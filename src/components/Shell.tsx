@@ -1,6 +1,6 @@
 import { LogoutButton } from "./LogoutButton";
 
-export type NavItem = { label: string; href?: string; soon?: boolean; key: string };
+export type NavItem = { label: string; href?: string; soon?: boolean; badge?: number; key: string };
 
 /** Sidebar layout from the "Portal colaboratori" design, used by both the CRM and the portal. */
 export function Shell(props: {
@@ -38,6 +38,7 @@ export function Shell(props: {
               <a key={i.key} href={i.href} aria-current={props.active === i.key ? "page" : undefined}>
                 {i.label}
                 {i.soon && <span className="soon">în curând</span>}
+                {!!i.badge && <span className="soon" title="Comenzi noi">{i.badge}</span>}
               </a>
             ) : null,
           )}

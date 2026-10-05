@@ -22,5 +22,12 @@
 			"migrations_dir": "migrations"
 		}
 	],
+	"r2_buckets": [
+		{
+			// Documents uploaded with orders (extras CF, acte, releveu…). Private: served only through the app.
+			"binding": "FILES",
+			"bucket_name": "valuefy-documents"
+		}
+	],
 	"observability": { "enabled": true }
 }

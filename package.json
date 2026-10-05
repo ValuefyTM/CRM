@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "tsc --noEmit",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "cf:deploy": "wrangler d1 migrations apply DB --remote && opennextjs-cloudflare deploy",
+    "cf:deploy": "(wrangler r2 bucket create valuefy-documents > /dev/null 2>&1 || true) && wrangler d1 migrations apply DB --remote && opennextjs-cloudflare deploy",
     "db:migrate:local": "wrangler d1 migrations apply DB --local"
   },
   "dependencies": {

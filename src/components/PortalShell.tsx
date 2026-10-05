@@ -11,9 +11,10 @@ export function PortalShell(props: { user: User; base: string; active: string; t
     <Shell
       app="portal"
       label={partner ? "Portal colaboratori" : "Portal client"}
-      cta={{ label: partner ? "+ Comandă nouă" : "+ Solicită evaluare" }}
+      cta={{ label: partner ? "+ Comandă nouă" : "+ Solicită evaluare", href: `${b}/comenzi/noua` }}
       nav={[
         { key: "home", label: "Acasă", href: b || "/" },
+        { key: "orders", label: partner ? "Comenzi" : "Evaluările mele", href: `${b}/comenzi` },
         { key: "account", label: "Contul meu", href: `${b}/cont` },
       ]}
       active={props.active}

@@ -1,9 +1,13 @@
+import { getDb } from "@/lib/db";
 import { initials } from "@/lib/guard";
 import { roleLabel, type User } from "@/lib/users";
 import { Shell } from "./Shell";
 
-export function CrmShell(props: { user: User; base: string; active: string; title: string; subtitle?: string; actions?: React.ReactNode; children: React.ReactNode }) {
+export async function CrmShell(props: { user: User; base: string; active: string; title: string; subtitle?: string; actions?: React.ReactNode; children: React.ReactNode }) {
   const b = props.base;
+  // Badge on "Comenzi": orders nobody in the team has opened yet.
+  const db = await getDb();
+  const unread = db ? (await db.prepare("SELECT COUNT(*) AS n FROM orders WHERE viewed_at IS NULL").first<{ n: number }>().catch(() => null))?.n ?? 0 : 0;
   return (
     <Shell
       app="crm"
@@ -11,6 +15,7 @@ export function CrmShell(props: { user: User; base: string; active: string; titl
       cta={{ label: "+ Utilizator nou", href: `${b}/utilizatori/nou` }}
       nav={[
         { key: "home", label: "Acasă", href: b || "/" },
+        { key: "orders", label: "Comenzi", href: `${b}/comenzi`, badge: unread },
         { key: "users", label: "Utilizatori", href: `${b}/utilizatori` },
       ]}
       active={props.active}

@@ -13,6 +13,7 @@ export default async function CrmHome() {
   const count = (kind: string) => live.filter((u) => u.kind === kind).length;
   const evaluators = live.filter((u) => u.kind === "internal" && u.role === "evaluator").length;
   const invited = live.filter((u) => u.status === "invited" && u.kind !== "internal").length;
+  const orders = await db.prepare("SELECT COUNT(*) AS n, SUM(viewed_at IS NULL) AS unread FROM orders").first<{ n: number; unread: number | null }>().catch(() => null);
   const leads = await db.prepare("SELECT COUNT(*) AS n FROM leads WHERE status = 'NEW'").first<{ n: number }>().catch(() => null);
   const first = user.name ? user.name.split(" ")[0] : "";
   const u = (tab: string) => `${base}/utilizatori?tab=${tab}`;
@@ -22,14 +23,15 @@ export default async function CrmHome() {
       <section className="hero">
         <span className="eyebrow">Bun venit{first ? `, ${first}` : ""}</span>
         <h2>CRM-ul VALUEFY, prima etapă.</h2>
-        <p>Acum gestionezi toți utilizatorii: echipa și evaluatorii, colaboratorii din portal și clienții. Comenzile, ofertele, alocarea evaluatorilor și facturarea vin în etapele următoare.</p>
+        <p>Primești comenzile din portal, cu toate datele și documentele, și gestionezi utilizatorii: echipa și evaluatorii, colaboratorii și clienții. Ofertarea, alocarea evaluatorilor și facturarea vin în etapele următoare.</p>
         <div className="actions" style={{ position: "relative", zIndex: 1 }}>
-          <a href={`${base}/utilizatori/nou`} className="btn btnGold btnPill">+ Utilizator nou</a>
-          <a href={`${base}/utilizatori`} className="btn btnPill" style={{ background: "rgba(255,255,255,.1)", color: "#fff" }}>Vezi toți utilizatorii</a>
+          <a href={`${base}/comenzi`} className="btn btnGold btnPill">Comenzi primite →</a>
+          <a href={`${base}/utilizatori/nou`} className="btn btnPill" style={{ background: "rgba(255,255,255,.1)", color: "#fff" }}>+ Utilizator nou</a>
         </div>
       </section>
 
       <div className="kpis">
+        <a className="kpi" href={`${base}/comenzi?f=new`} style={{ ["--dot" as string]: "var(--acc)" }}><span><i />Comenzi noi · {orders?.n ?? 0} în total</span><b>{orders?.unread ?? 0}</b></a>
         <a className="kpi" href={u("interni")} style={{ ["--dot" as string]: "var(--info)" }}><span><i />Interni · {evaluators} evaluatori</span><b>{count("internal")}</b></a>
         <a className="kpi" href={u("colaboratori")} style={{ ["--dot" as string]: "var(--ok)" }}><span><i />Colaboratori</span><b>{count("partner")}</b></a>
         <a className="kpi" href={u("clienti")} style={{ ["--dot" as string]: "var(--acc)" }}><span><i />Clienți cu cont</span><b>{count("client")}</b></a>
