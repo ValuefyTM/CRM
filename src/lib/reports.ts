@@ -91,25 +91,60 @@ export type Report = ReportRow & {
   client_kind: string | null; client_phone: string | null; client_email: string | null; client_cui: string | null; client_address: string | null;
   bank_name: string | null; contract_number: string | null; contract_kind: string | null; contract_date: string | null; contract_fee: number | null;
   referral_name: string | null; referral_id: string | null;
+  notes: string | null; delivered_at: string | null; delivered_by_name: string | null; updated_at: string;
+  order_seq: number | null; order_bank_ref: string | null; order_source: string | null; statement_number: string | null; client_code: string | null;
+  recipient_kind: string | null; recipient_email: string | null; recipient_phone: string | null; recipient_code: string | null; issuer_logo: string | null;
 };
 
 export async function getReport(db: D1Database, id: string) {
   return db
     .prepare(
       `SELECT r.*, c.name AS client_name, c.kind AS client_kind, c.phone AS client_phone, c.email AS client_email, c.cui AS client_cui, c.billing_address AS client_address,
-        COALESCE(b.code, b.name) AS bank_code, b.name AS bank_name, i.name AS issuer_name,
+        COALESCE(b.code, b.name) AS bank_code, b.name AS bank_name, i.name AS issuer_name, i.logo_url AS issuer_logo,
         k.number AS contract_number, k.kind AS contract_kind, k.signed_on AS contract_date, k.fee AS contract_fee,
-        ru.name AS referral_name, ru.id AS referral_id
+        ru.name AS referral_name, ru.id AS referral_id, COALESCE(NULLIF(du.name, ''), du.email) AS delivered_by_name,
+        o.seq AS order_seq, o.bank_ref AS order_bank_ref, o.source AS order_source, st.number AS statement_number, c.code AS client_code,
+        b.kind AS recipient_kind, b.email AS recipient_email, b.phone AS recipient_phone, b.code AS recipient_code
        FROM reports r LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id LEFT JOIN entities i ON i.id = r.issuer_id
-       LEFT JOIN contracts k ON k.id = r.contract_id LEFT JOIN users ru ON ru.id = r.referral_user_id WHERE r.id = ?`,
+       LEFT JOIN contracts k ON k.id = r.contract_id LEFT JOIN users ru ON ru.id = r.referral_user_id LEFT JOIN users du ON du.id = r.delivered_by
+       LEFT JOIN orders o ON o.id = r.order_id LEFT JOIN statements st ON st.id = o.statement_id WHERE r.id = ?`,
     )
     .bind(id)
     .first<Report>();
 }
 
+export type TeamMember = {
+  role: string; id: string; name: string; email: string; phone: string | null; anevar_no: string | null; specializations: string | null; coverage: string | null;
+  engagement: string | null; share_evaluator: number | null; share_verifier: number | null;
+};
+
 export async function reportTeam(db: D1Database, id: string) {
-  return (await db.prepare(`SELECT m.role, u.id, u.name, u.email FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = ?
-    ORDER BY CASE m.role WHEN 'inspector' THEN 1 WHEN 'evaluator' THEN 2 WHEN 'verifier' THEN 3 ELSE 4 END`).bind(id).all<{ role: string; id: string; name: string; email: string }>()).results;
+  return (await db.prepare(`SELECT m.role, u.id, u.name, u.email, u.phone, u.anevar_no, u.specializations, u.coverage, u.engagement, u.share_evaluator, u.share_verifier
+    FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = ?
+    ORDER BY CASE m.role WHEN 'evaluator' THEN 1 WHEN 'inspector' THEN 2 WHEN 'verifier' THEN 3 ELSE 4 END`).bind(id).all<TeamMember>()).results;
+}
+
+/** People who can be put on a report: active internal accounts. */
+export async function teamCandidates(db: D1Database) {
+  return (await db.prepare("SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role FROM users WHERE kind = 'internal' AND status <> 'disabled' ORDER BY name")
+    .all<{ id: string; name: string; role: string }>()).results;
+}
+
+export type ReportDocument = {
+  id: string; report_id: string; kind: "source" | "final"; filename: string; content_type: string | null; size_bytes: number | null; r2_key: string | null;
+  status: "uploaded" | "missing"; requested_at: string | null; uploaded_by_name: string | null; created_at: string;
+};
+
+export async function reportDocuments(db: D1Database, id: string) {
+  return (await db.prepare(`SELECT d.*, COALESCE(NULLIF(u.name, ''), u.email) AS uploaded_by_name FROM report_documents d LEFT JOIN users u ON u.id = d.uploaded_by
+    WHERE d.report_id = ? ORDER BY d.status = 'missing' DESC, d.created_at DESC`).bind(id).all<ReportDocument>()).results;
+}
+
+/** Documents that came with the order (portal uploads), shown as source documents of the report. */
+export async function reportOrderDocuments(db: D1Database, orderId: string | null) {
+  if (!orderId) return [];
+  return (await db.prepare("SELECT id, kind, filename, content_type, size_bytes, created_at FROM order_documents WHERE order_id = ? ORDER BY created_at")
+    .bind(orderId).all<{ id: string; kind: string; filename: string; content_type: string | null; size_bytes: number; created_at: string }>()).results;
 }
 
 export type AssetDetail = {
@@ -119,7 +154,7 @@ export type AssetDetail = {
   description: string | null; image_url: string | null; cf_file: string | null; plan_file: string | null;
   inspection_status: string | null; scheduled_at: string | null; done_at: string | null; inspector: string | null;
   contact_kind: string | null; contact_name: string | null; contact_phone: string | null;
-  sheet_photo: string | null; sheet_person: string | null; sheet_location: string | null; sheet_description: string | null;
+  sheet_photo: string | null; sheet_signature: string | null; sheet_person: string | null; sheet_location: string | null; sheet_description: string | null;
   other_reports: number;
 };
 
@@ -129,7 +164,7 @@ export async function reportAssets(db: D1Database, id: string) {
       `SELECT a.id, a.is_main, a.value, a.approach, p.id AS property_id, p.category, p.type, p.construction, p.county, p.city, p.full_address, p.geo, p.cf_number,
         p.cad_building, p.usable_area, p.year_built, p.description, p.image_url, p.cf_file, p.plan_file,
         i.status AS inspection_status, i.scheduled_at, i.done_at, u.name AS inspector, i.contact_kind, i.contact_name, i.contact_phone,
-        s.photo_url AS sheet_photo, s.present_person AS sheet_person, s.location AS sheet_location, s.description AS sheet_description,
+        s.photo_url AS sheet_photo, s.signature_url AS sheet_signature, s.present_person AS sheet_person, s.location AS sheet_location, s.description AS sheet_description,
         (SELECT COUNT(*) FROM assets x WHERE x.property_id = p.id AND x.id <> a.id) AS other_reports
        FROM assets a JOIN crm_properties p ON p.id = a.property_id LEFT JOIN inspections i ON i.asset_id = a.id LEFT JOIN users u ON u.id = i.inspector_id
        LEFT JOIN inspection_sheets s ON s.asset_id = a.id
@@ -143,6 +178,38 @@ export async function reportAssets(db: D1Database, id: string) {
 export async function propertyHistory(db: D1Database, propertyId: string, exceptReport: string) {
   return (await db.prepare(`${ROW} WHERE r.id <> ? AND r.id IN (SELECT report_id FROM assets WHERE property_id = ?) ORDER BY r.report_date DESC`).bind(exceptReport, propertyId).all<ReportRow>()).results;
 }
+
+/** Report log: CRM events on the report plus the dates known from Glide (oldest last). */
+export async function reportLog(db: D1Database, r: Report, assets: AssetDetail[]) {
+  const { results } = await db
+    .prepare(
+      `SELECT a.at, a.action, a.details, COALESCE(NULLIF(u.name, ''), u.email) AS actor_name FROM audit_log a
+       LEFT JOIN users u ON a.actor IN ('user:' || u.id, 'staff:' || u.id) WHERE a.entity = 'report' AND a.entity_id = ? ORDER BY a.at DESC LIMIT 40`,
+    )
+    .bind(r.id)
+    .all<{ at: string; action: string; details: string | null; actor_name: string | null }>();
+  const log: { at: string; text: string; who: string | null }[] = results.map((l) => ({ at: l.at, text: REPORT_ACTION[l.action] ? REPORT_ACTION[l.action](l.details) : l.action, who: l.actor_name }));
+  for (const a of assets) {
+    const what = cap(a.type) || "bun";
+    if (a.done_at) log.push({ at: a.done_at, text: `Inspecție realizată — ${what}${a.sheet_photo ? " (fișă cu fotografie)" : ""}`, who: a.inspector });
+    else if (a.scheduled_at) log.push({ at: a.scheduled_at, text: `Inspecție programată — ${what}`, who: a.inspector });
+  }
+  if (r.report_date) log.push({ at: r.report_date, text: `Raport datat${r.number ? ` nr. ${r.number}` : ""}`, who: null });
+  if (r.received_on) log.push({ at: r.received_on, text: r.order_id ? "Lucrare intrată din comandă" : "Lucrare intrată", who: null });
+  return log.sort((x, y) => y.at.localeCompare(x.at));
+}
+
+const REPORT_ACTION: Record<string, (d: string | null) => string> = {
+  "report.status": (d) => `Status schimbat${d ? `: ${d}` : ""}`,
+  "report.notes": () => "Note interne actualizate",
+  "report.document": (d) => `Document încărcat${d ? `: ${d}` : ""}`,
+  "report.document_missing": (d) => `Document solicitat${d ? `: ${d}` : ""}`,
+  "report.document_remove": (d) => `Document șters${d ? `: ${d}` : ""}`,
+  "report.final": (d) => `Raport final încărcat${d ? `: ${d}` : ""}`,
+  "report.delivered": () => "Raport marcat ca predat",
+  "report.member": (d) => `Echipă: adăugat ${d ?? ""}`.trim(),
+  "report.member_remove": (d) => `Echipă: scos ${d ?? ""}`.trim(),
+};
 
 export const lei = (n: number | null | undefined, cur = "lei") => (n == null ? "—" : `${n.toLocaleString("ro-RO", { maximumFractionDigits: 2 })} ${cur}`);
 /** Glide stores property types in capitals: "APARTAMENT IN BLOC" → "Apartament in bloc". */
