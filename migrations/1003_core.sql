@@ -69,8 +69,13 @@ CREATE TABLE IF NOT EXISTS statements (
 );
 
 -- Orders: the portal ones (phase 2a) plus bank, collaboration and historical partner orders.
--- Rebuilt so the portal-only columns can be empty for orders that came another way.
+-- Rebuilt so the portal-only columns can be empty for orders that came another way. Their documents are set aside
+-- while the table is replaced, so no foreign key ever points to a missing order.
 PRAGMA defer_foreign_keys = true;
+DROP TABLE IF EXISTS orders_new;
+DROP TABLE IF EXISTS order_documents_keep;
+CREATE TABLE order_documents_keep AS SELECT * FROM order_documents;
+DELETE FROM order_documents;
 CREATE TABLE orders_new (
   id                  TEXT PRIMARY KEY,
   seq                 INTEGER UNIQUE,                   -- CO-<seq> for orders placed in this CRM / portal
@@ -125,6 +130,8 @@ SELECT id, seq, source, created_by, partner_id, property_type, city, address, su
 FROM orders;
 DROP TABLE orders;
 ALTER TABLE orders_new RENAME TO orders;
+INSERT INTO order_documents SELECT * FROM order_documents_keep;
+DROP TABLE order_documents_keep;
 CREATE INDEX IF NOT EXISTS idx_orders_partner ON orders(partner_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_orders_creator ON orders(created_by, created_at);
 CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
