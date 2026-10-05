@@ -5,16 +5,28 @@ import { useMemo, useState } from "react";
 export type CrmOrderRow = {
   id: string; ref: string; created: string; type: string; address: string; client: string; clientPhone: string;
   from: string; fromId: string; firm: string | null; firmId: string | null; source: string; purpose: string; bank: string | null;
-  urgent: boolean; unread: boolean; docs: number; docsMissing: boolean; status: [string, string];
+  urgent: boolean; unread: boolean; docs: number; docsMissing: boolean; status: [string, string]; today: boolean; pending: boolean;
 };
 
 const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
+/** Shared with the bank tab and the cards above the tabs (?f=…). */
+export const ORDER_FILTERS: Record<string, (r: CrmOrderRow) => boolean> = {
+  all: () => true,
+  pending: (r) => r.pending,
+  today: (r) => r.today,
+  new: (r) => r.unread,
+  docs: (r) => r.docsMissing,
+  urgent: (r) => r.urgent && r.pending,
+};
+
 const FILTERS: [string, string, (r: CrmOrderRow) => boolean][] = [
   ["all", "Toate", () => true],
+  ["pending", "Neprocesate", ORDER_FILTERS.pending],
+  ["today", "Astăzi", ORDER_FILTERS.today],
   ["new", "Noi (nedeschise)", (r) => r.unread],
   ["docs", "Documente lipsă", (r) => r.docsMissing],
-  ["urgent", "Urgente", (r) => r.urgent],
+  ["urgent", "Urgente", ORDER_FILTERS.urgent],
   ["partner", "De la colaboratori", (r) => r.source === "partner"],
   ["client", "De la clienți", (r) => r.source === "client"],
 ];

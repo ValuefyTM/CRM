@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { CrmOrderRow } from "./OrdersTable";
+import { ORDER_FILTERS, type CrmOrderRow } from "./OrdersTable";
 
 const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
@@ -9,14 +9,15 @@ const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,
  * Bank orders under framework contracts. They will arrive from the banks' notification emails
  * (forwarded to the CRM, parsed per bank); until that is set up the list stays empty.
  */
-export function BankOrdersTable({ rows, base }: { rows: CrmOrderRow[]; base: string }) {
+export function BankOrdersTable({ rows, base, initial = "all" }: { rows: CrmOrderRow[]; base: string; initial?: string }) {
   const [q, setQ] = useState("");
   const [bank, setBank] = useState("all");
+  const [f, setF] = useState(initial in ORDER_FILTERS ? initial : "all");
   const banks = [...new Set(rows.map((r) => r.bank).filter(Boolean))] as string[];
   const shown = useMemo(() => {
     const t = fold(q.trim());
-    return rows.filter((r) => (bank === "all" || r.bank === bank) && (!t || fold([r.ref, r.client, r.address, r.bank].filter(Boolean).join(" ")).includes(t)));
-  }, [rows, q, bank]);
+    return rows.filter((r) => ORDER_FILTERS[f](r) && (bank === "all" || r.bank === bank) && (!t || fold([r.ref, r.client, r.address, r.bank].filter(Boolean).join(" ")).includes(t)));
+  }, [rows, q, bank, f]);
 
   if (!rows.length)
     return (
@@ -40,6 +41,7 @@ export function BankOrdersTable({ rows, base }: { rows: CrmOrderRow[]; base: str
           <button key={k} type="button" aria-pressed={bank === k} onClick={() => setBank(k)}>{l} <small>{k === "all" ? rows.length : rows.filter((r) => r.bank === k).length}</small></button>
         ))}
       </div>
+      {f !== "all" && <div className="actions"><span className="muted">Filtru din carduri activ.</span><button type="button" className="linkBtn" onClick={() => setF("all")}>Arată toate</button></div>}
       {shown.length === 0 ? <div className="empty">Nicio comandă pentru filtrele alese.</div> : (
         <div className="tableWrap">
           <table className="table">

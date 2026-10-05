@@ -14,19 +14,41 @@ export default async function CrmOrdersPage({ searchParams }: { searchParams: Pr
   const sp = await searchParams;
   const tab = sp.tab === "banci" ? "banci" : "parteneri";
   const orders = await allOrders(db);
+  // Calendar day in Romania, so "astăzi" matches the team's day.
+  const day = (iso: string) => new Date(iso).toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
+  const today = day(new Date().toISOString());
   const rows = orders.map((o) => ({
     id: o.id, ref: orderRef(o.seq), created: fmtDate(o.created_at, true), type: propertyLabel(o.property_type), address: `${o.address}, ${o.city}`,
     client: o.client_name, clientPhone: o.client_phone, from: o.creator_name || o.creator_email || "—", fromId: o.created_by,
     firm: o.partner_name, firmId: o.partner_id, source: o.source, purpose: o.purpose + (o.bank ? ` · ${o.bank}` : ""), bank: o.bank,
     urgent: !!o.urgent, unread: !o.viewed_at, docs: o.doc_count, docsMissing: !!o.docs_missing, status: orderStatus(o),
+    today: day(o.created_at) === today, pending: o.status === "received",
   }));
   const portal = rows.filter((r) => r.source !== "bank");
   const banks = rows.filter((r) => r.source === "bank");
   const unread = (list: typeof rows) => list.filter((r) => r.unread).length;
   const TABS: [string, string, typeof rows][] = [["parteneri", "Comenzi parteneri", portal], ["banci", "Comenzi bănci · contracte cadru", banks]];
 
+  const link = (f: string) => `${base}/comenzi?${tab === "banci" ? "tab=banci&" : ""}f=${f}`;
+  const CARDS: [string, string, string, number, string][] = [
+    ["pending", "Neprocesate", "var(--info)", rows.filter((r) => r.pending).length, "fără ofertă încă"],
+    ["today", "Noi astăzi", "var(--acc)", rows.filter((r) => r.today).length, `${portal.filter((r) => r.today).length} parteneri · ${banks.filter((r) => r.today).length} bănci`],
+    ["new", "Nedeschise", "var(--acc-ink)", unread(rows), "nimeni nu le-a deschis"],
+    ["docs", "Documente lipsă", "var(--err)", rows.filter((r) => r.docsMissing).length, "așteaptă documente"],
+    ["urgent", "Urgente", "var(--err)", rows.filter((r) => r.urgent && r.pending).length, "neprocesate, termen ~2 zile"],
+  ];
+
   return (
     <CrmShell user={user} base={base} active="orders" title="Comenzi primite" subtitle={`${orders.length} comenzi${unread(rows) ? ` · ${unread(rows)} nedeschise` : ""}`}>
+      <div className="kpis" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
+        {CARDS.map(([f, label, dot, n, sub]) => (
+          <a key={f} className="kpi" href={sp.f === f ? `${base}/comenzi${tab === "banci" ? "?tab=banci" : ""}` : link(f)} aria-current={sp.f === f ? "true" : undefined} style={{ ["--dot" as string]: dot }}>
+            <span><i />{label}</span>
+            <b>{n}</b>
+            <small className="muted">{sub}</small>
+          </a>
+        ))}
+      </div>
       <nav className="tabs" aria-label="Tip comenzi">
         {TABS.map(([k, label, list]) => (
           <a key={k} href={`${base}/comenzi${k === "banci" ? "?tab=banci" : ""}`} aria-current={tab === k ? "page" : undefined}>
@@ -36,7 +58,7 @@ export default async function CrmOrdersPage({ searchParams }: { searchParams: Pr
       </nav>
       {tab === "parteneri"
         ? <OrdersTable rows={portal} base={base} initial={sp.f ?? "all"} />
-        : <BankOrdersTable rows={banks} base={base} />}
+        : <BankOrdersTable rows={banks} base={base} initial={sp.f ?? "all"} />}
     </CrmShell>
   );
 }
