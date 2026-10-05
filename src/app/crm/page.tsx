@@ -35,7 +35,7 @@ export default async function CrmHome() {
         <a className="kpi" href={u("interni")} style={{ ["--dot" as string]: "var(--info)" }}><span><i />Interni · {evaluators} evaluatori</span><b>{count("internal")}</b></a>
         <a className="kpi" href={u("colaboratori")} style={{ ["--dot" as string]: "var(--ok)" }}><span><i />Colaboratori</span><b>{count("partner")}</b></a>
         <a className="kpi" href={u("clienti")} style={{ ["--dot" as string]: "var(--acc)" }}><span><i />Clienți cu cont</span><b>{count("client")}</b></a>
-        <div className="kpi" style={{ ["--dot" as string]: "var(--err)" }}><span><i />Solicitări noi de pe site</span><b>{leads?.n ?? "—"}</b></div>
+        <a className="kpi" href={`${base}/comenzi?tab=site`} style={{ ["--dot" as string]: "var(--err)" }}><span><i />Cereri noi de pe site</span><b>{leads?.n ?? "—"}</b></a>
       </div>
 
       <section className="card">

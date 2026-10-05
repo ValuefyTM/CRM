@@ -1,13 +1,14 @@
 import { getDb } from "@/lib/db";
+import { countNewLeads } from "@/lib/leads";
 import { initials } from "@/lib/guard";
 import { roleLabel, type User } from "@/lib/users";
 import { Shell } from "./Shell";
 
 export async function CrmShell(props: { user: User; base: string; active: string; title: string; subtitle?: string; actions?: React.ReactNode; children: React.ReactNode }) {
   const b = props.base;
-  // Badge on "Comenzi": orders nobody in the team has opened yet.
+  // Badge on "Comenzi": orders nobody in the team has opened yet, plus new requests from the website.
   const db = await getDb();
-  const unread = db ? (await db.prepare("SELECT COUNT(*) AS n FROM orders WHERE viewed_at IS NULL").first<{ n: number }>().catch(() => null))?.n ?? 0 : 0;
+  const unread = db ? ((await db.prepare("SELECT COUNT(*) AS n FROM orders WHERE viewed_at IS NULL").first<{ n: number }>().catch(() => null))?.n ?? 0) + (await countNewLeads(db)) : 0;
   return (
     <Shell
       app="crm"
