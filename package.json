@@ -1,0 +1,27 @@
+{
+  "name": "valuefy-crm",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3200",
+    "build": "next build",
+    "start": "next start",
+    "lint": "tsc --noEmit",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "cf:deploy": "wrangler d1 migrations apply DB --remote && opennextjs-cloudflare deploy",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local"
+  },
+  "dependencies": {
+    "@opennextjs/cloudflare": "^1.20.6",
+    "next": "^16.3.6",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.141.0"
+  }
+}

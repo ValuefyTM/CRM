@@ -1,0 +1,26 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	// CRM + partner portal: crm.valuefy.ro and portal.valuefy.ro (one Worker, routed by host).
+	"name": "crm",
+	"main": ".open-next/worker.js",
+	"compatibility_date": "2026-09-25",
+	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+	// Keep the variables set in the Cloudflare dashboard on every deploy.
+	"keep_vars": true,
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	"d1_databases": [
+		{
+			// The SAME database as the website (valuefy.ro), so website requests show up in the CRM.
+			// database_id: Cloudflare → Storage & Databases → D1 → valuefy-db → copy the ID.
+			"binding": "DB",
+			"database_name": "valuefy-db",
+			"database_id": "REPLACE_WITH_VALUEFY_DB_ID",
+			// CRM migrations are prefixed 1xxx so they never clash with the website's 0xxx files.
+			"migrations_dir": "migrations"
+		}
+	],
+	"observability": { "enabled": true }
+}

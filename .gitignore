@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+.env
+.env.local
+.env*.local
+
+# OpenNext / Cloudflare
+.open-next
+.wrangler
+.dev.vars*
+!.dev.vars.example
+
+# Stock photos copied at build time (scripts/fetch-photos.mjs)
+public/photos/u/
