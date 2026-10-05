@@ -18,6 +18,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   const l = await getLead(db, id);
   if (!l) notFound();
   const log = await history(db, [id]);
+  const order = await db.prepare("SELECT id, seq FROM orders WHERE lead_id = ?").bind(id).first<{ id: string; seq: number | null }>().catch(() => null);
   const [label, cls] = leadStatus(l.status);
   const sale = l.kind === "sale";
   const area = [num(l.surface_area, "mp utili"), l.rooms ? `${l.rooms} camere` : null, num(l.land_area, "mp teren")].filter(Boolean).join(" · ");
@@ -26,8 +27,9 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
     <CrmShell
       user={user} base={base} active="orders" title={`Cerere ${l.id}`}
       subtitle={`${sale ? "Vânzare" : "Evaluare"} · trimisă de pe valuefy.ro ${fmtDate(l.created_at, true)}`}
-      actions={<a href={`${base}/comenzi?tab=site`} className="btn btnGhost btnSm">← Cereri de pe site</a>}
+      actions={<a href={`${base}/comenzi${sale ? "?tab=site" : ""}`} className="btn btnGhost btnSm">← {sale ? "Vânzări de pe site" : "Comenzi"}</a>}
     >
+      {order && <div className="note">Cererea a devenit comanda <a className="rowLink" href={`${base}/comenzi/${order.id}`}>CO-{order.seq} →</a> Procesarea se face din comandă.</div>}
       <div className="cols">
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
           <section className="card">

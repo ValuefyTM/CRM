@@ -14,7 +14,7 @@ export default async function CrmHome() {
   const evaluators = live.filter((u) => u.kind === "internal" && u.role === "evaluator").length;
   const invited = live.filter((u) => u.status === "invited" && u.kind !== "internal").length;
   const orders = await db.prepare("SELECT COUNT(*) AS n, SUM(viewed_at IS NULL) AS unread FROM orders").first<{ n: number; unread: number | null }>().catch(() => null);
-  const leads = await db.prepare("SELECT COUNT(*) AS n FROM leads WHERE status = 'NEW'").first<{ n: number }>().catch(() => null);
+  const leads = await db.prepare("SELECT COUNT(*) AS n FROM leads WHERE status = 'NEW' AND source = 'WEBSITE_AI_SALE'").first<{ n: number }>().catch(() => null);
   const first = user.name ? user.name.split(" ")[0] : "";
   const u = (tab: string) => `${base}/utilizatori?tab=${tab}`;
 
@@ -35,7 +35,7 @@ export default async function CrmHome() {
         <a className="kpi" href={u("interni")} style={{ ["--dot" as string]: "var(--info)" }}><span><i />Interni · {evaluators} evaluatori</span><b>{count("internal")}</b></a>
         <a className="kpi" href={u("colaboratori")} style={{ ["--dot" as string]: "var(--ok)" }}><span><i />Colaboratori</span><b>{count("partner")}</b></a>
         <a className="kpi" href={u("clienti")} style={{ ["--dot" as string]: "var(--acc)" }}><span><i />Clienți cu cont</span><b>{count("client")}</b></a>
-        <a className="kpi" href={`${base}/comenzi?tab=site`} style={{ ["--dot" as string]: "var(--err)" }}><span><i />Cereri noi de pe site</span><b>{leads?.n ?? "—"}</b></a>
+        <a className="kpi" href={`${base}/comenzi?tab=site`} style={{ ["--dot" as string]: "var(--err)" }}><span><i />Vânzări noi de pe site</span><b>{leads?.n ?? "—"}</b></a>
       </div>
 
       <section className="card">

@@ -34,7 +34,7 @@ export const VIEWS: [string, string, (r: CrmOrderRow) => boolean][] = [
   ["suspended", "Suspendate", (r) => r.status[0] === "Suspendată"],
   ["cancelled", "Anulate", (r) => r.status[0] === "Anulată"],
 ];
-const SOURCES: [string, string][] = [["partner", "Colaboratori (brokeri)"], ["collab", "Colaborări firme evaluare"], ["client", "Clienți direcți"]];
+const SOURCES: [string, string][] = [["site", "Site valuefy.ro"], ["partner", "Colaboratori (brokeri)"], ["collab", "Colaborări firme evaluare"], ["client", "Clienți din portal"]];
 
 /** Orders placed in the portal by partner users (for their clients) and by direct clients. */
 export function OrdersTable({ rows, base, initial }: { rows: CrmOrderRow[]; base: string; initial: string }) {
@@ -75,7 +75,7 @@ export function OrdersTable({ rows, base, initial }: { rows: CrmOrderRow[]; base
                   <td>{r.client}<div className="muted" style={{ whiteSpace: "nowrap" }}>{r.clientPhone}</div></td>
                   <td>
                     {r.fromId ? <a className="rowLink" style={{ fontWeight: 500 }} href={`${base}/utilizatori/${r.fromId}`}>{r.from}</a> : r.from}
-                    <div className="muted">{r.firmId ? <a href={`${base}/utilizatori/firme/${r.firmId}`}>{r.firm}</a> : r.source === "collab" ? "Colaborare" : r.source === "partner" ? "Colaborator" : "Client direct"}</div>
+                    <div className="muted">{r.firmId ? <a href={`${base}/utilizatori/firme/${r.firmId}`}>{r.firm}</a> : r.source === "collab" ? "Colaborare" : r.source === "partner" ? "Colaborator" : r.source === "site" ? "Cerere de pe site" : "Client din portal"}</div>
                   </td>
                   <td>{r.purpose}</td>
                   <td>{r.docs ? `${r.docs} fișier${r.docs > 1 ? "e" : ""}` : <span className="muted">—</span>}</td>

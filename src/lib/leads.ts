@@ -64,8 +64,9 @@ export async function getLead(db: D1Database, id: string) {
   return r ? toLead(r) : null;
 }
 
+/** New sale requests (valuation requests are counted as orders). */
 export async function countNewLeads(db: D1Database) {
-  return (await db.prepare("SELECT COUNT(*) AS n FROM leads WHERE status = 'NEW'").first<{ n: number }>().catch(() => null))?.n ?? 0;
+  return (await db.prepare("SELECT COUNT(*) AS n FROM leads WHERE status = 'NEW' AND source = 'WEBSITE_AI_SALE'").first<{ n: number }>().catch(() => null))?.n ?? 0;
 }
 
 export async function updateLead(db: D1Database, id: string, patch: { status?: unknown; admin_notes?: unknown }) {

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getDb } from "./db";
 import { currentUser } from "./auth";
 import { basePath } from "./site";
+import { syncSiteOrders } from "./site-orders";
 
 export async function staffPage() {
   const base = await basePath("crm");
@@ -10,6 +11,7 @@ export async function staffPage() {
   if (!db) throw new Error("Baza de date nu este disponibilă.");
   const user = await currentUser(db, "crm");
   if (!user) redirect(`${base}/login`);
+  await syncSiteOrders(db); // website valuation requests → orders
   return { db, user, base };
 }
 

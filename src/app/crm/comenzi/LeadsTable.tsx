@@ -10,7 +10,7 @@ export type LeadRow = {
 
 const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
-/** Requests sent from the valuefy.ro assistant: valuations and properties to sell. */
+/** Properties offered for sale through the valuefy.ro assistant (valuation requests become orders). */
 export function LeadsTable({ rows, base, statuses, initial }: { rows: LeadRow[]; base: string; statuses: [string, string][]; initial?: string }) {
   const [q, setQ] = useState("");
   const [st, setSt] = useState(initial === "pending" ? "NEW" : "");
@@ -23,7 +23,7 @@ export function LeadsTable({ rows, base, statuses, initial }: { rows: LeadRow[];
   }, [rows, q, st, kind, initial]);
 
   if (!rows.length)
-    return <section className="card"><h2>Cereri de pe site</h2><div className="empty">Nicio cerere trimisă încă prin asistentul de pe valuefy.ro.</div></section>;
+    return <section className="card"><h2>Vânzări de pe site</h2><div className="empty">Nicio proprietate propusă spre vânzare prin asistentul de pe valuefy.ro. Cererile de evaluare apar direct ca și comenzi.</div></section>;
 
   return (
     <section className="card">
