@@ -37,7 +37,7 @@ export type OrderDocument = {
 const SELECT = `SELECT o.*, u.name AS creator_name, u.email AS creator_email, p.name AS partner_name,
   (SELECT COUNT(*) FROM order_documents d WHERE d.order_id = o.id) AS doc_count,
   (SELECT e.name FROM collaborations c JOIN entities e ON e.id = c.firm_id WHERE c.id = o.collaboration_id) AS collab_firm,
-  k.number AS contract_number, k.kind AS contract_kind
+  k.number AS contract_number, k.kind AS contract_kind, (SELECT x.lead_id FROM order_leads x WHERE x.order_id = o.id) AS lead_id
   FROM orders o LEFT JOIN users u ON u.id = o.created_by LEFT JOIN partners p ON p.id = o.partner_id LEFT JOIN contracts k ON k.id = o.contract_id`;
 
 // ---------- validation ----------

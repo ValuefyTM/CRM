@@ -21,7 +21,7 @@ export async function syncSiteOrders(db: D1Database) {
          p.property_type, p.description, p.city, p.address, p.surface_area, p.land_area, p.rooms, p.notes AS prop_notes,
          c.name, c.email, c.phone
        FROM leads l JOIN properties p ON p.id = l.property_id JOIN clients c ON c.id = l.client_id
-       WHERE l.source = 'WEBSITE_AI' AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.lead_id = l.id)
+       WHERE l.source = 'WEBSITE_AI' AND NOT EXISTS (SELECT 1 FROM order_leads x WHERE x.lead_id = l.id)
        ORDER BY l.created_at LIMIT 100`,
     )
     .all<Pending>()
@@ -37,19 +37,23 @@ export async function syncSiteOrders(db: D1Database) {
       try {
         await db
           .prepare(
-            `INSERT INTO orders (id, seq, source, lead_id, property_type, city, address, surface_area, land_area, rooms, purpose, urgent,
+            `INSERT INTO orders (id, seq, source, property_type, city, address, surface_area, land_area, rooms, purpose, urgent,
                client_name, client_phone, client_email, notes, status, docs_missing, viewed_at, created_at, updated_at)
-             VALUES (?, ?, 'site', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             VALUES (?, ?, 'site', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .bind(
-            `site-${l.id}`, Math.max(seq, 1001), l.id, TYPE[l.property_type ?? ""] ?? "other", l.city, l.address, l.surface_area, l.land_area, l.rooms,
+            `site-${l.id}`, Math.max(seq, 1001), TYPE[l.property_type ?? ""] ?? "other", l.city, l.address, l.surface_area, l.land_area, l.rooms,
             l.valuation_purpose, l.deadline === "Urgent" ? 1 : 0, l.name, l.phone, l.email, notes, status,
             l.documents_status === "Da" ? 0 : 1, l.status === "NEW" ? null : l.updated_at ?? l.created_at, l.created_at, now(),
           )
           .run();
+        await db.prepare("INSERT OR IGNORE INTO order_leads (order_id, lead_id) VALUES (?, ?)").bind(`site-${l.id}`, l.id).run();
         break;
       } catch (e) {
-        if (String(e).includes("idx_orders_lead") || String(e).includes("lead_id")) break; // converted by a parallel request
+        if (String(e).includes("orders.id")) { // converted by a parallel request
+          await db.prepare("INSERT OR IGNORE INTO order_leads (order_id, lead_id) VALUES (?, ?)").bind(`site-${l.id}`, l.id).run();
+          break;
+        }
         if (!String(e).includes("UNIQUE")) throw e;
       }
     }

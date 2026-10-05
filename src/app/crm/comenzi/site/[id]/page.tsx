@@ -18,7 +18,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   const l = await getLead(db, id);
   if (!l) notFound();
   const log = await history(db, [id]);
-  const order = await db.prepare("SELECT id, seq FROM orders WHERE lead_id = ?").bind(id).first<{ id: string; seq: number | null }>().catch(() => null);
+  const order = await db.prepare("SELECT o.id, o.seq FROM order_leads x JOIN orders o ON o.id = x.order_id WHERE x.lead_id = ?").bind(id).first<{ id: string; seq: number | null }>().catch(() => null);
   const [label, cls] = leadStatus(l.status);
   const sale = l.kind === "sale";
   const area = [num(l.surface_area, "mp utili"), l.rooms ? `${l.rooms} camere` : null, num(l.land_area, "mp teren")].filter(Boolean).join(" · ");
