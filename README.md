@@ -33,11 +33,11 @@ CRM migrations are numbered `1xxx` (`migrations/`) so they never clash with the 
    - Deploy command: `npm run cf:deploy` (applies the CRM migrations, then deploys)
 2. **R2 → Create bucket** `valuefy-documents` (the deploy command also tries to create it).
 3. In `wrangler.jsonc` set `database_id` to the ID of **valuefy-db** (Storage & Databases → D1 → valuefy-db).
-3. **Settings → Variables and Secrets** (runtime):
+4. **Settings → Variables and Secrets** (runtime):
    - `CRM_OWNER_EMAILS` — e.g. `office@valuefy.ro`; these addresses get an owner account at their first sign-in.
    - `ORDERS_NOTIFY_EMAIL` (optional) — who gets an email for each new order; defaults to `CRM_OWNER_EMAILS`.
    - `RESEND_API_KEY` (secret) and `CRM_EMAIL_FROM` — e.g. `VALUEFY <cont@valuefy.ro>`; the domain must be verified in Resend, otherwise codes and invitations can't be emailed.
-4. **Settings → Domains & Routes → Custom domain**: `crm.valuefy.ro` and `portal.valuefy.ro`.
+5. **Settings → Domains & Routes → Custom domain**: `crm.valuefy.ro` and `portal.valuefy.ro`.
 
 ## Local development
 ```
