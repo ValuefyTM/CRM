@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { staffPage, fmtDate } from "@/lib/guard";
-import { kindLabel, listPartners } from "@/lib/partners";
+import { displayName, KIND_LABEL, listUsers, roleLabel } from "@/lib/users";
 import { CrmShell } from "@/components/CrmShell";
 
 export const metadata: Metadata = { title: "CRM | VALUEFY" };
@@ -8,45 +8,50 @@ export const dynamic = "force-dynamic";
 
 export default async function CrmHome() {
   const { db, user, base } = await staffPage();
-  const partners = await listPartners(db);
-  const active = partners.filter((p) => p.status === "active").length;
-  const users = partners.reduce((n, p) => n + p.active_users, 0);
-  const invited = partners.reduce((n, p) => n + p.invited_users, 0);
+  const users = await listUsers(db);
+  const live = users.filter((u) => u.status !== "disabled");
+  const count = (kind: string) => live.filter((u) => u.kind === kind).length;
+  const evaluators = live.filter((u) => u.kind === "internal" && u.role === "evaluator").length;
+  const invited = live.filter((u) => u.status === "invited" && u.kind !== "internal").length;
   const leads = await db.prepare("SELECT COUNT(*) AS n FROM leads WHERE status = 'NEW'").first<{ n: number }>().catch(() => null);
   const first = user.name ? user.name.split(" ")[0] : "";
+  const u = (tab: string) => `${base}/utilizatori?tab=${tab}`;
 
   return (
-    <CrmShell user={user} base={base} active="home" title="Acasă" subtitle={`${active} colaboratori activi · ${invited} invitații în așteptare`}>
+    <CrmShell user={user} base={base} active="home" title="Acasă" subtitle={`${live.length} utilizatori · ${invited} invitații în așteptare`}>
       <section className="hero">
         <span className="eyebrow">Bun venit{first ? `, ${first}` : ""}</span>
         <h2>CRM-ul VALUEFY, prima etapă.</h2>
-        <p>Acum gestionezi colaboratorii și accesul lor în portal. Comenzile, ofertele, evaluatorii și facturarea vin în etapele următoare.</p>
+        <p>Acum gestionezi toți utilizatorii: echipa și evaluatorii, colaboratorii din portal și clienții. Comenzile, ofertele, alocarea evaluatorilor și facturarea vin în etapele următoare.</p>
         <div className="actions" style={{ position: "relative", zIndex: 1 }}>
-          <a href={`${base}/colaboratori/nou`} className="btn btnGold btnPill">+ Adaugă colaborator</a>
-          <a href={`${base}/colaboratori`} className="btn btnPill" style={{ background: "rgba(255,255,255,.1)", color: "#fff" }}>Vezi toți colaboratorii</a>
+          <a href={`${base}/utilizatori/nou`} className="btn btnGold btnPill">+ Utilizator nou</a>
+          <a href={`${base}/utilizatori`} className="btn btnPill" style={{ background: "rgba(255,255,255,.1)", color: "#fff" }}>Vezi toți utilizatorii</a>
         </div>
       </section>
 
       <div className="kpis">
-        <a className="kpi" href={`${base}/colaboratori`} style={{ ["--dot" as string]: "var(--ok)" }}><span><i />Colaboratori activi</span><b>{active}</b></a>
-        <a className="kpi" href={`${base}/colaboratori`} style={{ ["--dot" as string]: "var(--info)" }}><span><i />Persoane cu acces</span><b>{users}</b></a>
-        <a className="kpi" href={`${base}/colaboratori?f=invited`} style={{ ["--dot" as string]: "var(--acc)" }}><span><i />Invitații neacceptate</span><b>{invited}</b></a>
+        <a className="kpi" href={u("interni")} style={{ ["--dot" as string]: "var(--info)" }}><span><i />Interni · {evaluators} evaluatori</span><b>{count("internal")}</b></a>
+        <a className="kpi" href={u("colaboratori")} style={{ ["--dot" as string]: "var(--ok)" }}><span><i />Colaboratori</span><b>{count("partner")}</b></a>
+        <a className="kpi" href={u("clienti")} style={{ ["--dot" as string]: "var(--acc)" }}><span><i />Clienți cu cont</span><b>{count("client")}</b></a>
         <div className="kpi" style={{ ["--dot" as string]: "var(--err)" }}><span><i />Solicitări noi de pe site</span><b>{leads?.n ?? "—"}</b></div>
       </div>
 
       <section className="card">
         <div className="cardHead">
-          <h2>Colaboratori adăugați recent</h2>
-          <a href={`${base}/colaboratori`} className="btn btnGhost btnSm">Toți colaboratorii →</a>
+          <h2>Adăugați recent</h2>
+          <a href={`${base}/utilizatori`} className="btn btnGhost btnSm">Toți utilizatorii →</a>
         </div>
-        {partners.length === 0 ? (
-          <div className="empty">Nu ai adăugat încă niciun colaborator. <a className="rowLink" href={`${base}/colaboratori/nou`}>Adaugă primul colaborator →</a></div>
+        {users.length <= 1 ? (
+          <div className="empty">Nu ai adăugat încă niciun utilizator. <a className="rowLink" href={`${base}/utilizatori/nou`}>Adaugă primul utilizator →</a></div>
         ) : (
           <ul className="people">
-            {partners.slice(0, 6).map((p) => (
-              <li key={p.id}>
-                <span className="who"><a className="rowLink" href={`${base}/colaboratori/${p.id}`}>{p.name}</a><span className="muted">{kindLabel(p.kind)}{p.city ? ` · ${p.city}` : ""}</span></span>
-                <span className="muted">Adăugat {fmtDate(p.created_at)}</span>
+            {users.slice(0, 6).map((x) => (
+              <li key={x.id}>
+                <span className="who">
+                  <a className="rowLink" href={`${base}/utilizatori/${x.id}`}>{displayName(x)}</a>
+                  <span className="muted">{KIND_LABEL[x.kind]} · {roleLabel(x.kind, x.role)}{x.partner_name ? ` · ${x.partner_name}` : ""}</span>
+                </span>
+                <span className="muted">Adăugat {fmtDate(x.created_at)}</span>
               </li>
             ))}
           </ul>

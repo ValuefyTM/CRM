@@ -180,3 +180,16 @@ a.kpi:hover { border-color: var(--acc); transform: translateY(-2px); }
 .codeInput { font-family: var(--mono); font-size: 26px !important; letter-spacing: 10px; text-align: center; height: 60px !important; }
 .linkBtn { border: 0; background: none; padding: 0; font-size: 13px; font-weight: 700; color: var(--acc-text); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 899px) { .authPage { grid-template-columns: 1fr; } .authSide { display: none; } }
+
+/* ---------- Tabs ---------- */
+.segment { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px; border-radius: 14px; background: var(--cream-2); border: 1px solid var(--line); }
+.segment a, .segment button { height: 40px; border: 0; border-radius: 10px; background: transparent; font-size: 13.5px; font-weight: 700; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; }
+.segment [aria-current="page"], .segment [aria-pressed="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(23, 23, 58, 0.12); }
+.segment small { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: var(--neutral-bg); color: var(--neutral-text); }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.tabs a { padding: 12px 16px; font-size: 14px; font-weight: 700; color: var(--muted-2); border-bottom: 3px solid transparent; margin-bottom: -1px; display: flex; gap: 8px; align-items: center; white-space: nowrap; }
+.tabs a:hover { color: var(--ink); }
+.tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--acc); }
+.tabs small { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--cream-2); color: var(--muted); }
+.tabs a[aria-current="page"] small { background: var(--acc-soft); color: var(--acc-text); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 /** Email → 6-digit code (or the link from the email). */
-export function LoginForm({ audience, base, expired }: { audience: "staff" | "partner"; base: string; expired: boolean }) {
+export function LoginForm({ kind, base, expired }: { kind: "internal" | "partner" | "client"; base: string; expired: boolean }) {
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -13,7 +13,7 @@ export function LoginForm({ audience, base, expired }: { audience: "staff" | "pa
   useEffect(() => { if (step === "code") codeRef.current?.focus(); }, [step]);
 
   const post = (url: string, body: object) =>
-    fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ audience, ...body }) }).then(async (r) => ({
+    fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, ...body }) }).then(async (r) => ({
       ok: r.ok,
       data: (await r.json().catch(() => ({}))) as { error?: string },
     }));

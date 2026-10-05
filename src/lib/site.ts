@@ -1,33 +1,49 @@
 import { headers } from "next/headers";
 
-export type Audience = "staff" | "partner";
+/** The two applications served by this worker. */
+export type App = "crm" | "portal";
+/** Account kinds (see migrations/1001_users.sql). The team uses the CRM; partners and clients the portal. */
+export type Kind = "internal" | "partner" | "client";
 
 export const APP = {
-  staff: { prefix: "/crm", host: "crm.", cookie: "vf_crm", sessionDays: 7, name: "VALUEFY CRM" },
-  partner: { prefix: "/portal", host: "portal.", cookie: "vf_portal", sessionDays: 30, name: "Portal colaboratori VALUEFY" },
+  crm: { prefix: "/crm", host: "crm.", cookie: "vf_crm", sessionDays: 7, kinds: ["internal"] as Kind[] },
+  portal: { prefix: "/portal", host: "portal.", cookie: "vf_portal", sessionDays: 30, kinds: ["partner", "client"] as Kind[] },
 } as const;
+
+export const appOf = (kind: Kind): App => (kind === "internal" ? "crm" : "portal");
+
+/** Name of the application a kind of user signs in to (emails, page titles). */
+export const APP_NAME: Record<Kind, string> = {
+  internal: "VALUEFY CRM",
+  partner: "Portal colaboratori VALUEFY",
+  client: "Portal client VALUEFY",
+};
+
+async function host() {
+  const h = await headers();
+  return h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3200";
+}
 
 /** Public origin of the request (https://crm.valuefy.ro, https://crm.<account>.workers.dev, http://localhost:3200…). */
 export async function origin() {
   const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3200";
-  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  return `${proto}://${host}`;
+  const hst = await host();
+  const proto = h.get("x-forwarded-proto") ?? (hst.startsWith("localhost") ? "http" : "https");
+  return `${proto}://${hst}`;
 }
 
 /** Path prefix for links: "" on crm./portal. subdomains (the host already says which app), else /crm or /portal. */
-export async function basePath(aud: Audience) {
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
-  return host.startsWith(APP[aud].host) ? "" : APP[aud].prefix;
+export async function basePath(app: App) {
+  return (await host()).startsWith(APP[app].host) ? "" : APP[app].prefix;
 }
 
-/** Absolute URL to a page of an app, for emails. Uses the matching subdomain when we are on valuefy.ro. */
-export async function appUrl(aud: Audience, path: string) {
+/** Absolute URL to a page of an app, for emails. Switches subdomain on valuefy.ro; elsewhere uses the path prefix. */
+export async function appUrl(app: App, path: string) {
   const o = await origin();
   const u = new URL(o);
-  const other = aud === "staff" ? APP.partner.host : APP.staff.host;
-  if (u.hostname.startsWith(APP[aud].host)) return `${o}${path}`;
-  if (u.hostname.startsWith(other)) return `${u.protocol}//${APP[aud].host}${u.hostname.slice(other.length)}${path}`;
-  return `${o}${APP[aud].prefix}${path}`;
+  if (u.hostname.startsWith(APP[app].host)) return `${o}${path}`;
+  const other = Object.values(APP).find((a) => u.hostname.startsWith(a.host));
+  // crm.<account>.workers.dev has no portal.<account>.workers.dev twin, so only swap on our own domain.
+  if (other && !u.hostname.endsWith(".workers.dev")) return `${u.protocol}//${APP[app].host}${u.host.slice(other.host.length)}${path}`;
+  return `${o}${APP[app].prefix}${path}`;
 }

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
-import { currentStaff } from "@/lib/auth";
+import { currentUser } from "@/lib/auth";
 import { basePath } from "@/lib/site";
 import { LoginForm } from "@/components/LoginForm";
 
@@ -9,9 +9,9 @@ export const metadata: Metadata = { title: "Autentificare CRM | VALUEFY" };
 export const dynamic = "force-dynamic";
 
 export default async function CrmLogin({ searchParams }: { searchParams: Promise<{ link?: string }> }) {
-  const base = await basePath("staff");
+  const base = await basePath("crm");
   const db = await getDb();
-  if (db && (await currentStaff(db))) redirect(base || "/");
+  if (db && (await currentUser(db, "crm"))) redirect(base || "/");
   return (
     <div className="authPage">
       <aside className="authSide">
@@ -21,8 +21,8 @@ export default async function CrmLogin({ searchParams }: { searchParams: Promise
         </span>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <span className="eyebrow" style={{ position: "relative", color: "var(--acc-light)" }}>CRM VALUEFY</span>
-          <h2>Colaboratori, comenzi și evaluatori, într-un singur loc.</h2>
-          <p>Acces doar pentru echipa VALUEFY.</p>
+          <h2>Clienți, colaboratori, comenzi și evaluatori, într-un singur loc.</h2>
+          <p>Acces pentru echipa VALUEFY și evaluatorii colaboratori.</p>
         </div>
         <p style={{ fontSize: 12 }}>Firmă autorizată ANEVAR</p>
       </aside>
@@ -30,7 +30,7 @@ export default async function CrmLogin({ searchParams }: { searchParams: Promise
         <div className="authBox">
           <h1>Intră în CRM</h1>
           <p>Introdu adresa de email a contului tău din echipa VALUEFY.</p>
-          <LoginForm audience="staff" base={base} expired={(await searchParams).link === "expired"} />
+          <LoginForm kind="internal" base={base} expired={(await searchParams).link === "expired"} />
         </div>
       </main>
     </div>

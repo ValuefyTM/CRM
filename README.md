@@ -1,11 +1,11 @@
-# VALUEFY CRM & Portal colaboratori
+# VALUEFY CRM & Portal (clienți și colaboratori)
 
 One Next.js app on Cloudflare Workers, two addresses:
 
 | Address | Who | Code |
 |---|---|---|
 | `crm.valuefy.ro` | VALUEFY team | `src/app/crm/**` |
-| `portal.valuefy.ro` | partners (brokers, agencies, banks…) | `src/app/portal/**` |
+| `portal.valuefy.ro` | clients and partners (brokers, agencies, banks…), tabs on the sign-in page | `src/app/portal/**` |
 
 Routing by host is in `next.config.ts` (rewrites). On any other host (workers.dev, localhost) use `/crm` and `/portal`.
 
@@ -13,10 +13,13 @@ It shares the **valuefy-db** D1 database with the website, so website requests (
 CRM migrations are numbered `1xxx` (`migrations/`) so they never clash with the website's `0xxx`.
 
 ## Phase 1 (this version)
-- Team accounts (`staff_users`): owner / admin / staff. Sign-in with a 6-digit code or a one-time link by email — no passwords.
-- Partners (`partners`) and their portal users (`partner_users`): create in the CRM, invite by email, the person activates the account (name, phone, terms) and signs in with an email code.
-- Suspend a partner or disable a person (signs them out everywhere), resend invitations, audit history (`audit_log`).
-- Portal: sign-in, invitation, home (orders come in phase 2), "Contul meu".
+- One `users` table for every account (migration `1001_users.sql`), shown in the CRM under **Utilizatori** with three tabs:
+  - **Interni** — the team: owner / administrator / operator / evaluator, employee or external contractor; evaluators have ANEVAR number, specialisations (EPI, EBM, EI, EIF) and covered area. Sign in to the CRM.
+  - **Colaboratori** — people of partner firms (`partners`), switchable to the list of firms. Sign in to the portal.
+  - **Clienți** — person or company clients. Sign in to the portal.
+- Sign-in with a 6-digit code or a one-time link by email — no passwords. Partners and clients first activate the invitation (name, phone, terms); team members just sign in.
+- Administrators manage team accounts; everyone in the team can add partners and clients. Disable an account or suspend a firm (signs them out everywhere), resend invitations, audit history (`audit_log`).
+- Portal: sign-in with Client / Colaborator tabs, invitation, home (orders come in phase 2), "Contul meu".
 
 ## Cloudflare setup
 1. **Workers & Pages → Create → Import a repository** → this repo.

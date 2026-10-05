@@ -23,7 +23,7 @@ export function PartnerForm({ base, partnerId, initial }: { base: string; partne
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!f.name.trim()) return setMsg({ ok: false, text: "Completează denumirea colaboratorului." });
+    if (!f.name.trim()) return setMsg({ ok: false, text: "Completează denumirea firmei." });
     if (!f.kind) return setMsg({ ok: false, text: "Alege tipul colaboratorului." });
     setBusy(true); setMsg(null);
     const r = await fetch(isNew ? "/api/crm/partners" : `/api/crm/partners/${partnerId}`, {
@@ -34,16 +34,16 @@ export function PartnerForm({ base, partnerId, initial }: { base: string; partne
     const d = (await r.json().catch(() => ({}))) as { error?: string; id?: string; invited?: boolean };
     setBusy(false);
     if (!r.ok) return setMsg({ ok: false, text: d.error || "Nu am putut salva." });
-    if (isNew && d.id) location.href = `${base}/colaboratori/${d.id}?nou=${c.email.trim() ? (d.invited ? "invitat" : invite ? "neinvitat" : "fara") : "fara"}`;
+    if (isNew && d.id) location.href = `${base}/utilizatori/firme/${d.id}?nou=${c.email.trim() ? (d.invited ? "invitat" : invite ? "neinvitat" : "fara") : "fara"}`;
     else setMsg({ ok: true, text: "Modificările au fost salvate." });
   };
 
   return (
     <form onSubmit={submit} className="card" noValidate>
-      <h2>{isNew ? "Date colaborator" : "Date colaborator"}</h2>
+      <h2>Date firmă</h2>
       <div className="grid2">
         <label className="field span2">Denumire *<input className="input" value={f.name} onChange={set("name")} placeholder="ex. Credit Expert SRL sau Ion Popescu (PFA)" /></label>
-        <label className="field">Tip colaborator *
+        <label className="field">Tip *
           <select className="select" value={f.kind} onChange={set("kind")}>
             <option value="">Alege</option>
             {KINDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
@@ -55,7 +55,7 @@ export function PartnerForm({ base, partnerId, initial }: { base: string; partne
         <label className="field"><span>Email firmă <small>(opțional)</small></span><input className="input" type="email" value={f.email} onChange={set("email")} placeholder="office@firma.ro" /></label>
         <label className="field"><span>Telefon firmă <small>(opțional)</small></span><input className="input" type="tel" value={f.phone} onChange={set("phone")} /></label>
         <label className="field span2"><span>Adresă <small>(opțional)</small></span><input className="input" value={f.address} onChange={set("address")} /></label>
-        <label className="field span2"><span>Note interne <small>(nu le vede colaboratorul)</small></span><textarea className="textarea" rows={3} value={f.notes} onChange={set("notes")} placeholder="ex. comision convenit, bănci cu care lucrează, persoana care l-a adus" /></label>
+        <label className="field span2"><span>Note interne <small>(nu le vede firma)</small></span><textarea className="textarea" rows={3} value={f.notes} onChange={set("notes")} placeholder="ex. comision convenit, bănci cu care lucrează, persoana care l-a adus" /></label>
       </div>
 
       {isNew && (
@@ -73,8 +73,8 @@ export function PartnerForm({ base, partnerId, initial }: { base: string; partne
 
       {msg && <div role={msg.ok ? "status" : "alert"} className={msg.ok ? "okMsg" : "error"}>{msg.text}</div>}
       <div className="actions">
-        <button type="submit" className="btn btnNavy" disabled={busy}>{busy ? "Se salvează…" : isNew ? "Salvează colaboratorul" : "Salvează modificările"}</button>
-        {isNew && <a href={`${base}/colaboratori`} className="btn btnGhost">Renunță</a>}
+        <button type="submit" className="btn btnNavy" disabled={busy}>{busy ? "Se salvează…" : isNew ? "Salvează firma" : "Salvează modificările"}</button>
+        {isNew && <a href={`${base}/utilizatori?tab=colaboratori&vezi=firme`} className="btn btnGhost">Renunță</a>}
       </div>
     </form>
   );

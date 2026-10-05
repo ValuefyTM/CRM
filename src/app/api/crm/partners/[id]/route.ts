@@ -13,7 +13,7 @@ export async function PUT(req: Request, { params }: Ctx) {
   const p = validatePartner(await json(req));
   if (!p.ok) return err(p.error);
   await updatePartner(a.db, id, p.value);
-  await audit(a.db, `staff:${a.user.id}`, "partner.update", "partner", id);
+  await audit(a.db, `user:${a.user.id}`, "partner.update", "partner", id);
   return NextResponse.json({ ok: true });
 }
 
@@ -25,9 +25,9 @@ export async function PATCH(req: Request, { params }: Ctx) {
   const status = (await json(req)).status === "suspended" ? "suspended" : "active";
   await a.db.prepare("UPDATE partners SET status = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?").bind(status, id).run();
   if (status === "suspended") {
-    const { results } = await a.db.prepare("SELECT id FROM partner_users WHERE partner_id = ?").bind(id).all<{ id: string }>();
-    for (const u of results) await endAllSessions(a.db, "partner", u.id);
+    const { results } = await a.db.prepare("SELECT id FROM users WHERE kind = 'partner' AND partner_id = ?").bind(id).all<{ id: string }>();
+    for (const u of results) await endAllSessions(a.db, u.id);
   }
-  await audit(a.db, `staff:${a.user.id}`, `partner.${status === "suspended" ? "suspend" : "activate"}`, "partner", id);
+  await audit(a.db, `user:${a.user.id}`, `partner.${status === "suspended" ? "suspend" : "activate"}`, "partner", id);
   return NextResponse.json({ ok: true });
 }

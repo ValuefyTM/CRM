@@ -1,4 +1,4 @@
-// Server-only: partners (colaboratori) and their portal users.
+// Server-only: partner firms (colaboratori). Their people are users of kind 'partner' (src/lib/users.ts).
 import { now, uuid } from "./db";
 import { normEmail, validEmail } from "./crypto";
 
@@ -19,10 +19,6 @@ export type Partner = {
   city: string | null; address: string | null; notes: string | null; status: string; created_at: string; updated_at: string;
 };
 export type PartnerRow = Partner & { users: number; active_users: number; invited_users: number; last_login_at: string | null };
-export type PartnerUserRow = {
-  id: string; partner_id: string; email: string; name: string; phone: string | null; role: string; status: string;
-  invited_at: string | null; activated_at: string | null; last_login_at: string | null; created_at: string;
-};
 
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
@@ -46,22 +42,14 @@ export function validatePartner(body: unknown): { ok: true; value: PartnerInput 
   };
 }
 
-export function validatePerson(body: unknown): { ok: true; value: { name: string; email: string; phone: string | null; role: "owner" | "member" } } | { ok: false; error: string } {
-  const b = (body ?? {}) as Record<string, unknown>;
-  const name = str(b.name, 120);
-  const email = str(b.email, 160);
-  if (!validEmail(email)) return { ok: false, error: "Adresa de email a persoanei de contact nu pare validă." };
-  return { ok: true, value: { name, email: normEmail(email), phone: str(b.phone, 40) || null, role: b.role === "owner" ? "owner" : "member" } };
-}
-
 export async function listPartners(db: D1Database): Promise<PartnerRow[]> {
   const { results } = await db
     .prepare(
       `SELECT p.*,
-        (SELECT COUNT(*) FROM partner_users u WHERE u.partner_id = p.id) AS users,
-        (SELECT COUNT(*) FROM partner_users u WHERE u.partner_id = p.id AND u.status = 'active') AS active_users,
-        (SELECT COUNT(*) FROM partner_users u WHERE u.partner_id = p.id AND u.status = 'invited') AS invited_users,
-        (SELECT MAX(last_login_at) FROM partner_users u WHERE u.partner_id = p.id) AS last_login_at
+        (SELECT COUNT(*) FROM users u WHERE u.kind = 'partner' AND u.partner_id = p.id) AS users,
+        (SELECT COUNT(*) FROM users u WHERE u.kind = 'partner' AND u.partner_id = p.id AND u.status = 'active') AS active_users,
+        (SELECT COUNT(*) FROM users u WHERE u.kind = 'partner' AND u.partner_id = p.id AND u.status = 'invited') AS invited_users,
+        (SELECT MAX(last_login_at) FROM users u WHERE u.kind = 'partner' AND u.partner_id = p.id) AS last_login_at
        FROM partners p ORDER BY p.created_at DESC LIMIT 1000`,
     )
     .all<PartnerRow>();
@@ -70,14 +58,6 @@ export async function listPartners(db: D1Database): Promise<PartnerRow[]> {
 
 export async function getPartner(db: D1Database, id: string) {
   return db.prepare("SELECT * FROM partners WHERE id = ?").bind(id).first<Partner>();
-}
-
-export async function partnerUsers(db: D1Database, partnerId: string) {
-  const { results } = await db
-    .prepare("SELECT * FROM partner_users WHERE partner_id = ? ORDER BY role = 'owner' DESC, created_at")
-    .bind(partnerId)
-    .all<PartnerUserRow>();
-  return results;
 }
 
 export async function createPartner(db: D1Database, v: PartnerInput, createdBy: string) {
@@ -96,14 +76,3 @@ export async function updatePartner(db: D1Database, id: string, v: PartnerInput)
     .run();
 }
 
-/** Adds a portal user to a partner. Fails with a message when the email is already used. */
-export async function addPartnerUser(db: D1Database, partnerId: string, p: { name: string; email: string; phone: string | null; role: string }) {
-  const taken = await db.prepare("SELECT partner_id FROM partner_users WHERE email = ?").bind(p.email).first<{ partner_id: string }>();
-  if (taken) return { ok: false as const, error: taken.partner_id === partnerId ? "Persoana are deja acces la acest colaborator." : "Adresa de email este folosită deja la alt colaborator." };
-  const id = uuid();
-  await db
-    .prepare("INSERT INTO partner_users (id, partner_id, email, name, phone, role, status) VALUES (?, ?, ?, ?, ?, ?, 'invited')")
-    .bind(id, partnerId, p.email, p.name, p.phone, p.role)
-    .run();
-  return { ok: true as const, id };
-}

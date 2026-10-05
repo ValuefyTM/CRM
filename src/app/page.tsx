@@ -6,7 +6,7 @@ export default function Home() {
         <h1>VALUEFY</h1>
         <p>Alege aplicația:</p>
         <a href="/crm" className="btn btnNavy">CRM (echipa VALUEFY)</a>
-        <a href="/portal" className="btn btnGold">Portal colaboratori</a>
+        <a href="/portal" className="btn btnGold">Portal client și colaboratori</a>
       </div>
     </main>
   );

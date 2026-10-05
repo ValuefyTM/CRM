@@ -4,7 +4,7 @@ export type NavItem = { label: string; href?: string; soon?: boolean; key: strin
 
 /** Sidebar layout from the "Portal colaboratori" design, used by both the CRM and the portal. */
 export function Shell(props: {
-  audience: "staff" | "partner";
+  app: "crm" | "portal";
   label: string;
   nav: NavItem[];
   active: string;
@@ -47,7 +47,7 @@ export function Shell(props: {
             <span className="avatar">{props.me.initials}</span>
             <span className="meText"><b>{props.me.name}</b><small>{props.me.sub}</small></span>
           </div>
-          <LogoutButton audience={props.audience} />
+          <LogoutButton app={props.app} />
         </div>
       </aside>
       <div className="main">

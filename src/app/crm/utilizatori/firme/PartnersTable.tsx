@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from "react";
 
-type Row = { id: string; name: string; kind: string; kindLabel: string; city: string | null; cui: string | null; status: string; users: number; active: number; invited: number; lastLogin: string };
+export type FirmRow = { id: string; name: string; kind: string; kindLabel: string; city: string | null; cui: string | null; status: string; users: number; active: number; invited: number; lastLogin: string };
 
 const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
-export function PartnersTable({ rows, base, initial }: { rows: Row[]; base: string; initial: string }) {
+/** Partner firms, shown in the "Colaboratori" tab of Utilizatori. `head` adds controls next to the search box. */
+export function PartnersTable({ rows, base, initial = "all", head }: { rows: FirmRow[]; base: string; initial?: string; head?: React.ReactNode }) {
   const [q, setQ] = useState("");
   const [f, setF] = useState(initial);
   const counts = {
@@ -31,7 +32,8 @@ export function PartnersTable({ rows, base, initial }: { rows: Row[]; base: stri
   return (
     <section className="card">
       <div className="toolbar">
-        <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută după nume, tip, localitate, CUI…" aria-label="Caută" />
+        <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută firma după nume, tip, localitate, CUI…" aria-label="Caută" />
+        {head}
       </div>
       <div className="filters" role="group" aria-label="Filtre">
         {tabs.map(([k, label]) => (
@@ -39,15 +41,15 @@ export function PartnersTable({ rows, base, initial }: { rows: Row[]; base: stri
         ))}
       </div>
       {shown.length === 0 ? (
-        <div className="empty">{rows.length ? "Niciun colaborator pentru filtrele alese." : "Nu ai adăugat încă niciun colaborator."}</div>
+        <div className="empty">{rows.length ? "Nicio firmă pentru filtrele alese." : "Nu ai adăugat încă nicio firmă parteneră."}</div>
       ) : (
         <div className="tableWrap">
           <table className="table">
-            <thead><tr><th>Colaborator</th><th>Tip</th><th>Localitate</th><th>Acces portal</th><th>Ultima autentificare</th><th>Status</th></tr></thead>
+            <thead><tr><th>Firmă</th><th>Tip</th><th>Localitate</th><th>Acces portal</th><th>Ultima autentificare</th><th>Status</th></tr></thead>
             <tbody>
               {shown.map((r) => (
                 <tr key={r.id}>
-                  <td><a className="rowLink" href={`${base}/colaboratori/${r.id}`}>{r.name}</a>{r.cui && <div className="muted mono">CUI {r.cui}</div>}</td>
+                  <td><a className="rowLink" href={`${base}/utilizatori/firme/${r.id}`}>{r.name}</a>{r.cui && <div className="muted mono">CUI {r.cui}</div>}</td>
                   <td>{r.kindLabel}</td>
                   <td>{r.city || <span className="muted">—</span>}</td>
                   <td>

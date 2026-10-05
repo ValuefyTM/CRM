@@ -5,10 +5,10 @@ import { APP } from "@/lib/site";
 import { json } from "@/lib/api";
 
 export async function POST(req: Request) {
-  const audience = (await json(req)).audience === "staff" ? "staff" : "partner";
+  const app = (await json(req)).app === "crm" ? "crm" : "portal";
   const db = await getDb();
-  if (db) await endSession(db, audience);
+  if (db) await endSession(db, app);
   const res = NextResponse.json({ ok: true });
-  res.cookies.set({ name: APP[audience].cookie, value: "", path: "/", maxAge: 0 });
+  res.cookies.set({ name: APP[app].cookie, value: "", path: "/", maxAge: 0 });
   return res;
 }
