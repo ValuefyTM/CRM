@@ -1,6 +1,6 @@
 // Order content shared by the portal and the CRM: status, details and documents.
 import { fmtDate } from "@/lib/guard";
-import { DOCS, docLabel, fmtSize, missingDocs, orderRef, orderStatus, propertyLabel, STAGES, type Order, type OrderDocument } from "@/lib/orders";
+import { DOCS, docLabel, fmtSize, missingDocs, orderCode, orderPlace, orderStatus, orderWhat, STAGES, type Order, type OrderDocument } from "@/lib/orders";
 import { DocUpload } from "./DocUpload";
 
 export function OrderStatusCard({ o, docs }: { o: Order; docs: OrderDocument[] }) {
@@ -18,12 +18,15 @@ export function OrderStatusCard({ o, docs }: { o: Order; docs: OrderDocument[] }
       {missing.length > 0 && (
         <div className="note"><b>Documente lipsă:</b> {missing.map((d) => d.label).join(", ")}.</div>
       )}
+      {(o.status === "cancelled" || o.status === "suspended") && <p className="hint">Comanda este {o.status === "cancelled" ? "anulată" : "suspendată"}.</p>}
       <ol className="timeline">
         {STAGES.map((s, i) => {
-          const state = i === 0 ? "on" : i === 1 && missing.length ? "warn" : "";
+          // Processing is not built yet: new orders sit on stage 1; finished ones (Glide) are complete.
+          const reached = o.status === "done" ? 6 : o.status === "in_progress" ? 4 : 0;
+          const state = i < reached ? "past" : i === reached && reached < 6 ? "on" : i === 1 && missing.length ? "warn" : "";
           return (
             <li key={s} className={state}>
-              <span className="dot">{state === "warn" ? "!" : ""}</span>
+              <span className="dot">{state === "warn" ? "!" : state === "past" ? "✓" : ""}</span>
               <span>{s}{i === 0 && <span className="muted"> · {fmtDate(o.created_at, true)}</span>}{state === "warn" && <span className="muted"> · așteptăm documentele</span>}</span>
             </li>
           );
@@ -42,16 +45,16 @@ export function OrderInfo({ o, showSource }: { o: Order; showSource?: boolean })
       <h2>Detalii</h2>
       <div className="section" style={{ borderTop: 0, paddingTop: 0 }}>Proprietate</div>
       <dl className="dl">
-        <div><dt>Tip</dt><dd>{propertyLabel(o.property_type)}</dd></div>
-        <div><dt>Adresă</dt><dd>{o.address}, {o.city}</dd></div>
+        <div><dt>Tip</dt><dd>{orderWhat(o)}</dd></div>
+        <div><dt>Adresă</dt><dd>{orderPlace(o)}</dd></div>
         {area && <div><dt>Suprafețe</dt><dd>{area}</dd></div>}
         <div><dt>Scop</dt><dd>{o.purpose}{o.bank ? ` · ${o.bank}` : ""}</dd></div>
-        <div><dt>Termen</dt><dd>{o.urgent ? "Urgent (~2 zile lucrătoare)" : "Standard (~5 zile lucrătoare)"}</dd></div>
+        {!o.glide_id && <div><dt>Termen</dt><dd>{o.urgent ? "Urgent (~2 zile lucrătoare)" : "Standard (~5 zile lucrătoare)"}</dd></div>}
       </dl>
       <div className="section">Client și inspecție</div>
       <dl className="dl">
         <div><dt>Client</dt><dd>{o.client_name}</dd></div>
-        <div><dt>Telefon client</dt><dd><a href={`tel:${o.client_phone.replace(/\s/g, "")}`}>{o.client_phone}</a></dd></div>
+        <div><dt>Telefon client</dt><dd>{o.client_phone ? <a href={`tel:${o.client_phone.replace(/\s/g, "")}`}>{o.client_phone}</a> : "—"}</dd></div>
         {o.client_email && <div><dt>Email client</dt><dd><a href={`mailto:${o.client_email}`}>{o.client_email}</a></dd></div>}
         {o.contact_name && <div><dt>Contact inspecție</dt><dd>{o.contact_name} · <a href={`tel:${(o.contact_phone ?? "").replace(/\s/g, "")}`}>{o.contact_phone}</a></dd></div>}
         {o.source === "partner" && <div><dt>Evaluatorul poate contacta clientul</dt><dd>{yes(o.may_contact_client)}</dd></div>}
@@ -70,7 +73,7 @@ export function OrderInfo({ o, showSource }: { o: Order; showSource?: boolean })
 /** Uploaded documents (open / download) and, in the portal, upload buttons for what is still missing. */
 export function OrderDocuments({ o, docs, href, canUpload }: { o: Order; docs: OrderDocument[]; href: (d: OrderDocument) => string; canUpload: boolean }) {
   const missing = missingDocs(o.property_type, docs);
-  const optional = DOCS[o.property_type].filter((d) => d.optional && !docs.some((x) => x.kind === d.key));
+  const optional = o.property_type ? DOCS[o.property_type].filter((d) => d.optional && !docs.some((x) => x.kind === d.key)) : [];
   return (
     <section className="card">
       <div className="cardHead">
@@ -82,7 +85,7 @@ export function OrderDocuments({ o, docs, href, canUpload }: { o: Order; docs: O
           <li key={d.id}>
             <span className="docDot file" aria-hidden>{(d.filename.split(".").pop() || "").slice(0, 4).toUpperCase()}</span>
             <span className="who">
-              <b>{docLabel(o.property_type, d.kind)}</b>
+              <b>{docLabel(o.property_type ?? "other", d.kind)}</b>
               <span className="muted">{d.filename} · {fmtSize(d.size_bytes)} · {fmtDate(d.created_at, true)}{d.uploader_name ? ` · ${d.uploader_name}` : ""}</span>
             </span>
             <a className="btn btnGhost btnSm" href={href(d)} target="_blank" rel="noopener">Deschide</a>
@@ -115,4 +118,4 @@ export function OrderDocuments({ o, docs, href, canUpload }: { o: Order; docs: O
   );
 }
 
-export const orderTitle = (o: Pick<Order, "seq" | "property_type" | "city">) => `${orderRef(o.seq)} · ${propertyLabel(o.property_type)}, ${o.city}`;
+export const orderTitle = (o: Order) => `${orderCode(o)} · ${orderWhat(o)}`;

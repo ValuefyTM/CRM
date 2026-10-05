@@ -72,5 +72,26 @@ export const STAGES = ["Comandă primită", "Documente complete", "Inspecție pr
 export const ACCEPT = ".pdf,.jpg,.jpeg,.png,.heic,.webp,.doc,.docx";
 export const MAX_FILE_MB = 20;
 
-/** Status pill for an order (only the first stage exists until processing is built). */
-export const orderStatus = (o: { docs_missing: number }): [string, string] => (o.docs_missing ? ["Documente lipsă", "pillWarn"] : ["Comandă primită", ""]);
+/** Status pill for an order. New orders show whether documents are missing; processed ones (Glide) their outcome. */
+export const orderStatus = (o: { docs_missing: number; status?: string }): [string, string] => {
+  switch (o.status) {
+    case "done": return ["Finalizată", "pillOk"];
+    case "cancelled": return ["Anulată", "pillErr"];
+    case "suspended": return ["Suspendată", "pillWarn"];
+    case "in_progress": return ["În lucru", "pillInfo"];
+    case "draft": return ["Draft", ""];
+    default: return o.docs_missing ? ["Documente lipsă", "pillWarn"] : ["Comandă primită", ""];
+  }
+};
+
+/** Reference shown for an order: CO-<n> for orders placed in the CRM, the bank's number for bank orders. */
+export const orderCode = (o: { seq: number | null; bank_ref?: string | null; bank?: string | null; source?: string; id: string }) =>
+  o.seq ? orderRef(o.seq) : o.bank_ref ? `${o.bank ?? "Bancă"} ${o.bank_ref}` : `${o.source === "collab" ? "COL" : "CMD"}-${o.id.replace(/^g-ord-\w-/, "").slice(0, 6).toUpperCase()}`;
+
+export const SOURCE_LABEL: Record<string, string> = { partner: "Colaborator", client: "Client direct", bank: "Bancă · contract cadru", collab: "Colaborare firmă de evaluare" };
+
+/** Address line of an order ("—" when the order came without one, e.g. bank orders from Glide). */
+export const orderPlace = (o: { address: string | null; city: string | null }) => [o.address, o.city].filter(Boolean).join(", ") || "—";
+/** What is valued: the property type for portal orders, else the requested report type. */
+export const orderWhat = (o: { property_type: string | null; report_type?: string | null }) =>
+  o.property_type ? propertyLabel(o.property_type) : o.report_type ?? "Evaluare";

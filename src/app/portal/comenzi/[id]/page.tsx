@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { fmtDate, portalPage } from "@/lib/guard";
-import { canSee, getOrder, orderDocuments, orderRef, propertyLabel } from "@/lib/orders";
+import { canSee, getOrder, orderCode, orderDocuments, orderPlace, orderWhat } from "@/lib/orders";
 import { PortalShell } from "@/components/PortalShell";
 import { OrderDocuments, OrderInfo, OrderStatusCard } from "@/components/OrderDetails";
 
@@ -18,25 +18,25 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const failed = nou?.startsWith("eroare-") ? Number(nou.slice(7)) : 0;
 
   return (
-    <PortalShell user={user} base={base} active="orders" title={`Comanda ${orderRef(o.seq)}`} subtitle={`${propertyLabel(o.property_type)} · ${o.address}, ${o.city} · trimisă ${fmtDate(o.created_at, true)}`}>
+    <PortalShell user={user} base={base} active="orders" title={`Comanda ${orderCode(o)}`} subtitle={`${orderWhat(o)} · ${orderPlace(o)} · trimisă ${fmtDate(o.created_at, !o.glide_id)}`}>
       <div className="actions"><a href={`${base}/comenzi`} className="btn btnGhost btnSm">← Comenzi</a></div>
       {nou && (
         <div className={failed ? "note" : "okMsg"}>
           {failed
-            ? `Comanda ${orderRef(o.seq)} a fost trimisă, dar ${failed} document${failed > 1 ? "e nu au" : " nu a"} putut fi încărcat${failed > 1 ? "e" : ""}. Încearcă din nou mai jos.`
-            : `Comanda ${orderRef(o.seq)} a fost trimisă. Pregătim oferta și revenim în cel mai scurt timp.`}
+            ? `Comanda ${orderCode(o)} a fost trimisă, dar ${failed} document${failed > 1 ? "e nu au" : " nu a"} putut fi încărcat${failed > 1 ? "e" : ""}. Încearcă din nou mai jos.`
+            : `Comanda ${orderCode(o)} a fost trimisă. Pregătim oferta și revenim în cel mai scurt timp.`}
         </div>
       )}
       <div className="cols">
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
-          <section className="card" style={{ border: "1.5px solid var(--line)" }}>
+          {o.status === "received" && <section className="card" style={{ border: "1.5px solid var(--line)" }}>
             <div className="cardHead"><h2>Oferta de evaluare</h2><span className="pill"><i />În pregătire</span></div>
             <div className="actions" style={{ flexWrap: "nowrap" }}>
               <span className="spinner" aria-hidden />
               <p className="hint" style={{ fontSize: 14 }}>Analizăm comanda și pregătim oferta: onorariul și termenul de livrare. Te anunțăm pe email când este gata.</p>
             </div>
-          </section>
-          <OrderDocuments o={o} docs={docs} canUpload href={(d) => `/api/portal/orders/${o.id}/documents/${d.id}`} />
+          </section>}
+          {!o.glide_id && <OrderDocuments o={o} docs={docs} canUpload href={(d) => `/api/portal/orders/${o.id}/documents/${d.id}`} />}
           <OrderInfo o={o} />
         </div>
         <OrderStatusCard o={o} docs={docs} />

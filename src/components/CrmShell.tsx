@@ -16,7 +16,9 @@ export async function CrmShell(props: { user: User; base: string; active: string
       nav={[
         { key: "home", label: "Acasă", href: b || "/" },
         { key: "orders", label: "Comenzi", href: `${b}/comenzi`, badge: unread },
+        { key: "reports", label: "Rapoarte", href: `${b}/rapoarte` },
         { key: "users", label: "Utilizatori", href: `${b}/utilizatori` },
+        ...(props.user.role === "owner" ? [{ key: "import", label: "Import Glide", href: `${b}/setari/import` }] : []),
       ]}
       active={props.active}
       me={{ initials: initials(props.user.name, props.user.email), name: props.user.name || props.user.email, sub: roleLabel("internal", props.user.role) }}

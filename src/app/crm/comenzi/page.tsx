@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { fmtDate, staffPage } from "@/lib/guard";
-import { allOrders, orderRef, orderStatus, propertyLabel } from "@/lib/orders";
+import { allOrders, orderCode, orderPlace, orderStatus, orderWhat } from "@/lib/orders";
 import { CrmShell } from "@/components/CrmShell";
 import { OrdersTable } from "./OrdersTable";
 import { BankOrdersTable } from "./BankOrdersTable";
@@ -18,9 +18,10 @@ export default async function CrmOrdersPage({ searchParams }: { searchParams: Pr
   const day = (iso: string) => new Date(iso).toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
   const today = day(new Date().toISOString());
   const rows = orders.map((o) => ({
-    id: o.id, ref: orderRef(o.seq), created: fmtDate(o.created_at, true), type: propertyLabel(o.property_type), address: `${o.address}, ${o.city}`,
-    client: o.client_name, clientPhone: o.client_phone, from: o.creator_name || o.creator_email || "—", fromId: o.created_by,
-    firm: o.partner_name, firmId: o.partner_id, source: o.source, purpose: o.purpose + (o.bank ? ` · ${o.bank}` : ""), bank: o.bank,
+    id: o.id, ref: orderCode(o), created: fmtDate(o.created_at, !o.glide_id), type: orderWhat(o), address: orderPlace(o),
+    client: o.client_name ?? "—", clientPhone: o.client_phone, from: o.source === "collab" ? o.collab_firm ?? "Colaborare" : o.creator_name || o.creator_email || "—",
+    fromId: o.created_by, firm: o.partner_name, firmId: o.partner_id, source: o.source, purpose: (o.purpose ?? "—") + (o.bank ? ` · ${o.bank}` : ""), bank: o.bank,
+    bankRef: o.bank_ref, branch: o.bank_branch, reportType: o.report_type, fee: o.fee, contract: o.contract_number,
     urgent: !!o.urgent, unread: !o.viewed_at, docs: o.doc_count, docsMissing: !!o.docs_missing, status: orderStatus(o),
     today: day(o.created_at) === today, pending: o.status === "received",
   }));

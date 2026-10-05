@@ -3,8 +3,9 @@
 import { useMemo, useState } from "react";
 
 export type CrmOrderRow = {
-  id: string; ref: string; created: string; type: string; address: string; client: string; clientPhone: string;
-  from: string; fromId: string; firm: string | null; firmId: string | null; source: string; purpose: string; bank: string | null;
+  id: string; ref: string; created: string; type: string; address: string; client: string; clientPhone: string | null;
+  from: string; fromId: string | null; firm: string | null; firmId: string | null; source: string; purpose: string; bank: string | null;
+  bankRef: string | null; branch: string | null; reportType: string | null; fee: number | null; contract: string | null;
   urgent: boolean; unread: boolean; docs: number; docsMissing: boolean; status: [string, string]; today: boolean; pending: boolean;
 };
 
@@ -28,6 +29,7 @@ const FILTERS: [string, string, (r: CrmOrderRow) => boolean][] = [
   ["docs", "Documente lipsă", (r) => r.docsMissing],
   ["urgent", "Urgente", ORDER_FILTERS.urgent],
   ["partner", "De la colaboratori", (r) => r.source === "partner"],
+  ["collab", "Colaborări firme evaluare", (r) => r.source === "collab"],
   ["client", "De la clienți", (r) => r.source === "client"],
 ];
 
@@ -35,6 +37,7 @@ const FILTERS: [string, string, (r: CrmOrderRow) => boolean][] = [
 export function OrdersTable({ rows, base, initial }: { rows: CrmOrderRow[]; base: string; initial: string }) {
   const [q, setQ] = useState("");
   const [f, setF] = useState(initial);
+  const [limit, setLimit] = useState(100);
   const shown = useMemo(() => {
     const test = FILTERS.find(([k]) => k === f)?.[2] ?? (() => true);
     const t = fold(q.trim());
@@ -55,14 +58,14 @@ export function OrdersTable({ rows, base, initial }: { rows: CrmOrderRow[]; base
           <table className="table">
             <thead><tr><th>Comandă</th><th>Proprietate</th><th>Client</th><th>Trimisă de</th><th>Scop</th><th>Documente</th><th>Status</th></tr></thead>
             <tbody>
-              {shown.map((r) => (
+              {shown.slice(0, limit).map((r) => (
                 <tr key={r.id} className={r.unread ? "unread" : undefined}>
                   <td><a className="ref rowLink" href={`${base}/comenzi/${r.id}`}>{r.ref}</a><div className="muted">{r.created}</div></td>
                   <td><a className="rowLink" href={`${base}/comenzi/${r.id}`}>{r.type}</a><div className="muted">{r.address}</div></td>
                   <td>{r.client}<div className="muted" style={{ whiteSpace: "nowrap" }}>{r.clientPhone}</div></td>
                   <td>
-                    <a className="rowLink" style={{ fontWeight: 500 }} href={`${base}/utilizatori/${r.fromId}`}>{r.from}</a>
-                    <div className="muted">{r.firmId ? <a href={`${base}/utilizatori/firme/${r.firmId}`}>{r.firm}</a> : "Client direct"}</div>
+                    {r.fromId ? <a className="rowLink" style={{ fontWeight: 500 }} href={`${base}/utilizatori/${r.fromId}`}>{r.from}</a> : r.from}
+                    <div className="muted">{r.firmId ? <a href={`${base}/utilizatori/firme/${r.firmId}`}>{r.firm}</a> : r.source === "collab" ? "Colaborare" : r.source === "partner" ? "Colaborator" : "Client direct"}</div>
                   </td>
                   <td>{r.purpose}</td>
                   <td>{r.docs ? `${r.docs} fișier${r.docs > 1 ? "e" : ""}` : <span className="muted">—</span>}</td>
@@ -77,6 +80,11 @@ export function OrdersTable({ rows, base, initial }: { rows: CrmOrderRow[]; base
               ))}
             </tbody>
           </table>
+          {shown.length > limit && (
+            <div className="actions" style={{ justifyContent: "center", padding: 14 }}>
+              <button type="button" className="btn btnGhost btnSm" onClick={() => setLimit(limit + 200)}>Arată mai multe ({shown.length - limit} rămase)</button>
+            </div>
+          )}
         </div>
       )}
     </section>

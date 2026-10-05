@@ -7,15 +7,26 @@ import type { User } from "./users";
 
 export * from "./order-labels";
 
-export type Order = {
-  id: string; seq: number; source: "partner" | "client" | "bank"; created_by: string; partner_id: string | null;
+/** Fields of an order placed in the portal (all filled in); orders from banks, collaborations or Glide may leave them empty. */
+type PortalFields = {
   property_type: PropertyType; city: string; address: string; surface_area: number | null; land_area: number | null; rooms: number | null;
   purpose: string; bank: string | null; urgent: number;
   client_name: string; client_phone: string; client_email: string | null;
   contact_name: string | null; contact_phone: string | null; inspection_notes: string | null; may_contact_client: number; notes: string | null;
+};
+type Nullable<T> = { [K in keyof T]: T[K] | null };
+
+export type Order = Nullable<Pick<PortalFields, "property_type" | "city" | "address" | "purpose" | "client_name" | "client_phone">> &
+  Omit<PortalFields, "property_type" | "city" | "address" | "purpose" | "client_name" | "client_phone"> & {
+  id: string; seq: number | null; source: "partner" | "client" | "bank" | "collab"; created_by: string | null; partner_id: string | null;
   status: string; docs_missing: number; viewed_at: string | null; viewed_by: string | null; created_at: string; updated_at: string;
+  // bank / collaboration / Glide orders
+  glide_id: string | null; contract_id: string | null; collaboration_id: string | null; client_id: string | null; bank_id: string | null;
+  bank_branch: string | null; bank_ref: string | null; report_type: string | null; fee: number | null; share: number | null; fee_net: number | null;
+  referral_order_id: string | null; ordered_on: string | null;
   // joined
   creator_name: string | null; creator_email: string | null; partner_name: string | null; doc_count: number;
+  collab_firm: string | null; contract_number: string | null; contract_kind: string | null;
 };
 
 export type OrderDocument = {
@@ -24,12 +35,14 @@ export type OrderDocument = {
 };
 
 const SELECT = `SELECT o.*, u.name AS creator_name, u.email AS creator_email, p.name AS partner_name,
-  (SELECT COUNT(*) FROM order_documents d WHERE d.order_id = o.id) AS doc_count
-  FROM orders o LEFT JOIN users u ON u.id = o.created_by LEFT JOIN partners p ON p.id = o.partner_id`;
+  (SELECT COUNT(*) FROM order_documents d WHERE d.order_id = o.id) AS doc_count,
+  (SELECT e.name FROM collaborations c JOIN entities e ON e.id = c.firm_id WHERE c.id = o.collaboration_id) AS collab_firm,
+  k.number AS contract_number, k.kind AS contract_kind
+  FROM orders o LEFT JOIN users u ON u.id = o.created_by LEFT JOIN partners p ON p.id = o.partner_id LEFT JOIN contracts k ON k.id = o.contract_id`;
 
 // ---------- validation ----------
 
-export type OrderInput = Omit<Order, "id" | "seq" | "source" | "created_by" | "partner_id" | "status" | "docs_missing" | "viewed_at" | "viewed_by" | "created_at" | "updated_at" | "creator_name" | "creator_email" | "partner_name" | "doc_count">;
+export type OrderInput = PortalFields;
 
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const num = (v: unknown) => {
@@ -125,7 +138,7 @@ export async function ordersFor(db: D1Database, user: User) {
 }
 
 export async function allOrders(db: D1Database) {
-  const { results } = await db.prepare(`${SELECT} ORDER BY o.created_at DESC LIMIT 2000`).all<Order>();
+  const { results } = await db.prepare(`${SELECT} ORDER BY o.created_at DESC LIMIT 10000`).all<Order>();
   return results;
 }
 
@@ -141,7 +154,8 @@ export async function orderDocuments(db: D1Database, orderId: string) {
 }
 
 /** Required documents still missing, by label. */
-export function missingDocs(type: PropertyType, docs: Pick<OrderDocument, "kind">[]) {
+export function missingDocs(type: PropertyType | null, docs: Pick<OrderDocument, "kind">[]) {
+  if (!type) return [];
   const have = new Set(docs.map((d) => d.kind));
   return DOCS[type].filter((d) => !d.optional && !have.has(d.key));
 }
@@ -161,7 +175,7 @@ const OK_TYPES = /^(application\/pdf|image\/(jpeg|png|heic|heif|webp)|applicatio
 const OK_EXT = /\.(pdf|jpe?g|png|heic|heif|webp|docx?)$/i;
 
 /** Stores one uploaded file for an order and updates the "documents missing" flag. */
-export async function addDocument(db: D1Database, order: Pick<Order, "id" | "seq" | "property_type">, file: File, kind: string, userId: string) {
+export async function addDocument(db: D1Database, order: { id: string; seq: number | null; property_type: PropertyType }, file: File, kind: string, userId: string) {
   const r2 = await bucket();
   if (!r2) return { ok: false as const, error: "Încărcarea documentelor nu este disponibilă momentan. Trimite-le pe email la contact@valuefy.ro." };
   if (!file.size) return { ok: false as const, error: "Fișierul este gol." };
