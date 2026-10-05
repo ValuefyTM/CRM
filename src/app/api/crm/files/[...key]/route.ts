@@ -1,0 +1,16 @@
+import { getDb } from "@/lib/db";
+import { currentUser } from "@/lib/auth";
+import { bucket } from "@/lib/orders";
+
+/** Files moved from Glide (photos, logos), for the team only. */
+export async function GET(_: Request, { params }: { params: Promise<{ key: string[] }> }) {
+  const db = await getDb();
+  if (!db || !(await currentUser(db, "crm"))) return new Response("Autentifică-te din nou.", { status: 401 });
+  const key = (await params).key.join("/");
+  if (!key.startsWith("glide/")) return new Response("Nu există.", { status: 404 });
+  const obj = await (await bucket())?.get(key);
+  if (!obj) return new Response("Fișierul nu a fost găsit.", { status: 404 });
+  return new Response(obj.body, {
+    headers: { "Content-Type": obj.httpMetadata?.contentType ?? "application/octet-stream", "Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff" },
+  });
+}

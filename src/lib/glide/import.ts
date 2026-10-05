@@ -1,6 +1,7 @@
 // Server-only: writes rows prepared by transform.ts (Glide export) into D1. Idempotent: rows are matched on glide_id.
 import { now, uuid } from "../db";
 import { TABLES, type Row, type TableName } from "./transform";
+import { FILE_COLUMNS } from "../files";
 
 type Value = string | number | null;
 
@@ -85,7 +86,11 @@ export async function importRows(db: D1Database, table: string, rows: Row[], act
     // Glide is the source for imported rows; only "seen in the CRM" is kept once set.
     const update = keys.filter((k) => !["id", "glide_id", "viewed_by"].includes(k));
     if (cols.has("updated_at") && !update.includes("updated_at")) update.push("updated_at");
-    const sets = update.map((k) => (k === "updated_at" ? `updated_at = '${now()}'` : k === "viewed_at" ? "viewed_at = COALESCE(viewed_at, excluded.viewed_at)" : `${k} = excluded.${k}`));
+    const sets = update.map((k) =>
+      k === "updated_at" ? `updated_at = '${now()}'`
+      : k === "viewed_at" ? "viewed_at = COALESCE(viewed_at, excluded.viewed_at)"
+      : FILE_COLUMNS.some(([t, c]) => t === name && c === k) ? `${k} = CASE WHEN ${k} LIKE 'r2:%' OR ${k} LIKE 'lost:%' THEN ${k} ELSE excluded.${k} END` // files already moved to R2 stay
+      : `${k} = excluded.${k}`);
     return db.prepare(`${insert} ON CONFLICT(glide_id) DO UPDATE SET ${sets.join(", ")}`).bind(...values);
   });
   if (statements.length) await db.batch(statements);

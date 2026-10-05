@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { cap, getReport, INSPECTION_STATUS, lei, propertyHistory, REPORT_STATUS, reportAssets, reportTeam, ROLE_LABEL } from "@/lib/reports";
+import { fileSrc } from "@/lib/files";
 import { CrmShell } from "@/components/CrmShell";
 import { ReportList } from "@/components/ReportList";
 
@@ -57,9 +58,9 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
                   <h2>{assets.length > 1 ? `Bunul ${i + 1}${a.is_main ? " · principal" : ""}` : "Bunul evaluat"}</h2>
                   {a.value != null && <span className="pill pillOk"><i />{lei(a.value)}</span>}
                 </div>
-                {(a.image_url || a.sheet_photo) && (
+                {(fileSrc(a.sheet_photo) ?? fileSrc(a.image_url)) && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img className="assetImg" src={(a.sheet_photo ?? a.image_url)!} alt="" loading="lazy" />
+                  <img className="assetImg" src={(fileSrc(a.sheet_photo) ?? fileSrc(a.image_url))!} alt="" loading="lazy" />
                 )}
                 <dl className="dl">
                   <div><dt>Tip</dt><dd>{cap(a.type) || "—"}{a.construction === "under_construction" ? " · în construcție" : ""}</dd></div>
