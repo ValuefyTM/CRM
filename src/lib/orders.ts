@@ -106,13 +106,14 @@ export async function createOrder(db: D1Database, user: User, v: OrderInput) {
       await db
         .prepare(
           `INSERT INTO orders (id, seq, source, created_by, partner_id, property_type, city, address, surface_area, land_area, rooms, purpose, bank, urgent,
-            client_name, client_phone, client_email, contact_name, contact_phone, inspection_notes, may_contact_client, notes, docs_missing)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+            client_name, client_phone, client_email, contact_name, contact_phone, inspection_notes, may_contact_client, notes, docs_missing, client_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
         )
         .bind(
           id, next, user.kind === "partner" ? "partner" : "client", user.id, user.kind === "partner" ? user.partner_id : null,
           v.property_type, v.city, v.address, v.surface_area, v.land_area, v.rooms, v.purpose, v.bank, v.urgent,
           v.client_name, v.client_phone, v.client_email, v.contact_name, v.contact_phone, v.inspection_notes, v.may_contact_client, v.notes,
+          user.kind === "client" ? user.entity_id ?? null : null,
         )
         .run();
       return { id, seq: next };

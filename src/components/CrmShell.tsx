@@ -13,11 +13,12 @@ export async function CrmShell(props: { user: User; base: string; active: string
     <Shell
       app="crm"
       label="CRM"
-      cta={{ label: "+ Utilizator nou", href: `${b}/utilizatori/nou` }}
+      cta={{ label: "+ Client nou", href: `${b}/clienti/nou` }}
       nav={[
         { key: "home", label: "Acasă", href: b || "/" },
         { key: "orders", label: "Comenzi", href: `${b}/comenzi`, badge: unread },
         { key: "reports", label: "Rapoarte", href: `${b}/rapoarte` },
+        { key: "clients", label: "Clienți", href: `${b}/clienti` },
         { key: "users", label: "Utilizatori", href: `${b}/utilizatori` },
         ...(props.user.role === "owner" ? [{ key: "import", label: "Import Glide", href: `${b}/setari/import` }] : []),
       ]}
