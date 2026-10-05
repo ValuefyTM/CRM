@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { FilterSelect } from "@/components/FilterSelect";
 import { STATUS_LABEL } from "@/lib/labels";
 import { PartnersTable, type FirmRow } from "./firme/PartnersTable";
 
@@ -104,16 +105,13 @@ export function UsersBrowser(props: { rows: Row[]; firms: FirmRow[]; base: strin
         />
       ) : (
         <section className="card">
-          <div className="toolbar">
+          <div className="filterBar">
             <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută după nume, email, telefon, firmă…" aria-label="Caută" />
+            <FilterSelect label="Arată" value={f === "all" ? "" : f} onChange={(v) => setF(v || "all")} options={filters.filter(([k]) => k !== "all").map(([k, l, t]) => [k, l, inTab.filter(t).length])} all="Toți" />
             {peopleOrFirms}
             {addBtn}
           </div>
-          <div className="filters" role="group" aria-label="Filtre">
-            {filters.map(([k, label, test]) => (
-              <button key={k} type="button" aria-pressed={f === k} onClick={() => setF(k)}>{label} <small>{inTab.filter(test).length}</small></button>
-            ))}
-          </div>
+          <div className="resultLine"><span><b style={{ color: "var(--ink)" }}>{shown.length}</b> din {inTab.length}</span></div>
           {shown.length === 0 ? (
             <div className="empty">{inTab.length ? "Niciun utilizator pentru filtrele alese." : EMPTY[tab]}</div>
           ) : (

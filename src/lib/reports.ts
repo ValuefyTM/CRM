@@ -27,7 +27,14 @@ const ROW = `SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.r
      WHERE a.report_id = r.id ORDER BY a.is_main DESC LIMIT 1) AS asset
   FROM reports r LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id LEFT JOIN entities i ON i.id = r.issuer_id`;
 
-export type ReportFilters = { q?: string; status?: string; year?: string; bank?: string; issuer?: string; page?: number };
+export type ReportFilters = { q?: string; status?: string; year?: string; bank?: string; issuer?: string; evaluator?: string; sort?: string; page?: number };
+
+export const REPORT_SORTS: Record<string, [string, string]> = {
+  "": ["Cele mai noi", "COALESCE(r.report_date, substr(r.created_at, 1, 10)) DESC, CAST(r.number AS INTEGER) DESC"],
+  old: ["Cele mai vechi", "COALESCE(r.report_date, substr(r.created_at, 1, 10)) ASC"],
+  fee: ["Onorariu mare", "r.fee DESC NULLS LAST"],
+  value: ["Valoare mare", "r.result_value DESC NULLS LAST"],
+};
 export const PAGE_SIZE = 50;
 
 function where(f: ReportFilters) {
@@ -37,6 +44,7 @@ function where(f: ReportFilters) {
   if (f.year && /^\d{4}$/.test(f.year)) { w.push("COALESCE(r.reporting_year, CAST(substr(r.report_date, 1, 4) AS INTEGER)) = ?"); p.push(Number(f.year)); }
   if (f.bank) { w.push("COALESCE(b.code, b.name) = ?"); p.push(f.bank); }
   if (f.issuer) { w.push("r.issuer_id = ?"); p.push(f.issuer); }
+  if (f.evaluator) { w.push("EXISTS (SELECT 1 FROM report_members m WHERE m.report_id = r.id AND m.role = 'evaluator' AND m.user_id = ?)"); p.push(f.evaluator); }
   const q = f.q?.trim();
   if (q) {
     const like = `%${q.replace(/[%_]/g, "")}%`;
@@ -51,7 +59,7 @@ export async function listReports(db: D1Database, f: ReportFilters) {
   const { sql, params } = where(f);
   const from = `FROM reports r LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id`;
   const [rows, sum] = await Promise.all([
-    db.prepare(`${ROW} ${sql} ORDER BY COALESCE(r.report_date, substr(r.created_at, 1, 10)) DESC, CAST(r.number AS INTEGER) DESC LIMIT ${PAGE_SIZE} OFFSET ?`)
+    db.prepare(`${ROW} ${sql} ORDER BY ${(REPORT_SORTS[f.sort ?? ""] ?? REPORT_SORTS[""])[1]} LIMIT ${PAGE_SIZE} OFFSET ?`)
       .bind(...params, ((f.page ?? 1) - 1) * PAGE_SIZE).all<ReportRow>(),
     db.prepare(`SELECT COUNT(*) AS n, SUM(CASE WHEN r.status = 'done' THEN r.fee END) AS fees, SUM(r.status = 'done') AS done,
       SUM(r.status IN ('draft', 'in_progress')) AS open, SUM(r.status = 'suspended') AS suspended ${from} ${sql}`)
@@ -62,12 +70,13 @@ export async function listReports(db: D1Database, f: ReportFilters) {
 
 /** Values for the filter chips. */
 export async function reportFacets(db: D1Database) {
-  const [years, banks, issuers] = await Promise.all([
+  const [years, banks, issuers, evaluators] = await Promise.all([
     db.prepare(`SELECT COALESCE(reporting_year, CAST(substr(report_date, 1, 4) AS INTEGER)) AS y, COUNT(*) AS n FROM reports GROUP BY y HAVING y IS NOT NULL ORDER BY y DESC`).all<{ y: number; n: number }>(),
     db.prepare(`SELECT COALESCE(b.code, b.name) AS code, COUNT(*) AS n FROM reports r JOIN entities b ON b.id = r.recipient_id GROUP BY code ORDER BY n DESC`).all<{ code: string; n: number }>(),
     db.prepare(`SELECT i.id, i.name, COUNT(*) AS n FROM reports r JOIN entities i ON i.id = r.issuer_id GROUP BY i.id ORDER BY n DESC`).all<{ id: string; name: string; n: number }>(),
+    db.prepare(`SELECT u.id, COALESCE(NULLIF(u.name, ''), u.email) AS name, COUNT(*) AS n FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.role = 'evaluator' GROUP BY u.id ORDER BY n DESC`).all<{ id: string; name: string; n: number }>(),
   ]);
-  return { years: years.results, banks: banks.results, issuers: issuers.results };
+  return { years: years.results, banks: banks.results, issuers: issuers.results, evaluators: evaluators.results };
 }
 
 export async function reportsForOrder(db: D1Database, orderId: string) {

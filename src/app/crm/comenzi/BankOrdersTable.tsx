@@ -1,18 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ORDER_FILTERS, type CrmOrderRow } from "./OrdersTable";
+import { FilterSelect } from "@/components/FilterSelect";
+import { VIEWS, type CrmOrderRow } from "./OrdersTable";
 
 const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 const lei = (n: number | null) => (n == null ? "—" : `${n.toLocaleString("ro-RO")} lei`);
 
-const STATUS: [string, string, (r: CrmOrderRow) => boolean][] = [
-  ["all", "Toate", () => true],
-  ["open", "În lucru", (r) => ["received", "in_progress", "draft"].includes(r.status[0] === "Comandă primită" || r.status[0] === "Documente lipsă" ? "received" : r.status[0] === "În lucru" ? "in_progress" : r.status[0] === "Draft" ? "draft" : "")],
-  ["done", "Finalizate", (r) => r.status[0] === "Finalizată"],
-  ["suspended", "Suspendate", (r) => r.status[0] === "Suspendată"],
-  ["cancelled", "Anulate", (r) => r.status[0] === "Anulată"],
-];
 
 /**
  * Bank orders under framework contracts: historical ones from Glide, and new ones that will come from the banks'
@@ -20,17 +14,18 @@ const STATUS: [string, string, (r: CrmOrderRow) => boolean][] = [
  */
 export function BankOrdersTable({ rows, base, initial = "all" }: { rows: CrmOrderRow[]; base: string; initial?: string }) {
   const [q, setQ] = useState("");
-  const [bank, setBank] = useState("all");
-  const [st, setSt] = useState("all");
-  const [f, setF] = useState(initial in ORDER_FILTERS ? initial : "all");
+  const [bank, setBank] = useState("");
+  const [f, setF] = useState(VIEWS.some(([k]) => k === initial) ? initial : "");
   const [limit, setLimit] = useState(100);
   const banks = [...new Set(rows.map((r) => r.bank).filter(Boolean))] as string[];
-  const stTest = STATUS.find(([k]) => k === st)![2];
+  const test = VIEWS.find(([k]) => k === f)?.[2] ?? (() => true);
+  const byBank = (r: CrmOrderRow) => !bank || r.bank === bank;
   const shown = useMemo(() => {
     const t = fold(q.trim());
-    return rows.filter((r) => ORDER_FILTERS[f](r) && stTest(r) && (bank === "all" || r.bank === bank) &&
-      (!t || fold([r.ref, r.bankRef, r.client, r.branch, r.bank, r.contract].filter(Boolean).join(" ")).includes(t)));
-  }, [rows, q, bank, f, stTest]);
+    return rows.filter((r) => test(r) && byBank(r) && (!t || fold([r.ref, r.bankRef, r.client, r.branch, r.bank, r.contract].filter(Boolean).join(" ")).includes(t)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, q, bank, f]);
+  const active = [q.trim(), f, bank].filter(Boolean).length;
 
   if (!rows.length)
     return (
@@ -45,20 +40,15 @@ export function BankOrdersTable({ rows, base, initial = "all" }: { rows: CrmOrde
 
   return (
     <section className="card">
-      <div className="toolbar">
+      <div className="filterBar">
         <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută după nr. comandă, client, agenție…" aria-label="Caută" />
+        <FilterSelect label="Bancă" value={bank} onChange={setBank} options={banks.map((b) => [b, b, rows.filter((r) => r.bank === b && test(r)).length])} />
+        <FilterSelect label="Situație" value={f} onChange={setF} options={VIEWS.map(([k, l, t]) => [k, l, rows.filter((r) => byBank(r) && t(r)).length])} />
       </div>
-      <div className="filters" role="group" aria-label="Bancă">
-        {[["all", "Toate băncile"], ...banks.map((b) => [b, b])].map(([k, l]) => (
-          <button key={k} type="button" aria-pressed={bank === k} onClick={() => setBank(k)}>{l} <small>{k === "all" ? rows.length : rows.filter((r) => r.bank === k).length}</small></button>
-        ))}
+      <div className="resultLine">
+        <span><b style={{ color: "var(--ink)" }}>{shown.length.toLocaleString("ro-RO")}</b> din {rows.length.toLocaleString("ro-RO")} comenzi</span>
+        {active > 0 && <button type="button" className="resetLink" style={{ height: "auto", padding: 0 }} onClick={() => { setQ(""); setF(""); setBank(""); }}>✕ Resetează filtrele</button>}
       </div>
-      <div className="filters" role="group" aria-label="Status">
-        {STATUS.map(([k, l, test]) => (
-          <button key={k} type="button" aria-pressed={st === k} onClick={() => setSt(k)}>{l} <small>{rows.filter((r) => (bank === "all" || r.bank === bank) && test(r)).length}</small></button>
-        ))}
-      </div>
-      {f !== "all" && <div className="actions"><span className="muted">Filtru din carduri activ.</span><button type="button" className="linkBtn" onClick={() => setF("all")}>Arată toate</button></div>}
       {shown.length === 0 ? <div className="empty">Nicio comandă pentru filtrele alese.</div> : (
         <div className="tableWrap">
           <table className="table">

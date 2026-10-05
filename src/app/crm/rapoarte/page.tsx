@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { fmtDate, staffPage } from "@/lib/guard";
-import { cap, lei, listReports, PAGE_SIZE, REPORT_STATUS, reportFacets } from "@/lib/reports";
+import { cap, lei, listReports, PAGE_SIZE, REPORT_SORTS, REPORT_STATUS, reportFacets } from "@/lib/reports";
+import { ReportFilters } from "./ReportFilters";
 import { CrmShell } from "@/components/CrmShell";
 
 export const metadata: Metadata = { title: "Rapoarte | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
 
-type SP = { q?: string; status?: string; year?: string; bank?: string; issuer?: string; page?: string };
+type SP = { q?: string; status?: string; year?: string; bank?: string; issuer?: string; evaluator?: string; sort?: string; page?: string };
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const { db, user, base } = await staffPage();
@@ -19,14 +20,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     const qs = Object.entries(next).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v as string)}`).join("&");
     return `${base}/rapoarte${qs ? `?${qs}` : ""}`;
   };
-  const chip = (key: keyof SP, value: string | undefined, label: string, n?: number) => (
-    <a key={`${key}-${value ?? "all"}`} href={link({ [key]: sp[key] === value ? undefined : value })} aria-current={(sp[key] ?? undefined) === value ? "true" : undefined} className="chipLink">
-      {label}{n != null && <small>{n.toLocaleString("ro-RO")}</small>}
-    </a>
-  );
+
 
   return (
-    <CrmShell user={user} base={base} active="reports" title="Rapoarte" subtitle={`${data.total.toLocaleString("ro-RO")} rapoarte${sp.q || sp.status || sp.year || sp.bank || sp.issuer ? " pentru filtrele alese" : ""}`}>
+    <CrmShell user={user} base={base} active="reports" title="Rapoarte" subtitle="Toate rapoartele: VALUEFY și colaborările">
       <div className="kpis" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
         <div className="kpi" style={{ ["--dot" as string]: "var(--info)" }}><span><i />Rapoarte</span><b>{data.total.toLocaleString("ro-RO")}</b></div>
         <a className="kpi" href={link({ status: "done" })} style={{ ["--dot" as string]: "var(--ok)" }}><span><i />Finalizate</span><b>{data.done.toLocaleString("ro-RO")}</b></a>
@@ -36,17 +33,15 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       </div>
 
       <section className="card">
-        <form className="toolbar" action={`${base}/rapoarte`}>
-          {Object.entries(sp).filter(([k, v]) => v && k !== "q" && k !== "page").map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
-          <input className="search" name="q" defaultValue={sp.q} placeholder="Caută după client, nr. raport, adresă, nr. CF, telefon…" aria-label="Caută" />
-          <button type="submit" className="btn btnNavy">Caută</button>
-          {(sp.q || sp.status || sp.year || sp.bank || sp.issuer) && <a href={`${base}/rapoarte`} className="btn btnGhost">Resetează</a>}
-        </form>
-        <div className="filters" aria-label="An">{chip("year", undefined, "Toți anii")}{facets.years.map((y) => chip("year", String(y.y), String(y.y), y.n))}</div>
-        <div className="filters" aria-label="Status">{chip("status", undefined, "Toate statusurile")}{Object.entries(REPORT_STATUS).map(([k, [l]]) => chip("status", k, l))}</div>
-        <div className="filters" aria-label="Bancă">{chip("bank", undefined, "Toate băncile")}{facets.banks.map((b) => chip("bank", b.code, b.code, b.n))}</div>
-        {facets.issuers.length > 1 && <div className="filters" aria-label="Emitent">{chip("issuer", undefined, "Toți emitenții")}{facets.issuers.map((i) => chip("issuer", i.id, i.name, i.n))}</div>}
-
+        <ReportFilters
+          base={base} total={data.total} current={{ q: sp.q, status: sp.status, year: sp.year, bank: sp.bank, issuer: sp.issuer, evaluator: sp.evaluator, sort: sp.sort }}
+          years={facets.years.map((y) => [String(y.y), String(y.y), y.n])}
+          statuses={Object.entries(REPORT_STATUS).map(([k, [l]]) => [k, l])}
+          banks={facets.banks.map((b) => [b.code, b.code, b.n])}
+          issuers={facets.issuers.map((i) => [i.id, i.name, i.n])}
+          evaluators={facets.evaluators.map((e) => [e.id, e.name, e.n])}
+          sorts={Object.entries(REPORT_SORTS).map(([k, [l]]) => [k, l])}
+        />
         {data.rows.length === 0 ? (
           <div className="empty">{data.total === 0 && !sp.q ? "Nu există încă rapoarte. Proprietarul le poate aduce din Glide, din meniul Import Glide." : "Niciun raport pentru filtrele alese."}</div>
         ) : (

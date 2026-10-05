@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { FilterSelect } from "@/components/FilterSelect";
 
 export type FirmRow = { id: string; name: string; kind: string; kindLabel: string; city: string | null; cui: string | null; status: string; users: number; active: number; invited: number; lastLogin: string };
 
@@ -31,15 +32,12 @@ export function PartnersTable({ rows, base, initial = "all", head }: { rows: Fir
 
   return (
     <section className="card">
-      <div className="toolbar">
+      <div className="filterBar">
         <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută firma după nume, tip, localitate, CUI…" aria-label="Caută" />
+        <FilterSelect label="Arată" value={f === "all" ? "" : f} onChange={(v) => setF(v || "all")} options={tabs.filter(([k]) => k !== "all").map(([k, l]) => [k, l, counts[k as keyof typeof counts]])} all="Toate" />
         {head}
       </div>
-      <div className="filters" role="group" aria-label="Filtre">
-        {tabs.map(([k, label]) => (
-          <button key={k} type="button" aria-pressed={f === k} onClick={() => setF(k)}>{label} <small>{counts[k as keyof typeof counts]}</small></button>
-        ))}
-      </div>
+      <div className="resultLine"><span><b style={{ color: "var(--ink)" }}>{shown.length}</b> din {rows.length} firme</span></div>
       {shown.length === 0 ? (
         <div className="empty">{rows.length ? "Nicio firmă pentru filtrele alese." : "Nu ai adăugat încă nicio firmă parteneră."}</div>
       ) : (

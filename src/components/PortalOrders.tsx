@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { FilterSelect } from "./FilterSelect";
 
 export type PortalOrderRow = { id: string; ref: string; type: string; address: string; client: string; purpose: string; urgent: boolean; docsMissing: boolean; status: [string, string]; created: string };
 
@@ -30,9 +31,9 @@ export function PortalOrders({ rows, base, partner, compact }: { rows: PortalOrd
       </div>
       {!compact && rows.length > 0 && (
         <>
-          <div className="toolbar"><input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută după nr. comandă, adresă, client…" aria-label="Caută" /></div>
-          <div className="filters" role="group" aria-label="Filtre">
-            {filters.map(([k, l, t]) => <button key={k} type="button" aria-pressed={f === k} onClick={() => setF(k)}>{l} <small>{rows.filter(t).length}</small></button>)}
+          <div className="filterBar">
+            <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută după nr. comandă, adresă, client…" aria-label="Caută" />
+            <FilterSelect label="Arată" value={f === "all" ? "" : f} onChange={(v) => setF(v || "all")} options={filters.filter(([k]) => k !== "all").map(([k, l, t]) => [k, l, rows.filter(t).length])} />
           </div>
         </>
       )}
