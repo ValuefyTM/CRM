@@ -183,8 +183,8 @@ CREATE TABLE IF NOT EXISTS report_members (
 );
 CREATE INDEX IF NOT EXISTS idx_report_members_user ON report_members(user_id, role);
 
--- Properties (stable identity, reused across valuations) and the assets valued in each report.
-CREATE TABLE IF NOT EXISTS properties (
+-- Properties ("crm_properties": the website already has a "properties" table for its requests) (stable identity, reused across valuations) and the assets valued in each report.
+CREATE TABLE IF NOT EXISTS crm_properties (
   id             TEXT PRIMARY KEY,
   glide_id       TEXT UNIQUE,
   category       TEXT,
@@ -214,14 +214,14 @@ CREATE TABLE IF NOT EXISTS properties (
   created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
-CREATE INDEX IF NOT EXISTS idx_properties_cf ON properties(cf_number);
-CREATE INDEX IF NOT EXISTS idx_properties_city ON properties(city);
+CREATE INDEX IF NOT EXISTS idx_crm_properties_cf ON crm_properties(cf_number);
+CREATE INDEX IF NOT EXISTS idx_crm_properties_city ON crm_properties(city);
 
 CREATE TABLE IF NOT EXISTS assets (
   id            TEXT PRIMARY KEY,
   glide_id      TEXT UNIQUE,
   report_id     TEXT REFERENCES reports(id),            -- empty for historical assets whose report is missing
-  property_id   TEXT NOT NULL REFERENCES properties(id),
+  property_id   TEXT NOT NULL REFERENCES crm_properties(id),
   is_main       INTEGER NOT NULL DEFAULT 0,
   value         REAL,
   currency      TEXT NOT NULL DEFAULT 'RON',

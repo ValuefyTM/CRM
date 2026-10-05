@@ -23,7 +23,7 @@ export type ReportRow = {
 const ROW = `SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.result_value, r.report_type,
   c.name AS client_name, COALESCE(b.code, b.name) AS bank_code, i.name AS issuer_name,
   (SELECT u.name FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = r.id AND m.role = 'evaluator' LIMIT 1) AS evaluator,
-  (SELECT COALESCE(p.type, '') || '|' || COALESCE(p.full_address, p.city, '') FROM assets a JOIN properties p ON p.id = a.property_id
+  (SELECT COALESCE(p.type, '') || '|' || COALESCE(p.full_address, p.city, '') FROM assets a JOIN crm_properties p ON p.id = a.property_id
      WHERE a.report_id = r.id ORDER BY a.is_main DESC LIMIT 1) AS asset
   FROM reports r LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id LEFT JOIN entities i ON i.id = r.issuer_id`;
 
@@ -40,7 +40,7 @@ function where(f: ReportFilters) {
   const q = f.q?.trim();
   if (q) {
     const like = `%${q.replace(/[%_]/g, "")}%`;
-    w.push(`(r.label LIKE ? OR c.name LIKE ? OR r.number = ? OR c.phone LIKE ? OR EXISTS (SELECT 1 FROM assets a JOIN properties p ON p.id = a.property_id
+    w.push(`(r.label LIKE ? OR c.name LIKE ? OR r.number = ? OR c.phone LIKE ? OR EXISTS (SELECT 1 FROM assets a JOIN crm_properties p ON p.id = a.property_id
       WHERE a.report_id = r.id AND (p.full_address LIKE ? OR p.cf_number LIKE ? OR p.street LIKE ?)))`);
     p.push(like, like, q, like, like, like, like);
   }
@@ -122,7 +122,7 @@ export async function reportAssets(db: D1Database, id: string) {
         i.status AS inspection_status, i.scheduled_at, i.done_at, u.name AS inspector, i.contact_kind, i.contact_name, i.contact_phone,
         s.photo_url AS sheet_photo, s.present_person AS sheet_person, s.location AS sheet_location, s.description AS sheet_description,
         (SELECT COUNT(*) FROM assets x WHERE x.property_id = p.id AND x.id <> a.id) AS other_reports
-       FROM assets a JOIN properties p ON p.id = a.property_id LEFT JOIN inspections i ON i.asset_id = a.id LEFT JOIN users u ON u.id = i.inspector_id
+       FROM assets a JOIN crm_properties p ON p.id = a.property_id LEFT JOIN inspections i ON i.asset_id = a.id LEFT JOIN users u ON u.id = i.inspector_id
        LEFT JOIN inspection_sheets s ON s.asset_id = a.id
        WHERE a.report_id = ? ORDER BY a.is_main DESC`,
     )

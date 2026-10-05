@@ -13,14 +13,14 @@ export type ImportPlan = { tables: { name: TableName; rows: Row[] }[]; anomalies
 /** Insert order: every table only references tables before it. */
 export const TABLES = [
   "partners", "users", "entities", "contracts", "collaborations", "statements", "orders",
-  "reports", "report_members", "properties", "assets", "inspections", "inspection_sheets", "notes",
+  "reports", "report_members", "crm_properties", "assets", "inspections", "inspection_sheets", "notes",
 ] as const;
 export type TableName = (typeof TABLES)[number];
 
 export const TABLE_LABEL: Record<TableName, string> = {
   partners: "Firme partenere", users: "Utilizatori (echipă și colaboratori)", entities: "Clienți, bănci, firme",
   contracts: "Contracte", collaborations: "Contracte de colaborare", statements: "Borderouri", orders: "Comenzi",
-  reports: "Rapoarte", report_members: "Echipa rapoartelor", properties: "Proprietăți", assets: "Bunuri evaluate",
+  reports: "Rapoarte", report_members: "Echipa rapoartelor", crm_properties: "Proprietăți", assets: "Bunuri evaluate",
   inspections: "Inspecții", inspection_sheets: "Fișe de inspecție", notes: "Notițe",
 };
 
@@ -481,7 +481,7 @@ export function transform(files: Record<string, string>): ImportPlan {
       if (cfKey) propertyByCf.set(cfKey, pid);
       const type = t(b["TIP BUN"]);
       const year = num(b["ANUL CONSTRUIRII"]);
-      out.properties.push({
+      out.crm_properties.push({
         id: pid, glide_id: `bun:${gid}`, category: t(b["CATEGORIE BUN"]), type: type === "FERME AGRICOLE" ? "FERMA AGRICOLA" : type,
         construction: /CONSTRUCTIE/i.test(b["PROPRIETATE"] ?? "") ? "under_construction" : "existing",
         county: pick(COUNTY, t(b["JUDET"])) ?? ro(t(b["JUDET"])), city, street_type: pick(STREET, t(b["TIP ARTERA"])),
