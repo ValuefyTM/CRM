@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 
 export type CrmOrderRow = {
   id: string; ref: string; created: string; type: string; address: string; client: string; clientPhone: string;
-  from: string; fromId: string; firm: string | null; firmId: string | null; source: string; purpose: string;
+  from: string; fromId: string; firm: string | null; firmId: string | null; source: string; purpose: string; bank: string | null;
   urgent: boolean; unread: boolean; docs: number; docsMissing: boolean; status: [string, string];
 };
 
@@ -19,6 +19,7 @@ const FILTERS: [string, string, (r: CrmOrderRow) => boolean][] = [
   ["client", "De la clienți", (r) => r.source === "client"],
 ];
 
+/** Orders placed in the portal by partner users (for their clients) and by direct clients. */
 export function OrdersTable({ rows, base, initial }: { rows: CrmOrderRow[]; base: string; initial: string }) {
   const [q, setQ] = useState("");
   const [f, setF] = useState(initial);
@@ -36,7 +37,7 @@ export function OrdersTable({ rows, base, initial }: { rows: CrmOrderRow[]; base
         {FILTERS.map(([k, l, t]) => <button key={k} type="button" aria-pressed={f === k} onClick={() => setF(k)}>{l} <small>{rows.filter(t).length}</small></button>)}
       </div>
       {shown.length === 0 ? (
-        <div className="empty">{rows.length ? "Nicio comandă pentru filtrele alese." : "Nu a venit încă nicio comandă din portal."}</div>
+        <div className="empty">{rows.length ? "Nicio comandă pentru filtrele alese." : "Nu a venit încă nicio comandă din portal, de la colaboratori sau clienți."}</div>
       ) : (
         <div className="tableWrap">
           <table className="table">

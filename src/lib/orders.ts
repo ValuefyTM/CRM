@@ -8,7 +8,7 @@ import type { User } from "./users";
 export * from "./order-labels";
 
 export type Order = {
-  id: string; seq: number; source: "partner" | "client"; created_by: string; partner_id: string | null;
+  id: string; seq: number; source: "partner" | "client" | "bank"; created_by: string; partner_id: string | null;
   property_type: PropertyType; city: string; address: string; surface_area: number | null; land_area: number | null; rooms: number | null;
   purpose: string; bank: string | null; urgent: number;
   client_name: string; client_phone: string; client_email: string | null;
