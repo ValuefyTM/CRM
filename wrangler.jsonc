@@ -17,7 +17,7 @@
 			// database_id: Cloudflare → Storage & Databases → D1 → valuefy-db → copy the ID.
 			"binding": "DB",
 			"database_name": "valuefy-db",
-			"database_id": "REPLACE_WITH_VALUEFY_DB_ID",
+			"database_id": "588e7204-5b8e-4b2e-9baa-cadbc16841c7",
 			// CRM migrations are prefixed 1xxx so they never clash with the website's 0xxx files.
 			"migrations_dir": "migrations"
 		}
