@@ -513,3 +513,8 @@ a.rMeta:hover u { color: var(--acc-light); }
   .ofCard, .ofHero { break-inside: avoid; animation: none; }
   .ofHero { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+.ofPreviewBar { position: sticky; top: 78px; z-index: 15; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 14px 18px; border-radius: 16px; background: #fff; border: 1.5px solid var(--acc); box-shadow: 0 16px 36px -22px rgba(23, 23, 58, 0.45); }
+.ofPreviewBar > div:first-child { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.ofPreviewBar b { color: var(--ink); font-size: 14px; }
+.ofBtnGold.flat { margin-top: 0; height: 40px; font-size: 13.5px; }
+.ofBtnGold:disabled { opacity: 0.6; cursor: progress; }

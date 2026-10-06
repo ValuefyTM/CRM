@@ -12,7 +12,7 @@ const EMAIL = "contact@valuefy.ro";
 const day = (d: string | null) => (d ? new Date(d).toLocaleDateString("ro-RO", { day: "2-digit", month: "long", year: "numeric", timeZone: "Europe/Bucharest" }) : "—");
 const stamp = (d: string | null) => (d ? new Date(d).toLocaleString("ro-RO", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Bucharest" }) : "—");
 
-export function OfferView({ offer: o, order, preview = false }: { offer: Offer; order: Order; preview?: boolean }) {
+export function OfferView({ offer: o, order, preview = false, toolbar }: { offer: Offer; order: Order; preview?: boolean; toolbar?: React.ReactNode }) {
   const t = offerTotals(o);
   const docs = offerDocs(o);
   const terms = termSections(o.terms);
@@ -58,7 +58,7 @@ export function OfferView({ offer: o, order, preview = false }: { offer: Offer; 
       </header>
 
       <main className="ofMain">
-        {preview && <div className="ofBanner">Previzualizare din CRM — așa vede clientul oferta. Butoanele de acceptare sunt dezactivate aici.</div>}
+        {preview && (toolbar ?? <div className="ofBanner">Previzualizare din CRM — așa vede clientul oferta. Butoanele de acceptare sunt dezactivate aici.</div>)}
         {o.status === "declined" && <div className="ofBanner err">Oferta a fost refuzată{o.declined_at ? ` pe ${day(o.declined_at)}` : ""}. Pentru o ofertă nouă, scrie-ne la <a href={`mailto:${EMAIL}`}>{EMAIL}</a>.</div>}
         {expired && <div className="ofBanner err">Oferta a expirat pe {day(o.valid_until)}. Scrie-ne la <a href={`mailto:${EMAIL}`}>{EMAIL}</a> sau sună la {PHONE} pentru o ofertă actualizată.</div>}
 
@@ -87,10 +87,9 @@ export function OfferView({ offer: o, order, preview = false }: { offer: Offer; 
           <section className="ofCard">
             <div className="ofCardHead"><h2>Oferta financiară</h2><span className="ofMuted">lei</span></div>
             <ul className="ofLines">
-              <li><span><b>Raport de evaluare imobiliară</b><small>Include inspecția, analiza de piață și raportul semnat de evaluator autorizat ANEVAR.</small></span><b>{money(o.fee)}</b></li>
-              <li><span><b>{o.travel_label ?? "Deplasare"}</b><small>{o.travel_fee ? "Cost de deplasare la proprietate." : "Inclusă în preț."}</small></span><b>{money(o.travel_fee ?? 0)}</b></li>
-              {o.urgent_fee ? (
-                <li className={urgent ? "" : "opt"}><span><b>Regim urgent <em>{accepted ? (urgent ? "ales" : "neales") : "opțional"}</em></b><small>Raport livrat în {o.urgent_days ?? 2} zile lucrătoare de la inspecție.</small></span><b>+ {money(o.urgent_fee)}</b></li>
+              <li><span><b>Raport de evaluare imobiliară</b><small>Include deplasarea și inspecția, analiza de piață și raportul semnat de evaluator autorizat ANEVAR.</small></span><b>{money(o.fee)}</b></li>
+              {o.urgent_fee && o.urgent_days ? (
+                <li className={urgent ? "" : "opt"}><span><b>Regim urgent <em>{accepted ? (urgent ? "ales" : "neales") : "opțional"}</em></b><small>Raport livrat în {o.urgent_days} zile lucrătoare de la inspecție, în loc de {o.term_days}.</small></span><b>+ {money(o.urgent_fee)}</b></li>
               ) : null}
             </ul>
             <dl className="ofSum">
@@ -163,7 +162,7 @@ export function OfferView({ offer: o, order, preview = false }: { offer: Offer; 
             <p className="ofMuted small">Clientul a acceptat oferta tehnică și financiară și termenii de referință ai evaluării. Amprentă document: <code>{o.content_hash?.slice(0, 16)}</code></p>
           </section>
         ) : (
-          <OfferAccept token={o.token} disabled={!open || preview} urgentFee={o.urgent_fee ? money(Math.round(o.urgent_fee * (100 + o.vat_rate)) / 100) : null} urgentDays={o.urgent_days ?? 2}
+          <OfferAccept token={o.token} disabled={!open || preview} urgentFee={o.urgent_fee && o.urgent_days ? money(Math.round(o.urgent_fee * (100 + o.vat_rate)) / 100) : null} urgentDays={o.urgent_days ?? 0}
             defaultName={isCompany(o.client_name) ? "" : o.client_name ?? ""} defaultUrgent={!!order.urgent} />
         )}
 

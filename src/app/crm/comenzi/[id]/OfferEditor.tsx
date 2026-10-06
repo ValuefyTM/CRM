@@ -19,8 +19,8 @@ export function OfferEditor({ orderId, base, initial, status, evaluators }: {
 }) {
   const s = (v: number | null | undefined) => (v == null ? "" : String(v).replace(".", ","));
   const [f, setF] = useState({
-    ...initial, fee: s(initial.fee || null), travel_fee: s(initial.travel_fee), urgent_fee: s(initial.urgent_fee), vat_rate: s(initial.vat_rate),
-    term_days: s(initial.term_days), urgent_days: s(initial.urgent_days), travel_label: initial.travel_label ?? "", payment_terms: initial.payment_terms ?? "",
+    ...initial, fee: s(initial.fee || null), urgent_fee: s(initial.urgent_fee), vat_rate: s(initial.vat_rate),
+    term_days: s(initial.term_days), urgent_days: s(initial.urgent_days), payment_terms: initial.payment_terms ?? "",
     message: initial.message ?? "", evaluator_id: initial.evaluator_id ?? "",
   });
   const [docs, setDocs] = useState<OfferDoc[]>(initial.documents);
@@ -30,23 +30,22 @@ export function OfferEditor({ orderId, base, initial, status, evaluators }: {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setF((p) => ({ ...p, [k]: e.target.value }));
   const locked = status?.status === "accepted";
-  const net = num(f.fee) + num(f.travel_fee);
+  const net = num(f.fee);
+  const urgent = num(f.urgent_fee) > 0;
+  const preview = `${base}/comenzi/${orderId}/oferta`;
   const vat = Math.round(net * num(f.vat_rate || "21")) / 100;
 
-  const submit = async (action: "save" | "send") => {
-    if (action === "send" && !confirm(`Trimiți oferta pe ${f.client_email || "email"}?`)) return;
-    setBusy(action); setMsg(null);
+  /** Saves the form; "preview" then opens the offer as the client will see it, where it is sent from. */
+  const submit = async (then: "stay" | "preview") => {
+    setBusy(then); setMsg(null);
     const r = await fetch(`/api/crm/orders/${orderId}/offer`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...f, documents: docs, action }),
+      body: JSON.stringify({ ...f, urgent_days: urgent ? f.urgent_days : "", documents: docs, action: "save" }),
     }).catch(() => null);
-    const d = (await r?.json().catch(() => ({}))) as { error?: string; emailed?: boolean } | undefined;
-    setBusy("");
-    if (!r?.ok) return setMsg({ ok: false, text: d?.error || "Nu am putut salva oferta." });
-    if (action === "send" && d?.emailed === false) {
-      alert("Oferta a fost salvată și marcată ca trimisă, dar emailul nu a plecat. Copiază linkul și trimite-l manual.");
-    }
-    location.reload();
+    const d = (await r?.json().catch(() => ({}))) as { error?: string } | undefined;
+    if (!r?.ok) { setBusy(""); return setMsg({ ok: false, text: d?.error || "Nu am putut salva oferta." }); }
+    if (then === "preview") location.href = preview;
+    else location.reload();
   };
 
   const copy = async () => {
@@ -82,9 +81,9 @@ export function OfferEditor({ orderId, base, initial, status, evaluators }: {
           </ol>
           <p className="hint">Total: <b>{status.accepted_total ?? status.total}</b> cu TVA{status.accepted_urgent ? " · regim urgent ales de client" : ""}.</p>
           <div className="actions">
-            <a className="btn btnGhost btnSm" href={`${base}/comenzi/${orderId}/oferta`} target="_blank" rel="noopener">{locked ? "Vezi oferta semnată" : "Previzualizează"}</a>
+            <a className="btn btnGhost btnSm" href={preview}>{locked ? "Vezi oferta semnată" : "Previzualizează"}</a>
             <button type="button" className="btn btnGhost btnSm" onClick={copy}>Copiază linkul clientului</button>
-            {status.status === "sent" && <button type="button" className="btn btnGhost btnSm" disabled={!!busy} onClick={() => submit("send")}>{busy === "send" ? "Se trimite…" : "Retrimite pe email"}</button>}
+            {status.status === "sent" && <a className="btn btnGhost btnSm" href={preview}>Retrimite pe email</a>}
             {!locked && !open && <button type="button" className="btn btnNavy btnSm" onClick={() => setOpen(true)}>{status.status === "declined" ? "Pregătește o ofertă nouă" : "Modifică oferta"}</button>}
           </div>
         </>
@@ -92,24 +91,25 @@ export function OfferEditor({ orderId, base, initial, status, evaluators }: {
       {!status && !open && <button type="button" className="btn btnGold" onClick={() => setOpen(true)}>Pregătește oferta</button>}
 
       {open && !locked && (
-        <form className="offerForm" noValidate onSubmit={(e) => { e.preventDefault(); submit("save"); }}>
-          {status?.status === "sent" && <div className="note">Oferta a fost deja trimisă. Modificările apar la același link; folosește „Retrimite” ca să-l anunți pe client.</div>}
+        <form className="offerForm" noValidate onSubmit={(e) => { e.preventDefault(); submit("stay"); }}>
+          {status?.status === "sent" && <div className="note">Oferta a fost deja trimisă. Modificările apar la același link; după salvare o vezi în previzualizare, de unde o poți retrimite clientului.</div>}
           <div className="section">Onorariu și termen</div>
           <div className="grid4">
             <label className="field">Onorariu raport (lei, fără TVA) *<input className="input" inputMode="decimal" value={f.fee} onChange={set("fee")} placeholder="ex. 1200" /></label>
             <label className="field">TVA (%)<input className="input" inputMode="decimal" value={f.vat_rate} onChange={set("vat_rate")} /></label>
             <label className="field">Termen (zile lucrătoare) *<input className="input" inputMode="numeric" value={f.term_days} onChange={set("term_days")} /></label>
             <label className="field">Valabilă până la *<input className="input" type="date" value={f.valid_until} onChange={set("valid_until")} /></label>
-            <label className="field"><span>Deplasare (lei) <small>(gol = inclusă)</small></span><input className="input" inputMode="decimal" value={f.travel_fee} onChange={set("travel_fee")} /></label>
-            <label className="field">Etichetă deplasare<input className="input" value={f.travel_label} onChange={set("travel_label")} /></label>
-            <label className="field"><span>Regim urgent (lei) <small>(opțional)</small></span><input className="input" inputMode="decimal" value={f.urgent_fee} onChange={set("urgent_fee")} placeholder="ex. 400" /></label>
-            <label className="field">Termen urgent (zile)<input className="input" inputMode="numeric" value={f.urgent_days} onChange={set("urgent_days")} /></label>
           </div>
+          <div className="grid4">
+            <label className="field"><span>Tarif regim urgent (lei, fără TVA) <small>(opțional)</small></span><input className="input" inputMode="decimal" value={f.urgent_fee} onChange={set("urgent_fee")} placeholder="gol = fără regim urgent" /></label>
+            {urgent && <label className="field">Termen urgent (zile lucrătoare) *<input className="input" inputMode="numeric" value={f.urgent_days} onChange={set("urgent_days")} placeholder="ex. 2" /></label>}
+          </div>
+          <p className="hint">{urgent ? "Clientul poate alege regimul urgent la acceptarea ofertei." : "Regimul urgent apare în ofertă doar dacă îi completezi tariful."} Deplasarea este inclusă în onorariu.</p>
           <dl className="summary">
             <div><dt>Subtotal</dt><dd>{lei(net)}</dd></div>
             <div><dt>TVA</dt><dd>{lei(vat)}</dd></div>
             <div><dt>Total cu TVA</dt><dd>{lei(net + vat)}</dd></div>
-            {num(f.urgent_fee) > 0 && <div><dt>Cu regim urgent</dt><dd>{lei((net + num(f.urgent_fee)) * (1 + num(f.vat_rate || "21") / 100))}</dd></div>}
+            {urgent && <div><dt>Cu regim urgent</dt><dd>{lei((net + num(f.urgent_fee)) * (1 + num(f.vat_rate || "21") / 100))}</dd></div>}
           </dl>
           <label className="field">Condiții de plată<textarea className="textarea" rows={2} value={f.payment_terms} onChange={set("payment_terms")} /></label>
 
@@ -158,9 +158,8 @@ export function OfferEditor({ orderId, base, initial, status, evaluators }: {
 
           {msg && <div role={msg.ok ? "status" : "alert"} className={msg.ok ? "okMsg" : "error"}>{msg.text}</div>}
           <div className="actions">
-            <button type="submit" className="btn btnGhost" disabled={!!busy}>{busy === "save" ? "Se salvează…" : "Salvează ciorna"}</button>
-            {status && <a className="btn btnGhost" href={`${base}/comenzi/${orderId}/oferta`} target="_blank" rel="noopener">Previzualizează</a>}
-            <button type="button" className="btn btnGold" disabled={!!busy} onClick={() => submit("send")}>{busy === "send" ? "Se trimite…" : status?.status === "sent" ? "Salvează și retrimite →" : "Trimite oferta clientului →"}</button>
+            <button type="submit" className="btn btnGhost" disabled={!!busy}>{busy === "stay" ? "Se salvează…" : "Salvează ciorna"}</button>
+            <button type="button" className="btn btnGold" disabled={!!busy} onClick={() => submit("preview")}>{busy === "preview" ? "Se salvează…" : "Previzualizează și trimite →"}</button>
             {status && status.status !== "draft" && <button type="button" className="btn btnGhost" onClick={() => setOpen(false)}>Închide</button>}
           </div>
         </form>

@@ -154,8 +154,8 @@ export function offerDraft(o: Order, docs: Pick<OrderDocument, "kind">[], evalua
   return {
     client_name: o.client_name ?? o.creator_name ?? "",
     client_email: o.client_email ?? o.creator_email ?? "",
-    fee: 0, travel_fee: null, travel_label: o.city ? `Deplasare ${o.city}` : "Deplasare", urgent_fee: null, vat_rate: 21,
-    term_days: 5, urgent_days: 2, valid_until: valid,
+    fee: 0, travel_fee: null, travel_label: null, urgent_fee: null, vat_rate: 21,
+    term_days: 5, urgent_days: null, valid_until: valid,
     payment_terms: "50% avans la acceptare, 50% la livrarea raportului. Prin card sau transfer bancar, pe baza facturii emise.",
     evaluator_id: evaluator?.id ?? null, message: null, object_text: object, value_type: valueType,
     approaches: "Abordarea prin piață (comparații directe); alte abordări, după caz, conform datelor disponibile.",
@@ -188,11 +188,16 @@ export function validateOffer(body: unknown): { ok: true; value: OfferInput } | 
     ? (b.documents as Record<string, unknown>[]).slice(0, 30).map((d) => ({ label: str(d?.label, 160), received: d?.received === true, optional: d?.optional === true })).filter((d) => d.label)
     : [];
   const vat = amount(b.vat_rate);
+  // Express delivery is offered only with its own fee and number of days.
+  const urgentFee = amount(b.urgent_fee) || null;
+  const urgentDays = urgentFee ? int(b.urgent_days) : null;
+  if (urgentFee && !urgentDays) return { ok: false, error: "Alege în câte zile lucrătoare se livrează în regim urgent." };
+  if (urgentDays && urgentDays >= term) return { ok: false, error: "Termenul urgent trebuie să fie mai scurt decât termenul standard." };
   return {
     ok: true,
     value: {
-      client_name: str(b.client_name, 160), client_email: email.toLowerCase(), fee, travel_fee: amount(b.travel_fee) || null, travel_label: str(b.travel_label, 120) || null,
-      urgent_fee: amount(b.urgent_fee) || null, vat_rate: vat == null ? 21 : Math.min(vat, 100), term_days: term, urgent_days: int(b.urgent_days),
+      client_name: str(b.client_name, 160), client_email: email.toLowerCase(), fee, travel_fee: null, travel_label: null,
+      urgent_fee: urgentFee, vat_rate: vat == null ? 21 : Math.min(vat, 100), term_days: term, urgent_days: urgentDays,
       valid_until: valid, payment_terms: str(b.payment_terms, 600) || null, evaluator_id: str(b.evaluator_id, 60) || null, message: str(b.message, 2000) || null,
       object_text: str(b.object_text, 1000), value_type: str(b.value_type, 400), approaches: str(b.approaches, 600), standards: str(b.standards, 600),
       documents: docs, terms: str(b.terms, 20000),
