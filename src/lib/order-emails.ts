@@ -5,7 +5,7 @@ import { orderRef, propertyLabel, type OrderInput } from "./orders";
 import type { User } from "./users";
 
 /** Team inbox for new orders: ORDERS_NOTIFY_EMAIL, else the CRM owners. */
-const teamInbox = () => (process.env.ORDERS_NOTIFY_EMAIL || process.env.CRM_OWNER_EMAILS || "").split(",").map((s) => s.trim()).filter(Boolean);
+export const teamInbox = () => (process.env.ORDERS_NOTIFY_EMAIL || process.env.CRM_OWNER_EMAILS || "").split(",").map((s) => s.trim()).filter(Boolean);
 
 export async function sendOrderEmails(user: User, id: string, seq: number, v: OrderInput) {
   const ref = orderRef(seq);

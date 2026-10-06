@@ -11,6 +11,9 @@ import { CrmShell } from "@/components/CrmShell";
 import { History } from "@/components/History";
 import { OrderDocuments, OrderInfo, OrderStatusCard } from "@/components/OrderDetails";
 import { ReportList } from "@/components/ReportList";
+import { isExpired, money, offerDocs, offerDraft, offerForOrder, offerTotals, type OfferInput } from "@/lib/offers";
+import { offerLink } from "@/lib/offer-emails";
+import { OfferEditor } from "./OfferEditor";
 
 export const metadata: Metadata = { title: "Comandă | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -30,6 +33,26 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
   const [docs, log, reports] = await Promise.all([orderDocuments(db, id), history(db, [id]), reportsForOrder(db, id)]);
   const portal = o.source === "partner" || o.source === "client";
   const lead = o.lead_id ? await getLead(db, o.lead_id) : null;
+
+  // Offers: for orders from the portal and the website (bank orders follow the framework contract).
+  const offerable = !o.glide_id && (portal || o.source === "site");
+  const offer = offerable ? await offerForOrder(db, id) : null;
+  const evaluators = offerable
+    ? (await db.prepare("SELECT id, COALESCE(NULLIF(name, ''), email) AS name, anevar_no, role FROM users WHERE kind = 'internal' AND status <> 'disabled' AND role IN ('evaluator', 'owner', 'admin') ORDER BY name")
+      .all<{ id: string; name: string; anevar_no: string | null; role: string }>()).results
+    : [];
+  let offerInitial: OfferInput | null = null;
+  if (offerable) {
+    const draft = offerDraft(o, docs, evaluators.find((e) => e.id === user.id && e.role === "evaluator") ?? evaluators.find((e) => e.role === "evaluator") ?? null);
+    offerInitial = offer && offer.status !== "declined"
+      ? {
+          client_name: offer.client_name ?? "", client_email: offer.client_email ?? "", fee: offer.fee, travel_fee: offer.travel_fee, travel_label: offer.travel_label,
+          urgent_fee: offer.urgent_fee, vat_rate: offer.vat_rate, term_days: offer.term_days, urgent_days: offer.urgent_days, valid_until: offer.valid_until,
+          payment_terms: offer.payment_terms, evaluator_id: offer.evaluator_id, message: offer.message, object_text: offer.object_text ?? "", value_type: offer.value_type ?? "",
+          approaches: offer.approaches ?? "", standards: offer.standards ?? "", documents: offerDocs(offer), terms: offer.terms ?? "",
+        }
+      : draft;
+  }
 
   return (
     <CrmShell
@@ -69,7 +92,6 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
                 {o.creator_email && <div><dt>Email</dt><dd><a href={`mailto:${o.creator_email}`}>{o.creator_email}</a></dd></div>}
                 {o.bank_branch && <div><dt>Agenție</dt><dd>{o.bank_branch}</dd></div>}
               </dl>
-              {!o.glide_id && <p className="hint">Oferta, alocarea evaluatorului și facturarea se adaugă în etapa următoare. Deocamdată comanda poate fi doar consultată.</p>}
             </section>
           ) : (
             <section className="card">
@@ -86,6 +108,17 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
                 <div><dt>Data comenzii</dt><dd>{fmtDate(o.ordered_on ?? o.created_at)}</dd></div>
               </dl>
             </section>
+          )}
+          {offerable && offerInitial && (
+            <OfferEditor
+              orderId={o.id} base={base} initial={offerInitial} evaluators={evaluators}
+              status={offer ? {
+                number: offer.number, status: offer.status, link: await offerLink(offer), created_at: offer.created_at, sent_at: offer.sent_at, sent_to: offer.sent_to,
+                viewed_at: offer.viewed_at, accepted_at: offer.accepted_at, accepted_name: offer.accepted_name, accepted_urgent: offer.accepted_urgent,
+                total: money(offerTotals(offer).total), accepted_total: offer.accepted_at ? money(offerTotals(offer, !!offer.accepted_urgent).total) : null,
+                declined_at: offer.declined_at, decline_reason: offer.decline_reason, expired: offer.status === "sent" && isExpired(offer),
+              } : null}
+            />
           )}
           <ReportList reports={reports} base={base} title="Rapoarte pentru această comandă" empty="Niciun raport legat de comandă." />
           {(portal || o.source === "site" || o.address) && <OrderInfo o={o} />}

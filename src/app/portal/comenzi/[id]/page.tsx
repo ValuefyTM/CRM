@@ -4,6 +4,7 @@ import { fmtDate, portalPage } from "@/lib/guard";
 import { canSee, getOrder, orderCode, orderDocuments, orderPlace, orderWhat } from "@/lib/orders";
 import { PortalShell } from "@/components/PortalShell";
 import { OrderDocuments, OrderInfo, OrderStatusCard } from "@/components/OrderDetails";
+import { isExpired, money, offerForOrder, offerTotals } from "@/lib/offers";
 
 export const metadata: Metadata = { title: "Comandă | Portal VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -13,7 +14,9 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const { id } = await params;
   const o = await getOrder(db, id);
   if (!o || !canSee(user, o)) notFound();
-  const docs = await orderDocuments(db, id);
+  const [docs, found] = await Promise.all([orderDocuments(db, id), offerForOrder(db, id)]);
+  const offer = found && found.status !== "draft" ? found : null;
+  const expired = offer?.status === "sent" && isExpired(offer);
   const nou = (await searchParams).nou;
   const failed = nou?.startsWith("eroare-") ? Number(nou.slice(7)) : 0;
 
@@ -29,7 +32,24 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       )}
       <div className="cols">
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
-          {o.status === "received" && <section className="card" style={{ border: "1.5px solid var(--line)" }}>
+          {offer && (
+            <section className="card" style={{ border: `1.5px solid ${offer.status === "sent" && !expired ? "var(--acc)" : "var(--line)"}` }}>
+              <div className="cardHead">
+                <h2>Oferta de evaluare {offer.number}</h2>
+                <span className={`pill ${offer.status === "accepted" ? "pillOk" : offer.status === "declined" || expired ? "pillErr" : "pillWarn"}`}><i />
+                  {offer.status === "accepted" ? "Acceptată" : offer.status === "declined" ? "Refuzată" : expired ? "Expirată" : "De acceptat"}</span>
+              </div>
+              <dl className="dl">
+                <div><dt>Onorariu (cu TVA)</dt><dd>{money(offerTotals(offer, !!offer.accepted_urgent).total)}</dd></div>
+                <div><dt>Termen</dt><dd>{offer.accepted_urgent && offer.urgent_days ? offer.urgent_days : offer.term_days} zile lucrătoare de la inspecție</dd></div>
+                <div><dt>{offer.status === "accepted" ? "Acceptată" : "Valabilă până la"}</dt><dd>{fmtDate(offer.accepted_at ?? offer.valid_until)}</dd></div>
+              </dl>
+              <a className={`btn ${offer.status === "sent" && !expired ? "btnGold" : "btnGhost"}`} style={{ alignSelf: "flex-start" }} href={`${base}/oferta/${offer.token}`}>
+                {offer.status === "sent" && !expired ? "Vezi oferta și acceptă →" : "Vezi oferta"}
+              </a>
+            </section>
+          )}
+          {!offer && o.status === "received" && <section className="card" style={{ border: "1.5px solid var(--line)" }}>
             <div className="cardHead"><h2>Oferta de evaluare</h2><span className="pill"><i />În pregătire</span></div>
             <div className="actions" style={{ flexWrap: "nowrap" }}>
               <span className="spinner" aria-hidden />
