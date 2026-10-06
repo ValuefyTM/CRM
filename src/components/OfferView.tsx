@@ -159,7 +159,7 @@ export function OfferView({ offer: o, order, preview = false, toolbar }: { offer
             </dl>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             {o.signature && <img className="ofSig" src={o.signature} alt={`Semnătura ${o.accepted_name}`} />}
-            <p className="ofMuted small">Clientul a acceptat oferta tehnică și financiară și termenii de referință ai evaluării. Amprentă document: <code>{o.content_hash?.slice(0, 16)}</code></p>
+            <p className="ofMuted small">Clientul a acceptat oferta tehnică și financiară și termenii de referință ai evaluării. Oferta semnată devine contract de prestări servicii odată ce primim toate datele de facturare. Amprentă document: <code>{o.content_hash?.slice(0, 16)}</code></p>
           </section>
         ) : (
           <OfferAccept token={o.token} disabled={!open || preview} urgentFee={o.urgent_fee && o.urgent_days ? money(Math.round(o.urgent_fee * (100 + o.vat_rate)) / 100) : null} urgentDays={o.urgent_days ?? 0}

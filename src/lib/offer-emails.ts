@@ -48,11 +48,11 @@ export async function sendAcceptedEmails(o: Offer, order: Order) {
     jobs.push(sendEmail({
       to: o.sent_to,
       subject: `Ai acceptat oferta ${o.number} — VALUEFY`,
-      text: `Mulțumim! Ai acceptat și semnat oferta ${o.number}. Te contactăm pentru programarea inspecției.\nCopia semnată: ${link}`,
+      text: `Mulțumim! Ai acceptat și semnat oferta ${o.number}. Oferta semnată devine contract odată ce primim toate datele tale de facturare. Te contactăm pentru acestea și pentru programarea inspecției.\nCopia semnată: ${link}`,
       html: layout({
         eyebrow: `Oferta ${o.number} · acceptată`,
         title: "Mulțumim! Oferta a fost acceptată.",
-        body: `<p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#4A4A66">Ai semnat oferta și termenii de referință ai evaluării pe ${esc(new Date(o.accepted_at!).toLocaleString("ro-RO", { timeZone: "Europe/Bucharest" }))}. Te contactăm în curând pentru programarea inspecției.</p>${summary(o, order, urgent)}`,
+        body: `<p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#4A4A66">Ai semnat oferta și termenii de referință ai evaluării pe ${esc(new Date(o.accepted_at!).toLocaleString("ro-RO", { timeZone: "Europe/Bucharest" }))}. Oferta semnată se transformă automat în contract de prestări servicii odată ce primim toate datele tale de facturare. Te contactăm în curând pentru acestea și pentru programarea inspecției.</p>${summary(o, order, urgent)}`,
         button: { label: "Vezi oferta semnată →", url: link },
         foot: "Păstrează acest email: linkul duce la copia semnată a ofertei.",
       }),

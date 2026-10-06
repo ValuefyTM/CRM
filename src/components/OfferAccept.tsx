@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 export function PrintButton() {
   return <button type="button" className="ofBtnGhost" onClick={() => window.print()}>Descarcă PDF</button>;
@@ -82,21 +83,25 @@ export function OfferAccept({ token, disabled, urgentFee, urgentDays, defaultNam
   const [msg, setMsg] = useState("");
   const [declining, setDeclining] = useState(false);
   const [reason, setReason] = useState("");
+  const [signed, setSigned] = useState(false);
   const today = new Date().toLocaleDateString("ro-RO");
 
-  const post = async (body: object) => {
+  const post = async (body: { action: string; [k: string]: unknown }) => {
     setBusy(true); setMsg("");
     const r = await fetch(`/api/offer/${encodeURIComponent(token)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
     const d = (await r?.json().catch(() => ({}))) as { error?: string } | undefined;
     setBusy(false);
     if (!r?.ok) return setMsg(d?.error || "Nu am putut trimite. Verifică conexiunea și încearcă din nou.");
-    location.reload();
+    // After signing, explain what happens next before showing the signed offer.
+    if (body.action === "accept") setSigned(true);
+    else location.reload();
   };
 
   return (
     <section className="ofCard ofAccept" id="acceptare">
+      {signed && <SignedModal onClose={() => location.reload()} />}
       <h2>Acceptare și semnătură</h2>
-      <p className="ofMuted">Prin semnare accepți oferta tehnică și financiară și termenii de referință ai evaluării; oferta devine contract de prestări servicii. Primești o copie semnată pe email.</p>
+      <p className="ofMuted">Prin semnare accepți oferta tehnică și financiară și termenii de referință ai evaluării; după ce primim datele tale de facturare, oferta semnată se transformă automat în contract de prestări servicii. Primești o copie semnată pe email.</p>
       <form className="ofForm" onSubmit={(e) => {
         e.preventDefault();
         if (disabled) return;
@@ -133,5 +138,33 @@ export function OfferAccept({ token, disabled, urgentFee, urgentDays, defaultNam
         ) : <button type="button" className="ofLinkBtn" onClick={() => setDeclining(true)}>Refuz oferta</button>
       )}
     </section>
+  );
+}
+
+/** Shown right after the client signs: the signed offer becomes the contract once the billing details are in. */
+function SignedModal({ onClose }: { onClose: () => void }) {
+  const ok = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    ok.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [onClose]);
+  // Rendered on <body>: the offer cards are animated (transform), which would trap a fixed overlay inside them.
+  return createPortal(
+    <div className="ofModalBack" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="ofModal" role="dialog" aria-modal="true" aria-labelledby="signed-title" aria-describedby="signed-text">
+        <span className="ofModalIcon" aria-hidden>✓</span>
+        <h2 id="signed-title">Oferta a fost semnată</h2>
+        <p id="signed-text">
+          Mulțumim! Oferta semnată se va transforma <b>automat în contract de prestări servicii</b> odată ce primim <b>toate datele tale de facturare</b>.
+        </p>
+        <p className="ofMuted">Îți trimitem pe email o copie a ofertei semnate. Te contactăm în curând pentru datele de facturare și programarea inspecției.</p>
+        <button ref={ok} type="button" className="ofBtnNavy" onClick={onClose}>Am înțeles</button>
+      </div>
+    </div>,
+    document.body,
   );
 }
