@@ -15,9 +15,11 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 const cap = (s: string) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : "");
 const lei = (v: number) => `${Math.round(v).toLocaleString("ro-RO")} lei`;
 
-export function RegistryMap({ points, base, hover, onPick, height = "100%" }: {
-  points: RegistryPoint[]; base: string; hover?: string | null; onPick?: (id: string) => void; height?: number | string;
+export function RegistryMap({ points, base, hover, onPick, onHover, height = "100%" }: {
+  points: RegistryPoint[]; base: string; hover?: string | null; onPick?: (id: string) => void; onHover?: (id: string | null) => void; height?: number | string;
 }) {
+  const hoverCb = useRef(onHover);
+  hoverCb.current = onHover;
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<Leaflet.Map | null>(null);
   const L = useRef<typeof Leaflet | null>(null);
@@ -69,6 +71,11 @@ export function RegistryMap({ points, base, hover, onPick, height = "100%" }: {
           <a href="${base}/proprietati/${encodeURIComponent(p.id)}">Deschide fișa →</a></div>`,
         { closeButton: false, offset: [0, -4] },
       );
+      // Short label on hover (the card opens on click).
+      c.bindTooltip(`<b>${esc(cap(p.label))}</b>${p.value ? ` · ${lei(p.value)}` : ""}<br><small>${esc(p.address)}</small>`,
+        { direction: "top", offset: [0, -8], className: "rgTip", opacity: 1 });
+      c.on("mouseover", () => hoverCb.current?.(p.id));
+      c.on("mouseout", () => hoverCb.current?.(null));
       if (onPick) c.on("click", () => onPick(p.id));
       c.addTo(g);
       marks.current.set(p.id, c);
@@ -76,14 +83,16 @@ export function RegistryMap({ points, base, hover, onPick, height = "100%" }: {
     if (points.length) m.fitBounds(l.latLngBounds(points.map((p) => [p.lat, p.lng] as [number, number])), { padding: [30, 30], maxZoom: 16 });
   }, [ready, points, base, onPick]);
 
-  // The row under the mouse: its dot grows and comes to the front.
+  // The property under the mouse (in the list or on the map): its dot grows, comes to the front and shows its label;
+  // the map follows it when it is outside the view.
   useEffect(() => {
     const c = hover ? marks.current.get(hover) : null;
     if (!c) return;
     c.setStyle({ radius: 11, weight: 3, color: "#111" }).bringToFront();
     const m = map.current;
-    if (m && !m.getBounds().contains(c.getLatLng())) m.panTo(c.getLatLng());
-    return () => { c.setStyle({ radius: 6, weight: 1.5, color: "#fff" }); };
+    if (m && !m.getBounds().contains(c.getLatLng())) m.panTo(c.getLatLng(), { animate: true });
+    if (!c.isPopupOpen()) c.openTooltip();
+    return () => { c.setStyle({ radius: 6, weight: 1.5, color: "#fff" }); c.closeTooltip(); };
   }, [hover]);
 
   return (

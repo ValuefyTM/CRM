@@ -69,15 +69,29 @@ export function RegistryView(p: {
   const active = [c.q, c.cat, c.county, c.city, c.year, c.geo].filter(Boolean).length;
   const withGeo = new Set(p.points.map((x) => x.id));
 
-  // A dot clicked on the map: its row (if on this page) is marked and scrolled into view.
-  const onPick = useCallback((id: string) => {
-    setPicked(id);
-    const row = list.current?.querySelector(`[data-id="${CSS.escape(id)}"]`);
-    row?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  // Brings a row into view inside the list (not the page), centred when it is outside.
+  const reveal = useCallback((id: string) => {
+    const box = list.current;
+    const row = box?.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"]`);
+    if (!box || !row) return false;
+    const top = row.offsetTop, bottom = top + row.offsetHeight;
+    if (top < box.scrollTop || bottom > box.scrollTop + box.clientHeight) box.scrollTo({ top: top - box.clientHeight / 2 + row.offsetHeight / 2, behavior: "smooth" });
+    return true;
   }, []);
+
+  // A dot clicked on the map: its row (if on this page) is marked and scrolled into view.
+  const onPick = useCallback((id: string) => { setPicked(id); reveal(id); }, [reveal]);
+
+  // A dot under the mouse on the map: its row lights up and comes into view; a dot of another page says so.
+  const [offPage, setOffPage] = useState(false);
+  const onMapHover = useCallback((id: string | null) => {
+    setHover(id);
+    setOffPage(!!id && !reveal(id));
+  }, [reveal]);
 
   const rowProps = (r: RegistryRow) => ({
     "data-id": r.id, onMouseEnter: () => setHover(r.id), onMouseLeave: () => setHover(null),
+    onFocus: () => setHover(r.id), onBlur: () => setHover(null),
     className: `${picked === r.id ? "picked" : ""}`,
   });
 
@@ -203,7 +217,8 @@ export function RegistryView(p: {
             <div className={`rgGutter${drag ? " drag" : ""}`} role="separator" aria-orientation="vertical" aria-label="Lățimea listei" aria-valuenow={Math.round(left)} aria-valuemin={22} aria-valuemax={75}
               tabIndex={0} onPointerDown={startDrag} onDoubleClick={() => nudge(42 - left)}
               onKeyDown={(e) => { if (e.key === "ArrowLeft") nudge(-3); if (e.key === "ArrowRight") nudge(3); }} />
-            <div className="rgSplitMap"><RegistryMap points={p.points} base={p.base} hover={hover ?? picked} onPick={onPick} /></div>
+            <div className="rgSplitMap" style={{ position: "relative" }}><RegistryMap points={p.points} base={p.base} hover={hover ?? picked} onPick={onPick} onHover={onMapHover} />
+              {offPage && hover && <span className="rgOffPage">Proprietatea nu e pe pagina curentă a listei · click pe punct pentru fișă</span>}</div>
           </div>
         )}
     </section>

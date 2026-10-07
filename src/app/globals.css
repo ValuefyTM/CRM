@@ -1203,3 +1203,10 @@ body { font-size: 13px; -moz-osx-font-smoothing: grayscale; text-rendering: opti
 .rgIds { max-width: 190px; }
 .rgIds span { display: block; overflow: hidden; text-overflow: ellipsis; }
 .rgTable .dbNum { min-width: 24px; height: 22px; font-size: 11.5px; }
+.rgCards { position: relative; scroll-behavior: smooth; }
+.rgItem:focus-visible { outline: 2px solid var(--acc); outline-offset: -2px; }
+.rgItem.hover .rgThumb { box-shadow: 0 0 0 2px var(--acc); }
+.leaflet-tooltip.rgTip { font-family: var(--font); font-size: 11.5px; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 9px; padding: 6px 9px; box-shadow: 0 8px 20px -10px rgba(0, 0, 0, 0.35); line-height: 1.35; }
+.leaflet-tooltip.rgTip small { color: var(--muted-2); }
+.rgOffPage { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); z-index: 600; background: var(--ink); color: #fff; font-size: 11.5px; font-weight: 600; padding: 6px 10px; border-radius: 9px; white-space: nowrap; pointer-events: none; }
+.rgItem.hover { background: var(--acc-soft); box-shadow: inset 3px 0 0 var(--acc); }
