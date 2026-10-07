@@ -7,6 +7,7 @@ export const INTERNAL_ROLES = [
   ["owner", "Proprietar"],
   ["admin", "Administrator"],
   ["evaluator", "Evaluator"],
+  ["inspector", "Inspector"],
   ["operator", "Operator"],
 ] as const;
 export const PARTNER_ROLES = [

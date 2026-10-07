@@ -1,6 +1,6 @@
 // Server-only: email sign-in (6-digit code or one-time link), invitations and sessions.
 import { cookies } from "next/headers";
-import { APP, APP_NAME, appOf, appUrl, type App, type Kind } from "./site";
+import { APP, APP_NAME, appOf, appUrl, INSP_ROLES, type App, type Kind } from "./site";
 import { now, uuid } from "./db";
 import { normEmail, randomCode, randomToken, safeEqual, sha256 } from "./crypto";
 import { esc, layout, sendEmail } from "./email";
@@ -36,6 +36,12 @@ export async function audit(db: D1Database, actor: string, action: string, entit
     .run();
 }
 
+/** The inspections app is only for inspectors and evaluators; inspectors use only that app, not the CRM. */
+export const allowedIn = (app: App, u: User) =>
+  app === "insp" ? u.kind === "internal" && INSP_ROLES.includes(u.role) : app !== "crm" || u.role !== "inspector";
+
+const appName = (app: App, kind: Kind) => (app === "insp" ? "Inspecții VALUEFY" : APP_NAME[kind]);
+
 /** Team members sign in straight away; partners and clients first accept the invitation (name, phone, terms). */
 const mustAcceptInvite = (u: User) => u.status === "invited" && u.kind !== "internal";
 
@@ -45,7 +51,7 @@ const mustAcceptInvite = (u: User) => u.status === "invited" && u.kind !== "inte
  * Sends a sign-in code + link if the email belongs to an account that may sign in. Always resolves the same way,
  * so the form never reveals whether an address has an account. Invited partners and clients get their invitation again.
  */
-export async function requestSignIn(db: D1Database, kind: Kind, rawEmail: string): Promise<void> {
+export async function requestSignIn(db: D1Database, kind: Kind, rawEmail: string, toApp: App = appOf(kind)): Promise<void> {
   const email = normEmail(rawEmail);
   const recent = await db
     .prepare("SELECT COUNT(*) AS n FROM auth_codes WHERE email = ? AND audience = ? AND created_at > ?")
@@ -54,7 +60,7 @@ export async function requestSignIn(db: D1Database, kind: Kind, rawEmail: string
   if ((recent?.n ?? 0) >= MAX_CODES_PER_HOUR) return;
 
   const u = await accountFor(db, kind, email);
-  if (!u || !canSignIn(u)) return;
+  if (!u || !canSignIn(u) || !allowedIn(toApp, u)) return;
   if (mustAcceptInvite(u)) {
     await sendInvite(db, u.id, "system");
     return;
@@ -67,8 +73,8 @@ export async function requestSignIn(db: D1Database, kind: Kind, rawEmail: string
     .bind(uuid(), kind, email, await sha256(`${email}:${code}`), await sha256(token), inMinutes(CODE_MINUTES))
     .run();
 
-  const link = await appUrl(appOf(kind), `/login/link?token=${encodeURIComponent(token)}`);
-  const app = APP_NAME[kind];
+  const link = await appUrl(toApp, `/login/link?token=${encodeURIComponent(token)}`);
+  const app = appName(toApp, kind);
   await sendEmail({
     to: email,
     subject: `Codul tău de autentificare: ${code}`,
@@ -86,7 +92,7 @@ export async function requestSignIn(db: D1Database, kind: Kind, rawEmail: string
 }
 
 /** Checks a 6-digit code. Returns the user id on success. */
-export async function verifyCode(db: D1Database, kind: Kind, rawEmail: string, code: string): Promise<string | null> {
+export async function verifyCode(db: D1Database, kind: Kind, rawEmail: string, code: string, app: App = appOf(kind)): Promise<string | null> {
   const email = normEmail(rawEmail);
   const row = await db
     .prepare(
@@ -101,7 +107,7 @@ export async function verifyCode(db: D1Database, kind: Kind, rawEmail: string, c
     return null;
   }
   await db.prepare("UPDATE auth_codes SET used_at = ? WHERE id = ?").bind(now(), row.id).run();
-  return signInUserId(db, kind, email);
+  return signInUserId(db, kind, email, app);
 }
 
 /** Checks a one-time link token (login or invite) of an app. Returns the account it belongs to and, by default, uses it up. */
@@ -115,9 +121,9 @@ export async function consumeToken(db: D1Database, app: App, purpose: "login" | 
   return { email: row.email, kind: row.audience };
 }
 
-export async function signInUserId(db: D1Database, kind: Kind, email: string) {
+export async function signInUserId(db: D1Database, kind: Kind, email: string, app: App = appOf(kind)) {
   const u = await accountFor(db, kind, email);
-  return u && canSignIn(u) && !mustAcceptInvite(u) ? u.id : null;
+  return u && canSignIn(u) && !mustAcceptInvite(u) && allowedIn(app, u) ? u.id : null;
 }
 
 // ---------- invitations ----------
@@ -132,6 +138,23 @@ export async function sendInvite(db: D1Database, userId: string, actor: string):
   const hello = u.name ? `Bună, ${u.name.split(" ")[0]}!` : "Bună!";
   await db.prepare("UPDATE users SET invited_at = ? WHERE id = ?").bind(now(), u.id).run();
   await audit(db, actor, "user.invite", "user", u.id, u.email);
+
+  if (u.kind === "internal" && u.role === "inspector") {
+    const link = await appUrl("insp", "/login");
+    return sendEmail({
+      to: u.email,
+      subject: "Ai acces în aplicația de inspecții VALUEFY",
+      text: `${hello}\nAi primit acces în aplicația de inspecții VALUEFY. Deschide-o pe telefon și intră cu adresa ${u.email}: ${link}\nNu ai nevoie de parolă: primești un cod pe email la fiecare autentificare. Din browser poți alege „Adaugă pe ecranul principal”, ca să o ai ca aplicație.`,
+      html: layout({
+        eyebrow: "Inspecții VALUEFY",
+        title: `${hello} Ai primit acces în aplicația de inspecții.`,
+        body: `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A66">Deschide linkul de pe telefon și intră cu adresa <strong style="color:#17173A">${esc(u.email)}</strong>. Nu ai nevoie de parolă: la fiecare autentificare primești un cod pe email.</p>
+<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A66">Din meniul browserului alege „Adaugă pe ecranul principal”, ca să o ai ca aplicație și să poți lucra și fără semnal.</p>`,
+        button: { label: "Deschide aplicația →", url: link },
+        foot: "Dacă nu te aștepți la acest email, îl poți ignora.",
+      }),
+    });
+  }
 
   if (u.kind === "internal") {
     const link = await appUrl("crm", "/login");
@@ -179,8 +202,8 @@ export async function sendInvite(db: D1Database, userId: string, actor: string):
 
 // ---------- sessions ----------
 
-export async function createSession(db: D1Database, kind: Kind, userId: string) {
-  const app = APP[appOf(kind)];
+export async function createSession(db: D1Database, kind: Kind, userId: string, toApp: App = appOf(kind)) {
+  const app = APP[toApp];
   const token = randomToken();
   const expires = new Date(Date.now() + app.sessionDays * 864e5);
   await db
@@ -205,7 +228,7 @@ export async function currentUser(db: D1Database, app: App): Promise<User | null
     .bind(await sha256(token), now())
     .first<{ user_id: string }>();
   const u = row ? await getUser(db, row.user_id) : null;
-  return u && u.status === "active" && canSignIn(u) ? u : null;
+  return u && u.status === "active" && canSignIn(u) && allowedIn(app, u) ? u : null;
 }
 
 export async function endSession(db: D1Database, app: App) {

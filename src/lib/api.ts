@@ -27,5 +27,8 @@ export async function portalApi(): Promise<{ db: D1Database; user: User } | { re
 
 export const json = async (req: Request) => ((await req.json().catch(() => ({}))) ?? {}) as Record<string, unknown>;
 
+/** App a sign-in form belongs to, when it is not the kind's default (the inspections app). */
+export const appParam = (v: unknown) => (v === "insp" ? ("insp" as const) : undefined);
+
 /** Account kind sent by the sign-in forms. */
 export const kindParam = (v: unknown): Kind => (v === "internal" || v === "partner" || v === "client" ? v : "client");

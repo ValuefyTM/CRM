@@ -22,6 +22,7 @@ const FILTERS: Record<Tab, [string, string, (r: Row) => boolean][]> = {
   interni: [
     ["all", "Toți", () => true],
     ["evaluator", "Evaluatori", (r) => r.role === "evaluator" && r.status !== "disabled"],
+    ["inspector", "Inspectori", (r) => r.role === "inspector" && r.status !== "disabled"],
     ["admin", "Administrare", (r) => (r.role === "owner" || r.role === "admin") && r.status !== "disabled"],
     ["operator", "Operatori", (r) => r.role === "operator" && r.status !== "disabled"],
     ["contractor", "Colaboratori externi", (r) => r.engagement === "contractor" && r.status !== "disabled"],

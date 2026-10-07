@@ -5,7 +5,8 @@ import { APP } from "@/lib/site";
 import { json } from "@/lib/api";
 
 export async function POST(req: Request) {
-  const app = (await json(req)).app === "crm" ? "crm" : "portal";
+  const a = (await json(req)).app;
+  const app = a === "crm" || a === "insp" ? a : "portal";
   const db = await getDb();
   if (db) await endSession(db, app);
   const res = NextResponse.json({ ok: true });

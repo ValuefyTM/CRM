@@ -1,0 +1,235 @@
+/* Inspections app (inspectii.valuefy.ro): phone first, VALUEFY tokens from globals.css. */
+body:has(.insp) { background: var(--cream); overscroll-behavior-y: none; }
+.insp { min-height: 100dvh; color: var(--ink); -webkit-tap-highlight-color: transparent; }
+.insp button { cursor: pointer; }
+.insp .muted { color: var(--muted-2); font-size: 13px; }
+.insp .mono { font-family: var(--mono); }
+.insp .hint { font-size: 12.5px; color: var(--muted-2); line-height: 1.5; margin: 0; }
+.insp .center { text-align: center; }
+.inspEyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: var(--acc-light); text-transform: uppercase; }
+
+/* ---------- sign-in ---------- */
+.inspLogin { min-height: 100dvh; display: flex; flex-direction: column; background: var(--cream); }
+.inspLogin header { background: var(--navy); color: #fff; padding: calc(36px + env(safe-area-inset-top)) 22px 34px; display: flex; flex-direction: column; gap: 10px; }
+.inspLogin header img { width: 56px; height: 56px; border-radius: 14px; margin-bottom: 8px; }
+.inspLogin h1 { margin: 0; font-size: 26px; line-height: 1.15; letter-spacing: -0.03em; }
+.inspLogin header p { margin: 0; color: var(--on-navy); font-size: 14px; line-height: 1.5; }
+.inspLogin section { padding: 24px 20px; display: flex; flex-direction: column; gap: 14px; max-width: 480px; width: 100%; margin: 0 auto; }
+.inspLogin .authBox { gap: 14px; }
+
+/* ---------- shell ---------- */
+.iApp { max-width: 640px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; background: var(--cream); position: relative; }
+.iBody { flex: 1; display: flex; flex-direction: column; padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+.iOffline { position: sticky; top: 0; z-index: 40; background: var(--acc); color: var(--ink); font-size: 12px; font-weight: 700; text-align: center; padding: calc(6px + env(safe-area-inset-top)) 12px 6px; }
+.iNav {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 0; z-index: 30; width: 100%; max-width: 640px;
+  background: var(--navy); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+}
+.iNav a { position: relative; height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border-radius: 12px; color: var(--on-navy-2); font-size: 11px; font-weight: 700; }
+.iNav a[aria-current="page"] { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.iBadge { position: absolute; top: 4px; left: calc(50% + 6px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--acc); color: var(--ink); font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+
+.iTop {
+  position: sticky; top: 0; z-index: 20; background: var(--navy); color: #fff; display: flex; align-items: center; gap: 10px;
+  padding: calc(12px + env(safe-area-inset-top)) 14px 12px; min-height: 60px;
+}
+.iOffline + .iBody .iTop { top: 30px; }
+.iTopText { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.iTopText b { font-size: 16px; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.iTopText span { font-size: 12px; color: var(--on-navy-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.iIconBtn { width: 40px; height: 40px; flex-shrink: 0; border-radius: 12px; border: 0; background: rgba(255, 255, 255, 0.08); color: #fff; display: flex; align-items: center; justify-content: center; }
+.iIconBtn.light { background: var(--cream-2); color: var(--ink); }
+.iIconBtn.flip svg { transform: scaleX(-1); }
+.iIconBtn:disabled { opacity: 0.5; }
+.iTextBtn { border: 0; background: none; color: var(--acc-light); font-size: 13px; font-weight: 700; padding: 8px; }
+.iPad2 .iTextBtn, .iBox .iTextBtn { color: var(--acc-text); align-self: flex-start; padding: 4px 0; }
+.iCount { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--acc-light); }
+.iProgress { height: 4px; background: var(--cream-2); position: sticky; top: calc(60px + env(safe-area-inset-top)); z-index: 19; }
+.iProgress i { display: block; height: 100%; background: var(--acc); transition: width 0.3s var(--ease); }
+
+/* ---------- home ---------- */
+.iHero { background: var(--navy); color: #fff; padding: calc(18px + env(safe-area-inset-top)) 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+.iHeroTop { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.iBrand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.iBrand img { width: 36px; height: 36px; border-radius: 10px; }
+.iBrand > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.iMe { font-size: 13px; color: var(--on-navy-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.iMenu { position: relative; }
+.iMenu summary { list-style: none; display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.iMenu summary::-webkit-details-marker { display: none; }
+.iMenu > div { position: absolute; right: 0; top: calc(100% + 8px); z-index: 50; background: #fff; color: var(--ink); border-radius: 14px; border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(23, 23, 58, 0.18); padding: 6px; display: flex; flex-direction: column; min-width: 210px; }
+.iMenu > div button { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; border: 0; background: none; border-radius: 10px; font-size: 14px; font-weight: 700; color: var(--ink); text-align: left; }
+.iMenu > div button:active { background: var(--cream-2); }
+.iDot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+.iDot.off { background: var(--acc); }
+.iHero h1 { margin: 0; font-size: 25px; line-height: 1.15; letter-spacing: -0.035em; }
+.iHeroNote { margin: -6px 0 0; font-size: 13px; color: var(--acc-light); }
+.iTabs { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 -18px; padding: 0 18px; }
+.iTabs::-webkit-scrollbar { display: none; }
+.iTabs button { flex-shrink: 0; padding: 9px 14px; border-radius: 999px; border: 0; background: rgba(255, 255, 255, 0.08); color: #f4f5f7; font-size: 13px; font-weight: 700; }
+.iTabs button.on { background: var(--acc); color: var(--ink); }
+
+.iPad { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.iPad.withCta { padding-bottom: 96px; }
+.iStack { display: flex; flex-direction: column; gap: 10px; }
+.iDay { margin: 6px 2px 0; font-size: 13px; font-weight: 700; color: var(--muted); text-transform: none; }
+.iBanner { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--acc-soft); border: 1px solid var(--acc-line); font-size: 13px; line-height: 1.4; }
+.iBanner > span:nth-child(2) { flex: 1; }
+.iBanner b { color: var(--acc-text); white-space: nowrap; }
+.iBanner.soft { background: #fff; border-color: var(--line); }
+.iBannerN { width: 28px; height: 28px; flex-shrink: 0; border-radius: 50%; background: var(--acc); color: var(--ink); font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+.iSearch { display: flex; align-items: center; gap: 8px; height: 46px; padding: 0 14px; border-radius: 12px; background: #fff; border: 1px solid var(--line); color: var(--muted-2); }
+.iSearch input { flex: 1; border: 0; outline: 0; background: none; font-size: 15px; color: var(--ink); min-width: 0; }
+.iEmpty { margin: 24px 8px; text-align: center; color: var(--muted-2); font-size: 14px; line-height: 1.55; }
+.iSkeleton { display: flex; flex-direction: column; gap: 12px; }
+.iSkeleton i { display: block; height: 120px; border-radius: 18px; background: linear-gradient(90deg, #fff, var(--cream-2), #fff); background-size: 200% 100%; animation: iShimmer 1.2s infinite linear; }
+@keyframes iShimmer { to { background-position: -200% 0; } }
+
+.iCard { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 18px; background: #fff; border: 1px solid var(--line); text-align: left; color: var(--ink); font: inherit; width: 100%; }
+.iCard:active { transform: scale(0.99); }
+.iCard.soon { border: 1.5px solid var(--acc); }
+.iCardHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.iCardHead h3 { margin: 0; }
+.iTime { font-family: var(--mono); font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+.iTime.small { font-size: 14px; }
+.iBox > .iCardHead .iTime { font-family: var(--font); font-size: 17px; letter-spacing: -0.02em; }
+.iCardMain { display: flex; flex-direction: column; gap: 3px; }
+.iCardMain b { font-size: 16px; }
+.iCardMain span { font-size: 13px; color: var(--muted-2); line-height: 1.4; }
+.iTags { display: flex; gap: 6px; flex-wrap: wrap; }
+.iTag { padding: 4px 9px; border-radius: 8px; background: #f7f8fa; font-size: 11px; font-weight: 700; color: var(--muted); }
+.iTag.warn { background: var(--acc-soft); color: var(--acc-text); }
+.iPill { flex-shrink: 0; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.02em; background: var(--neutral-bg); color: var(--neutral-text); white-space: nowrap; }
+.iPill.ok { background: var(--ok-bg); color: var(--ok-text); }
+.iPill.warn, .iPill.acc { background: var(--acc-soft); color: var(--acc-text); }
+.iPill.err { background: var(--err-bg); color: var(--err); }
+
+/* ---------- boxes, fields, buttons ---------- */
+.iBox { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.iBox.flush { padding: 0; overflow: hidden; gap: 0; }
+.iBoxIn { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; }
+.iBox h3 { margin: 0; font-size: 15px; letter-spacing: -0.01em; }
+.iReq { color: var(--acc-text); font-size: 12px; font-weight: 700; }
+.iKv { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; padding: 2px 0; }
+.iKv span { color: var(--muted-2); flex-shrink: 0; }
+.iKv b { text-align: right; overflow-wrap: anywhere; }
+.iText { margin: 0; font-size: 14px; line-height: 1.55; white-space: pre-wrap; }
+.iNote { margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--cream-2); font-size: 13px; line-height: 1.45; }
+.iNote.ok { background: var(--ok-bg); color: var(--ok-text); }
+.iNote.warn { background: var(--acc-soft); color: var(--acc-text); }
+.iNote.err { background: var(--err-bg); color: var(--err); }
+.iNoMap { display: flex; align-items: center; gap: 8px; padding: 16px; background: var(--cream-2); font-size: 13px; color: var(--muted); }
+.iRow2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.iRow2.wide { grid-template-columns: 1.4fr 1fr; }
+.iBtn {
+  height: 46px; padding: 0 14px; border-radius: 12px; border: 0; background: var(--navy); color: #fff; font-size: 14px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-align: center; font-family: inherit;
+}
+.iBtn svg { width: 18px; height: 18px; }
+.iBtn.ghost { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+.iBtn.light { background: rgba(255, 255, 255, 0.12); color: #fff; border-color: rgba(255, 255, 255, 0.25); }
+.iBtn.acc { background: var(--acc); color: var(--ink); }
+.iBtn.danger { background: var(--err); color: #fff; }
+.iBtn.big { height: 54px; width: 100%; font-size: 15px; }
+.iBtn:disabled { opacity: 0.55; }
+.iCta { position: fixed; left: 50%; transform: translateX(-50%); bottom: 0; z-index: 25; width: 100%; max-width: 640px; padding: 12px 16px calc(14px + env(safe-area-inset-bottom)); background: rgba(251, 248, 242, 0.96); border-top: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.iApp:has(.iCta) .iNav { display: none; }
+
+.iField { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.iField input, .iField select, .iField textarea, .iQ textarea, .iUnit input {
+  height: 48px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--cream); font-size: 16px; color: var(--ink); font-weight: 400; width: 100%; min-width: 0;
+}
+.iField textarea, .iQ textarea { height: auto; padding: 12px 14px; line-height: 1.5; resize: vertical; font-family: inherit; }
+.iField input:focus, .iField select:focus, .iField textarea:focus, .iQ textarea:focus, .iUnit input:focus { outline: 2px solid var(--acc); outline-offset: 0; border-color: var(--acc); }
+.iCheck { display: flex; align-items: center; gap: 10px; font-size: 14px; min-height: 44px; }
+.iCheck input { width: 22px; height: 22px; accent-color: var(--navy); }
+.iUnit { display: flex; align-items: center; gap: 8px; }
+.iUnit em { font-style: normal; font-size: 14px; font-weight: 700; color: var(--muted-2); min-width: 22px; }
+.iChips { display: flex; flex-wrap: wrap; gap: 8px; }
+.iChipsWrap { border: 0; padding: 0; margin: 0; min-width: 0; }
+.iChip { min-height: 42px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: #fff; color: var(--ink); font-size: 14px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; font-family: inherit; }
+.iChip svg { width: 16px; height: 16px; }
+.iChip.on { background: var(--navy); border-color: var(--navy); color: #fff; }
+.iChip:disabled { opacity: 0.85; }
+.iDayList { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px; background: var(--cream); font-size: 13px; }
+.iDayItem { line-height: 1.4; }
+
+/* ---------- sheet ---------- */
+.iTypeSwitch { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px; border-radius: 14px; background: var(--cream-2); }
+.iTypeSwitch button { height: 40px; border: 0; border-radius: 10px; background: none; font-size: 12.5px; font-weight: 700; color: var(--muted); font-family: inherit; }
+.iTypeSwitch button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(23, 23, 58, 0.12); }
+.iSection { background: #fff; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+.iSectionHead { width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 0; background: none; text-align: left; font-family: inherit; color: var(--ink); }
+.iSecN { width: 30px; height: 30px; flex-shrink: 0; border-radius: 50%; background: var(--cream-2); font-size: 13px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.iSecN.ok { background: var(--ok); color: #fff; }
+.iSecN svg { width: 16px; height: 16px; }
+.iSecT { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.iSecT b { font-size: 15px; }
+.iSecT small { font-size: 12px; color: var(--muted-2); }
+.iSecChev { color: var(--muted-2); transition: transform 0.2s var(--ease); display: flex; }
+.iSection.open .iSecChev { transform: rotate(90deg); }
+.iSectionBody { padding: 4px 16px 18px; display: flex; flex-direction: column; gap: 18px; border-top: 1px solid var(--divider); padding-top: 16px; }
+.iQ { display: flex; flex-direction: column; gap: 8px; }
+.iQLabel { font-size: 13px; font-weight: 700; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.iQLabel svg { width: 14px; height: 14px; color: var(--ok); }
+.iUtil { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 14px; background: var(--cream); border: 1px solid #ede6d8; }
+.iUtilRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+.iUtilRow > span:first-child { font-weight: 700; }
+.iUtilRow .iChip { min-width: 58px; justify-content: center; }
+.iUtilRow .iUnit { width: 130px; }
+.iUtilRow .iUnit input { background: #fff; height: 42px; }
+
+/* ---------- photos ---------- */
+.iThumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 8px; }
+.iThumb { position: relative; aspect-ratio: 1; border: 0; padding: 0; border-radius: 12px; overflow: hidden; background: var(--cream-2); }
+.iThumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.iThumbTag { position: absolute; right: 6px; bottom: 6px; width: 24px; height: 24px; border-radius: 50%; background: var(--acc); color: var(--ink); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; }
+.iThumbTag svg { width: 14px; height: 14px; }
+.iThumbTag.err { background: var(--err); color: #fff; }
+.iViewer { position: fixed; inset: 0; z-index: 100; background: #0c0c1f; display: flex; flex-direction: column; justify-content: center; padding: env(safe-area-inset-top) 0 0; }
+.iViewer img { flex: 1; min-height: 0; width: 100%; object-fit: contain; }
+.iViewerBar { display: flex; gap: 10px; justify-content: space-between; padding: 14px 16px calc(16px + env(safe-area-inset-bottom)); }
+.iViewer .iNote { margin: 0 16px 16px; }
+
+/* ---------- signature ---------- */
+.iPad2 { display: flex; flex-direction: column; gap: 6px; }
+.iSig { width: 100%; height: 200px; border-radius: 14px; border: 1.5px dashed var(--dashed); background: var(--cream); touch-action: none; display: block; }
+.iChecks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.iChecks li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); }
+.iChecks li.ok { color: var(--ink); }
+.iChecks a { color: var(--acc-text); font-weight: 700; }
+.iCheckDot { width: 24px; height: 24px; flex-shrink: 0; border-radius: 50%; border: 2px solid var(--line); display: flex; align-items: center; justify-content: center; }
+.iChecks li.ok .iCheckDot { background: var(--ok); border-color: var(--ok); color: #fff; }
+.iCheckDot svg { width: 14px; height: 14px; }
+
+/* ---------- calendar ---------- */
+.iCal { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.iCalHead { display: flex; align-items: center; justify-content: space-between; }
+.iCalHead b { font-size: 15px; }
+.iCalGrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.iCalWd { text-align: center; font-size: 11px; font-weight: 700; color: var(--muted-2); padding: 4px 0; }
+.iCalDay { aspect-ratio: 1 / 1.05; border: 0; border-radius: 10px; background: none; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 3px; padding-top: 6px; font-family: inherit; font-size: 14px; font-weight: 700; color: var(--ink); }
+.iCalDay.out { color: var(--off); }
+.iCalDay.today > span:first-child { color: var(--acc-text); text-decoration: underline; text-underline-offset: 3px; }
+.iCalDay.sel { background: var(--navy); color: #fff; }
+.iCalDay.sel > span:first-child { color: #fff; }
+.iCalDots { display: flex; gap: 2px; align-items: center; }
+.iCalDots i { width: 6px; height: 6px; border-radius: 50%; background: var(--acc); }
+.iCalDots i.ok { background: var(--ok); }
+.iCalDots em { font-style: normal; font-size: 9px; }
+
+/* ---------- map ---------- */
+.iMap { position: relative; width: 100%; background: #e9e4d8; }
+.iMapEl { position: absolute; inset: 0; z-index: 0; }
+.iMapCtl { position: absolute; right: 10px; top: 10px; z-index: 500; display: flex; flex-direction: column; gap: 6px; }
+.iMapCtl button { min-width: 44px; height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--ink); font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(23, 23, 58, 0.15); }
+.iMapPage { position: relative; flex: 1; display: flex; flex-direction: column; min-height: calc(100dvh - 60px - 76px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+.iMapPage > .iMap { flex: 1; }
+.iMapFilters { padding: 10px 12px; background: var(--cream); border-bottom: 1px solid var(--line); flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.iMapFilters .iChip { min-height: 38px; flex-shrink: 0; }
+.iLegend { position: absolute; left: 10px; bottom: 10px; z-index: 500; background: rgba(255, 255, 255, 0.94); border-radius: 10px; padding: 6px 10px; font-size: 11px; font-weight: 700; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; max-width: calc(100% - 20px); }
+.iLegend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-left: 4px; }
+.iLegend i.acc { background: var(--acc); } .iLegend i.nav { background: var(--navy); } .iLegend i.warn { background: var(--acc-ink); } .iLegend i.ok { background: var(--ok); }
+.iMapCard { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 600; background: #fff; border-radius: 18px; padding: 14px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 10px 30px rgba(23, 23, 58, 0.25); }
+.iPinWrap { background: none; border: 0; }
+.insp .leaflet-container { font-family: var(--font); }

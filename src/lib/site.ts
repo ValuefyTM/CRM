@@ -1,16 +1,22 @@
 import { headers } from "next/headers";
 
-/** The two applications served by this worker. */
-export type App = "crm" | "portal";
+/** The applications served by this worker. */
+export type App = "crm" | "portal" | "insp";
 /** Account kinds (see migrations/1001_users.sql). The team uses the CRM; partners and clients the portal. */
 export type Kind = "internal" | "partner" | "client";
 
 export const APP = {
   crm: { prefix: "/crm", host: "crm.", cookie: "vf_crm", sessionDays: 7, kinds: ["internal"] as Kind[] },
   portal: { prefix: "/portal", host: "portal.", cookie: "vf_portal", sessionDays: 30, kinds: ["partner", "client"] as Kind[] },
+  // Inspections app for inspectors and evaluators (inspectii.valuefy.ro). Long sessions: it is used on site, often offline.
+  insp: { prefix: "/inspectii", host: "inspectii.", cookie: "vf_insp", sessionDays: 60, kinds: ["internal"] as Kind[] },
 } as const;
 
+/** The app a kind of account signs in to by default (team members can also use the inspections app). */
 export const appOf = (kind: Kind): App => (kind === "internal" ? "crm" : "portal");
+
+/** Team roles allowed in the inspections app. */
+export const INSP_ROLES = ["inspector", "evaluator"];
 
 /** Name of the application a kind of user signs in to (emails, page titles). */
 export const APP_NAME: Record<Kind, string> = {
