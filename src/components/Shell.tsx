@@ -1,13 +1,13 @@
-import { LogoutButton } from "./LogoutButton";
 import { Avatar } from "./Avatar";
+import { MeMenu, SideNav, type NavEntry, type NavGroup, type NavItem } from "./SideNav";
 
-export type NavItem = { label: string; href?: string; soon?: boolean; badge?: number; key: string };
+export type { NavItem, NavGroup, NavEntry } from "./SideNav";
 
-/** Sidebar layout from the "Portal colaboratori" design, used by both the CRM and the portal. */
+/** Sidebar layout used by the CRM and the portal: white logo, grouped menu, the signed-in user at the bottom. */
 export function Shell(props: {
   app: "crm" | "portal";
   label: string;
-  nav: NavItem[];
+  nav: NavEntry[];
   active: string;
   cta?: { label: string; href?: string };
   me: { id?: string; initials: string; name: string; sub: string };
@@ -16,40 +16,27 @@ export function Shell(props: {
   actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
-  const items = props.nav;
+  const flat: NavItem[] = props.nav.flatMap((e) => ("group" in e ? (e as NavGroup).items : [e as NavItem]));
   return (
     <div className="shell">
       <aside className="side">
-        <div className="brand">
-          <span className="brandPill">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/valuefy-logo.png" alt="VALUEFY" />
-          </span>
+        <a className="brand" href={flat[0]?.href ?? "/"} aria-label="VALUEFY · acasă">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/valuefy-logo-white.png" alt="VALUEFY" />
           <span className="brandLabel">{props.label}</span>
-        </div>
+        </a>
         {props.cta &&
           (props.cta.href ? (
             <a href={props.cta.href} className="sideCta">{props.cta.label}</a>
           ) : (
             <span className="sideCta" aria-disabled="true" title="Disponibil în curând">{props.cta.label}</span>
           ))}
-        <nav className="nav" aria-label="Meniu">
-          {items.map((i) =>
-            i.href ? (
-              <a key={i.key} href={i.href} aria-current={props.active === i.key ? "page" : undefined}>
-                {i.label}
-                {i.soon && <span className="soon">în curând</span>}
-                {!!i.badge && <span className="soon" title="Comenzi noi">{i.badge}</span>}
-              </a>
-            ) : null,
-          )}
-        </nav>
+        <SideNav nav={props.nav} active={props.active} />
         <div className="me">
-          <div className="meCard">
-            {props.me.id ? <Avatar id={props.me.id} name={props.me.name} size={36} presence="online" /> : <span className="avatar">{props.me.initials}</span>}
+          <MeMenu app={props.app}>
+            {props.me.id ? <Avatar id={props.me.id} name={props.me.name} size={40} presence="online" /> : <span className="avatar">{props.me.initials}</span>}
             <span className="meText"><b>{props.me.name}</b><small>{props.me.sub}</small></span>
-          </div>
-          <LogoutButton app={props.app} />
+          </MeMenu>
         </div>
       </aside>
       <div className="main">
@@ -63,7 +50,7 @@ export function Shell(props: {
         <main className="content">{props.children}</main>
       </div>
       <nav className="bottomNav" aria-label="Meniu">
-        {items.filter((i) => i.href).slice(0, 4).map((i) => (
+        {flat.filter((i) => i.href && !i.soon).slice(0, 4).map((i) => (
           <a key={i.key} href={i.href} aria-current={props.active === i.key ? "page" : undefined}>{i.label}</a>
         ))}
       </nav>
