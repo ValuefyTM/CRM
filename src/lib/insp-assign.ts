@@ -6,6 +6,7 @@ import { audit } from "./auth";
 import { esc, layout, sendEmail } from "./email";
 import { dutiesOf, isAdmin, type User } from "./users";
 import { FORMS, guessSheetType, sheetTypeLabel, type SheetType } from "./insp-forms";
+import { missingDocs, missingText, type DocType } from "./insp-docs";
 
 /** Main evaluator of the report, owners and administrators. */
 export async function canAssign(db: D1Database, user: User, reportId: string) {
@@ -33,7 +34,12 @@ export const openTask = (db: D1Database, assetId: string) =>
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const CONTACT_KINDS = ["client", "owner", "agent", "other"];
 
-export async function assignInspection(db: D1Database, user: User, reportId: string, b: Record<string, unknown>) {
+/**
+ * Gives (or reallocates) the inspection of an asset. The inspector needs at least the CF extract and the floor survey:
+ * without them the task is given only when `confirm_missing` is true (otherwise `missing` lists what is not uploaded).
+ */
+export async function assignInspection(db: D1Database, user: User, reportId: string, b: Record<string, unknown>)
+  : Promise<{ ok: true; id: string; missing: DocType[] } | { ok: false; error: string; missing?: DocType[] }> {
   const asset = await db
     .prepare(`SELECT a.id, a.report_id, p.category, p.type, COALESCE(p.full_address, p.city) AS address, r.order_id, r.number, o.property_type AS order_type
       FROM assets a JOIN crm_properties p ON p.id = a.property_id JOIN reports r ON r.id = a.report_id LEFT JOIN orders o ON o.id = r.order_id
@@ -52,6 +58,9 @@ export async function assignInspection(db: D1Database, user: User, reportId: str
   const kind = CONTACT_KINDS.includes(str(b.contact_kind, 20)) ? str(b.contact_kind, 20) : null;
   const name = str(b.contact_name, 120) || null, phone = str(b.contact_phone, 40) || null;
   const instructions = typeof b.instructions === "string" ? b.instructions.trim().slice(0, 2000) || null : null;
+  const missing = await missingDocs(db, reportId, asset.id);
+  if (missing.length && b.confirm_missing !== true)
+    return { ok: false as const, missing, error: `Nu sunt încărcate ${missingText(missing)}. Confirmă că aloci inspecția fără ${missing.length > 1 ? "ele" : "el"}.` };
   const t = now();
 
   const open = await openTask(db, asset.id);
@@ -80,6 +89,7 @@ export async function assignInspection(db: D1Database, user: User, reportId: str
   const what = `${asset.type ? asset.type.toLowerCase() : "bun"} → ${inspector.name}`;
   await audit(db, `user:${user.id}`, open ? "report.inspection_reassign" : "report.inspection_assign", "report", reportId, what);
   await audit(db, `user:${user.id}`, "inspection.assign", "inspection", id, inspector.id);
+  if (missing.length) await audit(db, `user:${user.id}`, "report.inspection_without_docs", "report", reportId, `fără ${missingText(missing)}`);
 
   if (inspector.id !== user.id) {
     const link = await appUrl("insp", "/");
@@ -88,19 +98,20 @@ export async function assignInspection(db: D1Database, user: User, reportId: str
     await sendEmail({
       to: inspector.email,
       subject: `Inspecție nouă de programat: ${where}`,
-      text: `${user.name || "Evaluatorul"} ți-a alocat inspecția pentru ${where}${asset.number ? ` (raport ${asset.number})` : ""}${dueText}. Fișă: ${sheetTypeLabel(type)}.${name ? ` Contact: ${name} ${phone ?? ""}.` : ""}${instructions ? `\nInstrucțiuni: ${instructions}` : ""}\nProgramează inspecția din aplicație: ${link}`,
+      text: `${user.name || "Evaluatorul"} ți-a alocat inspecția pentru ${where}${asset.number ? ` (raport ${asset.number})` : ""}${dueText}. Fișă: ${sheetTypeLabel(type)}.${name ? ` Contact: ${name} ${phone ?? ""}.` : ""}${instructions ? `\nInstrucțiuni: ${instructions}` : ""}${missing.length ? `\nÎncă nu sunt încărcate ${missingText(missing)}.` : "\nExtrasul CF și releveul sunt în aplicație, la inspecție."}\nProgramează inspecția din aplicație: ${link}`,
       html: layout({
         eyebrow: "Inspecții VALUEFY",
         title: "Ai o inspecție nouă de programat",
         body: `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A66"><strong style="color:#17173A">${esc(user.name || "Evaluatorul")}</strong> ți-a alocat inspecția pentru <strong style="color:#17173A">${esc(where)}</strong>${asset.number ? ` (raport ${esc(asset.number)})` : ""}${esc(dueText)}.</p>
 <p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A66">Fișă: ${esc(sheetTypeLabel(type))}${name ? ` · Contact: ${esc(name)} ${esc(phone ?? "")}` : ""}</p>
-${instructions ? `<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A66;white-space:pre-wrap">${esc(instructions)}</p>` : ""}`,
+${instructions ? `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A66;white-space:pre-wrap">${esc(instructions)}</p>` : ""}
+${missing.length ? `<p style="margin:0;font-size:15px;line-height:1.65;color:#9A3412">Încă nu sunt încărcate ${esc(missingText(missing))}; le găsești în aplicație când apar.</p>` : `<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A66">Extrasul CF și releveul sunt în aplicație, la inspecție.</p>`}`,
         button: { label: "Programează din aplicație →", url: link },
         foot: "Inspecția apare în aplicația de inspecții la „De programat”.",
       }),
     });
   }
-  return { ok: true as const, id };
+  return { ok: true as const, id, missing };
 }
 
 /** Cancels a task that is not done yet (the inspection disappears from the inspector's app). */

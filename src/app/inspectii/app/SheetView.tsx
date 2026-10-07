@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Ctx } from "./InspApp";
 import { useDetail, useDraft } from "./hooks";
 import { Chips, Icon, TopBar, type Local } from "./ui";
+import { DocsFab } from "./DocsViewer";
 import { accFields, FORMS, isFilled, progress, SHEET_TYPES, type Answers, type Field, type Section, type SheetType, type UtilAnswer } from "@/lib/insp-forms";
 
 function UtilBlock({ f, value, onChange, readOnly }: { f: Extract<Field, { kind: "util" }>; value: UtilAnswer; onChange: (v: UtilAnswer) => void; readOnly: boolean }) {
@@ -135,6 +136,7 @@ export function SheetView({ ctx, id, item }: { ctx: Ctx; id: string; item: Local
         })}
         <p className="hint center">Totul se salvează pe telefon pe măsură ce completezi{ctx.online ? " și se trimite automat ca ciornă" : ""}.</p>
       </div>
+      <DocsFab docs={detail?.docs} />
       <div className="iCta">
         <a className="iBtn big acc" href={`#/i/${encodeURIComponent(id)}/foto`}>Fotografii →</a>
       </div>

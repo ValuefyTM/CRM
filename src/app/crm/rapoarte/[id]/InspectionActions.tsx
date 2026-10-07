@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { SHEET_TYPES } from "@/lib/insp-forms";
+import { DocsConfirm, missingOf, type DocState } from "@/components/DocsConfirm";
 
 export type Person = { id: string; name: string; role: string; coverage: string | null };
 export type TaskInitial = {
   asset: string; label: string; inspection: string | null; inspector: string | null; sheet_type: string; due_on: string | null;
   contact_kind: string | null; contact_name: string | null; contact_phone: string | null; instructions: string | null; scheduled: boolean;
+  docs: DocState;
 };
 
 const CONTACTS: [string, string][] = [["", "—"], ["client", "Clientul"], ["owner", "Proprietarul"], ["agent", "Agent imobiliar"], ["other", "Altă persoană"]];
@@ -30,14 +32,17 @@ export function AssignInspection({ report, me, people, initial }: { report: stri
   });
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState(false);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
+  const missing = missingOf(initial.docs);
   const moving = realloc && initial.scheduled && f.inspector !== initial.inspector;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!f.inspector) return setMsg("Alege cine face inspecția.");
+    if (missing.length && !confirm) return setMsg(`Lipsesc ${missing.join(" și ")}: bifează că aloci inspecția fără ele sau încarcă-le întâi.`);
     setBusy(true); setMsg("");
-    const error = await send(`/api/crm/reports/${report}/inspections`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ asset: initial.asset, ...f }) });
+    const error = await send(`/api/crm/reports/${report}/inspections`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ asset: initial.asset, ...f, confirm_missing: confirm }) });
     setBusy(false);
     if (error) return setMsg(error);
     location.reload();
@@ -57,6 +62,7 @@ export function AssignInspection({ report, me, people, initial }: { report: stri
                 {people.map((p) => <option key={p.id} value={p.id}>{p.id === me ? `${p.name} (eu)` : p.name} · {ROLE[p.role] ?? p.role}{p.coverage ? ` · ${p.coverage}` : ""}</option>)}
               </select>
             </label>
+            <DocsConfirm have={initial.docs} checked={confirm} onChange={setConfirm} />
             {moving && <div className="note">Inspecția este deja programată. Dacă o dai altcuiva, programarea se anulează și noul inspector o programează din nou.</div>}
             <div className="formRow">
               <label className="field">Fișa de inspecție

@@ -5,6 +5,7 @@ import { currentUser, audit } from "./auth";
 import { bucket } from "./orders";
 import { err } from "./api";
 import type { User } from "./users";
+import { assetDocs } from "./insp-docs";
 import {
   ACC_FIELDS, FEATURE_COLUMNS, FORM_VERSION, FORMS, PRESENT_ROLES, accKey, featureColumns, guessSheetType, isAccessoryType, type Answers, type SheetType,
 } from "./insp-forms";
@@ -375,6 +376,24 @@ export async function deletePhoto(db: D1Database, ins: Insp, photoId: string) {
   await db.prepare("UPDATE inspection_photos SET deleted_at = ? WHERE id = ? AND inspection_id = ?").bind(now(), photoId, ins.id).run();
   return { ok: true as const };
 }
+
+/**
+ * CF extract and floor survey of an inspection (and of the accessories inspected on its sheet), as the app shows them:
+ * each one is opened through /api/insp/inspections/<id>/docs/<ref>, so it stays on the phone for use without signal.
+ */
+export async function inspectionDocs(db: D1Database, ins: Insp) {
+  if (!ins.report_id || !ins.asset_id) return [];
+  const hosted = ins.hosted.length
+    ? (await db.prepare(`SELECT id, asset_id FROM inspections WHERE id IN (${ins.hosted.map(() => "?").join(", ")})`).bind(...ins.hosted.map((h) => h.id)).all<{ id: string; asset_id: string | null }>()).results
+    : [];
+  const label = new Map<string, string>(hosted.filter((h) => h.asset_id).map((h) => [h.asset_id!, ins.hosted.find((x) => x.id === h.id)?.label ?? "accesoriu"]));
+  const docs = await assetDocs(db, ins.report_id, [ins.asset_id, ...label.keys()]);
+  return docs.map((d) => ({
+    ref: d.ref, type: d.type, name: d.name, content_type: d.content_type, for: d.asset_id && label.has(d.asset_id) ? label.get(d.asset_id)! : null,
+    url: `/api/insp/inspections/${encodeURIComponent(ins.id)}/docs/${encodeURIComponent(d.ref)}`,
+  }));
+}
+export type InspDocView = Awaited<ReturnType<typeof inspectionDocs>>[number];
 
 /** The inspection a stored file belongs to, when the user may see it ("inspectii/<inspection id>/…"). */
 export async function canSeeFile(db: D1Database, user: User, key: string) {

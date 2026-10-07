@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { PROPERTY_TYPES, PURPOSES } from "@/lib/order-labels";
+import { DocsConfirm } from "@/components/DocsConfirm";
 
 type Contract = { id: string; number: string | null; bank: string; bank_code: string | null; fee: number | null; report_type: string | null; purpose: string | null };
 type Collab = { id: string; number: string | null; firm: string; share: number | null };
@@ -17,7 +18,7 @@ export function ContractOrderForm(p: {
     contract_id: p.contracts.length === 1 ? p.contracts[0].id : "", collaboration_id: "", bank_ref: "", bank_branch: "", ordered_on: today, report_type: "", purpose: "",
     fee: "", client_name: "", client_phone: "", client_email: "", property_type: "apartment", city: "", address: "", surface_area: "",
     contact_name: "", contact_phone: "", inspection_notes: "", notes: "",
-    evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "", verifier_id: "", inspector_id: "", inspection_due: "", due_on: "", urgent: false,
+    evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "", verifier_id: "", inspector_id: "", inspection_due: "", due_on: "", urgent: false, confirm_missing: false,
   });
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
@@ -33,6 +34,7 @@ export function ContractOrderForm(p: {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (f.inspector_id && !f.confirm_missing) return setMsg("Extrasul CF și releveul nu sunt încărcate: bifează că aloci inspecția fără ele sau alege „O aloc mai târziu”.");
     setBusy(true); setMsg("");
     const r = await fetch("/api/crm/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, kind }) }).catch(() => null);
     const d = (await r?.json().catch(() => ({}))) as { report?: string; error?: string; inspectionError?: string | null } | undefined;
@@ -139,6 +141,8 @@ export function ContractOrderForm(p: {
           </label>
           <label className="field">Inspecție până la <small>(opțional)</small><input className="input" type="date" value={f.inspection_due} onChange={set("inspection_due")} disabled={!f.inspector_id} /></label>
         </div>
+        {f.inspector_id && <DocsConfirm have={{ cf: false, rlv: false }} checked={f.confirm_missing} onChange={(v) => setF({ ...f, confirm_missing: v })}
+          hint="Dosarul e nou: le încarci după ce se deschide, la „Documente & Livrare”, sau aloci inspecția de acolo după ce le ai." />}
         <label className="check"><input type="checkbox" checked={f.urgent} onChange={(e) => setF({ ...f, urgent: e.target.checked })} /><span>Urgent</span></label>
         <label className="field">Note interne <small>(opțional)</small><textarea className="textarea" rows={2} value={f.notes} onChange={set("notes")} /></label>
       </section>

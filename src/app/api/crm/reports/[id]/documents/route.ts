@@ -7,7 +7,8 @@ import { MAX_FILE_MB } from "@/lib/order-labels";
 const OK = /\.(pdf|jpe?g|png|heic|heif|webp|docx?|xlsx?|zip)$/i;
 
 /**
- * Report documents. Multipart `file` (+ `kind` = source | final, `doc` = id of a requested document it fulfils) uploads a file;
+ * Report documents. Multipart `file` (+ `kind` = source | final, `doc` = id of a requested document it fulfils, `doc_type` = cf | rlv
+ * and `asset` = the asset it belongs to, for the documents the inspector takes along) uploads a file;
  * JSON `{ missing: "Extras CF …" }` records a document that was asked for and has not come yet.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -44,6 +45,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   await r2.put(key, file.stream(), { httpMetadata: { contentType: file.type || "application/octet-stream" }, customMetadata: { report: id, kind } });
 
   const requested = typeof form?.get("doc") === "string" ? (form.get("doc") as string) : "";
+  const docType = kind === "source" && ["cf", "rlv", "other"].includes(String(form?.get("doc_type") ?? "")) ? String(form?.get("doc_type")) : null;
+  const assetId = kind === "source" && form?.get("asset")
+    ? (await a.db.prepare("SELECT id FROM assets WHERE id = ? AND report_id = ?").bind(String(form.get("asset")), id).first<{ id: string }>())?.id ?? null
+    : null;
   if (kind === "final") {
     // One final file per report: the new one replaces the previous.
     const old = await a.db.prepare("SELECT id, r2_key FROM report_documents WHERE report_id = ? AND kind = 'final'").bind(id).all<{ id: string; r2_key: string | null }>();
@@ -58,14 +63,29 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (missing) {
     // Keeps the name the document was asked for ("Extras CF garaj.pdf").
     const named = `${missing.filename.replace(/[^\w.\-() ăâîșțĂÂÎȘȚ]/g, "_")}${safe.match(/\.\w{2,4}$/)?.[0] ?? ""}`;
-    await a.db.prepare("UPDATE report_documents SET filename = ?, content_type = ?, size_bytes = ?, r2_key = ?, status = 'uploaded', uploaded_by = ?, created_at = ? WHERE id = ?")
-      .bind(named, file.type || null, file.size, key, a.user.id, now(), missing.id).run();
+    await a.db.prepare("UPDATE report_documents SET filename = ?, content_type = ?, size_bytes = ?, r2_key = ?, status = 'uploaded', uploaded_by = ?, created_at = ?, doc_type = COALESCE(?, doc_type), asset_id = COALESCE(?, asset_id) WHERE id = ?")
+      .bind(named, file.type || null, file.size, key, a.user.id, now(), docType, assetId, missing.id).run();
   } else {
-    await a.db.prepare("INSERT INTO report_documents (id, report_id, kind, filename, content_type, size_bytes, r2_key, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(docId, id, kind, safe, file.type || null, file.size, key, a.user.id).run();
+    await a.db.prepare("INSERT INTO report_documents (id, report_id, kind, filename, content_type, size_bytes, r2_key, uploaded_by, doc_type, asset_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(docId, id, kind, safe, file.type || null, file.size, key, a.user.id, docType, assetId).run();
   }
   await a.db.prepare("UPDATE reports SET updated_at = ?, uploaded_on = CASE WHEN ? = 'final' THEN ? ELSE uploaded_on END WHERE id = ?").bind(now(), kind, now().slice(0, 10), id).run();
   await audit(a.db, actor, kind === "final" ? "report.final" : "report.document", "report", id, safe);
+  return Response.json({ ok: true });
+}
+
+/** Marks a source document as the CF extract / floor survey (or neither): `{ doc, doc_type: cf | rlv | other, asset }`. */
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const a = await staffApi();
+  if ("res" in a) return a.res;
+  const { id } = await params;
+  const b = await json(req);
+  const d = await a.db.prepare("SELECT id, filename FROM report_documents WHERE id = ? AND report_id = ? AND kind = 'source'").bind(String(b.doc ?? ""), id).first<{ id: string; filename: string }>();
+  if (!d) return err("Documentul nu există.", 404);
+  const type = ["cf", "rlv", "other"].includes(String(b.doc_type)) ? String(b.doc_type) : null;
+  const asset = b.asset ? (await a.db.prepare("SELECT id FROM assets WHERE id = ? AND report_id = ?").bind(String(b.asset), id).first<{ id: string }>())?.id ?? null : null;
+  await a.db.prepare("UPDATE report_documents SET doc_type = ?, asset_id = CASE WHEN ? THEN ? ELSE asset_id END WHERE id = ?").bind(type, "asset" in b ? 1 : 0, asset, d.id).run();
+  await audit(a.db, `user:${a.user.id}`, "report.document_type", "report", id, `${d.filename}: ${type === "cf" ? "Extras CF" : type === "rlv" ? "Releveu" : "alt document"}`);
   return Response.json({ ok: true });
 }
 

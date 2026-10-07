@@ -114,6 +114,7 @@ export async function removeAsset(db: D1Database, actor: string, reportId: strin
     // Its inspection tasks (none done, no sheet, no photos) go with it.
     db.prepare("DELETE FROM inspection_schedule_log WHERE inspection_id IN (SELECT id FROM inspections WHERE asset_id = ?)").bind(assetId),
     db.prepare("DELETE FROM inspections WHERE asset_id = ?").bind(assetId),
+    db.prepare("UPDATE report_documents SET asset_id = NULL WHERE asset_id = ?").bind(assetId),
     db.prepare("DELETE FROM assets WHERE id = ?").bind(assetId),
     // The main asset goes: the next one becomes main.
     ...(a.is_main ? [db.prepare("UPDATE assets SET is_main = 1 WHERE id = (SELECT id FROM assets WHERE report_id = ? ORDER BY created_at LIMIT 1)").bind(reportId)] : []),

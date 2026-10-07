@@ -16,6 +16,7 @@ import { isExpired, money, offerDocs, offerDraft, offerForOrder, offerTotals, ty
 import { offerLink } from "@/lib/offer-emails";
 import { OfferEditor } from "./OfferEditor";
 import { DossierOpen } from "./DossierOpen";
+import { guessDocType } from "@/lib/insp-docs";
 import { orderProgress } from "@/lib/delivery";
 import { inspectorChoices } from "@/lib/insp-assign";
 
@@ -150,6 +151,10 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
                     hint={`${orderWhat(o)}${o.address ? ` · ${orderPlace(o)}` : ""} · ${o.client_name ?? ""}. Evaluatorul principal primește dosarul pe email și alocă inspecția (sau o aloci acum).`}
                     warn={!contractOrder && offer?.status !== "accepted" ? "Oferta nu este semnată în portal. Deschide dosarul doar dacă clientul a acceptat pe alt canal." : null}
                     dueDefault={contractOrder ? null : undefined}
+                    docs={{
+                      cf: docs.some((d) => d.kind === "cf" || (d.kind === "other" && guessDocType(d.filename) === "cf")),
+                      rlv: docs.some((d) => ["plan", "cadastre", "site_plan"].includes(d.kind) || (d.kind === "other" && guessDocType(d.filename) === "rlv")),
+                    }}
                   />}
                 </div>
               )}

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ASSET_CATEGORIES, capType, emptyAsset, type AssetForm } from "@/lib/asset-labels";
 import { PURPOSES } from "@/lib/order-labels";
 import { ContactFields } from "@/components/ContactFields";
+import { DocsConfirm } from "@/components/DocsConfirm";
 
 type Person = { id: string; name: string; role: string };
 type OrderInfo = {
@@ -41,7 +42,7 @@ export function ProcessWizard(p: {
   const [assets, setAssets] = useState<AssetForm[]>([{ ...emptyAsset({ city: o.city }), full_address: o.address ?? "", is_main: true }]);
   const [dos, setDos] = useState({
     contract_id: o.contract_id ?? "", fee: o.fee ? String(o.fee) : "", urgent: o.urgent, evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "",
-    verifier_id: "", inspector_id: "", inspection_due: "", due_on: "", instructions: "",
+    verifier_id: "", inspector_id: "", inspection_due: "", due_on: "", instructions: "", confirm_missing: false,
   });
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
@@ -110,7 +111,8 @@ export function ProcessWizard(p: {
   const go = (to: number) => { const e = to > step ? check(step) : ""; if (e) return setMsg(e); setMsg(""); setStep(to); };
 
   const submit = async () => {
-    const e = check(3) || (!dos.evaluator_id ? "Alege evaluatorul principal." : "");
+    const e = check(3) || (!dos.evaluator_id ? "Alege evaluatorul principal." : "")
+      || (dos.inspector_id && !dos.confirm_missing ? "Extrasul CF și releveul nu sunt încărcate: bifează că aloci inspecțiile fără ele sau alege „Le aloc mai târziu”." : "");
     if (e) return setMsg(e);
     setBusy(true); setMsg("");
     const r = await fetch(`/api/crm/orders/${o.id}/process`, {
@@ -284,6 +286,8 @@ export function ProcessWizard(p: {
               </label>
               <label className="field">Inspecție până la<input className="input" type="date" value={dos.inspection_due} onChange={(e) => setDos({ ...dos, inspection_due: e.target.value })} disabled={!dos.inspector_id} /></label>
             </div>
+            {dos.inspector_id && <DocsConfirm have={{ cf: false, rlv: false }} checked={dos.confirm_missing} onChange={(v) => setDos({ ...dos, confirm_missing: v })}
+              hint="Le încarci în dosar, la „Documente & Livrare”, pe fiecare bun; apar singure în aplicația de inspecții. Sau aloci inspecțiile de acolo după ce le ai." />}
             {dos.inspector_id && <label className="field">Instrucțiuni pentru inspector <small>(opțional)</small><textarea className="textarea" rows={2} value={dos.instructions} onChange={(e) => setDos({ ...dos, instructions: e.target.value })} /></label>}
             <label className="check"><input type="checkbox" checked={dos.urgent} onChange={(e) => setDos({ ...dos, urgent: e.target.checked })} /><span>Urgent</span></label>
             <div className="summaryBox">

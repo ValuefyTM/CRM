@@ -65,7 +65,9 @@ export function NotesEditor({ id, notes }: { id: string; notes: string | null })
 }
 
 /** File picker that uploads right away. `doc` fills a document that was marked as missing. */
-export function UploadButton({ id, kind = "source", doc, label, className = "btn btnGhost btnSm", accept }: { id: string; kind?: "source" | "final"; doc?: string; label: string; className?: string; accept?: string }) {
+export function UploadButton({ id, kind = "source", doc, label, className = "btn btnGhost btnSm", accept, docType, asset }: {
+  id: string; kind?: "source" | "final"; doc?: string; label: string; className?: string; accept?: string; docType?: "cf" | "rlv"; asset?: string;
+}) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -78,6 +80,8 @@ export function UploadButton({ id, kind = "source", doc, label, className = "btn
         const body = new FormData();
         body.set("file", f); body.set("kind", kind);
         if (doc) body.set("doc", doc);
+        if (docType) body.set("doc_type", docType);
+        if (asset) body.set("asset", asset);
         const error = await send(`/api/crm/reports/${id}/documents`, { method: "POST", body });
         setBusy(false); e.target.value = "";
         if (error) return setMsg(error);
@@ -136,6 +140,26 @@ export function MissingDoc({ id }: { id: string }) {
       <button type="button" className="btn btnGhost btnSm" onClick={() => setOpen(false)}>Renunță</button>
       {msg && <span role="alert" className="error inlineErr">{msg}</span>}
     </form>
+  );
+}
+
+/** CF / RLV / other: what a source document is, so the inspector gets it in the inspections app. */
+export function DocTypeSelect({ id, doc, value, assets }: { id: string; doc: string; value: string; assets: { id: string; label: string }[] | null }) {
+  const [v, setV] = useState(value);
+  return (
+    <select className="select selectSm" aria-label="Tip document" value={v} onChange={async (e) => {
+      const next = e.target.value;
+      const [type, asset] = next.split(":");
+      setV(next);
+      const error = await send(`/api/crm/reports/${id}/documents`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ doc, doc_type: type, asset: asset || null }) });
+      if (error) { setV(value); alert(error); }
+    }}>
+      <option value="other">Alt document</option>
+      {(["cf", "rlv"] as const).flatMap((t) => [
+        <option key={t} value={`${t}:`}>{t === "cf" ? "Extras CF" : "Releveu"}{assets && assets.length > 1 ? " · toate bunurile" : ""}</option>,
+        ...(assets && assets.length > 1 ? assets.map((x) => <option key={`${t}${x.id}`} value={`${t}:${x.id}`}>{t === "cf" ? "Extras CF" : "Releveu"} · {x.label}</option>) : []),
+      ])}
+    </select>
   );
 }
 

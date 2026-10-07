@@ -26,7 +26,9 @@ async function call<T = Json>(path: string, init?: RequestInit): Promise<{ ok: t
 }
 
 export type ListData = { inspections: Insp[]; at: string };
-export type DetailData = { inspection: Insp; sheet: ServerSheet | null; photos: ServerPhoto[] };
+/** CF extract / floor survey of the inspection (or of an accessory inspected on its sheet: `for`). */
+export type InspDoc = { ref: string; type: "cf" | "rlv"; name: string; content_type: string | null; for: string | null; url: string };
+export type DetailData = { inspection: Insp; sheet: ServerSheet | null; photos: ServerPhoto[]; docs?: InspDoc[] };
 
 export async function fetchList(): Promise<ListData | null> {
   try {

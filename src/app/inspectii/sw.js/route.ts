@@ -12,6 +12,7 @@ export async function GET() {
 const BASE = ${JSON.stringify(base)};
 const SHELL = BASE || "/"; // the app page (Next serves /inspectii without the trailing slash)
 const CACHE = "vf-insp-v1";
+const DOCS = "vf-insp-docs"; // CF extracts and floor surveys opened (or prefetched) on the phone
 const STATIC = ["/icon-insp-192.png", "/icon-insp-512.png", "/valuefy-logo.png", BASE + "/manifest.webmanifest"];
 
 async function cacheShell() {
@@ -26,7 +27,7 @@ async function cacheShell() {
 
 self.addEventListener("install", (e) => { e.waitUntil(cacheShell().catch(() => {}).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => {
-  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE && k !== DOCS).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
 self.addEventListener("message", (e) => { if (e.data === "refresh-shell") cacheShell().catch(() => {}); });
 
@@ -58,6 +59,19 @@ self.addEventListener("fetch", (e) => {
       const res = await fetch(req);
       if (res.ok) (await caches.open(CACHE)).put(req, res.clone());
       return res;
+    })());
+    return;
+  }
+  // Documents of an inspection: fresh when there is signal, the saved copy without.
+  if (p.startsWith("/api/insp/inspections/") && p.includes("/docs/")) {
+    e.respondWith((async () => {
+      try {
+        const res = await fetch(req);
+        if (res.ok) (await caches.open(DOCS)).put(req, res.clone());
+        return res;
+      } catch {
+        return (await caches.match(req, { cacheName: DOCS })) || new Response("Documentul nu este salvat pe telefon. Deschide-l o dată cu semnal.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+      }
     })());
     return;
   }

@@ -27,7 +27,7 @@ export async function POST(req: Request) {
       asset: r.assetId, inspector, due_on: typeof b.inspection_due === "string" ? b.inspection_due : "",
       contact_kind: typeof b.contact_name === "string" && b.contact_name.trim() ? "other" : "client",
       contact_name: (typeof b.contact_name === "string" && b.contact_name.trim()) || b.client_name, contact_phone: (typeof b.contact_phone === "string" && b.contact_phone.trim()) || b.client_phone,
-      instructions: b.inspection_notes,
+      instructions: b.inspection_notes, confirm_missing: b.confirm_missing === true,
     });
     if (!i.ok) inspectionError = i.error;
   }

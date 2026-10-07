@@ -30,7 +30,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const i = await assignInspection(a.db, a.user, r.id, {
       asset: r.assetId, inspector, due_on: typeof b.inspection_due === "string" ? b.inspection_due : "",
       contact_kind: order.contact_name ? "other" : "client", contact_name: order.contact_name ?? order.client_name ?? "", contact_phone: order.contact_phone ?? order.client_phone ?? "",
-      instructions: order.inspection_notes ?? "",
+      instructions: order.inspection_notes ?? "", confirm_missing: b.confirm_missing === true,
     });
     if (!i.ok) inspection = i.error;
   }

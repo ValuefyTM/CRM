@@ -15,7 +15,8 @@ import { AssetEditor, RemoveAsset } from "./AssetEditor";
 import { emptyAsset, type AssetForm } from "@/lib/asset-labels";
 import { canAssign, inspectorChoices } from "@/lib/insp-assign";
 import { guessSheetType } from "@/lib/insp-forms";
-import { AddMember, DeleteDoc, DeliverButton, FinalDrop, MissingDoc, NotesEditor, RemoveMember, SafeImg, StageActions, StatusButton, UploadButton } from "./ReportActions";
+import { docsByAsset, guessDocType } from "@/lib/insp-docs";
+import { AddMember, DeleteDoc, DocTypeSelect, DeliverButton, FinalDrop, MissingDoc, NotesEditor, RemoveMember, SafeImg, StageActions, StatusButton, UploadButton } from "./ReportActions";
 import { dueOf, STAGE_LABEL, STAGE_ORDER, stageOf } from "@/lib/dossier";
 import { nextReportNumber, noticeTarget } from "@/lib/delivery";
 
@@ -64,7 +65,9 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
     reportTeam(db, id), reportAssets(db, id), reportDocuments(db, id), reportOrderDocuments(db, r.order_id), teamCandidates(db),
   ]);
   const main = assets.find((a) => a.is_main) ?? assets[0];
-  const [mayAssign, inspectors] = await Promise.all([canAssign(db, user, id), inspectorChoices(db, user.id)]);
+  const [mayAssign, inspectors, inspDocs] = await Promise.all([canAssign(db, user, id), inspectorChoices(db, user.id), docsByAsset(db, id, assets.map((a) => a.id))]);
+  const docState = (assetId: string) => ({ cf: !!inspDocs[assetId]?.cf.length, rlv: !!inspDocs[assetId]?.rlv.length });
+  const assetLabel = (a: (typeof assets)[number]) => `${cap(a.type) || "Bun"}${a.full_address ? ` · ${a.full_address}` : ""}`;
   const [history, log, suggested, notifyTo] = await Promise.all([
     main ? propertyHistory(db, main.property_id, id) : Promise.resolve([]), reportLog(db, r, assets),
     r.number ? Promise.resolve("") : nextReportNumber(db), r.delivered_at ? Promise.resolve(null) : noticeTarget(db, r.order_id),
@@ -360,6 +363,11 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                         <tr key={a.id}>
                           <td>
                             {cap(a.type) || "Bun"} {a.is_main ? <span className="muted">(principal)</span> : null}
+                            {!cancelled && a.inspection_status !== "done" && (
+                              <span className="block" style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                                {(["cf", "rlv"] as const).map((t) => <span key={t} className={`docTag ${docState(a.id)[t] ? "ok" : "miss"}`}>{docState(a.id)[t] ? "✓" : "!"} {t === "cf" ? "CF" : "RLV"}</span>)}
+                              </span>
+                            )}
                             {fromApp && a.instructions && !cancelled && <span className="muted block">Instrucțiuni: {a.instructions}</span>}
                           </td>
                           <td>
@@ -383,6 +391,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                                     due_on: active ? a.due_on : null, contact_kind: (!cancelled && a.contact_kind) || a.a_contact_kind || "client",
                                     contact_name: (!cancelled && a.contact_name) || a.a_contact_name || (a.a_contact_kind && a.a_contact_kind !== "client" ? null : r.client_name),
                                     contact_phone: (!cancelled && a.contact_phone) || a.a_contact_phone || (a.a_contact_kind && a.a_contact_kind !== "client" ? null : r.client_phone), instructions: active ? a.instructions : null, scheduled: a.inspection_status === "scheduled",
+                                    docs: docState(a.id),
                                   }} />
                                   {active && <CancelInspection report={r.id} inspection={a.inspection_id!} who={a.inspector ?? "inspector"} />}
                                 </span>
@@ -436,6 +445,29 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
       )}
 
       {tab === "documente" && (
+        <>
+        <section className="card">
+          <h2>Pentru inspecție <span className="muted">· extras CF și releveu</span></h2>
+          <p className="hint">Inspectorul le vede în aplicația de inspecții, la inspecția bunului și în fișă. Un document încărcat aici fără bun ales e valabil pentru toate bunurile raportului.</p>
+          {assets.length === 0 ? <p className="hint">Raportul nu are bunuri.</p> : (
+            <div className="docsGrid">
+              {assets.map((a) => (
+                <div key={a.id} className="docsAsset">
+                  <b>{assetLabel(a)}</b>
+                  {(["cf", "rlv"] as const).map((t) => {
+                    const list = inspDocs[a.id]?.[t] ?? [];
+                    return (
+                      <span key={t} style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+                        <span className={`docTag ${list.length ? "ok" : "miss"}`} title={list.map((d) => d.name).join(", ")}>{list.length ? "✓" : "lipsă"} {t === "cf" ? "Extras CF" : "Releveu"}{list.length > 1 ? ` (${list.length})` : ""}</span>
+                        <UploadButton id={r.id} docType={t} asset={assets.length > 1 ? a.id : undefined} label={list.length ? "+ încă unul" : "Încarcă"} className="linkBtn" accept=".pdf,.jpg,.jpeg,.png,.heic,.webp" />
+                      </span>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
         <div className="cols">
           <section className="card flush">
             <div className="cardHead"><h2>Documente sursă</h2><UploadButton id={r.id} label="+ Încarcă" /></div>
@@ -452,6 +484,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                   <li key={d.id}>
                     <span className="ext">{ext(d.filename)}</span>
                     <span className="who"><b>{d.filename}</b><small>încărcat {fmtDate(d.created_at)}{d.size_bytes ? ` · ${fmtSize(d.size_bytes)}` : ""}{d.uploaded_by_name ? ` · ${d.uploaded_by_name}` : ""}</small></span>
+                    <DocTypeSelect id={r.id} doc={d.id} assets={assets.length > 1 ? assets.map((x, n) => ({ id: x.id, label: `${cap(x.type) || "Bun"}${assets.filter((y) => y.type === x.type).length > 1 ? ` ${n + 1}` : ""}` })) : null}
+                      value={(() => { const t = d.doc_type ?? guessDocType(d.filename); return t === "cf" || t === "rlv" ? `${t}:${d.asset_id ?? ""}` : "other"; })()} />
                     <a className="link" href={`/api/crm/reports/${r.id}/documents/${d.id}`} target="_blank" rel="noopener">Descarcă</a>
                     <DeleteDoc id={r.id} doc={d.id} name={d.filename} />
                   </li>
@@ -496,6 +530,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             {!r.delivered_at && <DeliverButton id={r.id} ready={!!final} number={r.number} suggested={suggested} notifyTo={notifyTo} />}
           </section>
         </div>
+        </>
       )}
     </CrmShell>
   );

@@ -134,6 +134,7 @@ export async function teamCandidates(db: D1Database) {
 export type ReportDocument = {
   id: string; report_id: string; kind: "source" | "final"; filename: string; content_type: string | null; size_bytes: number | null; r2_key: string | null;
   status: "uploaded" | "missing"; requested_at: string | null; uploaded_by_name: string | null; created_at: string;
+  doc_type: string | null; asset_id: string | null;
 };
 
 export async function reportDocuments(db: D1Database, id: string) {

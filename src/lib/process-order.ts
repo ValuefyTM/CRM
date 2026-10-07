@@ -100,6 +100,7 @@ export async function processBankOrder(db: D1Database, user: User, orderId: stri
       const i = await assignInspection(db, user, r.id, {
         asset: asset.id, inspector, due_on: str(d.inspection_due, 10), contact_kind: asset.contact.kind,
         contact_name: asset.contact.name, contact_phone: asset.contact.phone, instructions: str(d.instructions, 2000),
+        confirm_missing: d.confirm_missing === true,
       });
       if (!i.ok) problems.push(i.error);
     }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import { DocsConfirm, missingOf, type DocState } from "@/components/DocsConfirm";
 
 export type Pick_ = { id: string; name: string; role: string };
 
@@ -11,12 +12,12 @@ export type Pick_ = { id: string; name: string; role: string };
  */
 export function DossierOpen(p: {
   order: string; base: string; evaluators: Pick_[]; inspectors: Pick_[]; me: string; evaluator: string | null;
-  label: string; hint: string; warn?: string | null; dueDefault?: string | null; primary?: boolean;
+  label: string; hint: string; warn?: string | null; dueDefault?: string | null; primary?: boolean; docs: DocState;
 }) {
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({
     evaluator_id: p.evaluator ?? (p.evaluators.some((e) => e.id === p.me) ? p.me : ""), verifier_id: "", inspector_id: "", inspection_due: "",
-    due_on: p.dueDefault ?? "", notes: "",
+    due_on: p.dueDefault ?? "", notes: "", confirm_missing: false,
   });
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
@@ -25,6 +26,7 @@ export function DossierOpen(p: {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!f.evaluator_id) return setMsg("Alege evaluatorul principal.");
+    if (f.inspector_id && missingOf(p.docs).length && !f.confirm_missing) return setMsg(`Lipsesc ${missingOf(p.docs).join(" și ")}: bifează că aloci inspecția fără ele sau alege „O aloc mai târziu”.`);
     setBusy(true); setMsg("");
     const r = await fetch(`/api/crm/orders/${p.order}/dossier`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(f) }).catch(() => null);
     const d = (await r?.json().catch(() => ({}))) as { id?: string; error?: string; inspectionError?: string | null } | undefined;
@@ -68,6 +70,8 @@ export function DossierOpen(p: {
                 <input className="input" type="date" value={f.inspection_due} onChange={set("inspection_due")} disabled={!f.inspector_id} />
               </label>
             </div>
+            {f.inspector_id && <DocsConfirm have={p.docs} checked={f.confirm_missing} onChange={(v) => setF({ ...f, confirm_missing: v })}
+              hint="Le poți încărca pe comandă (sau în dosar, după deschidere); apar singure în aplicația de inspecții." />}
             <label className="field">Termen de predare a raportului <small>{p.dueDefault === undefined ? "(opțional; altfel din ofertă, de la inspecție)" : ""}</small>
               <input className="input" type="date" value={f.due_on} onChange={set("due_on")} />
             </label>

@@ -243,3 +243,37 @@ body:has(.insp) { background: var(--cream); overscroll-behavior-y: none; }
 .iBox.accent { border-color: var(--acc, #f2a93b); background: var(--acc-soft, #fdf1dc); }
 a.iKv.link { color: inherit; text-decoration: none; }
 a.iKv.link b { color: var(--acc-text, #9a5f00); }
+
+/* ---------- CF / RLV documents ---------- */
+.iDocRow { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font-family: inherit; color: var(--ink); text-align: left; }
+.iDocRow b { flex: 1; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iDocRow svg { color: var(--muted-2); flex-shrink: 0; }
+.iDocTag { flex-shrink: 0; min-width: 38px; text-align: center; font-size: 11px; font-weight: 800; border-radius: 8px; padding: 4px 6px; background: var(--cream-2); color: var(--ink); }
+.iDocTag.cf { background: var(--navy); color: #fff; }
+.iDocTag.rlv { background: var(--acc); color: var(--ink); }
+.iDocFab { position: fixed; z-index: 30; right: max(16px, calc(50% - 320px + 16px)); bottom: calc(92px + env(safe-area-inset-bottom)); height: 48px; padding: 0 16px; border: 0; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 8px; background: var(--navy); color: #fff; font: 800 13px/1 var(--font, inherit); box-shadow: 0 8px 24px rgba(23, 23, 58, 0.28); }
+.iDocFab.empty { background: #fff; color: var(--muted); border: 1px solid var(--line); box-shadow: 0 4px 14px rgba(23, 23, 58, 0.14); }
+.iDocModal { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; background: #10102a; color: #fff; padding-top: env(safe-area-inset-top); }
+.iDocHead { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+.iDocSwitch { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 14px; background: rgba(255, 255, 255, 0.1); }
+.iDocSwitch button { height: 40px; border: 0; border-radius: 10px; background: none; color: rgba(255, 255, 255, 0.7); font: 700 14px/1 inherit; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.iDocSwitch button.on { background: #fff; color: var(--ink); }
+.iDocSwitch small { font-size: 10.5px; font-weight: 800; padding: 2px 6px; border-radius: 999px; background: rgba(242, 169, 59, 0.25); color: inherit; }
+.iDocClose { width: 44px; height: 44px; border: 0; border-radius: 12px; background: rgba(255, 255, 255, 0.1); color: #fff; display: flex; align-items: center; justify-content: center; }
+.iDocChips { display: flex; gap: 6px; overflow-x: auto; padding: 0 12px 10px; }
+.iDocChips .iChip { white-space: nowrap; flex-shrink: 0; }
+.iDocBody { flex: 1; min-height: 0; background: #fff; display: flex; }
+.iDocBody iframe { flex: 1; width: 100%; height: 100%; border: 0; background: #fff; }
+.iDocImg { flex: 1; overflow: auto; touch-action: pan-x pan-y pinch-zoom; background: #f3f1ec; }
+.iDocImg img { display: block; max-width: none; height: auto; }
+.iDocEmpty { margin: auto; max-width: 300px; padding: 24px; text-align: center; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.iDocFoot { display: flex; align-items: center; gap: 12px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); font-size: 12.5px; }
+.iDocFoot span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(255, 255, 255, 0.7); }
+.iDocFoot a { color: var(--acc); font-weight: 800; white-space: nowrap; }
+.iPdf { flex: 1; overflow: auto; background: #e9e6df; padding: 8px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; -webkit-overflow-scrolling: touch; }
+.iPdfPage { display: block; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18); margin: 0 auto; flex-shrink: 0; }
+.iPdf .iDocEmpty { align-self: center; }
+.iDocZoom { display: inline-flex; gap: 6px; }
+.iDocZoom button { width: 38px; height: 34px; border: 0; border-radius: 10px; background: rgba(255, 255, 255, 0.12); color: #fff; font: 800 18px/1 inherit; font-family: inherit; }
+.iDocZoom button:disabled { opacity: 0.35; }

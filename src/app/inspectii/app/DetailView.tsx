@@ -5,6 +5,7 @@ import type { Ctx } from "./InspApp";
 import { fmtWhen, parseLocal } from "./store";
 import { Icon, mapsUrl, Pill, telUrl, TopBar, wazeUrl, type Local } from "./ui";
 import { LeafletMap } from "./LeafletMap";
+import { DocsSection } from "./DocsViewer";
 import { useDetail, useDraft, usePhotos } from "./hooks";
 import { progress, sheetTypeLabel } from "@/lib/insp-forms";
 
@@ -122,6 +123,8 @@ export function DetailView({ ctx, id, item }: { ctx: Ctx; id: string; item: Loca
             </>
           ) : <p className="muted">Nu există persoană de contact. O poți adăuga la programare.</p>}
         </section>
+
+        <DocsSection docs={detail?.docs} />
 
         <section className="iBox">
           <h3>Proprietatea</h3>
