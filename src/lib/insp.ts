@@ -54,8 +54,11 @@ const SELECT = `SELECT i.id, i.status, i.scheduled_at, i.done_at, i.duration_min
   LEFT JOIN entities c ON c.id = r.client_id
   LEFT JOIN entities b ON b.id = r.recipient_id`;
 
-/** Inspections of a user: assigned to them, or not assigned yet on a report they work on. */
-const MINE = `(i.inspector_id = ?1 OR (i.inspector_id IS NULL AND EXISTS (SELECT 1 FROM report_members m WHERE m.report_id = i.report_id AND m.user_id = ?1)))`;
+/**
+ * Inspections of a user: assigned to them, or not assigned yet on a report they work on. Inspections imported from
+ * Glide are history (finished reports) and never show in the app.
+ */
+const MINE = `i.glide_id IS NULL AND (i.inspector_id = ?1 OR (i.inspector_id IS NULL AND EXISTS (SELECT 1 FROM report_members m WHERE m.report_id = i.report_id AND m.user_id = ?1)))`;
 
 /** Still to do (and the report is still open), or done in the last 45 days. */
 const CURRENT = `((i.status IN ('to_schedule', 'scheduled') AND (r.id IS NULL OR r.status IN ('draft', 'in_progress', 'suspended')))
