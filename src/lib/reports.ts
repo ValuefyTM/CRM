@@ -28,7 +28,7 @@ const ROW = `SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.r
      WHERE a.report_id = r.id ORDER BY a.is_main DESC LIMIT 1) AS asset
   FROM reports r LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id LEFT JOIN entities i ON i.id = r.issuer_id`;
 
-export type ReportFilters = { q?: string; status?: string; year?: string; bank?: string; issuer?: string; evaluator?: string; sort?: string; page?: number };
+export type ReportFilters = { q?: string; status?: string; year?: string; bank?: string; issuer?: string; evaluator?: string; sort?: string; page?: number; etapa?: string; termen?: string };
 
 export const REPORT_SORTS: Record<string, [string, string]> = {
   "": ["Cele mai noi", "COALESCE(r.report_date, substr(r.created_at, 1, 10)) DESC, CAST(r.number AS INTEGER) DESC"],
@@ -38,10 +38,33 @@ export const REPORT_SORTS: Record<string, [string, string]> = {
 };
 export const PAGE_SIZE = 50;
 
+// Working stage and deadline in SQL (same rules as stageOf / dueOf in dossier.ts), for the dashboard links.
+const TASKS = "(SELECT COUNT(*) FROM inspections i WHERE i.report_id = r.id AND i.status <> 'cancelled')";
+const TASKS_DONE = "(SELECT COUNT(*) FROM inspections i WHERE i.report_id = r.id AND i.status = 'done')";
+const NO_INSP = "(SELECT COUNT(*) FROM assets a WHERE a.report_id = r.id AND a.no_inspection IS NOT NULL)";
+export const STAGE_SQL = `CASE WHEN r.delivered_at IS NOT NULL OR r.status = 'done' THEN 'delivered' WHEN r.stage = 'review' THEN 'review'
+  WHEN r.stage = 'drafting' OR (${TASKS} > 0 AND ${TASKS_DONE} = ${TASKS}) OR (${TASKS} = 0 AND ${NO_INSP} > 0) THEN 'drafting' ELSE 'inspection' END`;
+const INSPECTED = "(SELECT substr(MAX(i.done_at), 1, 10) FROM inspections i WHERE i.report_id = r.id AND i.status = 'done')";
+// n working days after the inspection: from a weekend day count from the Friday before; n + 2 days for every weekend crossed.
+const WD = `CAST(strftime('%w', ${INSPECTED}) AS INTEGER)`;
+export const DUE_SQL = `COALESCE(r.due_on, CASE WHEN r.term_days > 0 AND ${INSPECTED} IS NOT NULL THEN date(${INSPECTED},
+  ((CASE ${WD} WHEN 6 THEN -1 WHEN 0 THEN -2 ELSE 0 END) + r.term_days + 2 * ((r.term_days + (CASE WHEN ${WD} IN (0, 6) THEN 5 ELSE ${WD} END) - 1) / 5)) || ' days') END)`;
+export const STAGE_FILTERS: Record<string, string> = { inspectie: "inspection", redactare: "drafting", verificare: "review" };
+export const DUE_FILTERS: Record<string, string> = { depasit: "Termen depășit", curand: "Termen în 2 zile" };
+const bucharestToday = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
+
 function where(f: ReportFilters) {
   const w: string[] = [];
   const p: (string | number)[] = [];
+  const open = "r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL";
+  if (f.etapa && STAGE_FILTERS[f.etapa]) { w.push(`${open} AND (${STAGE_SQL}) = ?`); p.push(STAGE_FILTERS[f.etapa]); }
+  if (f.termen === "depasit") { w.push(`${open} AND (${DUE_SQL}) < ?`); p.push(bucharestToday()); }
+  if (f.termen === "curand") {
+    const d = new Date(`${bucharestToday()}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 2);
+    w.push(`${open} AND (${DUE_SQL}) BETWEEN ? AND ?`); p.push(bucharestToday(), d.toISOString().slice(0, 10));
+  }
   if (f.status && REPORT_STATUS[f.status]) { w.push("r.status = ?"); p.push(f.status); }
+  if (f.status === "deschise") w.push("r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL");
   if (f.year && /^\d{4}$/.test(f.year)) { w.push("COALESCE(r.reporting_year, CAST(substr(r.report_date, 1, 4) AS INTEGER)) = ?"); p.push(Number(f.year)); }
   if (f.bank) { w.push("COALESCE(b.code, b.name) = ?"); p.push(f.bank); }
   if (f.issuer) { w.push("r.issuer_id = ?"); p.push(f.issuer); }

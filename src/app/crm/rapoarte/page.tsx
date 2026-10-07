@@ -1,14 +1,15 @@
 import { niceName } from "@/lib/labels";
 import type { Metadata } from "next";
 import { fmtDate, staffPage } from "@/lib/guard";
-import { cap, lei, listReports, PAGE_SIZE, REPORT_SORTS, REPORT_STATUS, reportFacets } from "@/lib/reports";
+import { cap, DUE_FILTERS, lei, listReports, PAGE_SIZE, REPORT_SORTS, REPORT_STATUS, reportFacets, STAGE_FILTERS } from "@/lib/reports";
+import { STAGE_LABEL } from "@/lib/dossier";
 import { ReportFilters } from "./ReportFilters";
 import { CrmShell } from "@/components/CrmShell";
 
 export const metadata: Metadata = { title: "Rapoarte | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
 
-type SP = { q?: string; status?: string; year?: string; bank?: string; issuer?: string; evaluator?: string; sort?: string; page?: string };
+type SP = { q?: string; status?: string; year?: string; bank?: string; issuer?: string; evaluator?: string; sort?: string; page?: string; etapa?: string; termen?: string };
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const { db, user, base } = await staffPage();
@@ -43,6 +44,14 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           evaluators={facets.evaluators.map((e) => [e.id, e.name, e.n])}
           sorts={Object.entries(REPORT_SORTS).map(([k, [l]]) => [k, l])}
         />
+        {(STAGE_FILTERS[sp.etapa ?? ""] || DUE_FILTERS[sp.termen ?? ""] || sp.status === "deschise") && (
+          <div className="activeFilters">
+            <span>Din tabloul de bord:</span>
+            {STAGE_FILTERS[sp.etapa ?? ""] && <a className="chipX" href={link({ etapa: undefined })}>Etapa: {STAGE_LABEL[STAGE_FILTERS[sp.etapa!]]} <b aria-hidden>×</b></a>}
+            {sp.status === "deschise" && <a className="chipX" href={link({ status: undefined })}>Rapoarte deschise <b aria-hidden>×</b></a>}
+            {DUE_FILTERS[sp.termen ?? ""] && <a className="chipX" href={link({ termen: undefined })}>{DUE_FILTERS[sp.termen!]} <b aria-hidden>×</b></a>}
+          </div>
+        )}
         {data.rows.length === 0 ? (
           <div className="empty">{data.total === 0 && !sp.q ? "Nu există încă rapoarte. Proprietarul le poate aduce din Glide, din meniul Import Glide." : "Niciun raport pentru filtrele alese."}</div>
         ) : (
