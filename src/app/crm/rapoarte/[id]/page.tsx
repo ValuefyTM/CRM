@@ -1,3 +1,4 @@
+import { niceName } from "@/lib/labels";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { fmtDate, initials, staffPage } from "@/lib/guard";
@@ -112,8 +113,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const order = r.order_id ? orderCode({ id: r.order_id, seq: r.order_seq, bank_ref: r.order_bank_ref, bank: r.bank_code, source: r.order_source ?? undefined }) : null;
   type Recipient = { id: string; name: string; kind: string | null; role: string; contact: string; link?: boolean };
   const recipients: Recipient[] = [];
-  if (r.recipient_id) recipients.push({ id: r.recipient_id, name: r.bank_name ?? "—", kind: r.recipient_kind, role: "Finanțator / utilizator desemnat", contact: [r.recipient_email, r.recipient_phone, r.recipient_code && `cod ${r.recipient_code}`].filter(Boolean).join(" · ") });
-  if (r.client_id) recipients.push({ id: r.client_id, name: r.client_name ?? "—", kind: r.client_kind, role: r.recipient_id ? "Client / proprietar" : "Client / utilizator desemnat", contact: [r.client_phone, r.client_email].filter(Boolean).join(" · "), link: true });
+  if (r.recipient_id) recipients.push({ id: r.recipient_id, name: niceName(r.bank_name) || "—", kind: r.recipient_kind, role: "Finanțator / utilizator desemnat", contact: [r.recipient_email, r.recipient_phone, r.recipient_code && `cod ${r.recipient_code}`].filter(Boolean).join(" · ") });
+  if (r.client_id) recipients.push({ id: r.client_id, name: niceName(r.client_name) || "—", kind: r.client_kind, role: r.recipient_id ? "Client / proprietar" : "Client / utilizator desemnat", contact: [r.client_phone, r.client_email].filter(Boolean).join(" · "), link: true });
   const checks: [state: "ok" | "miss" | "todo", text: string, note?: string][] = [
     main?.no_inspection ? ["ok", "Bun principal fără inspecție", main.no_inspection] : [main?.sheet_photo || main?.inspection_status === "done" ? "ok" : "todo", "Fișă inspecție bun principal atașată"],
     [assets.length > 0 && assets.every((a) => a.value != null) ? "ok" : "todo", "Valori completate pe toate bunurile", assets.length ? `${assets.filter((a) => a.value != null).length} din ${assets.length}` : "niciun bun"],
@@ -145,8 +146,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
               {r.delivered_at && <span className="pill pillOk"><i />Predat</span>}
             </div>
             <div className="rChips">
-              {r.client_name && <a className="rChip" href={`${base}/clienti/${r.client_id}`}><span className="av">{initials(r.client_name, "c")}</span>{r.client_name}</a>}
-              {r.bank_name && <span className="rChip"><span className="av gold">{(r.bank_code ?? r.bank_name).slice(0, 3).toUpperCase()}</span>{r.bank_name}</span>}
+              {r.client_name && <a className="rChip" href={`${base}/clienti/${r.client_id}`}><span className="av">{initials(r.client_name, "c")}</span>{niceName(r.client_name)}</a>}
+              {r.bank_name && <span className="rChip"><span className="av gold">{(r.bank_code ?? r.bank_name).slice(0, 3).toUpperCase()}</span>{niceName(r.bank_name)}</span>}
               {r.contract_number && <span className="rMeta">Contract <u>{r.contract_kind === "framework" ? "cadru " : ""}{r.contract_number}</u></span>}
               {order && <a className="rMeta" href={`${base}/comenzi/${r.order_id}`}>Comandă <u>{order}</u></a>}
             </div>
@@ -198,9 +199,9 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             <section className="card">
               <h2>Client și sursă</h2>
               <dl className="kv">
-                <Row k="Client">{r.client_name ? <a className="rowLink" href={`${base}/clienti/${r.client_id}`}>{r.client_name}</a> : null}</Row>
+                <Row k="Client">{r.client_name ? <a className="rowLink" href={`${base}/clienti/${r.client_id}`}>{niceName(r.client_name)}</a> : null}</Row>
                 <Row k="Tip client">{r.client_kind ? KIND[r.client_kind] ?? r.client_kind : null}</Row>
-                <Row k="Utilizator / bancă">{r.bank_name}</Row>
+                <Row k="Utilizator / bancă">{niceName(r.bank_name) || null}</Row>
                 <Row k="Contract">{r.contract_number ? <span className="link">{r.contract_number} · {r.contract_kind === "framework" ? "cadru" : "clasic"}</span> : null}</Row>
                 <Row k="Comandă">{order ? <a className="link" href={`${base}/comenzi/${r.order_id}`}>{order}{r.order_source ? ` · ${SOURCE_LABEL[r.order_source]?.toLowerCase() ?? r.order_source}` : ""}</a> : null}</Row>
                 <Row k="Agenție bancară">{r.bank_branch}</Row>

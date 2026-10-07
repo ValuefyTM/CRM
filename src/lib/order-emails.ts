@@ -31,7 +31,7 @@ export async function sendOrderEmails(user: User, id: string, seq: number, v: Or
       html: layout({
         eyebrow: `Comanda ${ref}`,
         title: `${hello} Am primit comanda.`,
-        body: `<p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#4A4A66">Pregătim oferta (onorariu și termen) și revenim în cel mai scurt timp.</p>${table}`,
+        body: `<p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#4A4A4A">Pregătim oferta (onorariu și termen) și revenim în cel mai scurt timp.</p>${table}`,
         button: { label: "Vezi comanda →", url: portalLink },
         foot: "Poți adăuga oricând documentele lipsă din pagina comenzii.",
       }),
@@ -47,7 +47,7 @@ export async function sendOrderEmails(user: User, id: string, seq: number, v: Or
         html: layout({
           eyebrow: "VALUEFY CRM",
           title: `Comandă nouă ${ref}${v.urgent ? " · URGENT" : ""}`,
-          body: `<p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#4A4A66">Trimisă de <strong style="color:#17173A">${esc(by)}</strong>.</p>${table}`,
+          body: `<p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#4A4A4A">Trimisă de <strong style="color:#111111">${esc(by)}</strong>.</p>${table}`,
           button: { label: "Deschide în CRM →", url: crmLink },
           foot: "Documentele încărcate cu comanda se văd în pagina comenzii.",
         }),

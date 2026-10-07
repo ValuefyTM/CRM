@@ -32,7 +32,7 @@ export async function sendOfferEmail(o: Offer, order: Order, to: string) {
     html: layout({
       eyebrow: `Oferta ${o.number}`,
       title: `${hello} Oferta ta de evaluare este pregătită.`,
-      body: `<p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#4A4A66">${o.message ? esc(o.message) : "Am analizat solicitarea ta. Găsești mai jos un rezumat; oferta completă, cu termenii de referință ai evaluării, o poți citi și accepta online."}</p>${summary(o, order)}`,
+      body: `<p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#4A4A4A">${o.message ? esc(o.message) : "Am analizat solicitarea ta. Găsești mai jos un rezumat; oferta completă, cu termenii de referință ai evaluării, o poți citi și accepta online."}</p>${summary(o, order)}`,
       button: { label: "Vezi și acceptă oferta →", url: link },
       foot: `Oferta este valabilă până la ${fmtDay(o.valid_until)}. Pentru întrebări, răspunde la acest email.`,
     }),
@@ -52,7 +52,7 @@ export async function sendAcceptedEmails(o: Offer, order: Order) {
       html: layout({
         eyebrow: `Oferta ${o.number} · acceptată`,
         title: "Mulțumim! Oferta a fost acceptată.",
-        body: `<p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#4A4A66">Ai semnat oferta și termenii de referință ai evaluării pe ${esc(new Date(o.accepted_at!).toLocaleString("ro-RO", { timeZone: "Europe/Bucharest" }))}. Oferta semnată se transformă automat în contract de prestări servicii odată ce primim toate datele tale de facturare. Te contactăm în curând pentru acestea și pentru programarea inspecției.</p>${summary(o, order, urgent)}`,
+        body: `<p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#4A4A4A">Ai semnat oferta și termenii de referință ai evaluării pe ${esc(new Date(o.accepted_at!).toLocaleString("ro-RO", { timeZone: "Europe/Bucharest" }))}. Oferta semnată se transformă automat în contract de prestări servicii odată ce primim toate datele tale de facturare. Te contactăm în curând pentru acestea și pentru programarea inspecției.</p>${summary(o, order, urgent)}`,
         button: { label: "Vezi oferta semnată →", url: link },
         foot: "Păstrează acest email: linkul duce la copia semnată a ofertei.",
       }),
@@ -65,7 +65,7 @@ export async function sendAcceptedEmails(o: Offer, order: Order) {
       html: layout({
         eyebrow: "VALUEFY CRM",
         title: `Ofertă acceptată ${o.number}`,
-        body: `<p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#4A4A66">Semnată de <strong style="color:#17173A">${esc(o.accepted_name)}</strong>${urgent ? ", cu regim urgent" : ""}.</p>${summary(o, order, urgent)}`,
+        body: `<p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#4A4A4A">Semnată de <strong style="color:#111111">${esc(o.accepted_name)}</strong>${urgent ? ", cu regim urgent" : ""}.</p>${summary(o, order, urgent)}`,
         button: { label: "Deschide comanda →", url: crm },
         foot: "Următorul pas: programarea inspecției și factura de avans.",
       }),
@@ -82,7 +82,7 @@ export async function sendDeclinedEmail(o: Offer, order: Order) {
     html: layout({
       eyebrow: "VALUEFY CRM",
       title: `Ofertă refuzată ${o.number}`,
-      body: `<p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#4A4A66">${o.decline_reason ? `Motiv: <strong style="color:#17173A">${esc(o.decline_reason)}</strong>` : "Clientul nu a lăsat un motiv."}</p>`,
+      body: `<p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#4A4A4A">${o.decline_reason ? `Motiv: <strong style="color:#111111">${esc(o.decline_reason)}</strong>` : "Clientul nu a lăsat un motiv."}</p>`,
       button: { label: "Deschide comanda →", url: crm },
       foot: "Poți pregăti o ofertă nouă din pagina comenzii.",
     }),

@@ -91,9 +91,9 @@ export async function requestSignIn(db: D1Database, kind: Kind, rawEmail: string
     html: layout({
       eyebrow: app,
       title: "Codul tău de autentificare",
-      body: `<p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#4A4A66">Introdu codul de mai jos în pagina de autentificare:</p>
+      body: `<p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#4A4A4A">Introdu codul de mai jos în pagina de autentificare:</p>
 <p style="margin:16px 0;font-size:34px;font-weight:bold;letter-spacing:8px;font-family:ui-monospace,Menlo,monospace">${code}</p>
-<p style="margin:0;font-size:14px;line-height:1.6;color:#4A4A66">Sau intră direct apăsând butonul.</p>`,
+<p style="margin:0;font-size:14px;line-height:1.6;color:#4A4A4A">Sau intră direct apăsând butonul.</p>`,
       button: { label: "Intră în cont →", url: link },
       foot: `Codul și linkul sunt valabile ${CODE_MINUTES} minute și pot fi folosite o singură dată. Dacă nu ai cerut tu autentificarea, ignoră acest email.`,
     }),
@@ -157,8 +157,8 @@ export async function sendInvite(db: D1Database, userId: string, actor: string):
       html: layout({
         eyebrow: "Inspecții VALUEFY",
         title: `${hello} Ai primit acces în aplicația de inspecții.`,
-        body: `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A66">Deschide linkul de pe telefon și intră cu adresa <strong style="color:#17173A">${esc(u.email)}</strong>. Nu ai nevoie de parolă: la fiecare autentificare primești un cod pe email.</p>
-<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A66">Din meniul browserului alege „Adaugă pe ecranul principal”, ca să o ai ca aplicație și să poți lucra și fără semnal.</p>`,
+        body: `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A4A">Deschide linkul de pe telefon și intră cu adresa <strong style="color:#111111">${esc(u.email)}</strong>. Nu ai nevoie de parolă: la fiecare autentificare primești un cod pe email.</p>
+<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A4A">Din meniul browserului alege „Adaugă pe ecranul principal”, ca să o ai ca aplicație și să poți lucra și fără semnal.</p>`,
         button: { label: "Deschide aplicația →", url: link },
         foot: "Dacă nu te aștepți la acest email, îl poți ignora.",
       }),
@@ -174,7 +174,7 @@ export async function sendInvite(db: D1Database, userId: string, actor: string):
       html: layout({
         eyebrow: "VALUEFY CRM",
         title: `${hello} Ai primit acces în CRM-ul VALUEFY.`,
-        body: `<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A66">Intră cu adresa <strong style="color:#17173A">${esc(u.email)}</strong>. Nu ai nevoie de parolă: la fiecare autentificare primești un cod pe email.</p>`,
+        body: `<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A4A">Intră cu adresa <strong style="color:#111111">${esc(u.email)}</strong>. Nu ai nevoie de parolă: la fiecare autentificare primești un cod pe email.</p>`,
         button: { label: "Intră în CRM →", url: link },
         foot: "Dacă nu te aștepți la acest email, îl poți ignora.",
       }),
@@ -192,7 +192,7 @@ export async function sendInvite(db: D1Database, userId: string, actor: string):
   const partner = u.kind === "partner";
   const subject = partner ? `Invitație în Portalul colaboratori VALUEFY — ${u.partner_name}` : "Contul tău în Portalul client VALUEFY";
   const intro = partner
-    ? `Contul tău face parte din <strong style="color:#17173A">${esc(u.partner_name)}</strong>. Din portal vei putea comanda evaluări în numele clienților tăi, urmări fiecare dosar și primi rapoartele.`
+    ? `Contul tău face parte din <strong style="color:#111111">${esc(u.partner_name)}</strong>. Din portal vei putea comanda evaluări în numele clienților tăi, urmări fiecare dosar și primi rapoartele.`
     : "Din portal vei putea urmări evaluările comandate la VALUEFY, încărca documentele necesare și descărca rapoartele.";
   return sendEmail({
     to: u.email,
@@ -201,8 +201,8 @@ export async function sendInvite(db: D1Database, userId: string, actor: string):
     html: layout({
       eyebrow: partner ? "Portal colaboratori" : "Portal client",
       title: partner ? `${hello} Ai fost invitat(ă) în portalul VALUEFY.` : `${hello} Contul tău VALUEFY te așteaptă.`,
-      body: `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A66">${intro}</p>
-<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A66">Activează-ți contul în mai puțin de un minut. Nu ai nevoie de parolă: te autentifici cu un cod primit pe email.</p>`,
+      body: `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A4A">${intro}</p>
+<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A4A">Activează-ți contul în mai puțin de un minut. Nu ai nevoie de parolă: te autentifici cu un cod primit pe email.</p>`,
       button: { label: "Activează contul →", url: link },
       foot: `Invitația este valabilă ${INVITE_DAYS} zile. Dacă nu te aștepți la acest email, îl poți ignora.`,
     }),

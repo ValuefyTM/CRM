@@ -14,8 +14,8 @@ export async function GET() {
       scope: base || "/",
       display: "standalone",
       orientation: "portrait",
-      background_color: "#17173A",
-      theme_color: "#17173A",
+      background_color: "#111111",
+      theme_color: "#111111",
       icons: [
         { src: "/icon-insp-192.png", sizes: "192x192", type: "image/png" },
         { src: "/icon-insp-512.png", sizes: "512x512", type: "image/png" },

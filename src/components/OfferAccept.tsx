@@ -21,7 +21,7 @@ function SignaturePad({ onChange, disabled }: { onChange: (png: string) => void;
       const dpr = window.devicePixelRatio || 1;
       c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr);
       const g = c.getContext("2d")!;
-      g.scale(dpr, dpr); g.lineWidth = 2.4; g.lineCap = "round"; g.lineJoin = "round"; g.strokeStyle = "#17173A";
+      g.scale(dpr, dpr); g.lineWidth = 2.4; g.lineCap = "round"; g.lineJoin = "round"; g.strokeStyle = "#111111";
       strokes.current = 0; setEmpty(true); onChange("");
     };
     fit();

@@ -169,8 +169,8 @@ async function notifyEvaluator(db: D1Database, reportId: string, userId: string,
     html: layout({
       eyebrow: "CRM VALUEFY",
       title: "Ai un raport nou",
-      body: `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A66">${esc(why)}: <strong style="color:#17173A">${esc(label)}</strong>.</p>
-<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A66">Pasul următor: alocă inspecțiile pentru fiecare bun (ție sau unui coleg) sau marchează bunurile evaluate fără inspecție.</p>`,
+      body: `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A4A">${esc(why)}: <strong style="color:#111111">${esc(label)}</strong>.</p>
+<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A4A">Pasul următor: alocă inspecțiile pentru fiecare bun (ție sau unui coleg) sau marchează bunurile evaluate fără inspecție.</p>`,
       button: { label: "Deschide raportul →", url: link },
       foot: "Primești acest email pentru că ești evaluatorul principal al raportului.",
     }),

@@ -56,3 +56,15 @@ export const STATUS_LABEL: Record<string, [string, string]> = {
   invited: ["Invitat", "pillWarn"],
   disabled: ["Dezactivat", "pillErr"],
 };
+
+const KEEP_UPPER = new Set(["SA", "SRL", "SRL-D", "IFN", "PFA", "II", "IF", "SCS", "SNC", "RA", "SC", "BCR", "BRD", "CEC", "ING", "OTP", "UCB", "RO", "ANEVAR", "ONG", "SCA", "SPRL", "IPURL"]);
+
+/** "PISTA RALUCA-ANDREEA" → "Pista Raluca-Andreea", "UNICREDIT BANK SA" → "Unicredit Bank SA". Names written normally stay as they are. */
+export function niceName(s: string | null | undefined) {
+  if (!s || s !== s.toUpperCase() || !/\p{Lu}{2}/u.test(s)) return s ?? "";
+  return s.split(/(\s+)/).map((w) => {
+    const bare = w.replace(/[.,()"]/g, "");
+    if (KEEP_UPPER.has(bare)) return w;
+    return w.toLowerCase().replace(/(^|[-.("'])(\p{L})/gu, (_, a: string, b: string) => a + b.toUpperCase());
+  }).join("");
+}

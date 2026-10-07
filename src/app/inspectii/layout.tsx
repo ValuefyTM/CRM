@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   icons: { apple: "/icon-insp-apple.png" },
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#17173A" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#111111" };
 
 export default function InspLayout({ children }: { children: React.ReactNode }) {
   return <div className="insp">{children}</div>;

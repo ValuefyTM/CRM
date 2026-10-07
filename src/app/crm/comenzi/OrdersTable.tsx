@@ -1,5 +1,6 @@
 "use client";
 
+import { niceName } from "@/lib/labels";
 import { useMemo, useState } from "react";
 import { FilterSelect } from "@/components/FilterSelect";
 
@@ -72,7 +73,7 @@ export function OrdersTable({ rows, base, initial }: { rows: CrmOrderRow[]; base
                 <tr key={r.id} className={r.unread ? "unread" : undefined}>
                   <td><a className="ref rowLink" href={`${base}/comenzi/${r.id}`}>{r.ref}</a><div className="muted">{r.created}</div></td>
                   <td><a className="rowLink" href={`${base}/comenzi/${r.id}`}>{r.type}</a><div className="muted">{r.address}</div></td>
-                  <td>{r.client}<div className="muted" style={{ whiteSpace: "nowrap" }}>{r.clientPhone}</div></td>
+                  <td><b>{niceName(r.client)}</b><div className="muted" style={{ whiteSpace: "nowrap" }}>{r.clientPhone}</div></td>
                   <td>
                     {r.fromId ? <a className="rowLink" style={{ fontWeight: 500 }} href={`${base}/utilizatori/${r.fromId}`}>{r.from}</a> : r.from}
                     <div className="muted">{r.firmId ? <a href={`${base}/utilizatori/firme/${r.firmId}`}>{r.firm}</a> : r.source === "collab" ? "Colaborare" : r.source === "partner" ? "Colaborator" : r.source === "site" ? "Cerere de pe site" : "Client din portal"}</div>

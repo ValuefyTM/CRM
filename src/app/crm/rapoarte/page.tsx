@@ -1,3 +1,4 @@
+import { niceName } from "@/lib/labels";
 import type { Metadata } from "next";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { cap, lei, listReports, PAGE_SIZE, REPORT_SORTS, REPORT_STATUS, reportFacets } from "@/lib/reports";
@@ -54,8 +55,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                   const [type, address] = (r.asset ?? "|").split("|");
                   return (
                     <tr key={r.id}>
-                      <td><a className="ref rowLink" href={`${base}/rapoarte/${r.id}`}>{r.number ?? "—"}</a><div className="muted">{fmtDate(r.report_date)}</div></td>
-                      <td><a className="rowLink" href={`${base}/rapoarte/${r.id}`}>{r.client_name ?? "—"}</a><div className="muted">{r.report_type}</div></td>
+                      <td>{r.number ? <a className="ref rowLink" href={`${base}/rapoarte/${r.id}`}>{r.number}</a> : <a className="rowLink muted" href={`${base}/rapoarte/${r.id}`}>fără număr</a>}<div className="muted">{fmtDate(r.report_date)}</div></td>
+                      <td><a className="rowLink" href={`${base}/rapoarte/${r.id}`}>{niceName(r.client_name) || "—"}</a><div className="muted">{r.report_type}</div></td>
                       <td>{cap(type) || "—"}<div className="muted">{address}</div></td>
                       <td>{r.bank_code ?? "—"}</td>
                       <td>{r.evaluator ?? "—"}</td>

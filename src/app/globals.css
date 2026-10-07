@@ -1,14 +1,14 @@
 /* VALUEFY CRM & partner portal — tokens from the "Portal colaboratori" design handoff. */
 :root {
-  --navy: #17173a; --navy-hover: #24245a; --navy-deep: #111130;
+  --navy: #111111; --navy-hover: #2a2a2a; --navy-deep: #000000;
   --acc: #f2a93b; --acc-ink: #e0931a; --acc-text: #9a5f00; --acc-light: #f5be66; --acc-soft: #fdf1dc; --acc-line: #f5d9a6;
   --page: #f2ece0; --cream: #fbf8f2; --cream-2: #f3eee3;
   --line: #e2d8c4; --divider: #efe9dc; --dashed: #d8cfbd;
-  --ink: #17173a; --muted: #4a4a66; --muted-2: #6b6b85; --off: #a39d8f; --on-navy: #c9cae0; --on-navy-2: #a9abc4;
-  --info: #3b74d4; --info-text: #1f4fa0; --info-bg: #eaf0fb; --info-line: #cfddf5;
+  --ink: #141414; --muted: #4a4a4a; --muted-2: #6b6b6b; --off: #a39d8f; --on-navy: #d6d6d6; --on-navy-2: #a8a8a8;
+  --info: #2e2e2e; --info-text: #1f1f1f; --info-bg: #ececec; --info-line: #d6d6d6;
   --ok: #1fa971; --ok-text: #157f55; --ok-bg: #e7f7ef; --ok-line: #bfe6d2;
   --err: #b3261e; --err-bg: #fbe9e7;
-  --neutral-bg: #eef0f6; --neutral-text: #3a3a66;
+  --neutral-bg: #efefef; --neutral-text: #3a3a3a;
   --font: Verdana, Geneva, sans-serif; --mono: ui-monospace, Menlo, monospace;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -186,7 +186,7 @@ a.kpi:hover { border-color: var(--acc); transform: translateY(-2px); }
 /* ---------- Tabs ---------- */
 .segment { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px; border-radius: 14px; background: var(--cream-2); border: 1px solid var(--line); }
 .segment a, .segment button { height: 40px; border: 0; border-radius: 10px; background: transparent; font-size: 13.5px; font-weight: 700; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; }
-.segment [aria-current="page"], .segment [aria-pressed="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(23, 23, 58, 0.12); }
+.segment [aria-current="page"], .segment [aria-pressed="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(17, 17, 17, 0.12); }
 .segment small { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: var(--neutral-bg); color: var(--neutral-text); }
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
 .tabs a { padding: 12px 16px; font-size: 14px; font-weight: 700; color: var(--muted-2); border-bottom: 3px solid transparent; margin-bottom: -1px; display: flex; gap: 8px; align-items: center; white-space: nowrap; }
@@ -275,7 +275,7 @@ a.kpi:hover { border-color: var(--acc); transform: translateY(-2px); }
 .rTitle { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .rTitle h2 { margin: 0; font-family: var(--mono); font-size: clamp(26px, 3vw, 34px); letter-spacing: -0.02em; }
 .rHero .pill { background: rgba(255, 255, 255, 0.1); color: #fff; border: 1px solid rgba(255, 255, 255, 0.18); }
-.rHero .pillInfo { background: rgba(59, 116, 212, 0.22); color: #cfe0ff; border-color: rgba(120, 160, 230, 0.45); }
+.rHero .pillInfo { background: rgba(255, 255, 255, 0.14); color: #fff; border-color: rgba(255, 255, 255, 0.3); }
 .rHero .pillOk { background: rgba(31, 169, 113, 0.2); color: #bdf0d9; border-color: rgba(31, 169, 113, 0.45); }
 .rHero .pillWarn { background: rgba(242, 169, 59, 0.2); color: var(--acc-light); border-color: rgba(242, 169, 59, 0.45); }
 .rHero .pillErr { background: rgba(179, 38, 30, 0.25); color: #ffc9c4; border-color: rgba(220, 80, 70, 0.5); }
@@ -362,7 +362,7 @@ a.rMeta:hover u { color: var(--acc-light); }
 .dropzone span { color: var(--muted-2); font-size: 11.5px; }
 .dropzone:hover, .dropzone.over { border-color: var(--acc); background: var(--acc-soft); }
 .popWrap { position: relative; }
-.pop { position: absolute; z-index: 20; top: calc(100% + 8px); right: 0; width: min(320px, 86vw); background: #fff; color: var(--ink); border: 1px solid var(--line); border-radius: 16px; padding: 16px; box-shadow: 0 18px 40px rgba(23, 23, 58, 0.25); display: flex; flex-direction: column; gap: 12px; }
+.pop { position: absolute; z-index: 20; top: calc(100% + 8px); right: 0; width: min(320px, 86vw); background: #fff; color: var(--ink); border: 1px solid var(--line); border-radius: 16px; padding: 16px; box-shadow: 0 18px 40px rgba(17, 17, 17, 0.25); display: flex; flex-direction: column; gap: 12px; }
 @media (max-width: 699px) { .pop { left: 0; right: auto; } }
 .inlineForm { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .inlineForm .input, .inlineForm .select { height: 36px; font-size: 13.5px; width: auto; flex: 1; min-width: 160px; }
@@ -513,7 +513,7 @@ a.rMeta:hover u { color: var(--acc-light); }
   .ofCard, .ofHero { break-inside: avoid; animation: none; }
   .ofHero { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
-.ofPreviewBar { position: sticky; top: 78px; z-index: 15; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 14px 18px; border-radius: 16px; background: #fff; border: 1.5px solid var(--acc); box-shadow: 0 16px 36px -22px rgba(23, 23, 58, 0.45); }
+.ofPreviewBar { position: sticky; top: 78px; z-index: 15; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 14px 18px; border-radius: 16px; background: #fff; border: 1.5px solid var(--acc); box-shadow: 0 16px 36px -22px rgba(17, 17, 17, 0.45); }
 .ofPreviewBar > div:first-child { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
 .ofPreviewBar b { color: var(--ink); font-size: 14px; }
 .ofBtnGold.flat { margin-top: 0; height: 40px; font-size: 13.5px; }
@@ -598,7 +598,7 @@ a.rMeta:hover u { color: var(--acc-light); }
 .allocPick .select { height: 40px; }
 
 /* ---------- People: avatar with presence, person picker ---------- */
-.pAvatar { position: relative; flex-shrink: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: #17173a; font-weight: 800; letter-spacing: -0.02em; box-shadow: inset 0 0 0 1px rgba(23, 23, 58, 0.08); user-select: none; }
+.pAvatar { position: relative; flex-shrink: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: #111111; font-weight: 800; letter-spacing: -0.02em; box-shadow: inset 0 0 0 1px rgba(17, 17, 17, 0.08); user-select: none; }
 .pDot { position: absolute; right: -1px; bottom: -1px; width: 32%; height: 32%; min-width: 9px; min-height: 9px; border-radius: 50%; border: 2px solid #fff; background: #b8b6c4; }
 .pDot.online { background: #22c55e; }
 .pDot.away { background: #f5b83d; }
@@ -642,3 +642,53 @@ a.rMeta:hover u { color: var(--acc-light); }
 .onlineNow b { color: #15803d; }
 .pPickSearch:focus { outline: none; border-color: var(--acc); box-shadow: none; }
 .docTag { white-space: nowrap; }
+
+/* ================= Design v2: cards with a header band, airier listings, black instead of navy ================= */
+.card { --pad: clamp(16px, 2.4vw, 22px); box-shadow: 0 1px 2px rgba(17, 17, 17, 0.04), 0 12px 28px -22px rgba(17, 17, 17, 0.35); }
+.card.flush { --pad: 0px; }
+/* The card title sits in its own band: stands out from the content below. */
+.card > h2:first-child, .card > .cardHead:first-child {
+  margin: calc(-1 * var(--pad)) calc(-1 * var(--pad)) 2px; padding: 15px clamp(16px, 2.4vw, 22px) !important;
+  border-bottom: 1px solid var(--line); background: linear-gradient(180deg, #fff 0%, var(--cream) 100%); border-radius: 20px 20px 0 0;
+}
+.card h2 { font-size: 15.5px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.card > h2:first-child::before, .card > .cardHead:first-child h2::before { content: ""; width: 4px; height: 18px; border-radius: 3px; background: var(--acc); flex-shrink: 0; }
+.card h2 .muted { font-size: 12.5px; font-weight: 400; }
+.cardHead h2 { flex: 1 1 auto; }
+
+/* Key / value lists: quiet labels, readable values. */
+.kv div { padding: 11px 0; align-items: baseline; }
+.kv dt { font-size: 12.5px; color: var(--muted-2); }
+.kv dd { font-size: 13.5px; font-weight: 400; color: var(--ink); }
+.kv dd b, .kv dd strong { font-weight: 700; }
+
+/* Links: black, underlined in the accent colour. */
+.link, .kv dd a, .rowLink:hover { color: var(--ink); text-decoration: underline; text-decoration-color: var(--acc); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.link:hover, .kv dd a:hover { color: var(--acc-text); }
+
+/* Listings (reports, clients, orders): header band, more air, hover marker, references as tags. */
+.table { font-size: 13px; }
+.table thead th { background: var(--cream); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font-size: 10.5px; letter-spacing: 0.08em; padding-top: 11px; padding-bottom: 11px; white-space: nowrap; }
+.card > .tableWrap:first-child .table thead th, .card > .cardHead + .tableWrap .table thead th { border-top: 0; }
+.table td { padding-top: 14px; padding-bottom: 14px; color: var(--ink); line-height: 1.45; }
+.table td .muted, .table td small { font-size: 12px; color: var(--muted-2); }
+.table tbody tr { transition: background 0.15s; }
+.table tbody tr:hover { background: #fdfbf7; }
+.table tbody tr:hover > td:first-child { box-shadow: inset 3px 0 0 var(--acc); }
+.table .rowLink { font-weight: 700; font-size: 13px; }
+.table .rowLink:hover { color: var(--ink); }
+.table .ref, .table .ref.rowLink { display: inline-block; font-family: var(--mono); font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 7px; background: var(--cream-2); border: 1px solid var(--line); text-decoration: none; }
+.table .ref:hover { border-color: var(--acc); }
+.table td.num, .table td[style*="right"] { font-variant-numeric: tabular-nums; }
+
+/* KPI cards: label on top, big number, coloured line. */
+.kpi { position: relative; overflow: hidden; padding: 16px 18px 18px; box-shadow: 0 1px 2px rgba(17, 17, 17, 0.04); }
+.kpi::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--dot, var(--line)); opacity: 0.85; }
+.kpi span { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-2); }
+.kpi b { font-size: 30px; }
+a.kpi:hover { border-color: var(--acc-line); transform: translateY(-1px); }
+
+/* Pills: "info" is now dark. */
+.pillInfo { background: #1a1a1a; color: #fff; }
+.pillInfo i { background: var(--acc); }
+.table .ref { white-space: nowrap; }

@@ -19,7 +19,7 @@ function Pad({ onDone, disabled }: { onDone: (png: string | null) => void; disab
       const r = el.getBoundingClientRect(), d = window.devicePixelRatio || 1;
       el.width = Math.round(r.width * d); el.height = Math.round(r.height * d);
       const ctx = el.getContext("2d")!;
-      ctx.scale(d, d); ctx.lineWidth = 2.4; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#17173a";
+      ctx.scale(d, d); ctx.lineWidth = 2.4; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#111111";
       drawn.current = false;
     };
     fit();

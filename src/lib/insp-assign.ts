@@ -104,10 +104,10 @@ export async function assignInspection(db: D1Database, user: User, reportId: str
       html: layout({
         eyebrow: "Inspecții VALUEFY",
         title: "Ai o inspecție nouă de programat",
-        body: `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A66"><strong style="color:#17173A">${esc(user.name || "Evaluatorul")}</strong> ți-a alocat inspecția pentru <strong style="color:#17173A">${esc(where)}</strong>${asset.number ? ` (raport ${esc(asset.number)})` : ""}${esc(dueText)}.</p>
-<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A66">Fișă: ${esc(sheetTypeLabel(type))}${name ? ` · Contact: ${esc(name)} ${esc(phone ?? "")}` : ""}</p>
-${instructions ? `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A66;white-space:pre-wrap">${esc(instructions)}</p>` : ""}
-${missing.length ? `<p style="margin:0;font-size:15px;line-height:1.65;color:#9A3412">Încă nu sunt încărcate ${esc(missingText(missing))}; le găsești în aplicație când apar.</p>` : `<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A66">Extrasul CF și releveul sunt în aplicație, la inspecție.</p>`}`,
+        body: `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A4A"><strong style="color:#111111">${esc(user.name || "Evaluatorul")}</strong> ți-a alocat inspecția pentru <strong style="color:#111111">${esc(where)}</strong>${asset.number ? ` (raport ${esc(asset.number)})` : ""}${esc(dueText)}.</p>
+<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A4A">Fișă: ${esc(sheetTypeLabel(type))}${name ? ` · Contact: ${esc(name)} ${esc(phone ?? "")}` : ""}</p>
+${instructions ? `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A4A;white-space:pre-wrap">${esc(instructions)}</p>` : ""}
+${missing.length ? `<p style="margin:0;font-size:15px;line-height:1.65;color:#9A3412">Încă nu sunt încărcate ${esc(missingText(missing))}; le găsești în aplicație când apar.</p>` : `<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A4A">Extrasul CF și releveul sunt în aplicație, la inspecție.</p>`}`,
         button: { label: "Programează din aplicație →", url: link },
         foot: "Inspecția apare în aplicația de inspecții la „De programat”.",
       }),

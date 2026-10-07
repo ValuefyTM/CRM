@@ -1,3 +1,4 @@
+import { niceName } from "@/lib/labels";
 import type { Metadata } from "next";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { CLIENT_KINDS, CLIENT_PAGE, clientCounts, kindName, listClients } from "@/lib/clients";
@@ -34,7 +35,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                   const [pl, pc] = c.portal ? STATUS_LABEL[c.portal] ?? [c.portal, ""] : ["—", ""];
                   return (
                     <tr key={c.id}>
-                      <td><a className="rowLink" href={`${base}/clienti/${c.id}`}>{c.name}</a><div className="muted">{[c.cui && `CUI ${c.cui}`, c.email].filter(Boolean).join(" · ")}</div></td>
+                      <td><a className="rowLink" href={`${base}/clienti/${c.id}`}>{niceName(c.name)}</a><div className="muted">{[c.cui && `CUI ${c.cui}`, c.email].filter(Boolean).join(" · ")}</div></td>
                       <td>{kindName(c.kind)}</td>
                       <td style={{ whiteSpace: "nowrap" }}>{c.phone ?? <span className="muted">—</span>}</td>
                       <td>{c.city ?? <span className="muted">—</span>}</td>

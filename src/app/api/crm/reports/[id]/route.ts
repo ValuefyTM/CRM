@@ -47,7 +47,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           text: `${a.user.name || "Evaluatorul"} ți-a trimis la verificare raportul ${v.what}: ${link}`,
           html: layout({
             eyebrow: "CRM VALUEFY", title: "Ai un raport de verificat",
-            body: `<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A66"><strong style="color:#17173A">${esc(a.user.name || "Evaluatorul")}</strong> ți-a trimis la verificare raportul <strong style="color:#17173A">${esc(v.what)}</strong>.</p>`,
+            body: `<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A4A"><strong style="color:#111111">${esc(a.user.name || "Evaluatorul")}</strong> ți-a trimis la verificare raportul <strong style="color:#111111">${esc(v.what)}</strong>.</p>`,
             button: { label: "Deschide raportul →", url: link }, foot: "Primești acest email pentru că ești verificatorul raportului.",
           }),
         });

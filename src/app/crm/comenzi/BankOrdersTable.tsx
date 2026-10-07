@@ -1,5 +1,6 @@
 "use client";
 
+import { niceName } from "@/lib/labels";
 import { useMemo, useState } from "react";
 import { FilterSelect } from "@/components/FilterSelect";
 import { VIEWS, type CrmOrderRow } from "./OrdersTable";
@@ -58,7 +59,7 @@ export function BankOrdersTable({ rows, base, initial = "all" }: { rows: CrmOrde
                 <tr key={r.id} className={r.unread ? "unread" : undefined}>
                   <td><a className="ref rowLink" href={`${base}/comenzi/${r.id}`}>{r.bankRef ?? r.ref}</a><div className="muted">{r.created}</div></td>
                   <td>{r.bank ?? "—"}{r.branch && <div className="muted">{r.branch}</div>}</td>
-                  <td>{r.client}{r.clientPhone && <div className="muted" style={{ whiteSpace: "nowrap" }}>{r.clientPhone}</div>}</td>
+                  <td><b>{niceName(r.client)}</b>{r.clientPhone && <div className="muted" style={{ whiteSpace: "nowrap" }}>{r.clientPhone}</div>}</td>
                   <td>{r.reportType ?? r.type}</td>
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{lei(r.fee)}</td>
                   <td><span className="actions" style={{ gap: 6 }}>{r.unread && <span className="pill pillInfo"><i />Nouă</span>}<span className={`pill ${r.status[1]}`}><i />{r.status[0]}</span></span></td>

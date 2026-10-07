@@ -6,7 +6,7 @@ import { Icon } from "./ui";
 
 export type MapPoint = { id: string; lat: number; lng: number; tone: "acc" | "nav" | "ok" | "warn"; label: string; sub?: string };
 
-const TONE = { acc: "#f2a93b", nav: "#17173a", ok: "#1fa971", warn: "#e0931a" };
+const TONE = { acc: "#f2a93b", nav: "#111111", ok: "#1fa971", warn: "#e0931a" };
 const TILES = {
   map: { url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", attr: "© OpenStreetMap", max: 19 },
   sat: { url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attr: "© Esri", max: 19 },
@@ -89,7 +89,7 @@ export function LeafletMap({ points, selected, onPick, height, zoom = 15, intera
         setLocating(false);
         const ll: [number, number] = [pos.coords.latitude, pos.coords.longitude];
         me.current?.remove();
-        me.current = l.circleMarker(ll, { radius: 8, color: "#fff", weight: 3, fillColor: "#3b74d4", fillOpacity: 1 }).addTo(m);
+        me.current = l.circleMarker(ll, { radius: 8, color: "#fff", weight: 3, fillColor: "#111111", fillOpacity: 1 }).addTo(m);
         m.setView(ll, Math.max(m.getZoom(), 14));
       },
       () => setLocating(false),

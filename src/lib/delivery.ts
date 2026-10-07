@@ -110,8 +110,8 @@ export async function deliverReport(db: D1Database, user: { id: string }, report
       html: layout({
         eyebrow: "VALUEFY · Raport de evaluare",
         title: "Raportul tău este gata",
-        body: `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A66">Bună ziua${to.name ? `, ${esc(to.name)}` : ""}! Raportul de evaluare pentru comanda <strong style="color:#17173A">${esc(code)}</strong>${o.address ? ` (${esc([o.address, o.city].filter(Boolean).join(", "))})` : ""} este gata.</p>
-<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A66">Îl descarci ${esc(to.where)}, oricând ai nevoie de el.</p>`,
+        body: `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A4A">Bună ziua${to.name ? `, ${esc(to.name)}` : ""}! Raportul de evaluare pentru comanda <strong style="color:#111111">${esc(code)}</strong>${o.address ? ` (${esc([o.address, o.city].filter(Boolean).join(", "))})` : ""} este gata.</p>
+<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A4A">Îl descarci ${esc(to.where)}, oricând ai nevoie de el.</p>`,
         button: { label: "Descarcă raportul →", url: to.link },
         foot: "Mulțumim că ai ales VALUEFY. Pentru întrebări, răspunde la acest email.",
       }),

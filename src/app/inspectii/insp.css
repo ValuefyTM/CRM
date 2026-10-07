@@ -57,7 +57,7 @@ body:has(.insp) { background: var(--cream); overscroll-behavior-y: none; }
 .iMenu { position: relative; }
 .iMenu summary { list-style: none; display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .iMenu summary::-webkit-details-marker { display: none; }
-.iMenu > div { position: absolute; right: 0; top: calc(100% + 8px); z-index: 50; background: #fff; color: var(--ink); border-radius: 14px; border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(23, 23, 58, 0.18); padding: 6px; display: flex; flex-direction: column; min-width: 210px; }
+.iMenu > div { position: absolute; right: 0; top: calc(100% + 8px); z-index: 50; background: #fff; color: var(--ink); border-radius: 14px; border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(17, 17, 17, 0.18); padding: 6px; display: flex; flex-direction: column; min-width: 210px; }
 .iMenu > div button { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; border: 0; background: none; border-radius: 10px; font-size: 14px; font-weight: 700; color: var(--ink); text-align: left; }
 .iMenu > div button:active { background: var(--cream-2); }
 .iDot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
@@ -158,7 +158,7 @@ body:has(.insp) { background: var(--cream); overscroll-behavior-y: none; }
 /* ---------- sheet ---------- */
 .iTypeSwitch { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px; border-radius: 14px; background: var(--cream-2); }
 .iTypeSwitch button { height: 40px; border: 0; border-radius: 10px; background: none; font-size: 12.5px; font-weight: 700; color: var(--muted); font-family: inherit; }
-.iTypeSwitch button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(23, 23, 58, 0.12); }
+.iTypeSwitch button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(17, 17, 17, 0.12); }
 .iSection { background: #fff; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
 .iSectionHead { width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 0; background: none; text-align: left; font-family: inherit; color: var(--ink); }
 .iSecN { width: 30px; height: 30px; flex-shrink: 0; border-radius: 50%; background: var(--cream-2); font-size: 13px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
@@ -223,7 +223,7 @@ body:has(.insp) { background: var(--cream); overscroll-behavior-y: none; }
 .iMap { position: relative; width: 100%; background: #e9e4d8; }
 .iMapEl { position: absolute; inset: 0; z-index: 0; }
 .iMapCtl { position: absolute; right: 10px; top: 10px; z-index: 500; display: flex; flex-direction: column; gap: 6px; }
-.iMapCtl button { min-width: 44px; height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--ink); font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(23, 23, 58, 0.15); }
+.iMapCtl button { min-width: 44px; height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--ink); font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(17, 17, 17, 0.15); }
 .iMapPage { position: relative; flex: 1; display: flex; flex-direction: column; min-height: calc(100dvh - 60px - 76px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
 .iMapPage > .iMap { flex: 1; }
 .iMapFilters { padding: 10px 12px; background: var(--cream); border-bottom: 1px solid var(--line); flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
@@ -231,7 +231,7 @@ body:has(.insp) { background: var(--cream); overscroll-behavior-y: none; }
 .iLegend { position: absolute; left: 10px; bottom: 10px; z-index: 500; background: rgba(255, 255, 255, 0.94); border-radius: 10px; padding: 6px 10px; font-size: 11px; font-weight: 700; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; max-width: calc(100% - 20px); }
 .iLegend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-left: 4px; }
 .iLegend i.acc { background: var(--acc); } .iLegend i.nav { background: var(--navy); } .iLegend i.warn { background: var(--acc-ink); } .iLegend i.ok { background: var(--ok); }
-.iMapCard { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 600; background: #fff; border-radius: 18px; padding: 14px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 10px 30px rgba(23, 23, 58, 0.25); }
+.iMapCard { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 600; background: #fff; border-radius: 18px; padding: 14px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 10px 30px rgba(17, 17, 17, 0.25); }
 .iPinWrap { background: none; border: 0; }
 .insp .leaflet-container { font-family: var(--font); }
 
@@ -252,8 +252,8 @@ a.iKv.link b { color: var(--acc-text, #9a5f00); }
 .iDocTag.cf { background: var(--navy); color: #fff; }
 .iDocTag.rlv { background: var(--acc); color: var(--ink); }
 .iDocFab { position: fixed; z-index: 30; right: max(16px, calc(50% - 320px + 16px)); bottom: calc(92px + env(safe-area-inset-bottom)); height: 48px; padding: 0 16px; border: 0; border-radius: 999px;
-  display: inline-flex; align-items: center; gap: 8px; background: var(--navy); color: #fff; font: 800 13px/1 var(--font, inherit); box-shadow: 0 8px 24px rgba(23, 23, 58, 0.28); }
-.iDocFab.empty { background: #fff; color: var(--muted); border: 1px solid var(--line); box-shadow: 0 4px 14px rgba(23, 23, 58, 0.14); }
+  display: inline-flex; align-items: center; gap: 8px; background: var(--navy); color: #fff; font: 800 13px/1 var(--font, inherit); box-shadow: 0 8px 24px rgba(17, 17, 17, 0.28); }
+.iDocFab.empty { background: #fff; color: var(--muted); border: 1px solid var(--line); box-shadow: 0 4px 14px rgba(17, 17, 17, 0.14); }
 .iDocModal { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; background: #10102a; color: #fff; padding-top: env(safe-area-inset-top); }
 .iDocHead { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
 .iDocSwitch { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 14px; background: rgba(255, 255, 255, 0.1); }
