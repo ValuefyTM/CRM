@@ -3,13 +3,14 @@
 
 export const FORM_VERSION = 1;
 
-export type SheetType = "apartament" | "casa" | "teren" | "comercial";
+export type SheetType = "apartament" | "casa" | "teren" | "comercial" | "accesoriu";
 
 export const SHEET_TYPES: [SheetType, string][] = [
   ["apartament", "Apartament"],
   ["casa", "Casă"],
   ["teren", "Teren"],
   ["comercial", "Spațiu comercial / Hală"],
+  ["accesoriu", "Accesoriu (parcare, garaj, boxă)"],
 ];
 export const sheetTypeLabel = (t: string | null | undefined) => SHEET_TYPES.find(([k]) => k === t)?.[1] ?? "Proprietate";
 
@@ -40,6 +41,27 @@ const UTILS = (power = "Curent electric", powerMeter = "Contor electric montat")
   util("gas", "Gaz", "Contor gaz montat"),
   util("power", power, powerMeter),
 ];
+
+/**
+ * Accessories (parking space, garage, storage box): inspected on the sheet of the main property at the same address
+ * (one section per accessory, keys "acc.<inspection id>.<field>"), or on their own "accesoriu" sheet when alone.
+ */
+export const ACC_FIELDS: Field[] = [
+  { k: "acc_kind", label: "Tip", kind: "one", opts: ["Loc de parcare subteran", "Loc de parcare suprateran", "Garaj", "Boxă / debara"] },
+  { k: "acc_ident", label: "Număr / identificare", kind: "text", placeholder: "ex. loc 12, boxa 3" },
+  { k: "acc_level", label: "Nivel", kind: "text", placeholder: "ex. -1, parter" },
+  { k: "acc_area", label: "Suprafață măsurată", kind: "num", unit: "m²" },
+  { k: "acc_cover", label: "Acoperire", kind: "one", opts: ["Închis", "Acoperit, deschis", "Descoperit"] },
+  { k: "acc_access", label: "Acces", kind: "many", opts: ["Rampă auto", "Lift auto", "Lift", "Scări", "Direct din curte / stradă", "Telecomandă / barieră"] },
+  { k: "acc_condition", label: "Stare", kind: "one", opts: ["Foarte bună", "Bună", "Satisfăcătoare", "Deteriorată"] },
+  { k: "acc_notes", label: "Observații", kind: "text", long: true },
+];
+/** Key of an accessory field on the main property's sheet. */
+export const accKey = (inspectionId: string, k: string) => `acc.${inspectionId}.${k}`;
+/** The accessory fields with the keys they have on the main property's sheet. */
+export const accFields = (inspectionId: string): Field[] => ACC_FIELDS.map((f) => ({ ...f, k: accKey(inspectionId, f.k) }) as Field);
+/** Parking spaces, garages, storage boxes (CRM / Glide property types). */
+export const isAccessoryType = (type: string | null | undefined) => /PARCARE|GARAJ|\bBOX|ACCESORIU/i.test(type ?? "");
 
 export const FORMS: Record<SheetType, Section[]> = {
   apartament: [
@@ -180,11 +202,16 @@ export const FORMS: Record<SheetType, Section[]> = {
       { k: "notes", label: "Observații", kind: "text", long: true },
     ] },
   ],
+  accesoriu: [
+    { id: "accesoriu", title: "Accesoriul", fields: ACC_FIELDS.filter((f) => f.k !== "acc_notes") },
+    { id: "obs", title: "Observații", fields: [{ k: "notes", label: "Observații", kind: "text", long: true }] },
+  ],
 };
 
 /** Photo categories offered for every sheet; the ones marked required are needed before the sheet is sent. */
 export const PHOTO_CATEGORIES: { k: string; label: string; types?: SheetType[]; required?: boolean }[] = [
   { k: "exterior", label: "Exterior / fațadă", required: true },
+  { k: "accessories", label: "Accesorii (parcare, garaj, boxă)" },
   { k: "interior", label: "Interior", types: ["apartament", "casa", "comercial"] },
   { k: "kitchen", label: "Bucătărie", types: ["apartament", "casa"] },
   { k: "bathroom", label: "Baie", types: ["apartament", "casa"] },
@@ -208,6 +235,7 @@ export const PRESENT_ROLES: [string, string][] = [
 /** Guesses the form from the CRM property category / type (Glide vocabulary) or the order property type. */
 export function guessSheetType(category: string | null, type: string | null, orderType?: string | null): SheetType {
   const c = (category ?? "").toUpperCase(), t = (type ?? "").toUpperCase();
+  if (isAccessoryType(t)) return "accesoriu";
   if (orderType === "apartment") return "apartament";
   if (orderType === "house") return "casa";
   if (orderType === "land") return "teren";
@@ -249,6 +277,7 @@ const toNum = (v: unknown) => {
 /** Maps the answers onto property_features columns. Only fields of the chosen form are kept; values are checked. */
 export function featureColumns(t: SheetType, answers: Answers): Record<string, string | number | null> {
   const out: Record<string, string | number | null> = {};
+  if (t === "accesoriu") return out; // accessories keep their answers on the sheet only
   for (const f of allFields(t)) {
     const a = answers[f.k];
     if (f.kind === "util") {

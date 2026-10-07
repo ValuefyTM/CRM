@@ -72,6 +72,26 @@ export function DetailView({ ctx, id, item }: { ctx: Ctx; id: string; item: Loca
           )}
         </section>
 
+        {i.host_id && (
+          <section className="iBox accent">
+            <h3>Se inspectează pe fișa bunului principal</h3>
+            <p className="iText">Accesoriul are câmpurile lui pe fișa proprietății de la aceeași adresă: o singură vizită, o singură semnătură.</p>
+            <a className="iBtn" href={`#/i/${encodeURIComponent(i.host_id)}`}>Deschide inspecția principală →</a>
+          </section>
+        )}
+        {((i.hosted ?? []).length > 0 || (i.together ?? []).length > 0) && (
+          <section className="iBox">
+            <h3>La aceeași adresă</h3>
+            {(i.hosted ?? []).map((h) => (
+              <div key={h.id} className="iKv"><span>Pe această fișă</span><b>{h.label}{h.usable_area != null ? ` · ${h.usable_area} m²` : ""}</b></div>
+            ))}
+            {(i.together ?? []).map((t) => (
+              <a key={t.id} className="iKv link" href={`#/i/${encodeURIComponent(t.id)}`}><span>Fișă separată</span><b>{t.label} →</b></a>
+            ))}
+            <span className="muted">Programarea acestei inspecții se aplică tuturor bunurilor de la adresă.</span>
+          </section>
+        )}
+
         <section className="iBox flush">
           {i.lat != null && i.lng != null ? (
             <LeafletMap points={[{ id: i.id, lat: i.lat, lng: i.lng, tone: "acc", label: i.property_label }]} selected={i.id} height={200} zoom={16} />
@@ -152,7 +172,9 @@ export function DetailView({ ctx, id, item }: { ctx: Ctx; id: string; item: Loca
       </div>
 
       <div className="iCta">
-        {sent ? (
+        {i.host_id && !sent ? (
+          <a className="iBtn big acc" href={`#/i/${encodeURIComponent(i.host_id)}/fisa`}>Completează pe fișa principală →</a>
+        ) : sent ? (
           <a className="iBtn big ghost" href={sheetHref}>Vezi fișa trimisă</a>
         ) : sending ? (
           <a className="iBtn big ghost" href="#/detrimis">Vezi ce e de trimis</a>

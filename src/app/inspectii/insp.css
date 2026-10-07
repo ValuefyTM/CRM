@@ -234,3 +234,12 @@ body:has(.insp) { background: var(--cream); overscroll-behavior-y: none; }
 .iMapCard { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 600; background: #fff; border-radius: 18px; padding: 14px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 10px 30px rgba(23, 23, 58, 0.25); }
 .iPinWrap { background: none; border: 0; }
 .insp .leaflet-container { font-family: var(--font); }
+
+/* Assets of one report at the same address, inspected together */
+.iGroup { border: 1.5px solid var(--acc-line, #f5d9a6); border-radius: 20px; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: var(--acc-soft, #fdf1dc); }
+.iGroupHead { display: flex; justify-content: space-between; gap: 8px; padding: 2px 6px; font-size: 12px; color: var(--acc-text, #9a5f00); }
+.iGroupHead b { font-size: 12.5px; }
+.iTag.acc { background: var(--acc-soft, #fdf1dc); color: var(--acc-text, #9a5f00); }
+.iBox.accent { border-color: var(--acc, #f2a93b); background: var(--acc-soft, #fdf1dc); }
+a.iKv.link { color: inherit; text-decoration: none; }
+a.iKv.link b { color: var(--acc-text, #9a5f00); }

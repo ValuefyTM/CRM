@@ -12,6 +12,10 @@ export type Insp = {
   reschedule_count: number; contact_notified_at: string | null; started_at: string | null;
   sheet_status: "draft" | "submitted" | null; updated_at: string | null;
   due_on: string | null; instructions: string | null; assigned_by_name: string | null;
+  // Assets of one report at the same address (optional: lists saved on the phone by an older version lack them).
+  report_id?: string | null; accessory?: boolean; group?: string | null; host_id?: string | null;
+  hosted?: { id: string; label: string; address: string; cf_number: string | null; usable_area: number | null }[];
+  together?: { id: string; label: string; status: InspStatus }[];
 };
 export type ServerSheet = {
   id: string; status: "draft" | "submitted"; sheet_type: SheetType; answers: Answers; present_person: string | null; present_role: string | null;

@@ -6,7 +6,7 @@ import { bucket } from "./orders";
 import { err } from "./api";
 import type { User } from "./users";
 import {
-  FEATURE_COLUMNS, FORM_VERSION, FORMS, PRESENT_ROLES, featureColumns, guessSheetType, type Answers, type SheetType,
+  ACC_FIELDS, FEATURE_COLUMNS, FORM_VERSION, FORMS, PRESENT_ROLES, accKey, featureColumns, guessSheetType, isAccessoryType, type Answers, type SheetType,
 } from "./insp-forms";
 
 /** A signed-in inspector or evaluator. */
@@ -30,16 +30,23 @@ export type Insp = {
   reschedule_count: number; contact_notified_at: string | null; started_at: string | null;
   sheet_status: "draft" | "submitted" | null; updated_at: string | null;
   due_on: string | null; instructions: string | null; assigned_by_name: string | null;
+  // Several assets of one report at the same general address are inspected together.
+  report_id: string | null; asset_id: string | null; is_main: boolean; accessory: boolean;
+  group: string | null;                 // report + general address; shared by the assets inspected together
+  host_id: string | null;               // accessory: the inspection whose sheet it is inspected on
+  hosted: { id: string; label: string; address: string; cf_number: string | null; usable_area: number | null }[]; // accessories on this sheet
+  together: { id: string; label: string; status: InspStatus }[]; // the other properties of the group (own sheets)
 };
 
-type Row = Omit<Insp, "sheet_type" | "property_label" | "address" | "lat" | "lng" | "cad"> & {
+type Row = Omit<Insp, "sheet_type" | "property_label" | "address" | "lat" | "lng" | "cad" | "is_main" | "accessory" | "group" | "host_id" | "hosted" | "together"> & {
+  a_main: number | null;
   sheet_type: string | null; i_address: string | null; i_lat: number | null; i_lng: number | null;
   category: string | null; type: string | null; order_type: string | null; full_address: string | null; street_type: string | null; street: string | null;
   number: string | null; block: string | null; stair: string | null; floor: string | null; apartment: string | null; geo: string | null;
   cad_building: string | null; cad_land: string | null;
 };
 
-const SELECT = `SELECT i.id, i.status, i.scheduled_at, i.done_at, i.duration_min, i.sheet_type, i.address AS i_address, i.lat AS i_lat, i.lng AS i_lng,
+const SELECT = `SELECT i.id, i.report_id, i.asset_id, a.is_main AS a_main, i.status, i.scheduled_at, i.done_at, i.duration_min, i.sheet_type, i.address AS i_address, i.lat AS i_lat, i.lng AS i_lng,
     i.contact_kind, i.contact_name, i.contact_phone, i.notes, i.reschedule_count, i.contact_notified_at, i.started_at, i.updated_at,
     i.due_on, i.instructions, (SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE x.id = i.assigned_by) AS assigned_by_name,
     p.category, p.type, p.full_address, p.street_type, p.street, p.number, p.block, p.stair, p.floor, p.apartment, p.city, p.county, p.geo,
@@ -85,7 +92,9 @@ function addressOf(r: Row) {
 
 function toInsp(r: Row): Insp {
   const geo = r.i_lat != null && r.i_lng != null ? [r.i_lat, r.i_lng] : parseGeo(r.geo);
-  const sheet = (FORMS as Record<string, unknown>)[r.sheet_type ?? ""] ? (r.sheet_type as SheetType) : guessSheetType(r.category, r.type, r.order_type);
+  // An accessory gets the accessory sheet (also when it was given with another form, as long as the sheet is not started).
+  const stored = (FORMS as Record<string, unknown>)[r.sheet_type ?? ""] ? (r.sheet_type as SheetType) : null;
+  const sheet = stored && !(isAccessoryType(r.type) && !r.sheet_status && stored !== "accesoriu") ? stored : guessSheetType(r.category, r.type, r.order_type);
   return {
     id: r.id, status: r.status, scheduled_at: r.scheduled_at, done_at: r.done_at, duration_min: r.duration_min, sheet_type: sheet,
     property_label: title(r.type) || title(r.category) || "Proprietate", address: addressOf(r), city: r.city, county: r.county,
@@ -95,7 +104,51 @@ function toInsp(r: Row): Insp {
     reschedule_count: r.reschedule_count ?? 0, contact_notified_at: r.contact_notified_at, started_at: r.started_at,
     sheet_status: r.sheet_status as Insp["sheet_status"], updated_at: r.updated_at,
     due_on: r.due_on, instructions: r.instructions, assigned_by_name: r.assigned_by_name,
+    report_id: r.report_id, asset_id: r.asset_id, is_main: !!r.a_main, accessory: isAccessoryType(r.type),
+    group: null, host_id: null, hosted: [], together: [],
   };
+}
+
+/**
+ * General address: without what tells units apart (apartment, floor, staircase, parking space, box), so the flat, its
+ * parking space and its box at "Str. X nr. 20, bl. A" fall together. "Loc. Timișoara" (locality) is kept.
+ */
+export function generalAddress(addr: string) {
+  const plain = addr.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const unit = /^(ap|apt|apartament|et|etaj|sc|scara|nivel|niv|subsol|demisol|boxa|box|garaj|parcare|loc de parcare)\b|^loc\.?\s*(nr\.?\s*)?\d/;
+  return plain.split(",").map((x) => x.trim().replace(/\s+(ap|apt|ap\.|et|et\.|sc|sc\.)\s*[\w-]+$/, "").replace(/[.\s]+$/, ""))
+    .filter((x) => x && !unit.test(x)).join(", ");
+}
+
+/**
+ * Groups the inspections of one report at the same general address. In a group, the accessories still to inspect go
+ * on the sheet of a property (the main asset first); the other properties are listed as inspected together.
+ */
+function grouped(list: Insp[]): Insp[] {
+  // Same report, and one general address continues the other ("str. x 20" and "str. x 20, bl. a"): same place.
+  const groups = new Map<string, Insp[]>();
+  const keys: { report: string; addr: string; key: string }[] = [];
+  for (const i of list) {
+    if (!i.report_id || i.status === "cancelled") continue;
+    const addr = generalAddress(i.address);
+    const same = keys.find((k) => k.report === i.report_id && addr && k.addr && (addr === k.addr || addr.startsWith(`${k.addr},`) || k.addr.startsWith(`${addr},`)));
+    const key = same?.key ?? `${i.report_id}|${addr}`;
+    if (!same) keys.push({ report: i.report_id, addr, key });
+    i.group = key;
+    groups.set(key, [...(groups.get(key) ?? []), i]);
+  }
+  for (const members of groups.values()) {
+    if (members.length < 2) continue;
+    const open = (x: Insp) => x.status !== "done" && x.status !== "cancelled";
+    const props = members.filter((x) => !x.accessory);
+    const host = props.filter(open).sort((a, b) => Number(b.is_main) - Number(a.is_main))[0];
+    for (const x of members) {
+      x.together = props.filter((y) => y.id !== x.id).map((y) => ({ id: y.id, label: y.property_label, status: y.status }));
+      if (host && x.accessory && open(x)) x.host_id = host.id;
+    }
+    if (host) host.hosted = members.filter((x) => x.host_id === host.id).map((x) => ({ id: x.id, label: x.property_label, address: x.address, cf_number: x.cf_number, usable_area: x.usable_area }));
+  }
+  return list;
 }
 
 export async function myInspections(db: D1Database, user: User): Promise<Insp[]> {
@@ -103,12 +156,16 @@ export async function myInspections(db: D1Database, user: User): Promise<Insp[]>
     .prepare(`${SELECT} WHERE ${MINE} AND ${CURRENT} ORDER BY i.scheduled_at IS NULL, i.scheduled_at, i.due_on IS NULL, i.due_on LIMIT 500`)
     .bind(user.id)
     .all<Row>();
-  return results.map(toInsp);
+  return grouped(results.map(toInsp));
 }
 
+/** One inspection, with its group (the other inspections of the same report that are the user's). */
 export async function myInspection(db: D1Database, user: User, id: string): Promise<Insp | null> {
   const r = await db.prepare(`${SELECT} WHERE i.id = ?2 AND ${MINE}`).bind(user.id, id).first<Row>();
-  return r ? toInsp(r) : null;
+  if (!r) return null;
+  if (!r.report_id) return toInsp(r);
+  const { results } = await db.prepare(`${SELECT} WHERE i.report_id = ?2 AND ${MINE} AND (i.id = ?3 OR ${CURRENT})`).bind(user.id, r.report_id, id).all<Row>();
+  return grouped(results.map(toInsp)).find((x) => x.id === id) ?? toInsp(r);
 }
 
 // ---------- the sheet ----------
@@ -173,6 +230,14 @@ export async function schedule(db: D1Database, user: User, ins: Insp, b: Record<
       .bind(uuid(), ins.id, at, ins.scheduled_at, user.id, reason, user.id),
   ]);
   await audit(db, `user:${user.id}`, re ? "inspection.reschedule" : "inspection.schedule", "inspection", ins.id, at);
+  // One visit for the group: the accessories on this sheet and the other properties at the same address still open.
+  const others = [...ins.hosted.map((h) => h.id), ...ins.together.filter((x) => x.status === "to_schedule" || x.status === "scheduled").map((x) => x.id)];
+  if (others.length) {
+    await db.batch(others.map((oid) => db.prepare(
+      `UPDATE inspections SET status = 'scheduled', scheduled_at = ?, duration_min = COALESCE(duration_min, ?), scheduled_by = ?, scheduled_via = 'app',
+         inspector_id = COALESCE(inspector_id, ?), updated_at = ? WHERE id = ? AND status IN ('to_schedule', 'scheduled') AND glide_id IS NULL`,
+    ).bind(at, duration, user.id, user.id, now(), oid)));
+  }
   return { ok: true as const };
 }
 
@@ -204,7 +269,8 @@ export async function saveSheet(db: D1Database, user: User, ins: Insp, b: Record
 
   if (submit) {
     const photos = await db.prepare("SELECT category, COUNT(*) AS n FROM inspection_photos WHERE inspection_id = ? AND deleted_at IS NULL GROUP BY category").bind(ins.id).all<{ category: string; n: number }>();
-    if (!photos.results.some((p) => p.category === "exterior")) return { ok: false as const, error: "Adaugă cel puțin o fotografie exterioară.", status: 400 };
+    if (type === "accesoriu" ? !photos.results.length : !photos.results.some((p) => p.category === "exterior"))
+      return { ok: false as const, error: type === "accesoriu" ? "Adaugă cel puțin o fotografie a accesoriului." : "Adaugă cel puțin o fotografie exterioară.", status: 400 };
     if (!person) return { ok: false as const, error: "Completează numele persoanei prezente.", status: 400 };
     if (!signature && !current?.has_signature) return { ok: false as const, error: "Lipsește semnătura persoanei prezente.", status: 400 };
   }
@@ -247,9 +313,27 @@ export async function saveSheet(db: D1Database, user: User, ins: Insp, b: Record
       ).bind(`pf-${ins.id}`, id, ins.id, propertyId, type, t, ...names.map((n) => cols[n] ?? null)),
       db.prepare("UPDATE inspections SET status = 'done', done_at = ?, updated_at = ? WHERE id = ?").bind(localNow(), t, ins.id),
     );
+    // Accessories inspected on this sheet: their answers ("acc.<id>.<field>") become their own submitted sheet.
+    for (const h of ins.hosted) {
+      const acc: Answers = {};
+      for (const f of ACC_FIELDS) { const v = answers[accKey(h.id, f.k)]; if (v !== undefined) acc[f.k] = v; }
+      const accAsset = (await db.prepare("SELECT asset_id FROM inspections WHERE id = ? AND status IN ('to_schedule', 'scheduled')").bind(h.id).first<{ asset_id: string | null }>());
+      if (!accAsset) continue;
+      stmts.push(
+        db.prepare(
+          `INSERT INTO inspection_sheets (id, inspection_id, asset_id, inspector_id, sheet_type, status, form_version, details, description, present_person, present_role, present_phone,
+             signature_url, signed_at, location, lat, lng, accuracy_m, photo_url, photos_count, started_at, submitted_at, done_at, updated_at)
+           SELECT ?1, ?2, ?3, inspector_id, 'accesoriu', 'submitted', form_version, ?4, ?5, present_person, present_role, present_phone, signature_url, signed_at,
+             location, lat, lng, accuracy_m, photo_url, photos_count, started_at, submitted_at, done_at, updated_at FROM inspection_sheets WHERE id = ?6
+           ON CONFLICT(id) DO UPDATE SET details = ?4, description = ?5, status = 'submitted', submitted_at = excluded.submitted_at, updated_at = excluded.updated_at`,
+        ).bind(sheetId(h.id), h.id, accAsset.asset_id, JSON.stringify({ v: FORM_VERSION, answers: acc, on_sheet: id }),
+          typeof acc.acc_notes === "string" ? acc.acc_notes.slice(0, 4000) || null : null, id),
+        db.prepare("UPDATE inspections SET status = 'done', done_at = ?, sheet_type = 'accesoriu', updated_at = ? WHERE id = ?").bind(localNow(), t, h.id),
+      );
+    }
   }
   await db.batch(stmts);
-  if (submit) await audit(db, `user:${user.id}`, "inspection.submit", "inspection", ins.id, type);
+  if (submit) await audit(db, `user:${user.id}`, "inspection.submit", "inspection", ins.id, ins.hosted.length ? `${type} + ${ins.hosted.length} accesorii` : type);
   return { ok: true as const };
 }
 

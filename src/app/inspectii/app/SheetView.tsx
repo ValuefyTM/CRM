@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { Ctx } from "./InspApp";
 import { useDetail, useDraft } from "./hooks";
 import { Chips, Icon, TopBar, type Local } from "./ui";
-import { FORMS, isFilled, progress, SHEET_TYPES, type Answers, type Field, type SheetType, type UtilAnswer } from "@/lib/insp-forms";
+import { accFields, FORMS, isFilled, progress, SHEET_TYPES, type Answers, type Field, type Section, type SheetType, type UtilAnswer } from "@/lib/insp-forms";
 
 function UtilBlock({ f, value, onChange, readOnly }: { f: Extract<Field, { kind: "util" }>; value: UtilAnswer; onChange: (v: UtilAnswer) => void; readOnly: boolean }) {
   const yn = (cur: string | undefined, set: (v: "da" | "nu" | undefined) => void, label: string) => (
@@ -68,7 +68,7 @@ export function SheetView({ ctx, id, item }: { ctx: Ctx; id: string; item: Local
       // Open the first sections that are not complete yet.
       const o: Record<string, boolean> = {};
       let n = 0;
-      for (const s of FORMS[draft.sheet_type]) {
+      for (const s of [...FORMS[draft.sheet_type], ...(i?.hosted ?? []).map((h) => ({ id: `acc-${h.id}`, title: "", fields: accFields(h.id) }))]) {
         const full = s.fields.every((f) => f.k === "notes" || isFilled(f, draft.answers[f.k]));
         if (!full && n < 2) { o[s.id] = true; n++; }
       }
@@ -80,7 +80,12 @@ export function SheetView({ ctx, id, item }: { ctx: Ctx; id: string; item: Local
 
   const ro = draft.submitted || draft.submit;
   const type = draft.sheet_type;
-  const p = progress(type, draft.answers);
+  // Accessories at the same address (parking, garage, box) get their own section on this sheet.
+  const extra: Section[] = (i.hosted ?? []).map((h) => ({ id: `acc-${h.id}`, title: `Accesoriu: ${h.label}`, fields: accFields(h.id) }));
+  const sections = [...FORMS[type], ...extra];
+  const base = progress(type, draft.answers);
+  const extraFields = extra.flatMap((x) => x.fields).filter((f) => !f.k.endsWith(".acc_notes"));
+  const p = { done: base.done + extraFields.filter((f) => isFilled(f, draft.answers[f.k])).length, total: base.total + extraFields.length };
   const set = (k: string, v: Answers[string]) => update({ answers: { ...draft.answers, [k]: v } });
   const setType = (t: SheetType) => {
     if (t === type) return;
@@ -99,12 +104,14 @@ export function SheetView({ ctx, id, item }: { ctx: Ctx; id: string; item: Local
         {draft.error && <p className="iNote err">{draft.error}</p>}
         {!ro && (
           <div className="iTypeSwitch" role="group" aria-label="Tipul proprietății">
-            {SHEET_TYPES.map(([k, l]) => <button key={k} type="button" className={k === type ? "on" : ""} aria-pressed={k === type} onClick={() => setType(k)}>{l.split(" /")[0]}</button>)}
+            {SHEET_TYPES.filter(([k]) => k !== "accesoriu" || type === "accesoriu" || !(i.hosted ?? []).length).map(([k, l]) => <button key={k} type="button" className={k === type ? "on" : ""} aria-pressed={k === type} onClick={() => setType(k)}>{l.split(" /")[0].split(" (")[0]}</button>)}
           </div>
         )}
-        {FORMS[type].map((s, n) => {
-          const filled = s.fields.filter((f) => f.k !== "notes" && isFilled(f, draft.answers[f.k])).length;
-          const total = s.fields.filter((f) => f.k !== "notes").length;
+        {(i.hosted ?? []).length > 0 && <p className="iNote">Pe această fișă inspectezi și {(i.hosted ?? []).map((h) => h.label.toLowerCase()).join(", ")}: secțiunile „Accesoriu” de la final.</p>}
+        {sections.map((s, n) => {
+          const free = (f: Field) => f.k === "notes" || f.k.endsWith(".acc_notes");
+          const filled = s.fields.filter((f) => !free(f) && isFilled(f, draft.answers[f.k])).length;
+          const total = s.fields.filter((f) => !free(f)).length;
           const isOpen = !!open[s.id];
           return (
             <section key={s.id} className={`iSection${isOpen ? " open" : ""}`}>

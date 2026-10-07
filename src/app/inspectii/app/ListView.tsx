@@ -34,7 +34,8 @@ export function InspCard({ i, onOpen, now }: { i: Local; onOpen: () => void; now
       <div className="iTags">
         {i.report_number && <span className="iTag">Raport {i.report_number}{i.bank ? ` · ${i.bank}` : ""}</span>}
         {i.purpose && <span className="iTag">{i.purpose}</span>}
-        <span className="iTag">Fișă {sheetTypeLabel(i.sheet_type).toLowerCase()}</span>
+        <span className="iTag">Fișă {sheetTypeLabel(i.sheet_type).toLowerCase().split(" (")[0]}</span>
+        {(i.hosted ?? []).map((h) => <span key={h.id} className="iTag acc">+ {h.label} · aceeași fișă</span>)}
         {i.local === "scheduled_offline" && <span className="iTag warn">Programare netrimisă</span>}
         {i.status === "to_schedule" && i.due_on && !i.local && <span className={`iTag${i.due_on < dayKey(now ?? new Date()) ? " err" : " warn"}`}>Termen {i.due_on.split("-").reverse().slice(0, 2).join(".")}</span>}
       </div>
@@ -61,7 +62,8 @@ export function ListView({ ctx }: { ctx: Ctx }) {
 
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
-    const l = groups[tab];
+    // Accessories inspected on another property's sheet are shown on that property's card.
+    const l = groups[tab].filter((i) => !i.host_id || !groups[tab].some((x) => x.id === i.host_id));
     return s ? l.filter((i) => `${i.address} ${i.property_label} ${i.report_number ?? ""} ${i.client ?? ""} ${i.contact_name ?? ""} ${i.cf_number ?? ""}`.toLowerCase().includes(s)) : l;
   }, [groups, tab, q]);
 
@@ -128,13 +130,22 @@ export function ListView({ ctx }: { ctx: Ctx }) {
           </label>
         )}
         {shown.map((i, n) => {
+          // Properties of one report at the same address: shown together, once, where the first of them comes.
+          const mates = i.group ? shown.filter((x) => x.group === i.group) : [i];
+          if (mates[0].id !== i.id) return null;
           const d = i.scheduled_at?.slice(0, 10);
-          const prev = shown[n - 1]?.scheduled_at?.slice(0, 10);
+          const prev = shown.slice(0, n).filter((x) => !x.group || shown.find((y) => y.group === x.group)?.id === x.id).pop()?.scheduled_at?.slice(0, 10);
           const showDay = tab === "urmeaza" && d && d !== prev;
+          const open = (x: Local) => () => ctx.go(`#/i/${encodeURIComponent(x.id)}`);
           return (
             <div key={i.id} className="iStack">
               {showDay && <h2 className="iDay">{fmtDay(parseLocal(d)!)}</h2>}
-              <InspCard i={i} now={now} onOpen={() => ctx.go(`#/i/${encodeURIComponent(i.id)}`)} />
+              {mates.length > 1 ? (
+                <div className="iGroup">
+                  <div className="iGroupHead"><b>{mates.length} bunuri la aceeași adresă</b>{i.report_number ? <span>Raport {i.report_number}</span> : null}</div>
+                  {mates.map((x) => <InspCard key={x.id} i={x} now={now} onOpen={open(x)} />)}
+                </div>
+              ) : <InspCard i={i} now={now} onOpen={open(i)} />}
             </div>
           );
         })}
