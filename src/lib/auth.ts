@@ -4,7 +4,7 @@ import { APP, APP_NAME, appOf, appUrl, INSP_ROLES, type App, type Kind } from ".
 import { now, uuid } from "./db";
 import { normEmail, randomCode, randomToken, safeEqual, sha256 } from "./crypto";
 import { esc, layout, sendEmail } from "./email";
-import { canSignIn, findUser, getUser, type User } from "./users";
+import { canSignIn, dutiesOf, findUser, getUser, type User } from "./users";
 
 const CODE_MINUTES = 15;
 const INVITE_DAYS = 7;
@@ -44,7 +44,7 @@ export async function allowedIn(db: D1Database, app: App, u: User) {
   if (app === "crm") return u.role !== "inspector";
   if (app !== "insp") return true;
   if (u.kind !== "internal") return false;
-  if (INSP_ROLES.includes(u.role)) return true;
+  if (INSP_ROLES.includes(u.role) || dutiesOf(u).some((d) => INSP_ROLES.includes(d))) return true;
   const given = await db.prepare("SELECT 1 AS ok FROM inspections WHERE inspector_id = ? AND glide_id IS NULL AND status <> 'cancelled' LIMIT 1").bind(u.id).first<{ ok: number }>();
   return !!given;
 }

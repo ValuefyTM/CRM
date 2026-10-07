@@ -6,12 +6,12 @@ import type { Kind } from "./site";
 export type { Kind } from "./site";
 
 export * from "./labels";
-import { CLIENT_TYPES, ENGAGEMENTS, INTERNAL_ROLES, SPECIALIZATIONS } from "./labels";
+import { CLIENT_TYPES, DUTIES, ENGAGEMENTS, INTERNAL_ROLES, SPECIALIZATIONS } from "./labels";
 
 export type User = {
   id: string; kind: Kind; email: string; name: string; phone: string | null; role: string; status: "invited" | "active" | "disabled";
   partner_id: string | null; partner_name: string | null; partner_status: string | null;
-  engagement: string | null; anevar_no: string | null; specializations: string | null; coverage: string | null;
+  engagement: string | null; anevar_no: string | null; specializations: string | null; coverage: string | null; duties: string | null;
   client_type: string | null; company: string | null; cui: string | null; city: string | null; notes: string | null;
   entity_id?: string | null; created_by: string | null; invited_at: string | null; activated_at: string | null; last_login_at: string | null; created_at: string; updated_at: string;
 };
@@ -45,7 +45,7 @@ export async function partnerPeople(db: D1Database, partnerId: string) {
 // ---------- create / edit ----------
 
 export type UserInput = {
-  name: string; email: string; phone: string | null; role: string; partner_id: string | null;
+  name: string; email: string; phone: string | null; role: string; partner_id: string | null; duties: string | null;
   engagement: string | null; anevar_no: string | null; specializations: string | null; coverage: string | null;
   client_type: string | null; company: string | null; cui: string | null; city: string | null; notes: string | null;
 };
@@ -55,15 +55,15 @@ const opt = (v: unknown, max = 200) => str(v, max) || null;
 const oneOf = (list: readonly (readonly [string, string])[], v: unknown) => (list.some(([k]) => k === v) ? (v as string) : null);
 
 /**
- * Checks the fields for a kind of account. `currentRole` is the role the account has today: an owner stays owner,
- * and nobody becomes owner from the CRM (owners come from CRM_OWNER_EMAILS).
+ * Checks the fields for a kind of account. `currentRole` is the role the account has today: an owner stays owner.
+ * Only an owner can make someone else owner (`byOwner`); the first owners come from CRM_OWNER_EMAILS.
  */
-export function validateUser(kind: Kind, body: unknown, currentRole?: string): { ok: true; value: UserInput } | { ok: false; error: string } {
+export function validateUser(kind: Kind, body: unknown, currentRole?: string, byOwner = false): { ok: true; value: UserInput } | { ok: false; error: string } {
   const b = (body ?? {}) as Record<string, unknown>;
   const email = str(b.email, 160);
   if (!validEmail(email)) return { ok: false, error: "Adresa de email nu pare validă." };
   const v: UserInput = {
-    name: str(b.name, 120), email: normEmail(email), phone: opt(b.phone, 40), role: "", partner_id: null,
+    name: str(b.name, 120), email: normEmail(email), phone: opt(b.phone, 40), role: "", partner_id: null, duties: null,
     engagement: null, anevar_no: null, specializations: null, coverage: null,
     client_type: null, company: null, cui: null, city: opt(b.city, 80), notes: opt(b.notes, 4000),
   };
@@ -71,16 +71,18 @@ export function validateUser(kind: Kind, body: unknown, currentRole?: string): {
     if (currentRole === "owner") v.role = "owner";
     else {
       const role = oneOf(INTERNAL_ROLES, b.role);
-      if (!role || role === "owner") return { ok: false, error: "Alege rolul persoanei." };
+      if (!role || (role === "owner" && !byOwner)) return { ok: false, error: "Alege rolul persoanei." };
       v.role = role;
     }
     v.engagement = oneOf(ENGAGEMENTS, b.engagement) ?? "employee";
-    if (v.role === "evaluator") {
+    const duties = Array.isArray(b.duties) ? b.duties : String(b.duties ?? "").split(",");
+    v.duties = DUTIES.map(([k]) => k).filter((k) => duties.includes(k) || k === v.role).join(",") || null;
+    if (v.duties?.includes("evaluator")) {
       v.anevar_no = opt(b.anevar_no, 40);
       const specs = Array.isArray(b.specializations) ? b.specializations : String(b.specializations ?? "").split(",");
       v.specializations = SPECIALIZATIONS.map(([k]) => k).filter((k) => specs.includes(k)).join(",") || null;
-      v.coverage = opt(b.coverage, 200);
     }
+    if (v.duties) v.coverage = opt(b.coverage, 200);
   } else if (kind === "partner") {
     v.partner_id = str(b.partner_id, 60) || null;
     if (!v.partner_id) return { ok: false, error: "Alege firma colaboratorului." };
@@ -114,10 +116,10 @@ export async function createUser(db: D1Database, kind: Kind, v: UserInput, creat
   const id = uuid();
   await db
     .prepare(
-      `INSERT INTO users (id, kind, email, name, phone, role, status, partner_id, engagement, anevar_no, specializations, coverage,
-        client_type, company, cui, city, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, 'invited', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO users (id, kind, email, name, phone, role, status, partner_id, engagement, anevar_no, specializations, coverage, duties,
+        client_type, company, cui, city, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, 'invited', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(id, kind, v.email, v.name, v.phone, v.role, v.partner_id, v.engagement, v.anevar_no, v.specializations, v.coverage, v.client_type, v.company, v.cui, v.city, v.notes, createdBy)
+    .bind(id, kind, v.email, v.name, v.phone, v.role, v.partner_id, v.engagement, v.anevar_no, v.specializations, v.coverage, v.duties, v.client_type, v.company, v.cui, v.city, v.notes, createdBy)
     .run();
   return { ok: true as const, id };
 }
@@ -126,10 +128,10 @@ export async function updateUser(db: D1Database, u: User, v: UserInput) {
   if (await emailTaken(db, u.kind, v.email, u.id)) return { ok: false as const, error: TAKEN[u.kind] };
   await db
     .prepare(
-      `UPDATE users SET email = ?, name = ?, phone = ?, role = ?, partner_id = ?, engagement = ?, anevar_no = ?, specializations = ?, coverage = ?,
+      `UPDATE users SET email = ?, name = ?, phone = ?, role = ?, partner_id = ?, engagement = ?, anevar_no = ?, specializations = ?, coverage = ?, duties = ?,
         client_type = ?, company = ?, cui = ?, city = ?, notes = ?, updated_at = ? WHERE id = ?`,
     )
-    .bind(v.email, v.name, v.phone, v.role, v.partner_id, v.engagement, v.anevar_no, v.specializations, v.coverage, v.client_type, v.company, v.cui, v.city, v.notes, now(), u.id)
+    .bind(v.email, v.name, v.phone, v.role, v.partner_id, v.engagement, v.anevar_no, v.specializations, v.coverage, v.duties, v.client_type, v.company, v.cui, v.city, v.notes, now(), u.id)
     .run();
   return { ok: true as const };
 }

@@ -10,6 +10,15 @@ export const INTERNAL_ROLES = [
   ["inspector", "Inspector"],
   ["operator", "Operator"],
 ] as const;
+/** Work a team member does, whatever their role in the CRM (several can be ticked). */
+export const DUTIES = [
+  ["evaluator", "Evaluator"],
+  ["inspector", "Inspector"],
+] as const;
+export const dutiesOf = (u: { role: string; duties?: string | null }) =>
+  Array.from(new Set([...(u.duties ?? "").split(",").filter(Boolean), ...(u.role === "evaluator" || u.role === "inspector" ? [u.role] : [])]));
+export const hasDuty = (u: { role: string; duties?: string | null }, d: "evaluator" | "inspector") => dutiesOf(u).includes(d);
+
 export const PARTNER_ROLES = [
   ["owner", "Administrator cont"],
   ["member", "Membru"],
@@ -30,6 +39,12 @@ export const CLIENT_TYPES = [
 ] as const;
 
 const find = (list: readonly (readonly [string, string])[], v: string | null | undefined) => list.find(([k]) => k === v)?.[1];
+
+/** Role, plus the duties that are not already the role: "Proprietar · evaluator, inspector". */
+export const teamLabel = (u: { role: string; duties?: string | null }) => {
+  const extra = dutiesOf(u).filter((d) => d !== u.role).map((d) => find(DUTIES, d)?.toLowerCase() ?? d);
+  return `${find(INTERNAL_ROLES, u.role) ?? u.role}${extra.length ? ` · ${extra.join(", ")}` : ""}`;
+};
 
 export const roleLabel = (kind: string, role: string) =>
   kind === "internal" ? find(INTERNAL_ROLES, role) ?? role : kind === "partner" ? find(PARTNER_ROLES, role) ?? role : "Client";

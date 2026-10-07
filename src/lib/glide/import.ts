@@ -60,10 +60,10 @@ async function importUsers(db: D1Database, rows: Row[], actor: string, resolve: 
     const role = r.role === "owner" ? "admin" : r.role; // owners come only from CRM_OWNER_EMAILS
     await db
       .prepare(
-        `INSERT INTO users (id, glide_id, kind, email, name, phone, role, status, partner_id, engagement, anevar_no, specializations, coverage,
-          share_evaluator, share_verifier, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, 'invited', ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO users (id, glide_id, kind, email, name, phone, role, duties, status, partner_id, engagement, anevar_no, specializations, coverage,
+          share_evaluator, share_verifier, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'invited', ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(r.id ?? uuid(), r.glide_id, r.kind, r.email, r.name ?? "", r.phone ?? null, role, partner, r.engagement ?? null, r.anevar_no ?? null,
+      .bind(r.id ?? uuid(), r.glide_id, r.kind, r.email, r.name ?? "", r.phone ?? null, role, role === "evaluator" || role === "inspector" ? role : null, partner, r.engagement ?? null, r.anevar_no ?? null,
         r.specializations ?? null, r.coverage ?? null, r.share_evaluator ?? null, r.share_verifier ?? null, actor)
       .run();
   }

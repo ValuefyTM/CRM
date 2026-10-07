@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   const kind = b.kind;
   if (kind !== "internal" && kind !== "partner" && kind !== "client") return err("Tip de utilizator necunoscut.");
   if (kind === "internal" && !isAdmin(a.user)) return err("Doar administratorii pot adăuga utilizatori interni.", 403);
-  const v = validateUser(kind, b);
+  const v = validateUser(kind, b, undefined, a.user.role === "owner");
   if (!v.ok) return err(v.error);
   if (kind === "partner" && !(await getPartner(a.db, v.value.partner_id!))) return err("Firma aleasă nu există.");
   const r = await createUser(a.db, kind, v.value, a.user.id);

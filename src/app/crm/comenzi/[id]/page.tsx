@@ -11,6 +11,7 @@ import { CrmShell } from "@/components/CrmShell";
 import { History } from "@/components/History";
 import { OrderDocuments, OrderInfo, OrderStatusCard } from "@/components/OrderDetails";
 import { ReportList } from "@/components/ReportList";
+import { hasDuty } from "@/lib/labels";
 import { isExpired, money, offerDocs, offerDraft, offerForOrder, offerTotals, type OfferInput } from "@/lib/offers";
 import { offerLink } from "@/lib/offer-emails";
 import { OfferEditor } from "./OfferEditor";
@@ -38,8 +39,9 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
   const offerable = !o.glide_id && (portal || o.source === "site");
   const offer = offerable ? await offerForOrder(db, id) : null;
   const evaluators = offerable
-    ? (await db.prepare("SELECT id, COALESCE(NULLIF(name, ''), email) AS name, anevar_no, role FROM users WHERE kind = 'internal' AND status <> 'disabled' AND role IN ('evaluator', 'owner', 'admin') ORDER BY name")
-      .all<{ id: string; name: string; anevar_no: string | null; role: string }>()).results
+    ? (await db.prepare("SELECT id, COALESCE(NULLIF(name, ''), email) AS name, anevar_no, role, duties FROM users WHERE kind = 'internal' AND status <> 'disabled' AND (role IN ('evaluator', 'owner', 'admin') OR ',' || COALESCE(duties, '') || ',' LIKE '%,evaluator,%') ORDER BY name")
+      .all<{ id: string; name: string; anevar_no: string | null; role: string; duties: string | null }>()).results
+      .map((e) => ({ ...e, role: hasDuty(e, "evaluator") ? "evaluator" : e.role }))
     : [];
   let offerInitial: OfferInput | null = null;
   if (offerable) {

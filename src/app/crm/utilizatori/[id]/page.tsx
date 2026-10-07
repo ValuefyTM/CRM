@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { listPartners } from "@/lib/partners";
 import { history } from "@/lib/history";
-import { displayName, getUser, isAdmin, KIND_LABEL, roleLabel } from "@/lib/users";
+import { displayName, getUser, isAdmin, KIND_LABEL, roleLabel, teamLabel } from "@/lib/users";
 import { CrmShell } from "@/components/CrmShell";
 import { History } from "@/components/History";
 import { UserForm } from "../UserForm";
@@ -35,7 +35,7 @@ export default async function UserPage({ params, searchParams }: { params: Promi
   return (
     <CrmShell
       user={me} base={base} active="users" title={displayName(u)}
-      subtitle={`${KIND_LABEL[u.kind]} · ${roleLabel(u.kind, u.role)}${u.partner_name ? ` · ${u.partner_name}` : ""} · adăugat ${fmtDate(u.created_at)}`}
+      subtitle={`${KIND_LABEL[u.kind]} · ${u.kind === "internal" ? teamLabel(u) : roleLabel(u.kind, u.role)}${u.partner_name ? ` · ${u.partner_name}` : ""} · adăugat ${fmtDate(u.created_at)}`}
       actions={<a href={`${base}/utilizatori?tab=${TAB[u.kind]}`} className="btn btnGhost btnSm">← Utilizatori</a>}
     >
       {nou && NEW_MSG[nou] && <div className={nou === "invitat" ? "okMsg" : "note"}>{NEW_MSG[nou]}</div>}
@@ -48,9 +48,9 @@ export default async function UserPage({ params, searchParams }: { params: Promi
             canInvite={canManage} canDisable={canManage && !self && !(u.kind === "internal" && u.role === "owner")}
           />
           <UserForm
-            kind={u.kind} base={base} userId={u.id} firms={firms} readOnly={!canManage} lockRole={self || u.role === "owner"}
+            kind={u.kind} base={base} userId={u.id} firms={firms} readOnly={!canManage} lockRole={self || u.role === "owner"} canMakeOwner={me.role === "owner"} lockDuties={self && !isAdmin(me)}
             initial={{
-              name: u.name, email: u.email, phone: u.phone ?? "", role: u.role, engagement: u.engagement ?? "employee", anevar_no: u.anevar_no ?? "",
+              name: u.name, email: u.email, phone: u.phone ?? "", role: u.role, engagement: u.engagement ?? "employee", anevar_no: u.anevar_no ?? "", duties: (u.duties ?? "").split(",").filter(Boolean),
               specializations: u.specializations ? u.specializations.split(",") : [], coverage: u.coverage ?? "", partner_id: u.partner_id ?? "",
               client_type: u.client_type ?? "person", company: u.company ?? "", cui: u.cui ?? "", city: u.city ?? "", notes: u.notes ?? "",
             }}

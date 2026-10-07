@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { staffPage, fmtDate } from "@/lib/guard";
-import { displayName, KIND_LABEL, listUsers, roleLabel } from "@/lib/users";
+import { displayName, hasDuty, KIND_LABEL, listUsers, roleLabel } from "@/lib/users";
 import { CrmShell } from "@/components/CrmShell";
 
 export const metadata: Metadata = { title: "CRM | VALUEFY" };
@@ -11,7 +11,7 @@ export default async function CrmHome() {
   const users = await listUsers(db);
   const live = users.filter((u) => u.status !== "disabled");
   const count = (kind: string) => live.filter((u) => u.kind === kind).length;
-  const evaluators = live.filter((u) => u.kind === "internal" && u.role === "evaluator").length;
+  const evaluators = live.filter((u) => u.kind === "internal" && hasDuty(u, "evaluator")).length;
   const invited = live.filter((u) => u.status === "invited" && u.kind !== "internal").length;
   const orders = await db.prepare("SELECT COUNT(*) AS n, SUM(viewed_at IS NULL) AS unread FROM orders").first<{ n: number; unread: number | null }>().catch(() => null);
   const leads = await db.prepare("SELECT COUNT(*) AS n FROM leads WHERE status = 'NEW' AND source = 'WEBSITE_AI_SALE'").first<{ n: number }>().catch(() => null);

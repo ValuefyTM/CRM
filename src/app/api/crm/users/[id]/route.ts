@@ -19,13 +19,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const actor = `user:${a.user.id}`;
 
   if (b.action === "update") {
-    const v = validateUser(u.kind, b, u.role);
+    const v = validateUser(u.kind, b, u.role, a.user.role === "owner");
     if (!v.ok) return err(v.error);
-    if (self) Object.assign(v.value, { role: u.role, engagement: u.engagement }); // nobody changes their own role
+    // Nobody changes their own role; administrators may still tick their own duties (e.g. an owner who also inspects).
+    if (self) Object.assign(v.value, { role: u.role, engagement: u.engagement, ...(isAdmin(a.user) ? {} : { duties: u.duties }) });
     if (u.kind === "partner" && !(await getPartner(a.db, v.value.partner_id!))) return err("Firma aleasă nu există.");
     const r = await updateUser(a.db, u, v.value);
     if (!r.ok) return err(r.error, 409);
-    await audit(a.db, actor, "user.update", "user", id, v.value.role !== u.role ? `rol: ${v.value.role}` : undefined);
+    const changed = [v.value.role !== u.role && `rol: ${v.value.role}`, (v.value.duties ?? "") !== (u.duties ?? "") && `atribuții: ${v.value.duties ?? "—"}`].filter(Boolean).join(" · ");
+    await audit(a.db, actor, "user.update", "user", id, changed || undefined);
     return NextResponse.json({ ok: true });
   }
   if (b.action === "invite") {

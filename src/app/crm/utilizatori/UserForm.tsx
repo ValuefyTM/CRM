@@ -1,17 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { CLIENT_TYPES, ENGAGEMENTS, INTERNAL_ROLES, PARTNER_ROLES, SPECIALIZATIONS } from "@/lib/labels";
+import { CLIENT_TYPES, DUTIES, ENGAGEMENTS, INTERNAL_ROLES, PARTNER_ROLES, SPECIALIZATIONS } from "@/lib/labels";
 import type { Kind } from "@/lib/site";
 
 export type UserValues = {
   name: string; email: string; phone: string; role: string; engagement: string; anevar_no: string; specializations: string[]; coverage: string;
-  partner_id: string; client_type: string; company: string; cui: string; city: string; notes: string;
+  duties: string[]; partner_id: string; client_type: string; company: string; cui: string; city: string; notes: string;
 };
 
 const EMPTY: UserValues = {
   name: "", email: "", phone: "", role: "", engagement: "employee", anevar_no: "", specializations: [], coverage: "",
-  partner_id: "", client_type: "person", company: "", cui: "", city: "", notes: "",
+  duties: [], partner_id: "", client_type: "person", company: "", cui: "", city: "", notes: "",
 };
 
 const INVITE_TEXT: Record<Kind, string> = {
@@ -22,11 +22,12 @@ const INVITE_TEXT: Record<Kind, string> = {
 
 /**
  * Create or edit any account. `lockRole` keeps the role as it is (owners, or people editing themselves);
- * `readOnly` is for team members looking at accounts they may not change.
+ * `readOnly` is for team members looking at accounts they may not change; `canMakeOwner` when an owner is editing;
+ * `lockDuties` when the duties may not be changed either.
  */
 export function UserForm(props: {
   kind: Kind; base: string; userId?: string; initial?: Partial<UserValues>; firms: { id: string; name: string }[];
-  lockRole?: boolean; readOnly?: boolean;
+  lockRole?: boolean; readOnly?: boolean; canMakeOwner?: boolean; lockDuties?: boolean;
 }) {
   const { kind, base, userId } = props;
   const isNew = !userId;
@@ -35,6 +36,9 @@ export function UserForm(props: {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const set = (k: keyof UserValues) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setF((p) => ({ ...p, [k]: e.target.value }));
+  const toggleDuty = (k: string) => setF((p) => ({ ...p, duties: p.duties.includes(k) ? p.duties.filter((x) => x !== k) : [...p.duties, k] }));
+  // The role "Evaluator" / "Inspector" is itself a duty; the others (owner, administrator, operator) can add duties.
+  const duties = Array.from(new Set([...f.duties, ...(f.role === "evaluator" || f.role === "inspector" ? [f.role] : [])]));
   const toggleSpec = (k: string) => setF((p) => ({ ...p, specializations: p.specializations.includes(k) ? p.specializations.filter((x) => x !== k) : [...p.specializations, k] }));
   const ro = props.readOnly;
 
@@ -57,7 +61,7 @@ export function UserForm(props: {
     else setMsg({ ok: true, text: "Modificările au fost salvate." });
   };
 
-  const roles = kind === "internal" ? INTERNAL_ROLES.filter(([k]) => k !== "owner" || f.role === "owner") : PARTNER_ROLES;
+  const roles = kind === "internal" ? INTERNAL_ROLES.filter(([k]) => k !== "owner" || f.role === "owner" || props.canMakeOwner) : PARTNER_ROLES;
 
   return (
     <form onSubmit={submit} className="card" noValidate>
@@ -115,12 +119,38 @@ export function UserForm(props: {
             </>
           )}
 
+          {kind === "internal" && (
+            <div className="field" style={{ gridColumn: "1 / -1" }}>
+              <span>Atribuții <small>(ce face în echipă, pe lângă rol; se pot bifa mai multe)</small></span>
+              <div className="chips">
+                {DUTIES.map(([k, l]) => {
+                  const byRole = f.role === k;
+                  const on = duties.includes(k);
+                  return (
+                    <label key={k} className="check" style={{ alignItems: "center", padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 999, background: on ? "var(--acc-soft)" : "#fff" }}>
+                      <input type="checkbox" checked={on} disabled={byRole || props.lockDuties} onChange={() => toggleDuty(k)} />
+                      <span><b>{l}</b>{byRole ? " · din rol" : k === "inspector" ? " · aplicația de inspecții" : " · rapoarte, inspecții"}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {kind === "client" && <label className="field"><span>Localitate <small>(opțional)</small></span><input className="input" value={f.city} onChange={set("city")} placeholder="ex. Timișoara" /></label>}
         </div>
 
-        {kind === "internal" && f.role === "evaluator" && (
+        {kind === "internal" && duties.includes("inspector") && !duties.includes("evaluator") && (
           <>
-            <div className="section">Evaluator</div>
+            <div className="section">Inspector</div>
+            <div className="grid2">
+              <label className="field"><span>Zonă acoperită <small>(opțional)</small></span><input className="input" value={f.coverage} onChange={set("coverage")} placeholder="ex. Timiș, Arad, Caraș-Severin" /></label>
+            </div>
+          </>
+        )}
+        {kind === "internal" && duties.includes("evaluator") && (
+          <>
+            <div className="section">Evaluator{duties.includes("inspector") ? " și inspector" : ""}</div>
             <div className="grid2">
               <label className="field"><span>Nr. legitimație ANEVAR <small>(opțional)</small></span><input className="input" value={f.anevar_no} onChange={set("anevar_no")} placeholder="ex. 12345" /></label>
               <label className="field"><span>Zonă acoperită <small>(opțional)</small></span><input className="input" value={f.coverage} onChange={set("coverage")} placeholder="ex. Timiș, Arad, Caraș-Severin" /></label>

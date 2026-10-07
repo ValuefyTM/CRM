@@ -4,7 +4,7 @@ import { now, uuid } from "./db";
 import { appUrl, INSP_ROLES } from "./site";
 import { audit } from "./auth";
 import { esc, layout, sendEmail } from "./email";
-import { isAdmin, type User } from "./users";
+import { dutiesOf, isAdmin, type User } from "./users";
 import { FORMS, guessSheetType, sheetTypeLabel, type SheetType } from "./insp-forms";
 
 /** Main evaluator of the report, owners and administrators. */
@@ -17,10 +17,12 @@ export async function canAssign(db: D1Database, user: User, reportId: string) {
 /** Who can receive an inspection: the one giving it, and colleagues who are inspectors or evaluators. */
 export async function inspectorChoices(db: D1Database, me: string) {
   return (await db
-    .prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role, coverage FROM users
-      WHERE kind = 'internal' AND status <> 'disabled' AND (id = ? OR role IN (${INSP_ROLES.map(() => "?").join(", ")})) ORDER BY name`)
-    .bind(me, ...INSP_ROLES)
-    .all<{ id: string; name: string; role: string; coverage: string | null }>()).results;
+    .prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role, duties, coverage FROM users
+      WHERE kind = 'internal' AND status <> 'disabled' AND (id = ? OR role IN ('evaluator', 'inspector') OR ',' || COALESCE(duties, '') || ',' LIKE '%,evaluator,%'
+        OR ',' || COALESCE(duties, '') || ',' LIKE '%,inspector,%') ORDER BY name`)
+    .bind(me)
+    .all<{ id: string; name: string; role: string; duties: string | null; coverage: string | null }>()).results
+    .map((u) => ({ ...u, role: dutiesOf(u).includes("inspector") ? "inspector" : dutiesOf(u).includes("evaluator") ? "evaluator" : u.role }));
 }
 
 /** The task in progress for an asset (made in the CRM, not yet done or cancelled). */
@@ -40,10 +42,10 @@ export async function assignInspection(db: D1Database, user: User, reportId: str
     .first<{ id: string; report_id: string; category: string | null; type: string | null; address: string | null; order_id: string | null; number: string | null; order_type: string | null }>();
   if (!asset) return { ok: false as const, error: "Bunul nu aparține acestui raport." };
   const inspector = await db
-    .prepare(`SELECT id, email, COALESCE(NULLIF(name, ''), email) AS name, role FROM users WHERE id = ? AND kind = 'internal' AND status <> 'disabled'`)
+    .prepare(`SELECT id, email, COALESCE(NULLIF(name, ''), email) AS name, role, duties FROM users WHERE id = ? AND kind = 'internal' AND status <> 'disabled'`)
     .bind(str(b.inspector, 80))
-    .first<{ id: string; email: string; name: string; role: string }>();
-  if (!inspector || (inspector.id !== user.id && !INSP_ROLES.includes(inspector.role))) return { ok: false as const, error: "Alege-te pe tine sau un coleg inspector / evaluator." };
+    .first<{ id: string; email: string; name: string; role: string; duties: string | null }>();
+  if (!inspector || (inspector.id !== user.id && !dutiesOf(inspector).some((d) => INSP_ROLES.includes(d)))) return { ok: false as const, error: "Alege-te pe tine sau un coleg inspector / evaluator." };
   const type = (FORMS as Record<string, unknown>)[str(b.sheet_type, 20)] ? (str(b.sheet_type, 20) as SheetType) : guessSheetType(asset.category, asset.type, asset.order_type);
   const due = str(b.due_on, 10);
   if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) return { ok: false as const, error: "Termenul nu este o dată validă." };

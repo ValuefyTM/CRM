@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { kindLabel, listPartners } from "@/lib/partners";
-import { clientTypeLabel, displayName, isAdmin, listUsers, roleLabel } from "@/lib/users";
+import { clientTypeLabel, displayName, dutiesOf, isAdmin, listUsers, roleLabel, teamLabel } from "@/lib/users";
 import { CrmShell } from "@/components/CrmShell";
 import { UsersBrowser, type Tab } from "./UsersBrowser";
 
@@ -14,7 +14,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   const tab: Tab = sp.tab === "colaboratori" || sp.tab === "clienti" ? sp.tab : "interni";
   const rows = users.map((u) => ({
-    id: u.id, kind: u.kind, name: displayName(u), email: u.email, phone: u.phone, role: u.role, roleLabel: roleLabel(u.kind, u.role), status: u.status,
+    id: u.id, kind: u.kind, name: displayName(u), email: u.email, phone: u.phone, role: u.role, roleLabel: u.kind === "internal" ? teamLabel(u) : roleLabel(u.kind, u.role), duties: u.kind === "internal" ? dutiesOf(u) : [], status: u.status,
     partnerId: u.partner_id, partnerName: u.partner_name, engagement: u.engagement, anevar: u.anevar_no, specs: u.specializations,
     company: u.company, clientType: clientTypeLabel(u.client_type), city: u.city, lastLogin: fmtDate(u.last_login_at, true), isMe: u.id === user.id,
   }));

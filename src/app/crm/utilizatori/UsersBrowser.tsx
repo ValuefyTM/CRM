@@ -7,7 +7,7 @@ import { PartnersTable, type FirmRow } from "./firme/PartnersTable";
 
 export type Tab = "interni" | "colaboratori" | "clienti";
 type Row = {
-  id: string; kind: string; name: string; email: string; phone: string | null; role: string; roleLabel: string; status: string;
+  id: string; kind: string; name: string; email: string; phone: string | null; role: string; roleLabel: string; duties: string[]; status: string;
   partnerId: string | null; partnerName: string | null; engagement: string | null; anevar: string | null; specs: string | null;
   company: string | null; clientType: string; city: string | null; lastLogin: string; isMe: boolean;
 };
@@ -21,8 +21,8 @@ const TABS: [Tab, string, string][] = [
 const FILTERS: Record<Tab, [string, string, (r: Row) => boolean][]> = {
   interni: [
     ["all", "Toți", () => true],
-    ["evaluator", "Evaluatori", (r) => r.role === "evaluator" && r.status !== "disabled"],
-    ["inspector", "Inspectori", (r) => r.role === "inspector" && r.status !== "disabled"],
+    ["evaluator", "Evaluatori", (r) => r.duties.includes("evaluator") && r.status !== "disabled"],
+    ["inspector", "Inspectori", (r) => r.duties.includes("inspector") && r.status !== "disabled"],
     ["admin", "Administrare", (r) => (r.role === "owner" || r.role === "admin") && r.status !== "disabled"],
     ["operator", "Operatori", (r) => r.role === "operator" && r.status !== "disabled"],
     ["contractor", "Colaboratori externi", (r) => r.engagement === "contractor" && r.status !== "disabled"],
@@ -138,9 +138,9 @@ export function UsersBrowser(props: { rows: Row[]; firms: FirmRow[]; base: strin
                       </td>
                       {tab === "interni" && (
                         <>
-                          <td><span className={`pill ${r.role === "evaluator" ? "pillInfo" : ""}`}>{r.roleLabel}</span></td>
+                          <td><span className={`pill ${r.duties.includes("evaluator") ? "pillInfo" : ""}`}>{r.roleLabel}</span></td>
                           <td>{r.engagement === "contractor" ? "Extern" : "Intern"}</td>
-                          <td>{r.role === "evaluator" ? <>{r.anevar ? <span className="mono">{r.anevar}</span> : <span className="muted">—</span>}{r.specs && <div className="muted">{r.specs.replace(/,/g, " · ")}</div>}</> : <span className="muted">—</span>}</td>
+                          <td>{r.duties.includes("evaluator") ? <>{r.anevar ? <span className="mono">{r.anevar}</span> : <span className="muted">—</span>}{r.specs && <div className="muted">{r.specs.replace(/,/g, " · ")}</div>}</> : <span className="muted">—</span>}</td>
                         </>
                       )}
                       {tab === "colaboratori" && (
