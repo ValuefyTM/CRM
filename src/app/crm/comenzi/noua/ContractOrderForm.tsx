@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { PROPERTY_TYPES, PURPOSES } from "@/lib/order-labels";
-import { DocsConfirm } from "@/components/DocsConfirm";
+import { PURPOSES } from "@/lib/order-labels";
+import { emptyAsset, type AssetForm } from "@/lib/asset-labels";
+import { AssetsEditor } from "@/components/AssetsEditor";
 
 type Contract = { id: string; number: string | null; bank: string; bank_code: string | null; fee: number | null; report_type: string | null; purpose: string | null };
 type Collab = { id: string; number: string | null; firm: string; share: number | null };
@@ -16,10 +17,10 @@ export function ContractOrderForm(p: {
   const [kind, setKind] = useState(p.initialKind);
   const [f, setF] = useState({
     contract_id: p.contracts.length === 1 ? p.contracts[0].id : "", collaboration_id: "", bank_ref: "", bank_branch: "", ordered_on: today, report_type: "", purpose: "",
-    fee: "", client_name: "", client_phone: "", client_email: "", property_type: "apartment", city: "", address: "", surface_area: "",
-    contact_name: "", contact_phone: "", inspection_notes: "", notes: "",
-    evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "", verifier_id: "", inspector_id: "", inspection_due: "", due_on: "", urgent: false, confirm_missing: false,
+    fee: "", client_name: "", client_phone: "", client_email: "", inspection_notes: "", notes: "",
+    evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "", verifier_id: "", due_on: "", urgent: false,
   });
+  const [assets, setAssets] = useState<AssetForm[]>([{ ...emptyAsset(), full_address: "", is_main: true }]);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
@@ -34,14 +35,19 @@ export function ContractOrderForm(p: {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (f.inspector_id && !f.confirm_missing) return setMsg("Extrasul CF și releveul nu sunt încărcate: bifează că aloci inspecția fără ele sau alege „O aloc mai târziu”.");
+    for (const [n, a] of assets.entries()) {
+      if (!a.type.trim()) return setMsg(`Bunul ${n + 1}: alege tipul.`);
+      if (!a.city.trim() && !a.full_address.trim() && a.category !== "BUN MOBIL") return setMsg(`Bunul ${n + 1}: completează localitatea sau adresa.`);
+      if (a.contact_kind !== "client" && !a.contact_name.trim()) return setMsg(`Bunul ${n + 1}: completează persoana de contact la inspecție (sau alege „Clientul”).`);
+    }
     setBusy(true); setMsg("");
-    const r = await fetch("/api/crm/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, kind }) }).catch(() => null);
-    const d = (await r?.json().catch(() => ({}))) as { report?: string; error?: string; inspectionError?: string | null } | undefined;
+    const r = await fetch("/api/crm/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, kind, assets: assets.map((a, i) => ({
+      ...a, is_main: i === 0, ...(a.contact_kind === "client" ? { contact_name: f.client_name, contact_phone: f.client_phone } : {}),
+    })) }) }).catch(() => null);
+    const d = (await r?.json().catch(() => ({}))) as { report?: string; error?: string } | undefined;
     setBusy(false);
     if (!r?.ok || !d?.report) { setMsg(d?.error || "Nu am putut salva. Încearcă din nou."); return; }
-    if (d.inspectionError) alert(`Lucrarea s-a înregistrat, dar inspecția nu a fost alocată: ${d.inspectionError}`);
-    location.href = `${p.base}/rapoarte/${d.report}`;
+    location.href = `${p.base}/rapoarte/${d.report}?tab=inspectii&alocare=1`;
   };
 
   return (
@@ -94,29 +100,23 @@ export function ContractOrderForm(p: {
       </section>
 
       <section className="card">
-        <h2>Client și proprietate</h2>
+        <h2>Client</h2>
         <div className="formRow">
           <label className="field">Client (nume)<input className="input" value={f.client_name} onChange={set("client_name")} /></label>
           <label className="field">Telefon <small>(opțional)</small><input className="input" type="tel" value={f.client_phone} onChange={set("client_phone")} /></label>
           <label className="field">Email <small>(opțional)</small><input className="input" type="email" value={f.client_email} onChange={set("client_email")} /></label>
         </div>
-        <div className="formRow">
-          <label className="field">Tip proprietate
-            <select className="select" value={f.property_type} onChange={set("property_type")}>{PROPERTY_TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
-          </label>
-          <label className="field">Localitate<input className="input" value={f.city} onChange={set("city")} /></label>
-          <label className="field">Suprafață utilă mp <small>(opțional)</small><input className="input" inputMode="decimal" value={f.surface_area} onChange={set("surface_area")} /></label>
-        </div>
-        <label className="field">Adresa<input className="input" value={f.address} onChange={set("address")} placeholder="Strada, număr, bloc, apartament" /></label>
-        <div className="formRow">
-          <label className="field">Contact la inspecție <small>(dacă nu e clientul)</small><input className="input" value={f.contact_name} onChange={set("contact_name")} /></label>
-          <label className="field">Telefon contact<input className="input" type="tel" value={f.contact_phone} onChange={set("contact_phone")} /></label>
-        </div>
+      </section>
+
+      <section className="card">
+        <h2>Bunuri evaluate</h2>
+        <p className="hint">Adaugă fiecare bun separat (apartament, loc de parcare, boxă, teren): are valoarea și inspecția lui. Primul e bunul principal.</p>
+        <AssetsEditor assets={assets} setAssets={setAssets} client={{ name: f.client_name, phone: f.client_phone }} />
         <label className="field">Observații pentru inspecție <small>(opțional)</small><textarea className="textarea" rows={2} value={f.inspection_notes} onChange={set("inspection_notes")} /></label>
       </section>
 
       <section className="card">
-        <h2>Dosar și echipă</h2>
+        <h2>Raport și echipă</h2>
         <div className="formRow">
           <label className="field">Evaluator principal
             <select className="select" value={f.evaluator_id} onChange={set("evaluator_id")}>
@@ -132,24 +132,14 @@ export function ContractOrderForm(p: {
           </label>
           <label className="field">Termen predare raport <small>(opțional)</small><input className="input" type="date" value={f.due_on} onChange={set("due_on")} /></label>
         </div>
-        <div className="formRow">
-          <label className="field">Inspecția o face <small>(opțional)</small>
-            <select className="select" value={f.inspector_id} onChange={set("inspector_id")}>
-              <option value="">O aloc mai târziu</option>
-              {p.inspectors.map((x) => <option key={x.id} value={x.id}>{x.id === p.me ? `${x.name} (eu)` : x.name} · {x.role}</option>)}
-            </select>
-          </label>
-          <label className="field">Inspecție până la <small>(opțional)</small><input className="input" type="date" value={f.inspection_due} onChange={set("inspection_due")} disabled={!f.inspector_id} /></label>
-        </div>
-        {f.inspector_id && <DocsConfirm have={{ cf: false, rlv: false }} checked={f.confirm_missing} onChange={(v) => setF({ ...f, confirm_missing: v })}
-          hint="Dosarul e nou: le încarci după ce se deschide, la „Documente & Livrare”, sau aloci inspecția de acolo după ce le ai." />}
+        <p className="hint">Inspecțiile le aloci după creare: se deschide raportul cu fereastra de alocare, bun cu bun.</p>
         <label className="check"><input type="checkbox" checked={f.urgent} onChange={(e) => setF({ ...f, urgent: e.target.checked })} /><span>Urgent</span></label>
         <label className="field">Note interne <small>(opțional)</small><textarea className="textarea" rows={2} value={f.notes} onChange={set("notes")} /></label>
       </section>
 
       {msg && <div role="alert" className="error">{msg}</div>}
       <div className="actions">
-        <button type="submit" className="btn btnGold" disabled={busy}>{busy ? "Se înregistrează…" : "Înregistrează și deschide dosarul"}</button>
+        <button type="submit" className="btn btnGold" disabled={busy}>{busy ? "Se înregistrează…" : "Înregistrează și creează raportul"}</button>
         <a className="btn btnGhost" href={`${p.base}/comenzi?tab=banci`}>Renunță</a>
       </div>
     </form>

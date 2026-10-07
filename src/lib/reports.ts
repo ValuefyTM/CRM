@@ -161,6 +161,7 @@ export type AssetDetail = {
   contact_kind: string | null; contact_name: string | null; contact_phone: string | null;
   sheet_photo: string | null; sheet_signature: string | null; sheet_person: string | null; sheet_location: string | null; sheet_description: string | null;
   other_reports: number;
+  no_inspection: string | null; no_inspection_at: string | null;
 };
 
 export async function reportAssets(db: D1Database, id: string) {
@@ -168,6 +169,7 @@ export async function reportAssets(db: D1Database, id: string) {
     .prepare(
       `SELECT a.id, a.is_main, a.value, a.approach, p.id AS property_id, p.category, p.type, p.construction, p.county, p.city, p.full_address, p.geo, p.cf_number,
         p.cad_building, p.usable_area, p.year_built, p.description, p.image_url, p.cf_file, p.plan_file, p.cad_land, a.notes, a.contact_kind AS a_contact_kind, a.contact_name AS a_contact_name, a.contact_phone AS a_contact_phone,
+        a.no_inspection, a.no_inspection_at,
         i.id AS inspection_id, i.glide_id IS NOT NULL AS inspection_from_glide, i.status AS inspection_status, i.scheduled_at, i.done_at,
         COALESCE(NULLIF(u.name, ''), u.email) AS inspector, i.inspector_id, i.due_on, i.instructions, i.sheet_type, i.assigned_at,
         (SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE x.id = i.assigned_by) AS assigned_by_name, s.status AS sheet_status,
@@ -222,7 +224,7 @@ const REPORT_ACTION: Record<string, (d: string | null) => string> = {
   "report.asset_add": (d) => `Bun adăugat${d ? `: ${d}` : ""}`,
   "report.asset_edit": (d) => `Bun modificat${d ? `: ${d}` : ""}`,
   "report.asset_remove": (d) => `Bun scos din raport${d ? `: ${d}` : ""}`,
-  "report.opened": (d) => `Dosar deschis${d ? ` ${d}` : ""}`,
+  "report.opened": (d) => `Raport creat${d ? ` ${d}` : ""}`,
   "report.stage": (d) => `Etapă: ${d ?? ""}`.trim(),
   "report.client_notified": (d) => `Clientul a fost anunțat că raportul e gata${d ? ` (${d})` : ""}`,
   "report.member": (d) => `Echipă: adăugat ${d ?? ""}`.trim(),

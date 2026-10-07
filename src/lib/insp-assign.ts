@@ -84,6 +84,7 @@ export async function assignInspection(db: D1Database, user: User, reportId: str
   }
   await db.batch([
     db.prepare("INSERT OR IGNORE INTO report_members (report_id, user_id, role) VALUES (?, ?, 'inspector')").bind(reportId, inspector.id),
+    db.prepare("UPDATE assets SET no_inspection = NULL, no_inspection_at = NULL, no_inspection_by = NULL WHERE id = ?").bind(asset.id),
     db.prepare("UPDATE reports SET updated_at = ? WHERE id = ?").bind(t, reportId),
   ]);
   const what = `${asset.type ? asset.type.toLowerCase() : "bun"} → ${inspector.name}`;
@@ -112,6 +113,24 @@ ${missing.length ? `<p style="margin:0;font-size:15px;line-height:1.65;color:#9A
     });
   }
   return { ok: true as const, id, missing };
+}
+
+/**
+ * Marks an asset as valued without an inspection (`reason`), or as needing one again (`reason` empty).
+ * Not while an inspection task is open for it: that one is cancelled first.
+ */
+export async function markNoInspection(db: D1Database, user: User, reportId: string, assetId: string, reason: string | null) {
+  const a = await db.prepare("SELECT a.id, p.type FROM assets a JOIN crm_properties p ON p.id = a.property_id WHERE a.id = ? AND a.report_id = ?")
+    .bind(assetId, reportId).first<{ id: string; type: string | null }>();
+  if (!a) return { ok: false as const, error: "Bunul nu aparține acestui raport." };
+  if (reason && (await openTask(db, a.id))) return { ok: false as const, error: "Bunul are o inspecție alocată. Anuleaz-o întâi." };
+  const t = now();
+  await db.batch([
+    db.prepare("UPDATE assets SET no_inspection = ?, no_inspection_at = ?, no_inspection_by = ? WHERE id = ?").bind(reason, reason ? t : null, reason ? user.id : null, a.id),
+    db.prepare("UPDATE reports SET updated_at = ? WHERE id = ?").bind(t, reportId),
+  ]);
+  await audit(db, `user:${user.id}`, reason ? "report.no_inspection" : "report.needs_inspection", "report", reportId, `${a.type ? a.type.toLowerCase() : "bun"}${reason ? `: ${reason}` : ""}`);
+  return { ok: true as const };
 }
 
 /** Cancels a task that is not done yet (the inspection disappears from the inspector's app). */

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { SHEET_TYPES } from "@/lib/insp-forms";
+import { NO_INSPECTION_REASONS, SHEET_TYPES } from "@/lib/insp-forms";
 import { DocsConfirm, missingOf, type DocState } from "@/components/DocsConfirm";
 
 export type Person = { id: string; name: string; role: string; coverage: string | null };
@@ -103,5 +103,148 @@ export function CancelInspection({ report, inspection, who }: { report: string; 
       if (error) return alert(error);
       location.reload();
     }}>Anulează</button>
+  );
+}
+
+/** One asset in the allocation window. `state`: free (to give), open (task given), done, none (valued without inspection). */
+export type AllocRow = {
+  asset: string; label: string; address: string | null; state: "free" | "open" | "done" | "none"; inspector: string | null; none: string | null;
+  sheet_type: string; contact_kind: string | null; contact_name: string | null; contact_phone: string | null; docs: DocState;
+};
+
+/**
+ * "Alocă inspecțiile": every asset of the report in one window — an inspector, "Fără inspecție" (with the reason) or
+ * later. Opens by itself right after the report is created; it can be closed without giving anything.
+ */
+export function AllocateAll({ report, me, people, rows, autoOpen }: { report: string; me: string; people: Person[]; rows: AllocRow[]; autoOpen: boolean }) {
+  const [open, setOpen] = useState(autoOpen);
+  const free = rows.filter((r) => r.state === "free" || r.state === "none");
+  const [pick, setPick] = useState<Record<string, string>>(() => Object.fromEntries(free.map((r) => [r.asset, r.state === "none" ? "none" : ""])));
+  const [reason, setReason] = useState<Record<string, string>>(() => Object.fromEntries(free.map((r) => [r.asset, r.none ?? NO_INSPECTION_REASONS[0]])));
+  const [due, setDue] = useState("");
+  const [instructions, setInstructions] = useState("");
+  const [confirm, setConfirm] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const close = () => {
+    setOpen(false);
+    const u = new URL(location.href);
+    if (u.searchParams.has("alocare")) { u.searchParams.delete("alocare"); history.replaceState(null, "", u); }
+  };
+  const given = free.filter((r) => pick[r.asset] && pick[r.asset] !== "none");
+  const lacking = given.filter((r) => missingOf(r.docs).length);
+  const changes = free.filter((r) => (pick[r.asset] || "") !== (r.state === "none" ? "none" : "") || (r.state === "none" && pick[r.asset] === "none" && reason[r.asset] !== r.none));
+
+  const submit = async () => {
+    if (lacking.length && !confirm) return setMsg("Unele bunuri nu au extrasul CF sau releveul: bifează că aloci fără ele sau încarcă-le întâi.");
+    setBusy(true); setMsg("");
+    const errors: string[] = [];
+    for (const r of changes) {
+      const v = pick[r.asset];
+      const body = !v || v === "none"
+        ? { asset: r.asset, none: v === "none" ? reason[r.asset] : null }
+        : { asset: r.asset, inspector: v, sheet_type: r.sheet_type, due_on: due, contact_kind: r.contact_kind ?? "client", contact_name: r.contact_name ?? "", contact_phone: r.contact_phone ?? "", instructions, confirm_missing: confirm };
+      const e = await send(`/api/crm/reports/${report}/inspections`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (e) errors.push(`${r.label}: ${e}`);
+    }
+    setBusy(false);
+    if (errors.length) return setMsg(errors.join(" · "));
+    const u = new URL(location.href);
+    u.searchParams.delete("alocare");
+    location.replace(u);
+  };
+
+  const who = (id: string | null) => people.find((p) => p.id === id)?.name ?? "inspector";
+  return (
+    <>
+      <button type="button" className="btn btnNavy btnSm" onClick={() => setOpen(true)}>Alocă inspecțiile</button>
+      {open && createPortal(
+        <div className="vfModal" role="dialog" aria-modal="true" aria-labelledby="allocTitle" onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
+          <div className="vfModalBox wide">
+            <h2 id="allocTitle">Alocă inspecțiile</h2>
+            <p className="hint">Pentru fiecare bun din raport alegi cine face inspecția, „Fără inspecție” (evaluare fără vizită în CRM) sau lași pentru mai târziu. Inspectorul primește email și vede inspecția în aplicație.</p>
+            {free.length > 1 && (
+              <label className="field">Același inspector pentru toate bunurile
+                <select className="select" value="" onChange={(e) => { const v = e.target.value; if (v) setPick(Object.fromEntries(free.map((r) => [r.asset, v]))); }}>
+                  <option value="">Alege…</option>
+                  {people.map((p) => <option key={p.id} value={p.id}>{p.id === me ? `${p.name} (eu)` : p.name} · {ROLE[p.role] ?? p.role}</option>)}
+                  <option value="none">Toate fără inspecție</option>
+                </select>
+              </label>
+            )}
+            <ul className="allocList">
+              {rows.map((r) => {
+                const editable = r.state === "free" || r.state === "none";
+                const v = pick[r.asset] ?? "";
+                return (
+                  <li key={r.asset}>
+                    <div className="allocWhat">
+                      <b>{r.label}</b>
+                      {r.address && <small>{r.address}</small>}
+                      {editable && v && v !== "none" && (
+                        <span className="allocTags">
+                          {(["cf", "rlv"] as const).map((t) => <span key={t} className={`docTag ${r.docs[t] ? "ok" : "miss"}`}>{r.docs[t] ? "✓" : "!"} {t === "cf" ? "CF" : "RLV"}</span>)}
+                          {r.contact_name && <small>Contact: {r.contact_name}{r.contact_phone ? ` · ${r.contact_phone}` : ""}</small>}
+                        </span>
+                      )}
+                    </div>
+                    {editable ? (
+                      <div className="allocPick">
+                        <select className="select" aria-label={`Inspecția: ${r.label}`} value={v} onChange={(e) => setPick({ ...pick, [r.asset]: e.target.value })}>
+                          <option value="">Mai târziu</option>
+                          {people.map((p) => <option key={p.id} value={p.id}>{p.id === me ? `${p.name} (eu)` : p.name} · {ROLE[p.role] ?? p.role}</option>)}
+                          <option value="none">Fără inspecție</option>
+                        </select>
+                        {v === "none" && (
+                          <select className="select" aria-label={`Motiv: ${r.label}`} value={reason[r.asset]} onChange={(e) => setReason({ ...reason, [r.asset]: e.target.value })}>
+                            {[...new Set([...NO_INSPECTION_REASONS, reason[r.asset]])].map((x) => <option key={x} value={x}>{x}</option>)}
+                          </select>
+                        )}
+                      </div>
+                    ) : (
+                      <span className={`pill ${r.state === "done" ? "pillOk" : "pillInfo"}`}><i />{r.state === "done" ? "Realizată" : `Alocată: ${who(r.inspector)}`}</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            {given.length > 0 && (
+              <>
+                <div className="formRow">
+                  <label className="field">Termen inspecție <small>(opțional)</small><input className="input" type="date" value={due} onChange={(e) => setDue(e.target.value)} /></label>
+                </div>
+                <label className="field">Instrucțiuni pentru inspector <small>(opțional)</small>
+                  <textarea className="textarea" rows={2} value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="ex. măsurători la toate încăperile, cheia la vecinul de la ap. 4" />
+                </label>
+              </>
+            )}
+            {lacking.length > 0 && (
+              <div className="docsWarn">
+                <p><b>Fără extras CF sau releveu: {lacking.map((r) => r.label).join(", ")}.</b> Inspectorul are nevoie de ele la vizionare. Le poți încărca în raport, la „Documente & Livrare”; apar singure în aplicația de inspecții.</p>
+                <label className="check"><input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} /><span>Aloc inspecțiile fără ele</span></label>
+              </div>
+            )}
+            {msg && <div role="alert" className="error">{msg}</div>}
+            <div className="actions">
+              {free.length > 0 && <button type="button" className="btn btnNavy" disabled={busy || !changes.length} onClick={submit}>{busy ? "Se salvează…" : given.length ? `Alocă (${given.length})` : "Salvează"}</button>}
+              <button type="button" className="btn btnGhost" onClick={close}>{free.length ? "Închide, aloc mai târziu" : "Închide"}</button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
+
+/** Takes back "Fără inspecție": the asset needs an inspection again. */
+export function NeedsInspection({ report, asset }: { report: string; asset: string }) {
+  return (
+    <button type="button" className="linkBtn" onClick={async () => {
+      const error = await send(`/api/crm/reports/${report}/inspections`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ asset, none: null }) });
+      if (error) return alert(error);
+      location.reload();
+    }}>Necesită inspecție</button>
   );
 }

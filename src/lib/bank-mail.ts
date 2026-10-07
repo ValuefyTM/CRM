@@ -116,7 +116,7 @@ export async function notifyBankOrder(n: BankNotice, orderId: string, crmBase: s
     text: `${n.bank} a trimis o comandă nouă: ${n.ref}${n.client ? `, client ${n.client}` : ""}${n.requestType ? ` (${n.requestType})` : ""}.\nProceseaz-o în CRM: ${link}`,
     html: layout({
       eyebrow: "CRM VALUEFY · Comenzi bănci", title: `Comandă nouă ${n.bank}`,
-      body: `<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A66"><strong style="color:#17173A">${esc(n.ref)}</strong>${n.client ? ` · client ${esc(n.client)}` : ""}${n.requestType ? ` · ${esc(n.requestType)}` : ""}.<br>Completează datele clientului și ale bunului (din captura aplicației băncii) și deschide dosarul.</p>`,
+      body: `<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A66"><strong style="color:#17173A">${esc(n.ref)}</strong>${n.client ? ` · client ${esc(n.client)}` : ""}${n.requestType ? ` · ${esc(n.requestType)}` : ""}.<br>Completează datele clientului și ale bunului (din captura aplicației băncii) și creează raportul.</p>`,
       button: { label: "Procesează comanda →", url: link }, foot: "Comanda a fost preluată automat din emailul băncii.",
     }),
   });

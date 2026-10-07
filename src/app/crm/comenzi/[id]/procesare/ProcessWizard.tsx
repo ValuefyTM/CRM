@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ASSET_CATEGORIES, capType, emptyAsset, type AssetForm } from "@/lib/asset-labels";
+import { capType, emptyAsset, type AssetForm } from "@/lib/asset-labels";
 import { PURPOSES } from "@/lib/order-labels";
-import { ContactFields } from "@/components/ContactFields";
-import { DocsConfirm } from "@/components/DocsConfirm";
+import { AssetsEditor } from "@/components/AssetsEditor";
 
 type Person = { id: string; name: string; role: string };
 type OrderInfo = {
@@ -21,7 +20,7 @@ type Extracted = {
   notes: string | null;
 };
 
-const STEPS = ["Captură din aplicația băncii", "Client", "Bunuri evaluate", "Dosar și echipă"];
+const STEPS = ["Captură din aplicația băncii", "Client", "Bunuri evaluate", "Raport și echipă"];
 const s = (v: unknown) => (v == null ? "" : String(v));
 
 /**
@@ -42,7 +41,7 @@ export function ProcessWizard(p: {
   const [assets, setAssets] = useState<AssetForm[]>([{ ...emptyAsset({ city: o.city }), full_address: o.address ?? "", is_main: true }]);
   const [dos, setDos] = useState({
     contract_id: o.contract_id ?? "", fee: o.fee ? String(o.fee) : "", urgent: o.urgent, evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "",
-    verifier_id: "", inspector_id: "", inspection_due: "", due_on: "", instructions: "", confirm_missing: false,
+    verifier_id: "", due_on: "",
   });
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
@@ -111,8 +110,7 @@ export function ProcessWizard(p: {
   const go = (to: number) => { const e = to > step ? check(step) : ""; if (e) return setMsg(e); setMsg(""); setStep(to); };
 
   const submit = async () => {
-    const e = check(3) || (!dos.evaluator_id ? "Alege evaluatorul principal." : "")
-      || (dos.inspector_id && !dos.confirm_missing ? "Extrasul CF și releveul nu sunt încărcate: bifează că aloci inspecțiile fără ele sau alege „Le aloc mai târziu”." : "");
+    const e = check(3) || (!dos.evaluator_id ? "Alege evaluatorul principal." : "");
     if (e) return setMsg(e);
     setBusy(true); setMsg("");
     const r = await fetch(`/api/crm/orders/${o.id}/process`, {
@@ -121,14 +119,12 @@ export function ProcessWizard(p: {
         ...a, is_main: i === 0, ...(a.contact_kind === "client" ? { contact_name: client.name, contact_phone: client.phone } : {}),
       })) }),
     }).catch(() => null);
-    const d = (await r?.json().catch(() => ({}))) as { report?: string; error?: string; inspectionError?: string | null } | undefined;
+    const d = (await r?.json().catch(() => ({}))) as { report?: string; error?: string } | undefined;
     setBusy(false);
     if (!r?.ok || !d?.report) return setMsg(d?.error || "Nu am putut procesa comanda. Încearcă din nou.");
-    if (d.inspectionError) alert(`Dosarul s-a deschis, dar inspecția nu a fost alocată: ${d.inspectionError}`);
-    location.href = `${p.base}/rapoarte/${d.report}`;
+    location.href = `${p.base}/rapoarte/${d.report}?tab=inspectii&alocare=1`;
   };
 
-  const setA = (i: number, k: keyof AssetForm, v: string) => setAssets(assets.map((a, j) => (j === i ? { ...a, [k]: v, ...(k === "category" ? { type: "" } : {}) } : a)));
 
   return (
     <div className="wizard">
@@ -209,52 +205,15 @@ export function ProcessWizard(p: {
 
         {step === 2 && (
           <>
-            <div className="cardHead"><h2>Bunuri evaluate</h2><button type="button" className="btn btnGhost btnSm" onClick={() => { const last = assets[assets.length - 1]; setAssets([...assets, { ...emptyAsset({ county: last?.county, city: last?.city }), is_main: false,
-                contact_kind: last?.contact_kind ?? "client", contact_name: last?.contact_name ?? "", contact_phone: last?.contact_phone ?? "" }]); }}>+ Încă un bun</button></div>
+            <h2>Bunuri evaluate</h2>
             <p className="hint">Fiecare bun (apartament, loc de parcare, boxă, teren) separat: are valoarea și inspecția lui. Primul e bunul principal.</p>
-            {assets.map((a, i) => {
-              const types = ASSET_CATEGORIES.find(([c]) => c === a.category)?.[2] ?? [];
-              return (
-                <div key={i} className="assetBox">
-                  <div className="cardHead">
-                    <b>{i === 0 ? "Bun principal" : `Bunul ${i + 1}`}{a.type ? ` · ${capType(a.type)}` : ""}</b>
-                    {assets.length > 1 && <button type="button" className="linkBtn danger" onClick={() => setAssets(assets.filter((_, j) => j !== i))}>Scoate</button>}
-                  </div>
-                  <div className="formRow">
-                    <label className="field">Categorie<select className="select" value={a.category} onChange={(e) => setA(i, "category", e.target.value)}>{ASSET_CATEGORIES.map(([c, l]) => <option key={c} value={c}>{l}</option>)}</select></label>
-                    <label className="field">Tip
-                      {types.length && (types.includes(a.type) || !a.type)
-                        ? <select className="select" value={a.type} onChange={(e) => setA(i, "type", e.target.value === "__other" ? " " : e.target.value)}>
-                            <option value="">Alege…</option>{types.map((t) => <option key={t} value={t}>{capType(t)}</option>)}<option value="__other">Alt tip…</option>
-                          </select>
-                        : <input className="input" value={a.type.trim()} onChange={(e) => setA(i, "type", e.target.value.toUpperCase())} placeholder="ex. SPATIU DE BIROURI" />}
-                    </label>
-                  </div>
-                  <div className="formRow">
-                    <label className="field">Județ<input className="input" value={a.county} onChange={(e) => setA(i, "county", e.target.value)} /></label>
-                    <label className="field">Localitate<input className="input" value={a.city} onChange={(e) => setA(i, "city", e.target.value)} /></label>
-                  </div>
-                  <label className="field">Adresa completă<input className="input" value={a.full_address} onChange={(e) => setA(i, "full_address", e.target.value)} /></label>
-                  <div className="formRow">
-                    <label className="field">Nr. CF<input className="input mono" value={a.cf_number} onChange={(e) => setA(i, "cf_number", e.target.value)} /></label>
-                    <label className="field">Nr. cad. construcție<input className="input mono" value={a.cad_building} onChange={(e) => setA(i, "cad_building", e.target.value)} /></label>
-                    <label className="field">Nr. cad. teren<input className="input mono" value={a.cad_land} onChange={(e) => setA(i, "cad_land", e.target.value)} /></label>
-                  </div>
-                  <div className="formRow">
-                    <label className="field">Suprafață utilă (mp)<input className="input" inputMode="decimal" value={a.usable_area} onChange={(e) => setA(i, "usable_area", e.target.value)} /></label>
-                    <label className="field">An construcție<input className="input" inputMode="numeric" value={a.year_built} onChange={(e) => setA(i, "year_built", e.target.value)} /></label>
-                    <label className="field">Descriere<input className="input" value={a.description} onChange={(e) => setA(i, "description", e.target.value)} placeholder="ex. 3 camere · teren 450 mp" /></label>
-                  </div>
-                  <ContactFields value={a} client={{ name: client.name, phone: client.phone }} onChange={(c) => setAssets(assets.map((x, j) => (j === i ? { ...x, ...c } : x)))} />
-                </div>
-              );
-            })}
+            <AssetsEditor assets={assets} setAssets={setAssets} client={{ name: client.name, phone: client.phone }} />
           </>
         )}
 
         {step === 3 && (
           <>
-            <h2>Dosar și echipă</h2>
+            <h2>Raport și echipă</h2>
             <div className="formRow">
               {o.source === "bank" && (
                 <label className="field">Contract cadru
@@ -278,17 +237,7 @@ export function ProcessWizard(p: {
               </label>
               <label className="field">Termen predare raport<input className="input" type="date" value={dos.due_on} onChange={(e) => setDos({ ...dos, due_on: e.target.value })} /></label>
             </div>
-            <div className="formRow">
-              <label className="field">Inspecțiile le face <small>(opțional, pentru {assets.length === 1 ? "bun" : `toate cele ${assets.length} bunuri`})</small>
-                <select className="select" value={dos.inspector_id} onChange={(e) => setDos({ ...dos, inspector_id: e.target.value })}>
-                  <option value="">Le aloc mai târziu</option>{p.inspectors.map((x) => <option key={x.id} value={x.id}>{x.id === p.me ? `${x.name} (eu)` : x.name} · {x.role}</option>)}
-                </select>
-              </label>
-              <label className="field">Inspecție până la<input className="input" type="date" value={dos.inspection_due} onChange={(e) => setDos({ ...dos, inspection_due: e.target.value })} disabled={!dos.inspector_id} /></label>
-            </div>
-            {dos.inspector_id && <DocsConfirm have={{ cf: false, rlv: false }} checked={dos.confirm_missing} onChange={(v) => setDos({ ...dos, confirm_missing: v })}
-              hint="Le încarci în dosar, la „Documente & Livrare”, pe fiecare bun; apar singure în aplicația de inspecții. Sau aloci inspecțiile de acolo după ce le ai." />}
-            {dos.inspector_id && <label className="field">Instrucțiuni pentru inspector <small>(opțional)</small><textarea className="textarea" rows={2} value={dos.instructions} onChange={(e) => setDos({ ...dos, instructions: e.target.value })} /></label>}
+            <p className="hint">Inspecțiile le aloci după creare: se deschide raportul cu fereastra de alocare, bun cu bun.</p>
             <label className="check"><input type="checkbox" checked={dos.urgent} onChange={(e) => setDos({ ...dos, urgent: e.target.checked })} /><span>Urgent</span></label>
             <div className="summaryBox">
               <b>{client.name || "—"}</b>{client.phone ? ` · ${client.phone}` : ""}
@@ -303,7 +252,7 @@ export function ProcessWizard(p: {
             <button type="button" className="btn btnGhost" onClick={() => go(step - 1)}>← Înapoi</button>
             {step < 3
               ? <button type="button" className="btn btnNavy" onClick={() => go(step + 1)}>Continuă →</button>
-              : <button type="button" className="btn btnGold" disabled={busy} onClick={submit}>{busy ? "Se procesează…" : "Procesează și deschide dosarul"}</button>}
+              : <button type="button" className="btn btnGold" disabled={busy} onClick={submit}>{busy ? "Se procesează…" : "Procesează și creează raportul"}</button>}
           </div>
         )}
       </section>

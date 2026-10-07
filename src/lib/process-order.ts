@@ -6,7 +6,6 @@ import { audit } from "./auth";
 import { getOrder } from "./orders";
 import { openDossier } from "./dossier";
 import { addAsset, updateAsset, validateAsset } from "./assets";
-import { assignInspection } from "./insp-assign";
 import type { AssetInput } from "./asset-labels";
 import type { User } from "./users";
 
@@ -18,7 +17,7 @@ const amount = (v: unknown) => {
 };
 
 /** Order property type (portal vocabulary) from the asset's category / type. */
-function propertyType(a: AssetInput) {
+export function propertyType(a: AssetInput) {
   const t = a.type.toUpperCase();
   if (a.category === "TEREN" || a.category === "PROPRIETATE AGRICOLA" || t.startsWith("TEREN")) return "land";
   if (a.category === "COMERCIAL" || a.category === "MIXT") return "commercial";
@@ -31,21 +30,16 @@ function propertyType(a: AssetInput) {
 export async function processBankOrder(db: D1Database, user: User, orderId: string, body: Record<string, unknown>) {
   const o = await getOrder(db, orderId);
   if (!o) return { ok: false as const, error: "Comanda nu există." };
-  if (await db.prepare("SELECT 1 AS x FROM reports WHERE order_id = ?").bind(orderId).first()) return { ok: false as const, error: "Comanda are deja dosar deschis." };
+  if (await db.prepare("SELECT 1 AS x FROM reports WHERE order_id = ?").bind(orderId).first()) return { ok: false as const, error: "Comanda are deja raport creat." };
   const c = (body.client ?? {}) as Record<string, unknown>;
   const bk = (body.bank ?? {}) as Record<string, unknown>;
   const d = (body.dossier ?? {}) as Record<string, unknown>;
   const name = str(c.name, 160);
   if (!name) return { ok: false as const, error: "Completează numele clientului." };
   const company = c.kind === "company";
-  const raw = Array.isArray(body.assets) ? (body.assets as unknown[]).slice(0, 20) : [];
-  if (!raw.length) return { ok: false as const, error: "Adaugă cel puțin un bun de evaluat." };
-  const assets: AssetInput[] = [];
-  for (const [i, x] of raw.entries()) {
-    const v = validateAsset(x);
-    if (!v.ok) return { ok: false as const, error: `Bunul ${i + 1}: ${v.error}` };
-    assets.push({ ...v.value, property_id: null, is_main: i === 0 });
-  }
+  const parsed = parseAssets(body.assets);
+  if (!parsed.ok) return parsed;
+  const assets = parsed.assets;
   const evaluator = id_(d.evaluator_id);
   if (!evaluator) return { ok: false as const, error: "Alege evaluatorul principal." };
   const t = now();
@@ -78,33 +72,36 @@ export async function processBankOrder(db: D1Database, user: User, orderId: stri
   if (!r.ok) return r;
   if (!r.created || !r.assetId) return { ok: true as const, report: r.id };
 
-  // The file opened with the order's main asset: complete it with everything filled in, then add the others.
-  // Who shows each asset: its own contact, else the client.
+  const filled = await fillReportAssets(db, user.id, r.id, r.assetId, assets, { name, phone: str(c.phone, 40) });
+  if (!filled.ok) return filled;
+  await audit(db, `user:${user.id}`, "order.processed", "order", orderId, `${assets.length} ${assets.length === 1 ? "bun" : "bunuri"}`);
+  return { ok: true as const, report: r.id };
+}
+
+/** The assets sent with a new order (the first is the main one). */
+export function parseAssets(raw: unknown) {
+  const list = Array.isArray(raw) ? (raw as unknown[]).slice(0, 20) : [];
+  if (!list.length) return { ok: false as const, error: "Adaugă cel puțin un bun de evaluat." };
+  const assets: AssetInput[] = [];
+  for (const [i, x] of list.entries()) {
+    const v = validateAsset(x);
+    if (!v.ok) return { ok: false as const, error: `Bunul ${i + 1}: ${v.error}` };
+    assets.push({ ...v.value, property_id: null, is_main: i === 0 });
+  }
+  return { ok: true as const, assets };
+}
+
+/**
+ * A new report opens with the order's main asset: it is completed with everything filled in and the other assets are
+ * added. Who shows each asset at the inspection: its own contact, else the client.
+ */
+export async function fillReportAssets(db: D1Database, actor: string, reportId: string, mainAssetId: string, assets: AssetInput[], client: { name: string; phone: string }) {
   const contactOf = (a: AssetInput) => a.contact_kind && a.contact_kind !== "client" && a.contact_name
     ? { kind: a.contact_kind, name: a.contact_name, phone: a.contact_phone ?? "" }
-    : { kind: "client", name, phone: str(c.phone, 40) };
+    : { kind: "client", name: client.name, phone: client.phone };
   for (const a of assets) { const k = contactOf(a); Object.assign(a, { contact_kind: k.kind, contact_name: k.name, contact_phone: k.phone || null }); }
-  const assetIds = [{ id: r.assetId, contact: contactOf(main) }];
-  const up = await updateAsset(db, user.id, r.id, r.assetId, main);
+  const up = await updateAsset(db, actor, reportId, mainAssetId, assets[0]);
   if (!up.ok) return { ok: false as const, error: up.error };
-  for (const a of assets.slice(1)) {
-    const add = await addAsset(db, user.id, r.id, a);
-    if (add.ok) assetIds.push({ id: add.id, contact: contactOf(a) });
-  }
-
-  // Inspections: one per asset, all to the chosen inspector (they can be reallocated one by one on the report).
-  const inspector = id_(d.inspector_id);
-  const problems: string[] = [];
-  if (inspector) {
-    for (const asset of assetIds) {
-      const i = await assignInspection(db, user, r.id, {
-        asset: asset.id, inspector, due_on: str(d.inspection_due, 10), contact_kind: asset.contact.kind,
-        contact_name: asset.contact.name, contact_phone: asset.contact.phone, instructions: str(d.instructions, 2000),
-        confirm_missing: d.confirm_missing === true,
-      });
-      if (!i.ok) problems.push(i.error);
-    }
-  }
-  await audit(db, `user:${user.id}`, "order.processed", "order", orderId, `${assets.length} ${assets.length === 1 ? "bun" : "bunuri"}`);
-  return { ok: true as const, report: r.id, inspectionError: problems[0] ?? null };
+  for (const a of assets.slice(1)) await addAsset(db, actor, reportId, a);
+  return { ok: true as const };
 }

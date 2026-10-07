@@ -27,12 +27,13 @@ export async function orderProgress(db: D1Database, o: Order): Promise<Progress>
     ? await Promise.all([
         db.prepare(`SELECT status, scheduled_at, done_at FROM inspections WHERE report_id = ? AND status <> 'cancelled' ORDER BY (status = 'done') ASC, created_at DESC LIMIT 1`)
           .bind(rep.id).first<{ status: string; scheduled_at: string | null; done_at: string | null }>(),
-        db.prepare("SELECT COUNT(*) AS total, SUM(status = 'done') AS done, MAX(done_at) AS last FROM inspections WHERE report_id = ? AND status <> 'cancelled'")
-          .bind(rep.id).first<{ total: number; done: number | null; last: string | null }>(),
+        db.prepare(`SELECT COUNT(*) AS total, SUM(status = 'done') AS done, MAX(done_at) AS last,
+            (SELECT COUNT(*) FROM assets a WHERE a.report_id = ?1 AND a.no_inspection IS NOT NULL) AS none FROM inspections WHERE report_id = ?1 AND status <> 'cancelled'`)
+          .bind(rep.id).first<{ total: number; done: number | null; last: string | null; none: number }>(),
         db.prepare("SELECT id FROM report_documents WHERE report_id = ? AND kind = 'final' AND status = 'uploaded' ORDER BY created_at DESC LIMIT 1").bind(rep.id).first<{ id: string }>(),
       ])
     : [null, null, null];
-  const stage = rep ? stageOf(rep, { total: counts?.total ?? 0, done: counts?.done ?? 0 }) : null;
+  const stage = rep ? stageOf(rep, { total: counts?.total ?? 0, done: counts?.done ?? 0, none: counts?.none ?? 0 }) : null;
   const confirmed = contract ? rep?.created_at ?? o.created_at : offer?.status === "accepted" ? offer.accepted_at : rep?.created_at ?? null;
   const steps = [
     { label: "Comandă primită", at: o.ordered_on ?? o.created_at },

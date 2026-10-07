@@ -10,7 +10,7 @@ import { orderCode, SOURCE_LABEL } from "@/lib/order-labels";
 import { SPECIALIZATIONS } from "@/lib/labels";
 import { CrmShell } from "@/components/CrmShell";
 import { ReportList } from "@/components/ReportList";
-import { AssignInspection, CancelInspection } from "./InspectionActions";
+import { AllocateAll, AssignInspection, CancelInspection, NeedsInspection, type AllocRow } from "./InspectionActions";
 import { AssetEditor, RemoveAsset } from "./AssetEditor";
 import { emptyAsset, type AssetForm } from "@/lib/asset-labels";
 import { canAssign, inspectorChoices } from "@/lib/insp-assign";
@@ -54,10 +54,10 @@ function Row({ k, children }: { k: string; children?: React.ReactNode }) {
   return <div><dt>{k}</dt><dd>{children ?? "—"}</dd></div>;
 }
 
-export default async function ReportPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
+export default async function ReportPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; alocare?: string }> }) {
   const { db, user, base } = await staffPage();
   const { id } = await params;
-  const wanted = (await searchParams).tab;
+  const { tab: wanted, alocare } = await searchParams;
   const tab: Tab = TABS.find(([k]) => k === wanted)?.[0] ?? "general";
   const r = await getReport(db, id);
   if (!r) notFound();
@@ -67,14 +67,27 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const main = assets.find((a) => a.is_main) ?? assets[0];
   const [mayAssign, inspectors, inspDocs] = await Promise.all([canAssign(db, user, id), inspectorChoices(db, user.id), docsByAsset(db, id, assets.map((a) => a.id))]);
   const docState = (assetId: string) => ({ cf: !!inspDocs[assetId]?.cf.length, rlv: !!inspDocs[assetId]?.rlv.length });
-  const assetLabel = (a: (typeof assets)[number]) => `${cap(a.type) || "Bun"}${a.full_address ? ` · ${a.full_address}` : ""}`;
+  type A = (typeof assets)[number];
+  const isActive = (a: A) => !!a.inspection_id && !a.inspection_from_glide && (a.inspection_status === "to_schedule" || a.inspection_status === "scheduled");
+  // Who shows the asset: the open task's contact, else the asset's own, else the client.
+  const contactOf = (a: A) => {
+    const task = isActive(a) || a.inspection_status === "done";
+    const own = a.a_contact_kind && a.a_contact_kind !== "client";
+    return {
+      contact_kind: (task && a.contact_kind) || a.a_contact_kind || "client",
+      contact_name: (task && a.contact_name) || a.a_contact_name || (own ? null : r.client_name),
+      contact_phone: (task && a.contact_phone) || a.a_contact_phone || (own ? null : r.client_phone),
+    };
+  };
+  const inspState = (a: A): AllocRow["state"] => a.inspection_status === "done" ? "done" : isActive(a) ? "open" : a.no_inspection ? "none" : "free";
+  const assetLabel = (a: A) => `${cap(a.type) || "Bun"}${a.full_address ? ` · ${a.full_address}` : ""}`;
   const [history, log, suggested, notifyTo] = await Promise.all([
     main ? propertyHistory(db, main.property_id, id) : Promise.resolve([]), reportLog(db, r, assets),
     r.number ? Promise.resolve("") : nextReportNumber(db), r.delivered_at ? Promise.resolve(null) : noticeTarget(db, r.order_id),
   ]);
   // Working stage and deadline (from the offer: working days counted from the inspection).
   const tasks = assets.filter((a) => a.inspection_status && a.inspection_status !== "cancelled");
-  const stage = stageOf(r, { total: tasks.length, done: tasks.filter((a) => a.inspection_status === "done").length });
+  const stage = stageOf(r, { total: tasks.length, done: tasks.filter((a) => a.inspection_status === "done").length, none: assets.filter((a) => a.no_inspection).length });
   const inspectedOn = tasks.map((a) => a.done_at).filter((d): d is string => !!d).sort().pop()?.slice(0, 10) ?? null;
   const due = dueOf(r, inspectedOn);
   const late = !!due && stage !== "delivered" && due < new Date().toISOString().slice(0, 10);
@@ -100,7 +113,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   if (r.recipient_id) recipients.push({ id: r.recipient_id, name: r.bank_name ?? "—", kind: r.recipient_kind, role: "Finanțator / utilizator desemnat", contact: [r.recipient_email, r.recipient_phone, r.recipient_code && `cod ${r.recipient_code}`].filter(Boolean).join(" · ") });
   if (r.client_id) recipients.push({ id: r.client_id, name: r.client_name ?? "—", kind: r.client_kind, role: r.recipient_id ? "Client / proprietar" : "Client / utilizator desemnat", contact: [r.client_phone, r.client_email].filter(Boolean).join(" · "), link: true });
   const checks: [state: "ok" | "miss" | "todo", text: string, note?: string][] = [
-    [main?.sheet_photo || main?.inspection_status === "done" ? "ok" : "todo", "Fișă inspecție bun principal atașată"],
+    main?.no_inspection ? ["ok", "Bun principal fără inspecție", main.no_inspection] : [main?.sheet_photo || main?.inspection_status === "done" ? "ok" : "todo", "Fișă inspecție bun principal atașată"],
     [assets.length > 0 && assets.every((a) => a.value != null) ? "ok" : "todo", "Valori completate pe toate bunurile", assets.length ? `${assets.filter((a) => a.value != null).length} din ${assets.length}` : "niciun bun"],
     ...missing.map((d): ["miss", string, string] => ["miss", `${d.filename} lipsă`, "blochează predarea"]),
     [evaluator ? "ok" : "todo", "Evaluator alocat", evaluator?.name],
@@ -255,6 +268,11 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                           <b className="block">{cap(a.type) || "Bun"}{a.construction === "under_construction" ? " · în construcție" : ""}</b>
                           <span className="muted">{a.full_address ?? a.city ?? "—"}{a.cf_number ? ` · CF ${a.cf_number}` : ""}{a.cad_building && a.cad_building !== a.cf_number ? ` · nr. cad. ${a.cad_building}` : ""}</span>
                           {a.other_reports > 0 && <span className="muted block">evaluat și în alte {a.other_reports} rapoarte</span>}
+                          {(() => {
+                            const st = inspState(a);
+                            const [t, c] = st === "none" ? ["Fără inspecție", ""] : st === "done" ? ["Inspecție realizată", "pillOk"] : st === "open" ? [a.inspection_status === "scheduled" ? "Inspecție programată" : "Inspecție de programat", "pillInfo"] : ["Inspecție nealocată", "pillWarn"];
+                            return <span className="block" style={{ marginTop: 4 }}><span className={`pill ${c}`}><i />{t}</span>{st === "none" && <span className="muted"> {a.no_inspection}</span>}</span>;
+                          })()}
                         </td>
                         <td>{[cap(a.category), cap(a.type)].filter(Boolean).join(" · ") || "—"}</td>
                         <td className="mono">{a.usable_area ? `${a.usable_area.toLocaleString("ro-RO")} mp` : "—"}</td>
@@ -345,7 +363,16 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
       {tab === "inspectii" && (
         <>
           <section className="card flush">
-            <div className="cardHead"><h2>Inspecții</h2></div>
+            <div className="cardHead">
+              <h2>Inspecții</h2>
+              {mayAssign && assets.length > 0 && (
+                <AllocateAll report={r.id} me={user.id} people={inspectors} autoOpen={alocare === "1" && assets.some((a) => inspState(a) === "free")}
+                  rows={assets.map((a): AllocRow => ({
+                    asset: a.id, label: `${cap(a.type) || "Bun"}${a.is_main && assets.length > 1 ? " (principal)" : ""}`, address: a.full_address ?? a.city, state: inspState(a),
+                    inspector: a.inspector_id, none: a.no_inspection, sheet_type: guessSheetType(a.category, a.type), docs: docState(a.id), ...contactOf(a),
+                  }))} />
+              )}
+            </div>
             {assets.length === 0 ? <p className="hint pad">Raportul nu are bunuri, deci nici inspecții.</p> : (
               <div className="tableWrap">
                 <table className="table">
@@ -355,7 +382,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                       const fromApp = !!a.inspection_id && !a.inspection_from_glide;
                       const active = fromApp && (a.inspection_status === "to_schedule" || a.inspection_status === "scheduled");
                       const cancelled = a.inspection_status === "cancelled";
-                      const [ins, insCls] = cancelled ? ["Fără inspecție", ""] : INSPECTION_STATUS[a.inspection_status ?? ""] ?? ["Fără inspecție", ""];
+                      const none = !!a.no_inspection && !active && a.inspection_status !== "done";
+                      const [ins, insCls] = none ? ["Fără inspecție", ""] : cancelled || !a.inspection_status ? ["Nealocată", "pillWarn"] : INSPECTION_STATUS[a.inspection_status] ?? [a.inspection_status, ""];
                       // Glide history counts as done only when it was done; a new task can always replace an unfinished one.
                       const canGive = !active && a.inspection_status !== "done";
                       const contact = cancelled ? null : [a.contact_kind ? CONTACT[a.contact_kind] : null, a.contact_name, a.contact_phone].filter(Boolean).join(" · ");
@@ -363,7 +391,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                         <tr key={a.id}>
                           <td>
                             {cap(a.type) || "Bun"} {a.is_main ? <span className="muted">(principal)</span> : null}
-                            {!cancelled && a.inspection_status !== "done" && (
+                            {!cancelled && !none && a.inspection_status !== "done" && (
                               <span className="block" style={{ display: "flex", gap: 6, marginTop: 4 }}>
                                 {(["cf", "rlv"] as const).map((t) => <span key={t} className={`docTag ${docState(a.id)[t] ? "ok" : "miss"}`}>{docState(a.id)[t] ? "✓" : "!"} {t === "cf" ? "CF" : "RLV"}</span>)}
                               </span>
@@ -371,7 +399,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                             {fromApp && a.instructions && !cancelled && <span className="muted block">Instrucțiuni: {a.instructions}</span>}
                           </td>
                           <td>
-                            {!cancelled && a.inspector ? a.inspector : <span className="muted">nealocat</span>}
+                            {!cancelled && a.inspector ? a.inspector : none ? "—" : <span className="muted">nealocat</span>}
                             {fromApp && !cancelled && a.assigned_by_name && <span className="muted block">alocată de {a.assigned_by_name}{a.assigned_at ? `, ${fmtDate(a.assigned_at)}` : ""}</span>}
                           </td>
                           <td className="mono">
@@ -379,7 +407,12 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                             {active && a.due_on && <span className="muted block">termen {fmtDate(a.due_on)}</span>}
                           </td>
                           <td>{contact || "—"}</td>
-                          <td><span className={`pill ${insCls}`}><i />{ins}</span>{fromApp && a.sheet_status === "draft" && active && <span className="muted block">fișă în lucru</span>}</td>
+                          <td>
+                            <span className={`pill ${insCls}`}><i />{ins}</span>
+                            {none && <span className="muted block">{a.no_inspection}</span>}
+                            {cancelled && !none && <span className="muted block">inspecția a fost anulată</span>}
+                            {fromApp && a.sheet_status === "draft" && active && <span className="muted block">fișă în lucru</span>}
+                          </td>
                           <td>{a.sheet_photo || a.sheet_person ? <a className="link" href={`#fisa-${a.id}`}>Vezi fișa</a> : "—"}</td>
                           {mayAssign && (
                             <td className="r">
@@ -388,11 +421,10 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                                   <AssignInspection report={r.id} me={user.id} people={inspectors} initial={{
                                     asset: a.id, label: `${cap(a.type) || "Bun"}${a.full_address ? ` · ${a.full_address}` : ""}`, inspection: active ? a.inspection_id : null,
                                     inspector: active ? a.inspector_id : null, sheet_type: (active && a.sheet_type) || guessSheetType(a.category, a.type),
-                                    due_on: active ? a.due_on : null, contact_kind: (!cancelled && a.contact_kind) || a.a_contact_kind || "client",
-                                    contact_name: (!cancelled && a.contact_name) || a.a_contact_name || (a.a_contact_kind && a.a_contact_kind !== "client" ? null : r.client_name),
-                                    contact_phone: (!cancelled && a.contact_phone) || a.a_contact_phone || (a.a_contact_kind && a.a_contact_kind !== "client" ? null : r.client_phone), instructions: active ? a.instructions : null, scheduled: a.inspection_status === "scheduled",
+                                    due_on: active ? a.due_on : null, ...contactOf(a), instructions: active ? a.instructions : null, scheduled: a.inspection_status === "scheduled",
                                     docs: docState(a.id),
                                   }} />
+                                  {none && <NeedsInspection report={r.id} asset={a.id} />}
                                   {active && <CancelInspection report={r.id} inspection={a.inspection_id!} who={a.inspector ?? "inspector"} />}
                                 </span>
                               )}

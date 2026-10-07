@@ -16,9 +16,7 @@ import { isExpired, money, offerDocs, offerDraft, offerForOrder, offerTotals, ty
 import { offerLink } from "@/lib/offer-emails";
 import { OfferEditor } from "./OfferEditor";
 import { DossierOpen } from "./DossierOpen";
-import { guessDocType } from "@/lib/insp-docs";
 import { orderProgress } from "@/lib/delivery";
-import { inspectorChoices } from "@/lib/insp-assign";
 
 export const metadata: Metadata = { title: "Comandă | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -48,7 +46,6 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
       .all<{ id: string; name: string; anevar_no: string | null; role: string; duties: string | null }>()).results
       .map((e) => ({ ...e, role: hasDuty(e, "evaluator") ? "evaluator" : e.role }))
     : [];
-  const inspectors = !o.glide_id && !reports.length ? await inspectorChoices(db, user.id) : [];
   // Processing: the order becomes a report file. Portal / website orders open it when the offer is signed (or by hand,
   // e.g. accepted by phone); bank and collaboration orders are processed straight away under their contract.
   const dossier = reports[0] ?? null;
@@ -126,35 +123,30 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
               <div className="cardHead">
                 <h2>Procesare</h2>
                 <span className={`pill ${dossier ? "pillOk" : offer?.status === "accepted" || contractOrder ? "pillWarn" : ""}`}><i />
-                  {dossier ? "Dosar deschis" : offer?.status === "accepted" || contractOrder ? "De deschis dosarul" : "Așteaptă acceptarea ofertei"}</span>
+                  {dossier ? "Raport creat" : offer?.status === "accepted" || contractOrder ? "De creat raportul" : "Așteaptă acceptarea ofertei"}</span>
               </div>
               {dossier ? (
                 <div className="actions">
-                  <p className="hint" style={{ margin: 0 }}>Comanda se lucrează în dosarul {dossier.number ? `nr. ${dossier.number}` : dossier.label ?? ""}: inspecție, redactare, verificare și livrare.</p>
-                  <a className="btn btnNavy btnSm" href={`${base}/rapoarte/${dossier.id}`}>Deschide dosarul →</a>
+                  <p className="hint" style={{ margin: 0 }}>Comanda se lucrează în raportul {dossier.number ? `nr. ${dossier.number}` : dossier.label ?? ""}: inspecție, redactare, verificare și livrare.</p>
+                  <a className="btn btnNavy btnSm" href={`${base}/rapoarte/${dossier.id}`}>Deschide raportul →</a>
                 </div>
               ) : (
                 <div className="actions">
                   <p className="hint" style={{ margin: 0, flex: "1 1 260px" }}>
-                    {contractOrder ? `Comandă ${o.source === "bank" ? `${o.bank ?? "bancă"}${o.contract_number ? ` · contract cadru ${o.contract_number}` : ""}` : `colaborare ${o.collab_firm ?? ""}`}: fără ofertă. Completezi clientul și bunurile (din captura aplicației băncii sau manual) și se deschide dosarul.`
-                      : offer?.status === "accepted" ? "Oferta e semnată. Deschide dosarul și alocă evaluatorul și inspecția."
-                      : "Dosarul se deschide automat când clientul semnează oferta, pe evaluatorul din ofertă. Dacă a acceptat pe alt canal (telefon, email), îl poți deschide acum."}
+                    {contractOrder ? `Comandă ${o.source === "bank" ? `${o.bank ?? "bancă"}${o.contract_number ? ` · contract cadru ${o.contract_number}` : ""}` : `colaborare ${o.collab_firm ?? ""}`}: fără ofertă. Completezi clientul și bunurile (din captura aplicației băncii sau manual) și se creează raportul.`
+                      : offer?.status === "accepted" ? "Oferta e semnată. Creează raportul și alocă evaluatorul; inspecțiile le aloci apoi pe raport, pentru fiecare bun."
+                      : "Raportul se creează automat când clientul semnează oferta, pe evaluatorul din ofertă. Dacă a acceptat pe alt canal (telefon, email), îl poți crea acum."}
                   </p>
                   {contractOrder ? (
                     <a className="btn btnGold" href={`${base}/comenzi/${o.id}/procesare`}>Procesează: client, bunuri, echipă →</a>
                   ) : <DossierOpen
                     order={o.id} base={base} me={user.id} evaluator={offer?.evaluator_id ?? null}
                     evaluators={evaluators.map((e) => ({ id: e.id, name: e.name, role: e.role }))}
-                    inspectors={inspectors.map((x) => ({ id: x.id, name: x.name, role: x.role }))}
-                    label={contractOrder || offer?.status === "accepted" ? "Deschide dosarul" : "Deschide dosarul acum"}
+                    label={contractOrder || offer?.status === "accepted" ? "Creează raportul" : "Creează raportul acum"}
                     primary={contractOrder || offer?.status === "accepted"}
-                    hint={`${orderWhat(o)}${o.address ? ` · ${orderPlace(o)}` : ""} · ${o.client_name ?? ""}. Evaluatorul principal primește dosarul pe email și alocă inspecția (sau o aloci acum).`}
-                    warn={!contractOrder && offer?.status !== "accepted" ? "Oferta nu este semnată în portal. Deschide dosarul doar dacă clientul a acceptat pe alt canal." : null}
+                    hint={`${orderWhat(o)}${o.address ? ` · ${orderPlace(o)}` : ""} · ${o.client_name ?? ""}. Evaluatorul principal primește raportul pe email.`}
+                    warn={!contractOrder && offer?.status !== "accepted" ? "Oferta nu este semnată în portal. Creează raportul doar dacă clientul a acceptat pe alt canal." : null}
                     dueDefault={contractOrder ? null : undefined}
-                    docs={{
-                      cf: docs.some((d) => d.kind === "cf" || (d.kind === "other" && guessDocType(d.filename) === "cf")),
-                      rlv: docs.some((d) => ["plan", "cadastre", "site_plan"].includes(d.kind) || (d.kind === "other" && guessDocType(d.filename) === "rlv")),
-                    }}
                   />}
                 </div>
               )}

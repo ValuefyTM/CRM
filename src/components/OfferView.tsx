@@ -127,7 +127,7 @@ export function OfferView({ offer: o, order, preview = false, toolbar, delivered
               <ul className="ofBullets">
                 <li>Raport de evaluare semnat electronic (PDF)</li>
                 <li>Anexe: fotografii, comparabile, documente</li>
-                <li>Acces la dosar în portalul client</li>
+                <li>Acces la raport în portalul client</li>
               </ul>
             </div>
           </div>

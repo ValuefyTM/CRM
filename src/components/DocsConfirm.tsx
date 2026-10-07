@@ -14,7 +14,7 @@ export function DocsConfirm({ have, checked, onChange, hint }: { have: DocState;
   if (!miss.length) return <p className="docsOk">✓ Extrasul CF și releveul sunt încărcate; inspectorul le vede în aplicație.</p>;
   return (
     <div className="docsWarn">
-      <p><b>Lipsesc {miss.join(" și ")}.</b> Inspectorul are nevoie de ele la vizionare. {hint ?? "Le poți încărca în dosar, la „Documente & Livrare”; apar singure în aplicația de inspecții."}</p>
+      <p><b>Lipsesc {miss.join(" și ")}.</b> Inspectorul are nevoie de ele la vizionare. {hint ?? "Le poți încărca în raport, la „Documente & Livrare”; apar singure în aplicația de inspecții."}</p>
       <label className="check"><input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} /><span>Aloc inspecția fără {miss.length > 1 ? "ele" : miss[0] === "releveul" ? "releveu" : "extrasul CF"}</span></label>
     </div>
   );

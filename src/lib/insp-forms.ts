@@ -308,3 +308,6 @@ export function featureColumns(t: SheetType, answers: Answers): Record<string, s
 export const FEATURE_COLUMNS = Array.from(
   new Set(SHEET_TYPES.flatMap(([t]) => Object.keys(featureColumns(t, {})))),
 );
+
+/** Reasons an asset is valued without an inspection in the CRM. */
+export const NO_INSPECTION_REASONS = ["Evaluare desktop, fără vizionare", "Inspecție făcută anterior", "Inspecție făcută de bancă / terț", "Inspecție în afara CRM"];

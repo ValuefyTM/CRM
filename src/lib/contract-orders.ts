@@ -3,7 +3,8 @@
 // statement (borderou) — and opens its report file in the same step.
 import { now, uuid } from "./db";
 import { audit } from "./auth";
-import { PROPERTY_TYPES } from "./order-labels";
+import { propertyType } from "./process-order";
+import type { AssetInput } from "./asset-labels";
 
 export type ContractChoice = { id: string; number: string | null; bank_id: string | null; bank: string; bank_code: string | null; fee: number | null; report_type: string | null; purpose: string | null };
 export type CollabChoice = { id: string; number: string | null; firm: string; share: number | null };
@@ -23,15 +24,18 @@ const amount = (v: unknown) => {
   return Number.isFinite(n) && n >= 0 && n < 1e7 ? Math.round(n * 100) / 100 : null;
 };
 
-/** Registers the order of a bank (framework contract) or of a collaborating firm. Returns its id. */
-export async function createContractOrder(db: D1Database, actor: string, b: Record<string, unknown>) {
+/**
+ * Registers the order of a bank (framework contract) or of a collaborating firm, with its assets (the first is the
+ * main one: its place goes on the order). Returns its id.
+ */
+export async function createContractOrder(db: D1Database, actor: string, b: Record<string, unknown>, assets: AssetInput[]) {
   const kind = b.kind === "collab" ? "collab" : "bank";
-  const type = PROPERTY_TYPES.some(([k]) => k === b.property_type) ? (b.property_type as string) : null;
   const client = str(b.client_name, 160);
-  const city = str(b.city, 80), address = str(b.address, 200);
   if (!client) return { ok: false as const, error: "Completează numele clientului." };
-  if (!type) return { ok: false as const, error: "Alege tipul proprietății." };
-  if (!city || !address) return { ok: false as const, error: "Completează localitatea și adresa proprietății." };
+  const main = assets[0];
+  const type = propertyType(main), city = main.city ?? "", address = main.full_address ?? "";
+  const contactName = main.contact_kind && main.contact_kind !== "client" ? main.contact_name : null;
+  const contactPhone = contactName ? main.contact_phone : null;
   const ordered = /^\d{4}-\d{2}-\d{2}$/.test(str(b.ordered_on, 10)) ? str(b.ordered_on, 10) : now().slice(0, 10);
   let fee = amount(b.fee);
   let contract: ContractChoice | null = null, collab: CollabChoice | null = null;
@@ -53,9 +57,9 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
       contact_name, contact_phone, inspection_notes, notes, status, contract_id, collaboration_id, bank_id, bank_branch, bank_ref, report_type, fee, share, fee_net,
       ordered_on, viewed_at, viewed_by, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'received', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(id, kind, actor, type, city, address, amount(b.surface_area) || null, str(b.purpose, 120) || contract?.purpose || (kind === "bank" ? "Credit bancar" : null),
+    .bind(id, kind, actor, type, city || null, address || null, main.usable_area || null, str(b.purpose, 120) || contract?.purpose || (kind === "bank" ? "Credit bancar" : null),
       contract ? contract.bank_code || contract.bank : null, b.urgent === true ? 1 : 0, client, str(b.client_phone, 40) || null, str(b.client_email, 160).toLowerCase() || null,
-      str(b.contact_name, 120) || null, str(b.contact_phone, 40) || null, str(b.inspection_notes, 1000) || null, str(b.notes, 2000) || null,
+      contactName, contactPhone, str(b.inspection_notes, 1000) || null, str(b.notes, 2000) || null,
       contract?.id ?? null, collab?.id ?? null, contract?.bank_id ?? null, str(b.bank_branch, 120) || null, str(b.bank_ref, 60) || null,
       str(b.report_type, 120) || contract?.report_type || null, fee, share, fee != null && share != null ? Math.round(fee * share * 100) / 100 : null,
       ordered, t, actor, t, t)

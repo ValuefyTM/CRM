@@ -25,10 +25,11 @@ export type Stage = (typeof STAGE_ORDER)[number];
  * Stage of a report: delivered once handed over; review when sent to the verifier; drafting when set by hand or once
  * every inspection of the report is done (or there is nothing to inspect); otherwise waiting for the inspection.
  */
-export function stageOf(r: { stage: string | null; delivered_at: string | null; status: string }, insp: { total: number; done: number }): Stage {
+/** `insp`: inspection tasks (not cancelled) and done; `none`: assets valued without an inspection. */
+export function stageOf(r: { stage: string | null; delivered_at: string | null; status: string }, insp: { total: number; done: number; none?: number }): Stage {
   if (r.delivered_at || r.status === "done") return "delivered";
   if (r.stage === "review") return "review";
-  if (r.stage === "drafting" || (insp.total > 0 && insp.done === insp.total)) return "drafting";
+  if (r.stage === "drafting" || (insp.total > 0 && insp.done === insp.total) || (insp.total === 0 && (insp.none ?? 0) > 0)) return "drafting";
   return "inspection";
 }
 
@@ -151,25 +152,25 @@ export async function openDossier(db: D1Database, orderId: string, actor: { id: 
   await audit(db, who, "report.opened", "report", reportId, accepted ? `din oferta ${accepted.number}` : o.source === "bank" ? "comandă bancă" : o.source === "collab" ? "colaborare" : "din comandă");
   await audit(db, who, "order.dossier", "order", o.id, reportId);
 
-  if (evaluator && evaluator !== actor?.id) await notifyEvaluator(db, reportId, evaluator, label || "dosar nou", actor?.name ?? null, !!accepted);
+  if (evaluator && evaluator !== actor?.id) await notifyEvaluator(db, reportId, evaluator, label || "raport nou", actor?.name ?? null, !!accepted);
   return { ok: true as const, id: reportId, created: true, assetId };
 }
 
 async function notifyEvaluator(db: D1Database, reportId: string, userId: string, label: string, by: string | null, fromOffer: boolean) {
   const u = await db.prepare("SELECT email, COALESCE(NULLIF(name, ''), email) AS name FROM users WHERE id = ? AND status <> 'disabled'").bind(userId).first<{ email: string; name: string }>();
   if (!u) return;
-  const link = await appUrl("crm", `/rapoarte/${reportId}`);
-  const why = fromOffer ? "Clientul a acceptat oferta, iar dosarul s-a deschis pe numele tău" : `${by ?? "Un coleg"} ți-a dat dosarul`;
+  const link = await appUrl("crm", `/rapoarte/${reportId}?tab=inspectii&alocare=1`);
+  const why = fromOffer ? "Clientul a acceptat oferta, iar raportul s-a creat pe numele tău" : `${by ?? "Un coleg"} ți-a dat raportul`;
   await sendEmail({
     to: u.email,
-    subject: `Dosar nou: ${label}`,
-    text: `${why}: ${label}.\nAlocă inspecția și urmărește raportul din CRM: ${link}`,
+    subject: `Raport nou: ${label}`,
+    text: `${why}: ${label}.\nAlocă inspecțiile și urmărește raportul din CRM: ${link}`,
     html: layout({
       eyebrow: "CRM VALUEFY",
-      title: "Ai un dosar nou",
+      title: "Ai un raport nou",
       body: `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A66">${esc(why)}: <strong style="color:#17173A">${esc(label)}</strong>.</p>
-<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A66">Pasul următor: alocă inspecția (ție sau unui coleg) din pagina raportului.</p>`,
-      button: { label: "Deschide dosarul →", url: link },
+<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A66">Pasul următor: alocă inspecțiile pentru fiecare bun (ție sau unui coleg) sau marchează bunurile evaluate fără inspecție.</p>`,
+      button: { label: "Deschide raportul →", url: link },
       foot: "Primești acest email pentru că ești evaluatorul principal al raportului.",
     }),
   });

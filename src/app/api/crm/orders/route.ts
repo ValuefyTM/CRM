@@ -1,13 +1,14 @@
 import { err, json, staffApi } from "@/lib/api";
 import { createContractOrder } from "@/lib/contract-orders";
 import { openDossier } from "@/lib/dossier";
-import { assignInspection } from "@/lib/insp-assign";
+import { fillReportAssets, parseAssets } from "@/lib/process-order";
 
 const id_ = (v: unknown) => (typeof v === "string" && /^[\w-]{1,80}$/.test(v) ? v : null);
+const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
 /**
- * New work under a framework contract (bank) or a collaboration: registers the order (statement line) and opens its
- * report file at once — evaluator, verifier, deadline and, optionally, the inspection.
+ * New work under a framework contract (bank) or a collaboration: registers the order (statement line) with its assets
+ * and creates its report at once — evaluator, verifier, deadline. The inspections are given afterwards, on the report.
  */
 export async function POST(req: Request) {
   const a = await staffApi();
@@ -15,21 +16,16 @@ export async function POST(req: Request) {
   const b = await json(req);
   const evaluator = id_(b.evaluator_id);
   if (!evaluator) return err("Alege evaluatorul principal.");
-  const o = await createContractOrder(a.db, a.user.id, b);
+  const assets = parseAssets(b.assets);
+  if (!assets.ok) return err(assets.error);
+  const o = await createContractOrder(a.db, a.user.id, b, assets.assets);
   if (!o.ok) return err(o.error);
   const due = typeof b.due_on === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.due_on) ? b.due_on : null;
   const r = await openDossier(a.db, o.id, { id: a.user.id, name: a.user.name }, { evaluator_id: evaluator, verifier_id: id_(b.verifier_id), due_on: due });
   if (!r.ok) return err(r.error);
-  let inspectionError: string | null = null;
-  const inspector = id_(b.inspector_id);
-  if (inspector && r.created && r.assetId) {
-    const i = await assignInspection(a.db, a.user, r.id, {
-      asset: r.assetId, inspector, due_on: typeof b.inspection_due === "string" ? b.inspection_due : "",
-      contact_kind: typeof b.contact_name === "string" && b.contact_name.trim() ? "other" : "client",
-      contact_name: (typeof b.contact_name === "string" && b.contact_name.trim()) || b.client_name, contact_phone: (typeof b.contact_phone === "string" && b.contact_phone.trim()) || b.client_phone,
-      instructions: b.inspection_notes, confirm_missing: b.confirm_missing === true,
-    });
-    if (!i.ok) inspectionError = i.error;
+  if (r.created && r.assetId) {
+    const f = await fillReportAssets(a.db, a.user.id, r.id, r.assetId, assets.assets, { name: str(b.client_name, 160), phone: str(b.client_phone, 40) });
+    if (!f.ok) return err(f.error);
   }
-  return Response.json({ ok: true, order: o.id, report: r.id, inspectionError });
+  return Response.json({ ok: true, order: o.id, report: r.id });
 }
