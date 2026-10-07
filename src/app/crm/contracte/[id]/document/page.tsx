@@ -285,7 +285,7 @@ export default async function ContractDocument({ params, searchParams }: { param
             <table className="cdTable">
               <thead><tr><th>Nr.</th><th>Serviciu</th><th style={{ textAlign: "right" }}>Preț (lei, fără TVA)</th></tr></thead>
               <tbody>
-                {d.annexes.map((x) => <tr key={x.n}><td>{x.n}.</td><td>{x.reportType ?? "Raport de evaluare"}{x.purpose ? ` – ${x.purpose}` : ""} (Anexa 1.{x.n})</td><td style={{ textAlign: "right" }}>{money(x.fee)}</td></tr>)}
+                {d.annexes.map((x) => <tr key={x.n}><td>{x.n}.</td><td>{x.reportType ?? "Raport de evaluare"}{x.services.movable && !x.services.immovable ? " – bunuri mobile" : x.services.immovable && !x.services.movable ? " – bunuri imobile" : ""}{x.purpose ? ` – ${x.purpose}` : ""} (Anexa 1.{x.n})</td><td style={{ textAlign: "right" }}>{money(x.fee)}</td></tr>)}
                 <tr><td /><td><b>Total</b></td><td style={{ textAlign: "right" }}><b>{money(d.total)} lei + TVA</b></td></tr>
               </tbody>
             </table>

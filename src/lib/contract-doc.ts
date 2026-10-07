@@ -70,7 +70,10 @@ export async function contractDoc(db: D1Database, id: string) {
     return {
       n: n + 1, reportId: r.id || null, number: r.number, label: r.label, purpose, reportType: r.report_type ?? k.report_type, fee: r.fee,
       assets: docAssets, terms: { ...defaults, ...saved } as ReportTerms, defaults, saved,
-      services: { immovable: !movableOnly && (k.valuation_types ?? "EPI").includes("EPI"), movable: (k.valuation_types ?? "").includes("EBM") || docAssets.some((a) => a.movable) },
+      // Each annex ticks the services of its own assets (movable and real estate are valued in separate reports).
+      services: docAssets.length
+        ? { immovable: docAssets.some((a) => !a.movable), movable: docAssets.some((a) => a.movable) }
+        : { immovable: (k.valuation_types ?? "EPI").includes("EPI"), movable: (k.valuation_types ?? "").includes("EBM") },
     };
   });
 

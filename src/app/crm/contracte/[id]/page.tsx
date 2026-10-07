@@ -142,7 +142,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
           </section>
           <section className="card">
             <h2>Facturare</h2>
-            <p className="hint" style={{ margin: 0 }}>{framework ? "Pe borderoul lunar al băncii." : "Factura se va emite din Oblio, pe baza contractului (în curând)."}</p>
+            <p className="hint" style={{ margin: 0 }}>{framework ? "Pe borderoul lunar al băncii." : "O singură factură pe contract, cu câte o linie pentru fiecare raport (ca în Anexa 2), emisă din Oblio (în curând)."}</p>
           </section>
           <History log={log} />
         </div>

@@ -1378,3 +1378,4 @@ div.dbKpi::after { content: none; }
 .cdNote { color: #8a6a1c; font-size: 8pt; }
 .ctRep { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
 .ctPickAssets { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; font-weight: 400; }
+.ctMixed { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 4px 0 8px; }

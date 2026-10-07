@@ -135,6 +135,16 @@ export async function openDossier(db: D1Database, orderId: string, actor: { id: 
   let specs: ReportSpec[] = [];
   try { specs = o.reports_json ? (JSON.parse(o.reports_json) as ReportSpec[]).filter((x) => x && Array.isArray(x.assets)) : []; } catch { specs = []; }
   const s0 = specs[0];
+  // Direct work keeps its assets on the order until the report opens.
+  let list: AssetInput[] = [];
+  try { list = o.assets_json ? (JSON.parse(o.assets_json) as AssetInput[]) : []; } catch { /* malformed: the main asset stays as made from the order */ }
+  // Movable assets (EBM) and real estate (EPI) go in separate reports: each report's type follows its own assets.
+  const kindOf = (idx: number[] | undefined) => {
+    const own = (idx ?? list.map((_, i) => i)).map((i) => list[i]).filter(Boolean);
+    if (!own.length) return /mobil/i.test(o.report_type ?? "") && !o.property_type ? "EBM" : "EPI";
+    const mov = own.some((a) => a.category === "BUN MOBIL"), imm = own.some((a) => a.category !== "BUN MOBIL");
+    return mov && imm ? "EPI,EBM" : mov ? "EBM" : "EPI";
+  };
 
   // Property and the asset valued (the main one); more assets can be added on the report.
   const [category, type] = PROPERTY[o.property_type ?? ""] ?? [null, (o.report_type ?? "BUN").toUpperCase()];
@@ -151,8 +161,9 @@ export async function openDossier(db: D1Database, orderId: string, actor: { id: 
   const insertReport = (id: string, sp: ReportSpec | undefined, reportLabel: string) =>
     db.prepare(`INSERT INTO reports (id, label, issuer_id, contract_id, order_id, client_id, recipient_id, bank_branch, report_type, valuation_types, purpose, value_type,
         received_on, fee, status, reporting_year, referral_user_id, notes, term_days, due_on, offer_id, opened_by, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'EPI', ?, ?, ?, ?, 'in_progress', ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(id, reportLabel || null, issuer?.id ?? null, o.contract_id, o.id, clientId, recipientId, o.bank_branch, sp?.report_type || o.report_type, sp?.purpose || o.purpose,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'in_progress', ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(id, reportLabel || null, issuer?.id ?? null, o.contract_id, o.id, clientId, recipientId, o.bank_branch, sp?.report_type || o.report_type,
+        specs.length ? kindOf(sp?.assets) : "EPI", sp?.purpose || o.purpose,
         accepted?.value_type ?? null, day, (several ? sp?.fee : null) ?? (several ? null : sp?.fee ?? fee) ?? null, Number(day.slice(0, 4)), o.source === "partner" ? o.created_by : null,
         opts.notes ?? null, sp?.term_days ?? term ?? null, opts.due_on ?? null, accepted?.id ?? null, actor?.id ?? null, t, t);
   const members = (id: string) => [
@@ -181,14 +192,12 @@ export async function openDossier(db: D1Database, orderId: string, actor: { id: 
     const purposes = [...new Set((several ? specs.map((x) => x.purpose || o.purpose) : [o.purpose]).filter(Boolean))].join(" + ") || null;
     contract = await createClassicContract(db, who, {
       client_id: clientId, fee: total ?? null, purpose: purposes, report_type: s0?.report_type || o.report_type || "Raport de evaluare",
-      valuation_types: category === null && /mobil/i.test(o.report_type ?? "") ? "EBM" : "EPI", signed_on: accepted?.accepted_at?.slice(0, 10) ?? (o.source === "direct" ? o.ordered_on : null) ?? day,
+      valuation_types: list.length ? kindOf(undefined) : category === null && /mobil/i.test(o.report_type ?? "") ? "EBM" : "EPI", signed_on: accepted?.accepted_at?.slice(0, 10) ?? (o.source === "direct" ? o.ordered_on : null) ?? day,
       notes: accepted ? `Generat la acceptarea ofertei ${accepted.number}.` : "Generat la procesarea comenzii.",
     });
     await db.prepare("UPDATE reports SET contract_id = ? WHERE id = ?").bind(contract.id, reportId).run();
   }
-  // Direct work keeps its assets on the order until the report opens: the main one completes the asset made above.
-  let list: AssetInput[] = [];
-  try { list = o.assets_json ? (JSON.parse(o.assets_json) as AssetInput[]) : []; } catch { /* malformed: the main asset stays as made from the order */ }
+  // The main asset made above is completed with the first asset of the order.
   const by = actor?.id ?? "system";
   const client = { name: o.client_name ?? "", phone: o.client_phone ?? "" };
   if (!specs.length) {

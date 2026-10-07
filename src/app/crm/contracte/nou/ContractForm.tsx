@@ -136,6 +136,13 @@ export function ContractForm(p: {
   const usedAssets = newAssets ? assets : [];
   const total = reps.reduce((n, r) => n + (parseFloat(r.fee.replace(",", ".")) || 0), 0);
   const assetName = (a: AssetForm, i: number) => `${i + 1}. ${a.type ? a.type.charAt(0) + a.type.slice(1).toLowerCase() : "Bun nou"}${a.city || a.full_address ? ` · ${a.full_address || a.city}` : ""}`;
+  const isMov = (n: number) => usedAssets[n]?.category === "BUN MOBIL";
+  const mixed = (r: Rep) => r.assets.some(isMov) && r.assets.some((n) => !isMov(n));
+  // Movable assets and real estate are valued in separate reports (EBM / EPI) on the same contract, one invoice with a line each.
+  const split = (i: number) => {
+    const r = reps[i];
+    setReps([...reps.slice(0, i), { ...r, assets: r.assets.filter((n) => !isMov(n)) }, { ...r, fee: "", assets: r.assets.filter(isMov), shared: [] }, ...reps.slice(i + 1)]);
+  };
   const addAssetTo = (n: number) => setReps(reps.map((r) => (r.assets.includes(n - 1) && !r.assets.includes(n) ? { ...r, assets: [...r.assets, n] } : r)));
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
@@ -270,6 +277,12 @@ export function ContractForm(p: {
                   <label className="field">Onorariu fără TVA (lei)<input className="input" inputMode="decimal" value={r.fee} onChange={(e) => setRep(i, { fee: e.target.value })} placeholder={mode === "offer" ? "opțional" : "ex. 1500"} /></label>
                   <label className="field">Termen (zile lucrătoare)<input className="input" inputMode="numeric" value={r.term_days} onChange={(e) => setRep(i, { term_days: e.target.value })} /></label>
                 </div>
+                {mixed(r) && (
+                  <div className="note ctMixed">
+                    Raportul are și bunuri mobile, și imobile. Se evaluează în rapoarte separate (EBM / EPI), pe același contract, cu o singură factură cu câte o linie pe raport.
+                    <button type="button" className="btn btnNavy btnSm" onClick={() => split(i)}>Împarte: imobile / mobile</button>
+                  </div>
+                )}
                 <div className="field">Bunuri evaluate în acest raport
                   <div className="ctPickAssets">
                     {usedAssets.map((a, n) => {
