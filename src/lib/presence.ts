@@ -23,5 +23,9 @@ export function presenceOf(lastSeen: string | null | undefined, at = Date.now())
   return { presence: "offline", seen: `Văzut ${when}` };
 }
 
-/** Adds `presence` and `seen` to people read with their `last_seen_at`. */
-export const withPresence = <T extends { last_seen_at?: string | null }>(list: T[]) => list.map((p) => ({ ...p, ...presenceOf(p.last_seen_at) }));
+/** URL of a user's profile photo (null without one); the upload time keeps browsers from showing an old one. */
+export const photoUrl = (id: string, avatarAt: string | null | undefined) => (avatarAt ? `/api/crm/users/${encodeURIComponent(id)}/avatar?v=${Date.parse(avatarAt) || 0}` : null);
+
+/** Adds `presence`, `seen` and `photo` to people read with their `last_seen_at` (and `avatar_at`). */
+export const withPresence = <T extends { id?: string; last_seen_at?: string | null; avatar_at?: string | null }>(list: T[]) =>
+  list.map((p) => ({ ...p, ...presenceOf(p.last_seen_at), photo: p.id ? photoUrl(p.id, p.avatar_at) : null }));

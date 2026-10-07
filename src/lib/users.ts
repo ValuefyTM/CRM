@@ -9,19 +9,42 @@ export * from "./labels";
 import { CLIENT_TYPES, DUTIES, ENGAGEMENTS, INTERNAL_ROLES, SPECIALIZATIONS } from "./labels";
 
 export type User = {
-  id: string; kind: Kind; email: string; name: string; phone: string | null; role: string; status: "invited" | "active" | "disabled";
+  id: string; kind: Kind; email: string; name: string; phone: string | null; role: string; status: "invited" | "active" | "disabled" | "deleted";
   partner_id: string | null; partner_name: string | null; partner_status: string | null;
   engagement: string | null; anevar_no: string | null; specializations: string | null; coverage: string | null; duties: string | null;
   client_type: string | null; company: string | null; cui: string | null; city: string | null; notes: string | null;
   entity_id?: string | null; created_by: string | null; invited_at: string | null; activated_at: string | null; last_login_at: string | null; created_at: string; updated_at: string;
-  last_seen_at?: string | null;
+  last_seen_at?: string | null; avatar_at?: string | null;
 };
 
 /** Owners and administrators manage the team and can suspend partner firms. */
 export const isAdmin = (u: Pick<User, "kind" | "role">) => u.kind === "internal" && (u.role === "owner" || u.role === "admin");
 
+/** Who may change an account: partner and client accounts any team member; team accounts their owner or an administrator (owners only by owners). */
+export const canManageUser = (me: Pick<User, "id" | "kind" | "role">, u: Pick<User, "id" | "kind" | "role">) =>
+  u.kind !== "internal" || u.id === me.id || (isAdmin(me) && (u.role !== "owner" || me.role === "owner"));
+
+/**
+ * Deletes an account. One with no work behind it goes for good; one that appears in reports, orders or inspections
+ * keeps its name there (status "deleted", email freed so it can be used again) and leaves every list and choice.
+ */
+export async function deleteUser(db: D1Database, u: User) {
+  await db.batch([
+    db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(u.id),
+    db.prepare("DELETE FROM auth_codes WHERE lower(email) = lower(?)").bind(u.email),
+  ]);
+  try {
+    await db.prepare("DELETE FROM users WHERE id = ?").bind(u.id).run();
+    return { removed: true as const };
+  } catch {
+    await db.prepare(`UPDATE users SET status = 'deleted', email = ?, avatar_at = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`)
+      .bind(`${u.email}#sters-${u.id.slice(-6)}`, u.id).run();
+    return { removed: false as const };
+  }
+}
+
 /** Account and (for partner users) firm are not blocked. Invited partners and clients still have to accept the invitation. */
-export const canSignIn = (u: User) => u.status !== "disabled" && (u.kind !== "partner" || u.partner_status === "active");
+export const canSignIn = (u: User) => u.status !== "disabled" && u.status !== "deleted" && (u.kind !== "partner" || u.partner_status === "active");
 
 const SELECT = "SELECT u.*, p.name AS partner_name, p.status AS partner_status FROM users u LEFT JOIN partners p ON p.id = u.partner_id";
 
@@ -34,12 +57,12 @@ export async function findUser(db: D1Database, kind: Kind, email: string) {
 }
 
 export async function listUsers(db: D1Database) {
-  const { results } = await db.prepare(`${SELECT} ORDER BY u.created_at DESC LIMIT 5000`).all<User>();
+  const { results } = await db.prepare(`${SELECT} WHERE u.status <> 'deleted' ORDER BY u.created_at DESC LIMIT 5000`).all<User>();
   return results;
 }
 
 export async function partnerPeople(db: D1Database, partnerId: string) {
-  const { results } = await db.prepare(`${SELECT} WHERE u.kind = 'partner' AND u.partner_id = ? ORDER BY u.role = 'owner' DESC, u.created_at`).bind(partnerId).all<User>();
+  const { results } = await db.prepare(`${SELECT} WHERE u.kind = 'partner' AND u.partner_id = ? AND u.status <> 'deleted' ORDER BY u.role = 'owner' DESC, u.created_at`).bind(partnerId).all<User>();
   return results;
 }
 

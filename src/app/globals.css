@@ -924,3 +924,18 @@ a.navItem[aria-current="page"] .navBadge { padding: 1px 6px; border-radius: 6px;
 .meMore { width: 28px; height: 28px; }
 .meMenu button { height: 34px; font-size: 12.5px; }
 .side .me { padding: 8px 0 12px; bottom: -12px; margin-bottom: -12px; }
+.pAvatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+.iconBtn { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; border: 1px solid var(--line); background: #fff; color: var(--muted); cursor: pointer; transition: all 0.15s; }
+.iconBtn:hover { color: var(--ink); border-color: var(--acc); background: var(--acc-soft); }
+.iconBtn.danger:hover { color: var(--err); border-color: #f1c7c2; background: var(--err-bg); }
+.rowActions { display: inline-flex; gap: 6px; justify-content: flex-end; }
+.profileCard { gap: 12px; }
+.profileTop { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.profilePic { position: relative; }
+.profileCam { position: absolute; right: -4px; bottom: -4px; width: 32px; height: 32px; border-radius: 50%; border: 3px solid #fff; background: var(--ink); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.profileCam:hover { background: var(--acc); color: var(--ink); }
+.profileText { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.profileText h2 { margin: 0; font-size: 20px; letter-spacing: -0.02em; }
+.profileText h2::before { display: none; }
+.profilePic .pDot { min-width: 16px; min-height: 16px; width: 18px; height: 18px; border-width: 3px; }
+.profilePic .pDot { top: 4px; right: 4px; bottom: auto; }

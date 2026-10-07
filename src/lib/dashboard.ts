@@ -2,7 +2,7 @@
 // how the team is loaded, and the trend over the last 12 months.
 import { dueOf, stageOf, type Stage } from "./dossier";
 import { countNewLeads } from "./leads";
-import { presenceOf, type Presence } from "./presence";
+import { photoUrl, presenceOf, type Presence } from "./presence";
 import { dutiesOf } from "./labels";
 
 const OPEN = "r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL";
@@ -19,7 +19,7 @@ export type OpenReport = {
 };
 export type Alert = { key: string; tone: "err" | "warn" | "info"; title: string; hint: string; count: number; href: string; items: { label: string; sub?: string; href: string }[] };
 export type TeamRow = {
-  id: string; name: string; role: string; presence: Presence; seen: string; open: number; drafting: number; late: number; delivered: number; inspections: number;
+  id: string; name: string; role: string; presence: Presence; seen: string; photo: string | null; open: number; drafting: number; late: number; delivered: number; inspections: number;
 };
 export type Month = { ym: string; n: number; fees: number; prevN: number; prevFees: number };
 
@@ -65,12 +65,12 @@ export async function dashboard(db: D1Database, base: string) {
       .bind(ago(2)).all<{ id: string; report_id: string; assigned_at: string; inspector: string | null; label: string | null }>(),
     db.prepare(`SELECT d.report_id, d.filename, r.label FROM report_documents d JOIN reports r ON r.id = d.report_id WHERE d.status = 'missing' AND ${OPEN} ORDER BY d.requested_at`)
       .all<{ report_id: string; filename: string; label: string | null }>(),
-    db.prepare(`SELECT i.id, i.report_id, i.scheduled_at, i.duration_min, COALESCE(NULLIF(u.name, ''), u.email) AS inspector, i.inspector_id, u.last_seen_at,
+    db.prepare(`SELECT i.id, i.report_id, i.scheduled_at, i.duration_min, COALESCE(NULLIF(u.name, ''), u.email) AS inspector, i.inspector_id, u.last_seen_at, u.avatar_at,
         p.type, COALESCE(p.full_address, p.city) AS address, i.contact_name FROM inspections i
       JOIN assets a ON a.id = i.asset_id JOIN crm_properties p ON p.id = a.property_id LEFT JOIN users u ON u.id = i.inspector_id
       WHERE i.status = 'scheduled' AND substr(i.scheduled_at, 1, 10) BETWEEN ? AND ? ORDER BY i.scheduled_at LIMIT 12`)
       .bind(t, addDays(t, 1)).all<{ id: string; report_id: string | null; scheduled_at: string; duration_min: number | null; inspector: string | null; inspector_id: string | null;
-        last_seen_at: string | null; type: string | null; address: string | null; contact_name: string | null }>(),
+        last_seen_at: string | null; avatar_at: string | null; type: string | null; address: string | null; contact_name: string | null }>(),
     db.prepare(`SELECT o.id, o.bank, o.bank_ref, o.client_name, o.created_at FROM orders o WHERE o.source = 'bank' AND o.glide_id IS NULL
       AND o.status IN ('received', 'draft') AND NOT EXISTS (SELECT 1 FROM reports r WHERE r.order_id = o.id) ORDER BY o.created_at`)
       .all<{ id: string; bank: string | null; bank_ref: string | null; client_name: string | null; created_at: string }>(),
@@ -80,8 +80,8 @@ export async function dashboard(db: D1Database, base: string) {
     db.prepare(`SELECT f.order_id, f.sent_at, o.seq, o.client_name FROM offers f JOIN orders o ON o.id = f.order_id WHERE f.status = 'sent' AND f.sent_at < ? ORDER BY f.sent_at`)
       .bind(ago(3)).all<{ order_id: string; sent_at: string; seq: number; client_name: string | null }>(),
     countNewLeads(db),
-    db.prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role, duties, last_seen_at FROM users WHERE kind = 'internal' AND status = 'active' ORDER BY name`)
-      .all<{ id: string; name: string; role: string; duties: string | null; last_seen_at: string | null }>(),
+    db.prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role, duties, last_seen_at, avatar_at FROM users WHERE kind = 'internal' AND status = 'active' ORDER BY name`)
+      .all<{ id: string; name: string; role: string; duties: string | null; last_seen_at: string | null; avatar_at: string | null }>(),
     db.prepare(`SELECT m.user_id, COUNT(*) AS n FROM report_members m JOIN reports r ON r.id = m.report_id WHERE m.role = 'evaluator' AND ${OPEN} GROUP BY m.user_id`)
       .all<{ user_id: string; n: number }>(),
     db.prepare(`SELECT m.user_id, COUNT(*) AS n FROM report_members m JOIN reports r ON r.id = m.report_id WHERE m.role = 'evaluator' AND r.status = 'done' AND ${DONE_DATE} BETWEEN ? AND ? GROUP BY m.user_id`)
@@ -138,7 +138,7 @@ export async function dashboard(db: D1Database, base: string) {
     .filter((u) => dutiesOf(u).some((d) => d === "evaluator" || d === "inspector") || oMap.has(u.id) || iMap.has(u.id))
     .map((u) => ({
       id: u.id, name: u.name, role: dutiesOf(u).includes("evaluator") ? (dutiesOf(u).includes("inspector") ? "Evaluator · inspector" : "Evaluator") : "Inspector",
-      ...presenceOf(u.last_seen_at), open: oMap.get(u.id) ?? 0, drafting: open.filter((r) => r.evaluator_id === u.id && r.stage !== "inspection").length,
+      ...presenceOf(u.last_seen_at), photo: photoUrl(u.id, u.avatar_at), open: oMap.get(u.id) ?? 0, drafting: open.filter((r) => r.evaluator_id === u.id && r.stage !== "inspection").length,
       late: late.filter((r) => r.evaluator_id === u.id).length, delivered: dMap.get(u.id) ?? 0, inspections: iMap.get(u.id) ?? 0,
     }))
     .sort((a, b) => b.open + b.inspections - (a.open + a.inspections) || a.name.localeCompare(b.name));
@@ -160,7 +160,7 @@ export async function dashboard(db: D1Database, base: string) {
     delivered: { n: period?.n ?? 0, pn: period?.pn ?? 0, fees: period?.fees ?? 0, pfees: period?.pfees ?? 0 },
     newOrders, turnaround: { cur: turn?.cur ?? null, prev: turn?.prev ?? null },
     openCount: open.length, late: late.length, alerts, pipeline,
-    visits: visits.results.map((v) => ({ ...v, ...presenceOf(v.last_seen_at), tomorrow: v.scheduled_at.slice(0, 10) !== t })),
+    visits: visits.results.map((v) => ({ ...v, ...presenceOf(v.last_seen_at), photo: v.inspector_id ? photoUrl(v.inspector_id, v.avatar_at) : null, tomorrow: v.scheduled_at.slice(0, 10) !== t })),
     team: teamRows, months, sources: sources.results,
   };
 }

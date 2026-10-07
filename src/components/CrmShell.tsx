@@ -4,6 +4,7 @@ import { initials } from "@/lib/guard";
 import { roleLabel, type User } from "@/lib/users";
 import { Shell } from "./Shell";
 import { Heartbeat } from "./Heartbeat";
+import { photoUrl } from "@/lib/presence";
 
 export async function CrmShell(props: { user: User; base: string; active: string; title: string; subtitle?: string; actions?: React.ReactNode; children: React.ReactNode }) {
   const b = props.base;
@@ -48,7 +49,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
         ] },
       ]}
       active={props.active}
-      me={{ id: props.user.id, initials: initials(props.user.name, props.user.email), name: props.user.name || props.user.email, sub: roleLabel("internal", props.user.role) }}
+      me={{ id: props.user.id, photo: photoUrl(props.user.id, props.user.avatar_at), initials: initials(props.user.name, props.user.email), name: props.user.name || props.user.email, sub: roleLabel("internal", props.user.role) }}
       title={props.title}
       subtitle={props.subtitle}
       actions={props.actions}

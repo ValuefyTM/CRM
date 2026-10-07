@@ -158,7 +158,7 @@ export async function openDossier(db: D1Database, orderId: string, actor: { id: 
 }
 
 async function notifyEvaluator(db: D1Database, reportId: string, userId: string, label: string, by: string | null, fromOffer: boolean) {
-  const u = await db.prepare("SELECT email, COALESCE(NULLIF(name, ''), email) AS name FROM users WHERE id = ? AND status <> 'disabled'").bind(userId).first<{ email: string; name: string }>();
+  const u = await db.prepare("SELECT email, COALESCE(NULLIF(name, ''), email) AS name FROM users WHERE id = ? AND status NOT IN ('disabled', 'deleted')").bind(userId).first<{ email: string; name: string }>();
   if (!u) return;
   const link = await appUrl("crm", `/rapoarte/${reportId}?tab=inspectii&alocare=1`);
   const why = fromOffer ? "Clientul a acceptat oferta, iar raportul s-a creat pe numele tău" : `${by ?? "Un coleg"} ți-a dat raportul`;
@@ -179,8 +179,8 @@ async function notifyEvaluator(db: D1Database, reportId: string, userId: string,
 
 /** Team members who can lead a report: evaluators (by role or duty), owners and administrators. */
 export async function evaluatorChoices(db: D1Database) {
-  return withPresence((await db.prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role, anevar_no, last_seen_at FROM users WHERE kind = 'internal' AND status <> 'disabled'
+  return withPresence((await db.prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role, anevar_no, last_seen_at, avatar_at FROM users WHERE kind = 'internal' AND status NOT IN ('disabled', 'deleted')
       AND (role IN ('evaluator', 'owner', 'admin') OR ',' || COALESCE(duties, '') || ',' LIKE '%,evaluator,%') ORDER BY name`)
-    .all<{ id: string; name: string; role: string; anevar_no: string | null; last_seen_at: string | null }>()).results)
+    .all<{ id: string; name: string; role: string; anevar_no: string | null; last_seen_at: string | null; avatar_at: string | null }>()).results)
     .map((u) => ({ ...u, sub: u.anevar_no ? `Evaluator ANEVAR ${u.anevar_no}` : u.role === "owner" ? "Proprietar" : u.role === "admin" ? "Administrator" : "Evaluator" }));
 }

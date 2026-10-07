@@ -152,7 +152,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
               {order && <a className="rMeta" href={`${base}/comenzi/${r.order_id}`}>Comandă <u>{order}</u></a>}
             </div>
             <div className="rChips">
-              {evaluator && <a className="rChip" href={`${base}/utilizatori/${evaluator.id}`} title={evaluator.seen}><Avatar id={evaluator.id} name={evaluator.name || evaluator.email} size={26} presence={evaluator.presence} />{evaluator.name || evaluator.email}<small>· evaluator principal</small></a>}
+              {evaluator && <a className="rChip" href={`${base}/utilizatori/${evaluator.id}`} title={evaluator.seen}><Avatar id={evaluator.id} name={evaluator.name || evaluator.email} size={26} presence={evaluator.presence} photo={evaluator.photo} />{evaluator.name || evaluator.email}<small>· evaluator principal</small></a>}
               <span className="rMeta">actualizat {ago(r.updated_at ?? r.created_at)}</span>
             </div>
           </div>
@@ -317,7 +317,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                   const what = [ROLE_LABEL[m.role], m.anevar_no && `legitimație ${m.anevar_no}`, specs(m.specializations), m.role === "inspector" && m.coverage && `zone: ${m.coverage}`, m.engagement === "contractor" && "colaborator extern"].filter(Boolean).join(" · ");
                   return (
                     <li key={m.role + m.id}>
-                      <Avatar id={m.id} name={m.name || m.email} size={40} presence={m.presence} title={`${m.name || m.email} · ${m.seen}`} />
+                      <Avatar id={m.id} name={m.name || m.email} size={40} presence={m.presence} photo={m.photo} title={`${m.name || m.email} · ${m.seen}`} />
                       <span className="who"><a className="rowLink" href={`${base}/utilizatori/${m.id}`}>{m.name || m.email}</a><span className="muted">{what}</span><span className={`pSeen ${m.presence}`}><i />{m.seen}</span></span>
                       <span className="pill"><i />{(ROLE_LABEL[m.role] ?? m.role).toUpperCase()}</span>
                       <b className="mono share">{share != null ? `${share}%` : "—"}</b>
@@ -404,7 +404,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                           <td>
                             {!cancelled && a.inspector ? (() => {
                               const p = inspectors.find((x) => x.id === a.inspector_id);
-                              return <PersonLine id={a.inspector_id ?? a.inspector} name={a.inspector} presence={p?.presence} sub={p?.seen} size={30} />;
+                              return <PersonLine id={a.inspector_id ?? a.inspector} name={a.inspector} presence={p?.presence} photo={p?.photo} sub={p?.seen} size={30} />;
                             })() : none ? "—" : <span className="muted">nealocat</span>}
                             {fromApp && !cancelled && a.assigned_by_name && <span className="muted block">alocată de {a.assigned_by_name}{a.assigned_at ? `, ${fmtDate(a.assigned_at)}` : ""}</span>}
                           </td>

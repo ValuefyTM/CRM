@@ -17,20 +17,21 @@ function colorOf(key: string) {
 
 const LABEL: Record<Presence, string> = { online: "online", away: "activ recent", offline: "offline" };
 
-export function Avatar({ id, name, size = 36, presence, title }: { id: string; name: string; size?: number; presence?: Presence | null; title?: string }) {
+export function Avatar({ id, name, size = 36, presence, title, photo }: { id: string; name: string; size?: number; presence?: Presence | null; title?: string; photo?: string | null }) {
   return (
     <span className="pAvatar" style={{ width: size, height: size, fontSize: Math.round(size * 0.38), background: colorOf(id || name) }} title={title ?? name} aria-hidden={!presence}>
-      {initialsOf(name)}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {photo ? <img src={photo} alt="" loading="lazy" /> : initialsOf(name)}
       {presence && <i className={`pDot ${presence}`} role="img" aria-label={LABEL[presence]} />}
     </span>
   );
 }
 
 /** Avatar, name and a second line (role, last activity). */
-export function PersonLine({ id, name, sub, presence, size = 32, me }: { id: string; name: string; sub?: string | null; presence?: Presence | null; size?: number; me?: boolean }) {
+export function PersonLine({ id, name, sub, presence, size = 32, me, photo }: { id: string; name: string; sub?: string | null; presence?: Presence | null; size?: number; me?: boolean; photo?: string | null }) {
   return (
     <span className="pLine">
-      <Avatar id={id} name={name} size={size} presence={presence} />
+      <Avatar id={id} name={name} size={size} presence={presence} photo={photo} />
       <span className="pText"><b>{name}{me && <em> (eu)</em>}</b>{sub && <small>{sub}</small>}</span>
     </span>
   );

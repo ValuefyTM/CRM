@@ -3,9 +3,10 @@ import { notFound } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { listPartners } from "@/lib/partners";
 import { history } from "@/lib/history";
-import { displayName, getUser, isAdmin, KIND_LABEL, roleLabel, teamLabel } from "@/lib/users";
+import { canManageUser, displayName, getUser, isAdmin, KIND_LABEL, roleLabel, teamLabel } from "@/lib/users";
+import { ProfileCard, DeleteUser } from "../UserActions";
 import { CrmShell } from "@/components/CrmShell";
-import { presenceOf } from "@/lib/presence";
+import { photoUrl, presenceOf } from "@/lib/presence";
 import { History } from "@/components/History";
 import { UserForm } from "../UserForm";
 import { AccessPanel } from "./AccessPanel";
@@ -28,7 +29,14 @@ export default async function UserPage({ params, searchParams }: { params: Promi
   if (!u) notFound();
   const self = u.id === me.id;
   // Same rules as PATCH /api/crm/users/[id].
-  const canManage = u.kind !== "internal" || self || (isAdmin(me) && (u.role !== "owner" || me.role === "owner"));
+  const gone = u.status === "deleted";
+  const canManage = !gone && canManageUser(me, u);
+  const canDelete = !gone && !self && canManage && (u.kind !== "internal" || isAdmin(me));
+  const why = gone ? "Contul a fost șters. Numele rămâne doar în istoricul lucrărilor."
+    : canManage ? null
+    : u.role === "owner" ? "Contul unui proprietar îl poate modifica doar un proprietar."
+    : "Conturile echipei le modifică administratorii (și fiecare pe al său).";
+  const presence = u.kind === "internal" && !gone ? presenceOf(self ? new Date().toISOString() : u.last_seen_at) : null;
   const firms = u.kind === "partner" ? (await listPartners(db)).map((p) => ({ id: p.id, name: p.name })) : [];
   const log = await history(db, [u.id]);
   const nou = (await searchParams).nou;
@@ -37,17 +45,23 @@ export default async function UserPage({ params, searchParams }: { params: Promi
     <CrmShell
       user={me} base={base} active="users" title={displayName(u)}
       subtitle={`${KIND_LABEL[u.kind]} · ${u.kind === "internal" ? teamLabel(u) : roleLabel(u.kind, u.role)}${u.partner_name ? ` · ${u.partner_name}` : ""} · adăugat ${fmtDate(u.created_at)}${u.kind === "internal" ? ` · ${presenceOf(u.last_seen_at).seen}` : ""}`}
-      actions={<a href={`${base}/utilizatori?tab=${TAB[u.kind]}`} className="btn btnGhost btnSm">← Utilizatori</a>}
+      actions={<>
+        {canDelete && <DeleteUser id={u.id} name={displayName(u)} back={`${base}/utilizatori?tab=${TAB[u.kind]}`} />}
+        <a href={`${base}/utilizatori?tab=${TAB[u.kind]}`} className="btn btnGhost btnSm">← Utilizatori</a>
+      </>}
     >
       {nou && NEW_MSG[nou] && <div className={nou === "invitat" ? "okMsg" : "note"}>{NEW_MSG[nou]}</div>}
       {u.kind === "partner" && u.partner_status === "suspended" && <div className="note">Firma {u.partner_name} este suspendată: persoanele ei nu se pot autentifica în portal.</div>}
       <div className="cols">
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
-          <AccessPanel
+          <ProfileCard id={u.id} name={displayName(u)} photo={photoUrl(u.id, u.avatar_at)} canEdit={canManage} note={why}
+            sub={`${KIND_LABEL[u.kind]} · ${u.kind === "internal" ? teamLabel(u) : roleLabel(u.kind, u.role)}${u.partner_name ? ` · ${u.partner_name}` : ""}`}
+            presence={presence?.presence ?? null} seen={presence?.seen ?? null} />
+          {!gone && <AccessPanel
             userId={u.id} kind={u.kind} email={u.email} status={u.status}
             invitedAt={fmtDate(u.invited_at, true)} activatedAt={fmtDate(u.activated_at, true)} lastLogin={fmtDate(u.last_login_at, true)}
             canInvite={canManage} canDisable={canManage && !self && !(u.kind === "internal" && u.role === "owner")}
-          />
+          />}
           <UserForm
             kind={u.kind} base={base} userId={u.id} firms={firms} readOnly={!canManage} lockRole={self || u.role === "owner"} canMakeOwner={me.role === "owner"} lockDuties={self && !isAdmin(me)}
             initial={{

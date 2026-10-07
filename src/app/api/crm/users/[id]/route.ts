@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { audit, endAllSessions, sendInvite } from "@/lib/auth";
 import { getPartner } from "@/lib/partners";
-import { getUser, isAdmin, updateUser, validateUser } from "@/lib/users";
+import { canManageUser, deleteUser, getUser, isAdmin, updateUser, validateUser } from "@/lib/users";
+import { bucket } from "@/lib/orders";
 import { err, json, staffApi } from "@/lib/api";
 
 /** Edit an account, (re)send the invitation, disable or re-enable it. */
@@ -50,4 +51,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ ok: true, status });
   }
   return err("Acțiune necunoscută.");
+}
+
+/** Deletes an account (for good when it has no work behind it, else hidden and its email freed). */
+export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const a = await staffApi();
+  if ("res" in a) return a.res;
+  const { id } = await params;
+  const u = await getUser(a.db, id);
+  if (!u || u.status === "deleted") return err("Utilizatorul nu există.", 404);
+  if (u.id === a.user.id) return err("Nu îți poți șterge propriul cont.");
+  if (!canManageUser(a.user, u) || (u.kind === "internal" && !isAdmin(a.user))) return err("Nu ai drepturi să ștergi acest cont.", 403);
+  if (u.kind === "internal" && u.role === "owner") {
+    const owners = await a.db.prepare("SELECT COUNT(*) AS n FROM users WHERE kind = 'internal' AND role = 'owner' AND status = 'active'").first<{ n: number }>();
+    if ((owners?.n ?? 0) <= 1) return err("Este singurul proprietar activ: nu poate fi șters.");
+  }
+  if (u.avatar_at) await (await bucket())?.delete(`avatars/${u.id}.jpg`);
+  const r = await deleteUser(a.db, u);
+  await audit(a.db, `user:${a.user.id}`, "user.delete", "user", id, `${u.name || u.email}${r.removed ? "" : " (păstrat în istoricul lucrărilor)"}`);
+  return NextResponse.json({ ok: true, removed: r.removed });
 }

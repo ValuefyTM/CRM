@@ -206,7 +206,7 @@ export default async function CrmHome() {
                     <a href={v.report_id ? `${base}/rapoarte/${v.report_id}?tab=inspectii` : `${base}/rapoarte`}>
                       <span className={`dbTime${v.tomorrow ? " tm" : ""}`}><b>{v.scheduled_at.slice(11, 16)}</b><small>{v.tomorrow ? "mâine" : "azi"}</small></span>
                       <span className="t"><b>{v.type ? v.type.charAt(0) + v.type.slice(1).toLowerCase() : "Inspecție"}</b><small>{I.pin}{v.address ?? "—"}</small></span>
-                      {v.inspector && v.inspector_id && <span className="who"><Avatar id={v.inspector_id} name={v.inspector} size={28} presence={v.presence} title={`${v.inspector} · ${v.seen}`} /></span>}
+                      {v.inspector && v.inspector_id && <span className="who"><Avatar id={v.inspector_id} name={v.inspector} size={28} presence={v.presence} photo={v.photo} title={`${v.inspector} · ${v.seen}`} /></span>}
                     </a>
                   </li>
                 ))}
@@ -233,7 +233,7 @@ export default async function CrmHome() {
                     <tr key={t.id}>
                       <td>
                         <a className="dbMember" href={`${base}/utilizatori/${t.id}`}>
-                          <Avatar id={t.id} name={t.name} size={36} presence={t.presence} title={`${t.name} · ${t.seen}`} />
+                          <Avatar id={t.id} name={t.name} size={36} presence={t.presence} photo={t.photo} title={`${t.name} · ${t.seen}`} />
                           <span><b>{t.name}</b><small>{t.role} · <span className={`pSeen ${t.presence}`}>{t.seen}</span></small></span>
                         </a>
                       </td>

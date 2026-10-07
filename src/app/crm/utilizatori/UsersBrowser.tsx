@@ -5,6 +5,7 @@ import { FilterSelect } from "@/components/FilterSelect";
 import { STATUS_LABEL } from "@/lib/labels";
 import { PartnersTable, type FirmRow } from "./firme/PartnersTable";
 import { Avatar } from "@/components/Avatar";
+import { DeleteUser } from "./UserActions";
 import { AvatarStack } from "@/components/PersonPicker";
 import type { Presence } from "@/lib/presence";
 
@@ -13,7 +14,7 @@ type Row = {
   id: string; kind: string; name: string; email: string; phone: string | null; role: string; roleLabel: string; duties: string[]; status: string;
   partnerId: string | null; partnerName: string | null; engagement: string | null; anevar: string | null; specs: string | null;
   company: string | null; clientType: string; city: string | null; lastLogin: string; isMe: boolean;
-  presence: Presence; seen: string;
+  presence: Presence; seen: string; photo: string | null; canEdit: boolean; canDelete: boolean;
 };
 
 const TABS: [Tab, string, string][] = [
@@ -123,7 +124,7 @@ export function UsersBrowser(props: { rows: Row[]; firms: FirmRow[]; base: strin
               const on = inTab.filter((r) => r.presence !== "offline" && r.status === "active");
               return on.length > 0 && (
                 <button type="button" className="onlineNow" onClick={() => setF(tab === "interni" ? "online" : "all")} title={on.map((r) => `${r.name} · ${r.seen}`).join("\n")}>
-                  <AvatarStack people={on.map((r) => ({ id: r.id, name: r.name, presence: r.presence, seen: r.seen }))} max={5} />
+                  <AvatarStack people={on.map((r) => ({ id: r.id, name: r.name, presence: r.presence, seen: r.seen, photo: r.photo }))} max={5} />
                   <span><b>{on.filter((r) => r.presence === "online").length}</b> online acum</span>
                 </button>
               );
@@ -142,6 +143,7 @@ export function UsersBrowser(props: { rows: Row[]; firms: FirmRow[]; base: strin
                     {tab === "clienti" && <><th>Tip</th><th>Telefon</th><th>Localitate</th></>}
                     <th>Activitate</th>
                     <th>Status</th>
+                    <th className="r"><span className="sr-only">Acțiuni</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -149,7 +151,7 @@ export function UsersBrowser(props: { rows: Row[]; firms: FirmRow[]; base: strin
                     <tr key={r.id}>
                       <td>
                         <span className="userCell">
-                          <Avatar id={r.id} name={r.name} size={38} presence={r.status === "disabled" ? null : r.presence} title={`${r.name} · ${r.seen}`} />
+                          <Avatar id={r.id} name={r.name} size={38} photo={r.photo} presence={r.status === "disabled" ? null : r.presence} title={`${r.name} · ${r.seen}`} />
                           <span>
                             <a className="rowLink" href={`${base}/utilizatori/${r.id}`}>{r.name}</a>
                             {r.isMe && <span className="muted"> (tu)</span>}
@@ -180,6 +182,16 @@ export function UsersBrowser(props: { rows: Row[]; firms: FirmRow[]; base: strin
                       )}
                       <td>{r.status === "disabled" ? <span className="muted">—</span> : <span className={`pSeen ${r.presence}`} title={`Ultima autentificare: ${r.lastLogin}`}><i />{r.seen}</span>}</td>
                       <td><Status s={r.status} /></td>
+                      <td className="r">
+                        <span className="rowActions">
+                          <a className="iconBtn" href={`${base}/utilizatori/${r.id}`} title={r.canEdit ? "Editează" : "Vezi"} aria-label={`${r.canEdit ? "Editează" : "Vezi"} ${r.name}`}>
+                            {r.canEdit
+                              ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>
+                              : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" /><circle cx="12" cy="12" r="3" /></svg>}
+                          </a>
+                          {r.canDelete && <DeleteUser id={r.id} name={r.name} compact />}
+                        </span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

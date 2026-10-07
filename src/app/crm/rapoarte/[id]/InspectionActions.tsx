@@ -8,7 +8,7 @@ import { PersonLine } from "@/components/Avatar";
 import type { Presence } from "@/lib/presence";
 import { DocsConfirm, missingOf, type DocState } from "@/components/DocsConfirm";
 
-export type Person = { id: string; name: string; role: string; coverage: string | null; presence?: Presence; seen?: string };
+export type Person = { id: string; name: string; role: string; coverage: string | null; presence?: Presence; seen?: string; photo?: string | null };
 export type TaskInitial = {
   asset: string; label: string; inspection: string | null; inspector: string | null; sheet_type: string; due_on: string | null;
   contact_kind: string | null; contact_name: string | null; contact_phone: string | null; instructions: string | null; scheduled: boolean;
@@ -17,7 +17,7 @@ export type TaskInitial = {
 
 const CONTACTS: [string, string][] = [["", "—"], ["client", "Clientul"], ["owner", "Proprietarul"], ["agent", "Agent imobiliar"], ["other", "Altă persoană"]];
 const ROLE: Record<string, string> = { inspector: "Inspector", evaluator: "Evaluator", owner: "Evaluator principal", admin: "Evaluator principal" };
-const picks = (people: Person[]): PickPerson[] => people.map((p) => ({ id: p.id, name: p.name, sub: [ROLE[p.role] ?? p.role, p.coverage].filter(Boolean).join(" · "), presence: p.presence, seen: p.seen }));
+const picks = (people: Person[]): PickPerson[] => people.map((p) => ({ id: p.id, name: p.name, sub: [ROLE[p.role] ?? p.role, p.coverage].filter(Boolean).join(" · "), presence: p.presence, seen: p.seen, photo: p.photo }));
 
 async function send(url: string, init: RequestInit) {
   const r = await fetch(url, init).catch(() => null);
@@ -199,7 +199,7 @@ export function AllocateAll({ report, me, people, rows, autoOpen }: { report: st
                     ) : (
                       r.state === "done" ? <span className="pill pillOk"><i />Realizată</span> : (() => {
                         const p = picks(people).find((x) => x.id === r.inspector);
-                        return p ? <PersonLine id={p.id} name={p.name} sub={`Alocată · ${p.seen ?? ""}`} presence={p.presence} size={30} me={p.id === me} /> : <span className="pill pillInfo"><i />Alocată</span>;
+                        return p ? <PersonLine id={p.id} name={p.name} sub={`Alocată · ${p.seen ?? ""}`} presence={p.presence} photo={p.photo} size={30} me={p.id === me} /> : <span className="pill pillInfo"><i />Alocată</span>;
                       })()
                     )}
                   </li>
