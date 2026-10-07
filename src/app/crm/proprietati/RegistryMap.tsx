@@ -15,8 +15,12 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 const cap = (s: string) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : "");
 const lei = (v: number) => `${Math.round(v).toLocaleString("ro-RO")} lei`;
 
-export function RegistryMap({ points, base, hover, onPick, onHover, height = "100%" }: {
-  points: RegistryPoint[]; base: string; hover?: string | null; onPick?: (id: string) => void; onHover?: (id: string | null) => void; height?: number | string;
+/** A point drawn with its own colour, card and label (inspections), instead of the property defaults. */
+export type MapPoint = RegistryPoint & { color?: string; popup?: string; tip?: string };
+
+export function RegistryMap({ points, base, hover, onPick, onHover, height = "100%", legend, subject, empty }: {
+  points: MapPoint[]; base: string; hover?: string | null; onPick?: (id: string) => void; onHover?: (id: string | null) => void; height?: number | string;
+  legend?: [string, string][]; subject?: { lat: number; lng: number; radiusKm?: number; label: string } | null; empty?: string;
 }) {
   const hoverCb = useRef(onHover);
   hoverCb.current = onHover;
@@ -63,8 +67,8 @@ export function RegistryMap({ points, base, hover, onPick, onHover, height = "10
     marks.current.clear();
     const renderer = l.canvas({ padding: 0.5 });
     for (const p of points) {
-      const c = l.circleMarker([p.lat, p.lng], { renderer, radius: 6, color: "#fff", weight: 1.5, fillColor: CAT_COLOR[p.cat] ?? "#7a7a7a", fillOpacity: 0.95 });
-      c.bindPopup(
+      const c = l.circleMarker([p.lat, p.lng], { renderer, radius: 6, color: "#fff", weight: 1.5, fillColor: p.color ?? CAT_COLOR[p.cat] ?? "#7a7a7a", fillOpacity: 0.95 });
+      c.bindPopup(p.popup ??
         `<div class="rgPop"><span class="rgPopCat" style="--c:${CAT_COLOR[p.cat] ?? "#7a7a7a"}">${esc(CAT_LABEL[p.cat] ?? "Proprietate")}</span>
           <b>${esc(cap(p.label))}</b><small>${esc(p.address)}</small>
           ${p.value ? `<span class="rgPopVal">${lei(p.value)}${p.date ? ` · ${esc(p.date.split("-").reverse().join("."))}` : ""}</span>` : ""}
@@ -72,7 +76,7 @@ export function RegistryMap({ points, base, hover, onPick, onHover, height = "10
         { closeButton: false, offset: [0, -4] },
       );
       // Short label on hover (the card opens on click).
-      c.bindTooltip(`<b>${esc(cap(p.label))}</b>${p.value ? ` · ${lei(p.value)}` : ""}<br><small>${esc(p.address)}</small>`,
+      c.bindTooltip(p.tip ?? `<b>${esc(cap(p.label))}</b>${p.value ? ` · ${lei(p.value)}` : ""}<br><small>${esc(p.address)}</small>`,
         { direction: "top", offset: [0, -8], className: "rgTip", opacity: 1 });
       c.on("mouseover", () => hoverCb.current?.(p.id));
       c.on("mouseout", () => hoverCb.current?.(null));
@@ -80,8 +84,19 @@ export function RegistryMap({ points, base, hover, onPick, onHover, height = "10
       c.addTo(g);
       marks.current.set(p.id, c);
     }
-    if (points.length) m.fitBounds(l.latLngBounds(points.map((p) => [p.lat, p.lng] as [number, number])), { padding: [30, 30], maxZoom: 16 });
-  }, [ready, points, base, onPick]);
+    // The property being valued (comparables): a black pin and the search radius.
+    if (subject) {
+      if (subject.radiusKm) l.circle([subject.lat, subject.lng], { radius: subject.radiusKm * 1000, color: "#e9a227", weight: 1.5, fillColor: "#e9a227", fillOpacity: 0.06, interactive: false }).addTo(g);
+      l.marker([subject.lat, subject.lng], {
+        icon: l.divIcon({ className: "rgSubject", html: `<svg width="30" height="40" viewBox="0 0 28 36" aria-hidden="true"><path d="M14 35s12-11 12-21A12 12 0 0 0 2 14c0 10 12 21 12 21z" fill="#111" stroke="#e9a227" stroke-width="2.5"/><circle cx="14" cy="14" r="4.5" fill="#e9a227"/></svg>`, iconSize: [30, 40], iconAnchor: [15, 39] }),
+        zIndexOffset: 2000, keyboard: false,
+      }).bindTooltip(`<b>${esc(subject.label)}</b>`, { direction: "top", offset: [0, -36], className: "rgTip" }).addTo(g);
+    }
+    const all = points.map((p) => [p.lat, p.lng] as [number, number]);
+    if (subject) all.push([subject.lat, subject.lng]);
+    if (subject?.radiusKm && !points.length) m.setView([subject.lat, subject.lng], 15);
+    else if (all.length) m.fitBounds(l.latLngBounds(all), { padding: [30, 30], maxZoom: 16 });
+  }, [ready, points, base, onPick, subject]);
 
   // The property under the mouse (in the list or on the map): its dot grows, comes to the front and shows its label;
   // the map follows it when it is outside the view.
@@ -102,9 +117,9 @@ export function RegistryMap({ points, base, hover, onPick, onHover, height = "10
         <button type="button" onClick={() => setSat(!sat)}>{sat ? "Hartă" : "Satelit"}</button>
       </div>
       <div className="rgLegend">
-        {Object.entries(CAT_LABEL).map(([k, l]) => <span key={k}><i style={{ background: CAT_COLOR[k] }} />{l}</span>)}
+        {(legend ?? Object.entries(CAT_LABEL).map(([k, l]) => [l, CAT_COLOR[k]] as [string, string])).map(([l, c]) => <span key={l}><i style={{ background: c }} />{l}</span>)}
       </div>
-      {points.length === 0 && <div className="rgMapEmpty">Nicio proprietate cu localizare pentru filtrele alese.</div>}
+      {points.length === 0 && !subject && <div className="rgMapEmpty">{empty ?? "Nicio proprietate cu localizare pentru filtrele alese."}</div>}
     </div>
   );
 }

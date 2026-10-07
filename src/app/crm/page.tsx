@@ -198,7 +198,7 @@ export default async function CrmHome() {
           </section>
 
           <section className="card">
-            <div className="cardHead"><h2>Inspecții azi și mâine</h2><span className="muted">{d.visits.length || ""}</span></div>
+            <div className="cardHead"><h2>Inspecții azi și mâine</h2><a className="link" href={`${base}/agenda-inspectii?vezi=calendar`}>Agenda inspecțiilor →</a></div>
             {d.visits.length === 0 ? <p className="hint">Nicio inspecție programată azi sau mâine.</p> : (
               <ul className="dbVisits">
                 {d.visits.map((v) => (

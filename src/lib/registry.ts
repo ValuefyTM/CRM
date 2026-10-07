@@ -22,7 +22,7 @@ export const REGISTRY_SORTS: Record<string, [string, string]> = {
 export const REGISTRY_PAGE = 50;
 
 /** Each property with its latest valuation: the asset's own value, else the report value when the report has only that asset. */
-const BASE = `WITH v0 AS (
+export const BASE = `WITH v0 AS (
     SELECT a.property_id, a.report_id, r.number,
       COALESCE(r.report_date, substr(r.created_at, 1, 10)) AS d,
       COALESCE(a.value, CASE WHEN (SELECT COUNT(*) FROM assets x WHERE x.report_id = a.report_id) = 1 THEN r.result_value END) AS val

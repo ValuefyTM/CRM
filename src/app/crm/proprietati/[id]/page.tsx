@@ -34,7 +34,10 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
 
   return (
     <CrmShell user={user} base={base} active="properties" title={cap(p.type) || "Proprietate"} subtitle={`Registru proprietăți · ${p.full_address ?? p.city ?? ""}`}
-      actions={<a className="btn btnGhost btnSm" href={`${base}/proprietati`}>← Proprietăți</a>}>
+      actions={<>
+        <a className="btn btnNavy btnSm" href={`${base}/proprietati/${p.id}/comparabile`}>Comparabile în zonă</a>
+        <a className="btn btnGhost btnSm" href={`${base}/proprietati`}>← Proprietăți</a>
+      </>}>
       <section className="rgHero">
         <div>
           {p.category && <span className="rgCat light" style={{ ["--c" as string]: CAT_COLOR[catKey(p.category)] ?? "#7a7a7a" }}>{CAT_LABEL[catKey(p.category)] ?? p.category}</span>}
