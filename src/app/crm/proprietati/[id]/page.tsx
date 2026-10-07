@@ -5,6 +5,8 @@ import { catKey, parseGeo, registryProperty } from "@/lib/registry";
 import { REPORT_STATUS } from "@/lib/reports";
 import { niceName } from "@/lib/labels";
 import { CrmShell } from "@/components/CrmShell";
+import { geolocateEnabled } from "@/lib/geolocate";
+import { LocateOne } from "../LocateActions";
 import { RegistryMap } from "../RegistryMap";
 import { CAT_COLOR, CAT_LABEL } from "@/lib/registry-labels";
 
@@ -61,13 +63,19 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
             <Row k="Nr. cadastral teren">{p.cad_land && <span className="mono">{p.cad_land}</span>}</Row>
             <Row k="Zonă">{p.zone}</Row>
             <Row k="Coordonate">{ll ? <span className="mono">{ll[0].toFixed(6)}, {ll[1].toFixed(6)}</span> : null}</Row>
+            <Row k="Sursa coordonatelor">{ll ? (p.geo_source === "cadastru" ? `centrul parcelei din cadastru${p.geo_note ? ` (${p.geo_note})` : ""}` : p.geo_source === "glide" ? "introduse în Glide" : p.geo_source === "gps" ? "GPS la inspecție" : p.geo_source ?? null) : null}</Row>
           </dl>
           {p.description && <p className="prose">{p.description}</p>}
         </section>
         <section className="card flush">
           <div className="cardHead"><h2>Localizare</h2></div>
           {ll ? <div style={{ height: 340 }}><RegistryMap base={base} height={340} points={[{ id: p.id, lat: ll[0], lng: ll[1], cat: catKey(p.category), label: p.type ?? "", address: p.full_address ?? "", value: p.value, date: p.last_date }]} /></div>
-            : <p className="hint pad">Proprietatea nu are coordonate. Se adaugă din aplicația de inspecții (GPS la fișă) sau din Glide.</p>}
+            : (
+              <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <p className="hint" style={{ margin: 0 }}>Proprietatea nu are coordonate.{p.geo_note ? ` Ultima căutare în cadastru: ${p.geo_note}` : ""}</p>
+                {geolocateEnabled() && (p.cad_building || p.cad_land || p.cf_number) && <LocateOne id={p.id} />}
+              </div>
+            )}
         </section>
       </div>
 

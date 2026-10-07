@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { staffPage } from "@/lib/guard";
 import { registry, registryFacets, REGISTRY_PAGE, REGISTRY_SORTS } from "@/lib/registry";
 import { CrmShell } from "@/components/CrmShell";
+import { isAdmin } from "@/lib/users";
+import { geolocateEnabled, locateCounts } from "@/lib/geolocate";
+import { LocateAll } from "./LocateActions";
 import { RegistryView, type RegistryQuery } from "./RegistryView";
 import { CAT_LABEL } from "@/lib/registry-labels";
 
@@ -14,7 +17,8 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
   const { db, user, base } = await staffPage();
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page) || 1);
-  const [data, facets] = await Promise.all([registry(db, { ...sp, page }), registryFacets(db, sp.county)]);
+  const admin = isAdmin(user);
+  const [data, facets, locCounts] = await Promise.all([registry(db, { ...sp, page }), registryFacets(db, sp.county), admin ? locateCounts(db) : Promise.resolve(null)]);
   const s = data.stats;
   const pages = Math.max(1, Math.ceil(s.n / REGISTRY_PAGE));
   const geoPct = s.n ? Math.round((s.geo / s.n) * 100) : 0;
@@ -43,6 +47,8 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
           <span className="dbKpiFoot"><span className="rgBar"><i style={{ width: `${geoPct}%` }} /></span><span className="dbDelta flat">{geoPct}%</span></span>
         </a>
       </div>
+
+      {locCounts && (locCounts.todo > 0 || locCounts.tried > 0 || !geolocateEnabled()) && <LocateAll initial={locCounts} enabled={geolocateEnabled()} />}
 
       <RegistryView
         base={base} current={sp} rows={data.rows} points={data.points} total={s.n} page={data.page} pages={pages}

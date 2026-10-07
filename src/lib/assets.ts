@@ -3,6 +3,7 @@
 import { now, uuid } from "./db";
 import { audit } from "./auth";
 import { ASSET_CATEGORIES, capType, type AssetInput } from "./asset-labels";
+import { locateProperty } from "./geolocate";
 
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const opt = (v: unknown, max = 200) => str(v, max) || null;
@@ -83,6 +84,7 @@ export async function addAsset(db: D1Database, actor: string, reportId: string, 
     db.prepare("UPDATE reports SET updated_at = ? WHERE id = ?").bind(t, reportId),
   ]);
   await audit(db, `user:${actor}`, "report.asset_add", "report", reportId, `${capType(v.type) || "bun"}${linked ? " (proprietate existentă)" : ""}`);
+  await locateProperty(db, propertyId);
   return { ok: true as const, id, linked };
 }
 
@@ -98,6 +100,7 @@ export async function updateAsset(db: D1Database, actor: string, reportId: strin
     db.prepare("UPDATE reports SET updated_at = ? WHERE id = ?").bind(t, reportId),
   ]);
   await audit(db, `user:${actor}`, "report.asset_edit", "report", reportId, capType(v.type) || "bun");
+  await locateProperty(db, a.property_id);
   return { ok: true as const };
 }
 

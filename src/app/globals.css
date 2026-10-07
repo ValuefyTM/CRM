@@ -1059,3 +1059,10 @@ a.navItem[aria-current="page"] .navBadge { background: none; padding: 0; color: 
 .meMenu .meDensity button[aria-pressed="true"] { background: #e9a227; color: #14142b; font-weight: 600; }
 .meMenu .meDensity button { font-size: 11px; padding: 0 2px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .meDensity > div { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.locateBar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(17, 17, 17, 0.04); }
+.locateIc { width: 40px; height: 40px; border-radius: 12px; background: var(--acc-soft); color: var(--acc-text); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.locateText { flex: 1 1 320px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.locateText b { font-size: 14px; }
+.locateText small { font-size: 12.5px; color: var(--muted-2); line-height: 1.5; }
+.locateRun { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.locateRun i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--acc); animation: vfSpin 0.8s linear infinite; }

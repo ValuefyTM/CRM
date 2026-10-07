@@ -65,3 +65,16 @@ npm run db:migrate:local
 npm run preview                        # http://localhost:8787/crm
 ```
 Without `RESEND_API_KEY`, sign-in codes and invitation links are printed in the terminal.
+
+## Localizare din cadastru (proprietăți pe hartă)
+
+Proprietățile fără coordonate primesc centrul parcelei din planurile cadastrale ale localizatorului din VALUEFY Tools
+(`/api/localizare/centroid`, Timiș). Se caută după numărul cadastral al construcției, apoi al terenului, apoi CF; la
+unități individuale („259154-C1-U20”) se folosește rădăcina (primele 6 cifre), iar localitatea alege planul UAT.
+
+- automat, la salvarea unui bun în raport (dacă proprietatea nu are coordonate);
+- în masă, din pagina Proprietăți (administratori): „Localizează”, apoi „Reîncearcă negăsitele”;
+- pe fișa proprietății: „Localizează din cadastru”.
+
+Variabile: `LOCATOR_API_TOKEN` (secret, aceeași valoare și în workerul Tools) și opțional `LOCATOR_API_URL`
+(implicit `https://tools.valuefy.ro`). Coordonatele găsite se marchează cu `geo_source = 'cadastru'`.
