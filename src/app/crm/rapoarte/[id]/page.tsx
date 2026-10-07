@@ -270,7 +270,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                           {a.is_main ? <span className="tag">Principal</span> : null}
                           <b className="block">{cap(a.type) || "Bun"}{a.construction === "under_construction" ? " · în construcție" : ""}</b>
                           <span className="muted">{a.full_address ?? a.city ?? "—"}{a.cf_number ? ` · CF ${a.cf_number}` : ""}{a.cad_building && a.cad_building !== a.cf_number ? ` · nr. cad. ${a.cad_building}` : ""}</span>
-                          {a.other_reports > 0 && <span className="muted block">evaluat și în alte {a.other_reports} rapoarte</span>}
+                          <a className="link block" style={{ fontSize: 12, marginTop: 2 }} href={`${base}/proprietati/${a.property_id}`}>{a.other_reports > 0 ? `Fișa proprietății · evaluată și în alte ${a.other_reports} rapoarte` : "Fișa proprietății"} →</a>
                           {(() => {
                             const st = inspState(a);
                             const [t, c] = st === "none" ? ["Fără inspecție", ""] : st === "done" ? ["Inspecție realizată", "pillOk"] : st === "open" ? [a.inspection_status === "scheduled" ? "Inspecție programată" : "Inspecție de programat", "pillInfo"] : ["Inspecție nealocată", "pillWarn"];

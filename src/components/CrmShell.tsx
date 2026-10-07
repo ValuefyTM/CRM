@@ -33,7 +33,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
         { group: "Operațional", key: "g-ops", items: [
           { key: "reports", label: "Rapoarte", href: `${b}/rapoarte`, badge: open },
           { key: "inspections", label: "Inspecții", soon: true },
-          { key: "properties", label: "Proprietăți", soon: true },
+          { key: "properties", label: "Proprietăți", href: `${b}/proprietati` },
         ] },
         { group: "Financiar", key: "g-fin", items: [
           { key: "statements", label: "Borderouri", soon: true },
