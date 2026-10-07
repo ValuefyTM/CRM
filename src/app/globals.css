@@ -1013,3 +1013,49 @@ a.navItem[aria-current="page"] .navBadge { padding: 1px 6px; border-radius: 6px;
 .fsel.toggle { padding-right: 12px; }
 .fsel.toggle::after { display: none; }
 .fsel.toggle span { pointer-events: auto; }
+
+/* ================= Sidebar typography (IBM Plex) ================= */
+.side {
+  --plex: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --plex-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --nav-py: 9px;
+  font-family: var(--plex); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility;
+}
+:root[data-nav-density="compact"] .side { --nav-py: 7px; }
+:root[data-nav-density="comfortable"] .side { --nav-py: 11px; }
+.side button, .side input { font-family: inherit; }
+.brandLabel { font-family: var(--plex); font-size: 10px; font-weight: 500; letter-spacing: 0.11em; text-transform: uppercase; color: rgba(255, 255, 255, 0.42); }
+
+.navItem, .navGroupItems .navItem {
+  height: auto; min-height: 0; padding: var(--nav-py) 10px; border-radius: 9px;
+  font-family: var(--plex); font-size: 13px; font-weight: 450; line-height: 1.25; color: rgba(255, 255, 255, 0.74);
+}
+a.navItem:hover { background: rgba(255, 255, 255, 0.07); color: #fff; }
+a.navItem[aria-current="page"] { background: #e9a227; color: #14142b; font-weight: 600; }
+.navItem.soon { color: rgba(255, 255, 255, 0.74); opacity: 0.55; }
+
+.navBadge, .navBadge.hot { font-family: var(--plex-mono); font-size: 11px; font-weight: 400; color: rgba(255, 255, 255, 0.45); text-align: right; font-variant-numeric: tabular-nums; min-width: 3ch; }
+a.navItem[aria-current="page"] .navBadge { background: none; padding: 0; color: rgba(20, 20, 43, 0.6); }
+
+.navGroupHead {
+  height: auto; padding: 8px 10px; border-radius: 9px; background: none;
+  font-family: var(--plex); font-size: 10.5px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255, 255, 255, 0.5);
+}
+.navGroupHead:hover { background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.8); }
+.navGroup.open .navGroupHead { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.navChev { display: inline-block; font-size: 15px; line-height: 1; font-weight: 400; letter-spacing: 0; transition: transform 0.2s; }
+.navGroup.open .navChev { transform: rotate(90deg); }
+.navGroupItems { border-left: 1px solid rgba(255, 255, 255, 0.1); margin: 4px 0 6px 12px; padding-left: 8px; gap: 1px; }
+
+.meCard { font-family: var(--plex); }
+.meAv { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; background: #e9a227; color: #14142b; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; letter-spacing: 0.02em; }
+.meText b { font-size: 12px; font-weight: 600; }
+.meText small { font-size: 10.5px; color: rgba(255, 255, 255, 0.45); }
+.meMenu button { font-family: var(--plex); font-size: 13px; font-weight: 500; }
+.meDensity { display: flex; flex-direction: column; gap: 6px; padding: 8px 8px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); margin-bottom: 4px; }
+.meDensity > span { font-size: 10.5px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255, 255, 255, 0.45); }
+.meDensity > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.meMenu .meDensity button { height: 28px; padding: 0 6px; justify-content: center; font-size: 11.5px; border-radius: 7px; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.74); }
+.meMenu .meDensity button[aria-pressed="true"] { background: #e9a227; color: #14142b; font-weight: 600; }
+.meMenu .meDensity button { font-size: 11px; padding: 0 2px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meDensity > div { grid-template-columns: repeat(3, minmax(0, 1fr)); }

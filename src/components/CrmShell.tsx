@@ -20,7 +20,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
   return (
     <Shell
       app="crm"
-      label="Evaluări ANEVAR · CRM"
+      label="Evaluări ANEVAR · Cluj"
       nav={[
         { key: "home", label: "Dashboard", href: b || "/" },
         { group: "CRM", key: "g-crm", items: [

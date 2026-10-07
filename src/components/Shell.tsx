@@ -34,7 +34,9 @@ export function Shell(props: {
         <SideNav nav={props.nav} active={props.active} />
         <div className="me">
           <MeMenu app={props.app}>
-            {props.me.id ? <Avatar id={props.me.id} name={props.me.name} size={40} presence="online" photo={props.me.photo} /> : <span className="avatar">{props.me.initials}</span>}
+            {props.me.photo
+              ? <Avatar id={props.me.id ?? props.me.name} name={props.me.name} size={32} photo={props.me.photo} />
+              : <span className="meAv" aria-hidden="true">{props.me.initials}</span>}
             <span className="meText"><b>{props.me.name}</b><small>{props.me.sub}</small></span>
           </MeMenu>
         </div>

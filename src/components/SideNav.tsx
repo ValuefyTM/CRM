@@ -39,7 +39,7 @@ export function SideNav({ nav, active }: { nav: NavEntry[]; active: string }) {
             <button type="button" className="navGroupHead" aria-expanded={open} onClick={() => toggle(e.key)}>
               <span>{e.group}</span>
               {!open && sum > 0 && <span className="navBadge hot">{sum}</span>}
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+              <span className="navChev" aria-hidden="true">›</span>
             </button>
             {open && <div className="navGroupItems">{e.items.map((i) => <Item key={i.key} i={i} active={active} />)}</div>}
           </div>
@@ -49,9 +49,24 @@ export function SideNav({ nav, active }: { nav: NavEntry[]; active: string }) {
   );
 }
 
-/** The signed-in user at the bottom of the sidebar, with a menu (sign out). */
+export type Density = "compact" | "normal" | "comfortable";
+const DENSITY_KEY = "vf-nav-density";
+const applyDensity = (d: Density) => { document.documentElement.dataset.navDensity = d; };
+
+/** The signed-in user at the bottom of the sidebar, with a menu (menu density, sign out). */
 export function MeMenu({ children, app }: { children: React.ReactNode; app: "crm" | "portal" }) {
   const [open, setOpen] = useState(false);
+  const [density, setDensity] = useState<Density>("normal");
+  useEffect(() => {
+    try {
+      const d = localStorage.getItem(DENSITY_KEY) as Density | null;
+      if (d === "compact" || d === "comfortable" || d === "normal") { setDensity(d); applyDensity(d); }
+    } catch { /* private window */ }
+  }, []);
+  const pick = (d: Density) => {
+    setDensity(d); applyDensity(d);
+    try { localStorage.setItem(DENSITY_KEY, d); } catch { /* not kept */ }
+  };
   useEffect(() => {
     if (!open) return;
     const off = (ev: MouseEvent) => { if (!(ev.target as HTMLElement).closest(".meCard")) setOpen(false); };
@@ -72,6 +87,14 @@ export function MeMenu({ children, app }: { children: React.ReactNode; app: "crm
       </button>
       {open && (
         <div className="meMenu" role="menu">
+          <div className="meDensity" role="group" aria-label="Densitate meniu">
+            <span>Densitate meniu</span>
+            <div>
+              {([["compact", "Compact"], ["normal", "Normal"], ["comfortable", "Confortabil"]] as const).map(([k, l]) => (
+                <button key={k} type="button" aria-pressed={density === k} onClick={() => pick(k)}>{l}</button>
+              ))}
+            </div>
+          </div>
           <button type="button" role="menuitem" onClick={logout}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></svg>
             Ieși din cont
