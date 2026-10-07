@@ -544,3 +544,8 @@ a.rMeta:hover u { color: var(--acc-light); }
 .stageSteps .on .dot { border-color: var(--acc); background: var(--acc-soft); color: var(--acc-text); }
 .stageInfo { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .ofBanner.ok { background: var(--acc-soft); border-color: var(--acc-line); color: var(--ink); }
+.pickList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 280px; overflow-y: auto; }
+.pickList button { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: #fff; cursor: pointer; font: inherit; color: var(--ink); }
+.pickList button:hover { border-color: var(--acc); }
+.pickList button[aria-pressed="true"] { border-color: var(--acc); background: var(--acc-soft); box-shadow: 0 0 0 1px var(--acc); }
+.pickList .muted { font-size: 12.5px; }

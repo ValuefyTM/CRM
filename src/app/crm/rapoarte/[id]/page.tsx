@@ -11,6 +11,8 @@ import { SPECIALIZATIONS } from "@/lib/labels";
 import { CrmShell } from "@/components/CrmShell";
 import { ReportList } from "@/components/ReportList";
 import { AssignInspection, CancelInspection } from "./InspectionActions";
+import { AssetEditor, RemoveAsset } from "./AssetEditor";
+import { emptyAsset, type AssetForm } from "@/lib/asset-labels";
 import { canAssign, inspectorChoices } from "@/lib/insp-assign";
 import { guessSheetType } from "@/lib/insp-forms";
 import { AddMember, DeleteDoc, DeliverButton, FinalDrop, MissingDoc, NotesEditor, RemoveMember, SafeImg, StageActions, StatusButton, UploadButton } from "./ReportActions";
@@ -37,6 +39,14 @@ const ago = (iso: string) => {
 };
 const ext = (name: string) => (name.match(/\.(\w{2,4})$/)?.[1] ?? "doc").toUpperCase();
 const specs = (s: string | null) => (s ? s.split(",").filter((k) => SPECIALIZATIONS.some(([v]) => v === k)).join(", ") : "");
+
+/** Values of an asset for its edit form. */
+const assetForm = (a: Awaited<ReturnType<typeof reportAssets>>[number]): AssetForm => ({
+  id: a.id, category: a.category ?? "REZIDENTIAL", type: a.type ?? "", construction: a.construction ?? "existing", county: a.county ?? "", city: a.city ?? "",
+  full_address: a.full_address ?? "", cf_number: a.cf_number ?? "", cad_building: a.cad_building ?? "", cad_land: a.cad_land ?? "",
+  usable_area: a.usable_area != null ? String(a.usable_area) : "", year_built: a.year_built != null ? String(a.year_built) : "", description: a.description ?? "",
+  is_main: !!a.is_main, value: a.value != null ? String(a.value) : "", approach: a.approach ?? "", notes: a.notes ?? "",
+});
 
 function Row({ k, children }: { k: string; children?: React.ReactNode }) {
   return <div><dt>{k}</dt><dd>{children ?? "—"}</dd></div>;
@@ -224,11 +234,14 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
       {tab === "bunuri" && (
         <>
           <section className="card flush">
-            <div className="cardHead"><h2>Bunuri evaluate</h2></div>
+            <div className="cardHead" style={{ padding: "16px 22px 0" }}>
+              <h2>Bunuri evaluate</h2>
+              <AssetEditor report={r.id} label="+ Adaugă bun" initial={{ ...emptyAsset({ county: main?.county, city: main?.city }), is_main: assets.length === 0 }} />
+            </div>
             {assets.length === 0 ? <p className="hint pad">Raportul nu are bunuri înregistrate.</p> : (
               <div className="tableWrap">
                 <table className="table">
-                  <thead><tr><th>Proprietate</th><th>Tip / categorie</th><th>Supr. utilă</th><th>An constr.</th><th>Abordare</th><th className="r">Valoare</th></tr></thead>
+                  <thead><tr><th>Proprietate</th><th>Tip / categorie</th><th>Supr. utilă</th><th>An constr.</th><th>Abordare</th><th className="r">Valoare</th><th /></tr></thead>
                   <tbody>
                     {assets.map((a) => (
                       <tr key={a.id}>
@@ -243,6 +256,12 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                         <td>{a.year_built ?? "—"}</td>
                         <td>{a.approach ? APPROACH[a.approach] : "—"}</td>
                         <td className="mono num r">{a.value != null ? lei(a.value, cur) : "—"}</td>
+                        <td className="r">
+                          <span className="actions" style={{ justifyContent: "flex-end", flexWrap: "nowrap" }}>
+                            <AssetEditor report={r.id} label="Modifică" shared={a.other_reports} initial={assetForm(a)} />
+                            {assets.length > 1 && a.inspection_status !== "done" && !a.sheet_status && <RemoveAsset report={r.id} asset={a.id} name={cap(a.type) || "bunul"} />}
+                          </span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -250,6 +269,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                     <tr>
                       <td colSpan={5}>Total raport{r.value_type ? ` · ${r.value_type.toLowerCase()}` : ""}{r.valuation_date ? ` la ${fmtDate(r.valuation_date)}` : ""}</td>
                       <td className="mono num r">{lei(assetsTotal || r.result_value, cur)}</td>
+                      <td />
                     </tr>
                   </tfoot>
                 </table>

@@ -51,11 +51,11 @@ export const dueOf = (r: { due_on: string | null; term_days: number | null }, in
 // ---------- opening the file ----------
 
 const PROPERTY: Record<string, [category: string | null, type: string]> = {
-  apartment: ["REZIDENTIAL", "APARTAMENT"],
-  house: ["REZIDENTIAL", "CASA"],
-  land: ["TEREN", "TEREN"],
-  commercial: ["COMERCIAL", "SPATIU COMERCIAL"],
-  industrial: ["INDUSTRIAL", "HALA"],
+  apartment: ["REZIDENTIAL", "APARTAMENT IN BLOC"],
+  house: ["REZIDENTIAL", "CASA CU TEREN"],
+  land: ["TEREN", "TEREN INTRAVILAN CONSTRUCTII"],
+  commercial: ["COMERCIAL", "SPATIU COMERCIAL - PARTE DINTR-O CLADIRE"],
+  industrial: ["INDUSTRIAL", "SPATIU DE PRODUCTIE"],
   other: [null, "ALTA PROPRIETATE"],
 };
 
