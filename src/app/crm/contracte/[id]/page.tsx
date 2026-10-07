@@ -9,6 +9,9 @@ import { CONTRACT_PURPOSES, getContract, REPORT_KINDS } from "@/lib/contracts";
 import { CrmShell } from "@/components/CrmShell";
 import { History } from "@/components/History";
 import { ContractEdit } from "./ContractEdit";
+import { ContractTermsEdit } from "./ContractTermsEdit";
+import { contractDoc } from "@/lib/contract-doc";
+import { DELIVERABLES, VALUE_TYPES } from "@/lib/contract-terms";
 
 export const metadata: Metadata = { title: "Contract | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -22,7 +25,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
   if (!d) notFound();
   const k = d.contract;
   const framework = k.kind === "framework";
-  const log = await history(db, [id]);
+  const [log, doc] = await Promise.all([history(db, [id]), framework ? null : contractDoc(db, id)]);
   const t = d.totals;
 
   return (
@@ -32,7 +35,10 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
         <a href={`${base}/contracte`} className="btn btnGhost btnSm">← Contracte</a>
         {framework
           ? <a href={`${base}/comenzi/noua?contract=${k.id}`} className="btn btnGold btnSm">+ Comandă pe acest contract</a>
-          : <a href={`${base}/contracte/nou?contract=${k.id}`} className="btn btnGold btnSm">+ Raport nou pe acest contract</a>}
+          : <>
+            <a href={`${base}/contracte/${k.id}/document`} className="btn btnNavy btnSm">Document contract (PDF)</a>
+            <a href={`${base}/contracte/nou?contract=${k.id}`} className="btn btnGold btnSm">+ Raport nou pe acest contract</a>
+          </>}
       </>}>
       <div className="dbKpis ibKpis">
         <div className="dbKpi"><span className="dbKpiLabel"><i style={{ background: "var(--ink)" }} />Rapoarte</span><b>{t.n.toLocaleString("ro-RO")}</b></div>
@@ -67,6 +73,21 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
             {framework && <p className="hint">Comenzile băncii se lucrează pe acest contract și se facturează la final de lună pe borderou (sau individual, la predarea raportului, după bancă).</p>}
           </section>
 
+          {doc && (
+            <section className="card" id="termeni">
+              <div className="cardHead"><h2>Termeni de referință (Anexa 1) și plată (Anexa 2)</h2><ContractTermsEdit id={k.id} terms={doc.terms} defaults={doc.defaults} /></div>
+              <dl className="dl">
+                <div><dt>Livrabil</dt><dd>{DELIVERABLES.find(([x]) => x === doc.terms.deliverable)?.[1]}{doc.terms.deliverable === "nop" ? (doc.terms.nop_inspection ? ", cu inspecție" : ", fără inspecție") : ""} · {doc.terms.reports} {doc.terms.reports === 1 ? "raport" : "rapoarte"}</dd></div>
+                <div><dt>Termen de livrare</dt><dd>{doc.terms.term_days} zile lucrătoare de la inspecție</dd></div>
+                <div><dt>Tipul valorii</dt><dd>{VALUE_TYPES.find(([x]) => x === doc.terms.value_type)?.[1]}</dd></div>
+                <div><dt>Utilizatori desemnați</dt><dd>{doc.terms.users}</dd></div>
+                <div><dt>Bunuri în contract</dt><dd>{doc.assets.length ? doc.assets.map((a) => a.type).join(", ") : "—"}</dd></div>
+                <div><dt>Ipoteze speciale</dt><dd>{doc.terms.special}</dd></div>
+                <div><dt>Plată</dt><dd>{doc.terms.tranches.split(/\n+/).join(" · ")}</dd></div>
+              </dl>
+              {Object.keys(doc.saved).some((x) => doc.saved[x as keyof typeof doc.saved] !== undefined) && <p className="hint">Unele câmpuri sunt personalizate pe acest contract; restul se completează automat.</p>}
+            </section>
+          )}
           <section className="card flush">
             <div className="cardHead"><h2>{framework ? "Comenzi și rapoarte pe contract" : "Rapoarte pe contract"}</h2>{t.n > d.reports.length && <span className="muted">ultimele {d.reports.length} din {t.n.toLocaleString("ro-RO")}</span>}</div>
             {d.reports.length === 0 ? <div className="empty">Niciun raport pe acest contract.</div> : (

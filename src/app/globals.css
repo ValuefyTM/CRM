@@ -1318,3 +1318,56 @@ body { font-size: 13px; -moz-osx-font-smoothing: grayscale; text-rendering: opti
 .ctKindTag { font-size: 10px; font-weight: 600; padding: 0 5px; border-radius: 4px; background: color-mix(in srgb, var(--ink) 8%, transparent); margin-left: 4px; vertical-align: 1px; }
 .ctNo { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; padding: 3px 9px; border-radius: 6px; background: color-mix(in srgb, var(--acc) 18%, transparent); color: var(--acc-ink); }
 div.dbKpi::after { content: none; }
+
+/* ---------- Contract document (A4, printable) ---------- */
+.cdWrap { background: #e9e6df; min-height: 100vh; padding: 0 0 40px; color: #1a1a1a; }
+.cdBar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 16px; background: #111; }
+.cdBar .btnGhost { background: #fff; }
+.cdBarTitle { flex: 1; color: #fff; font-weight: 600; font-size: 13px; }
+.cdWarn { max-width: 210mm; margin: 14px auto 0; padding: 10px 14px; border-radius: 8px; background: #fff3cd; font-size: 13px; }
+.cdPage { width: 210mm; max-width: calc(100% - 32px); margin: 18px auto 0; background: #fff; padding: 16mm 18mm 18mm; box-shadow: 0 2px 14px rgba(0,0,0,.12);
+  font-family: "IBM Plex Sans", system-ui, sans-serif; font-size: 10pt; line-height: 1.5; }
+.cdHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 8px; margin-bottom: 14px; border-bottom: 2px solid #E9A227; }
+.cdHead img { height: 26px; width: auto; }
+.cdHead span { font-size: 8pt; color: #666; }
+.cdPage h1 { font-size: 14pt; text-align: center; letter-spacing: .04em; margin: 6px 0 10px; }
+.cdPage h2 { font-size: 10.5pt; margin: 14px 0 4px; break-after: avoid; }
+.cdPage h3 { font-size: 10pt; margin: 10px 0 2px; break-after: avoid; }
+.cdPage p { margin: 0 0 5px; text-align: justify; }
+.cdLead { text-align: center !important; }
+.cdParties { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0 6px; }
+.cdParties section { border: 1px solid #d8d4cc; border-radius: 6px; padding: 8px 10px; }
+.cdParties h3 { margin: 0 0 2px; font-size: 8.5pt; letter-spacing: .08em; color: #8a6a1c; }
+.cdParties dl { display: grid; grid-template-columns: auto 1fr; gap: 1px 8px; margin: 4px 0 0; font-size: 9pt; }
+.cdParties dt { color: #666; }
+.cdParties dd { margin: 0; }
+.cdDefs { margin: 4px 0 6px; padding-left: 18px; }
+.cdDefs li { margin-bottom: 3px; text-align: justify; }
+.cdChecks { list-style: none; margin: 2px 0 6px; padding: 0 0 0 10px; }
+.cdChecks li { margin: 1px 0; }
+.cdCols { columns: 2; }
+.cdBox { font-size: 11pt; margin-right: 3px; }
+.cdDef { font-size: 9pt; color: #333; background: #faf8f3; padding: 6px 8px; border-left: 3px solid #E9A227; }
+.cdTable { width: 100%; border-collapse: collapse; margin: 4px 0 8px; font-size: 9pt; }
+.cdTable th, .cdTable td { border: 1px solid #cfcac0; padding: 4px 6px; text-align: left; vertical-align: top; }
+.cdTable th { background: #f4f1ea; }
+.cdBlank { color: #888; font-style: italic; }
+.cdContacts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 4px 0 6px; font-size: 9pt; }
+.cdContacts div { display: flex; flex-direction: column; }
+.cdPlain { margin: 2px 0 6px; padding-left: 18px; }
+.cdSign { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 22px; break-inside: avoid; }
+.cdSign > div { display: flex; flex-direction: column; min-height: 110px; position: relative; }
+.cdSign small { color: #555; }
+.cdSignLine { margin-top: auto; border-bottom: 1px solid #999; width: 70%; height: 40px; }
+.cdSeal { position: relative; height: 90px; margin-top: 4px; }
+.cdStamp { position: absolute; left: 0; top: 0; width: 88px; opacity: .9; }
+.cdSig { position: absolute; left: 50px; top: 18px; width: 120px; }
+@media (max-width: 760px) { .cdPage { padding: 18px 16px; } .cdParties, .cdContacts, .cdSign { grid-template-columns: 1fr; } .cdCols { columns: 1; } }
+@media print {
+  @page { size: A4; margin: 12mm 0; }
+  .cdBar, .cdWarn { display: none !important; }
+  html, body { background: #fff !important; }
+  .cdWrap { background: #fff; padding: 0; }
+  .cdPage { box-shadow: none; margin: 0 auto; padding: 0 16mm; width: auto; max-width: none; break-after: page; }
+  .cdPage:last-child { break-after: auto; }
+}
