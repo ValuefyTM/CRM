@@ -12,7 +12,7 @@ const EMAIL = "contact@valuefy.ro";
 const day = (d: string | null) => (d ? new Date(d).toLocaleDateString("ro-RO", { day: "2-digit", month: "long", year: "numeric", timeZone: "Europe/Bucharest" }) : "—");
 const stamp = (d: string | null) => (d ? new Date(d).toLocaleString("ro-RO", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Bucharest" }) : "—");
 
-export function OfferView({ offer: o, order, preview = false, toolbar }: { offer: Offer; order: Order; preview?: boolean; toolbar?: React.ReactNode }) {
+export function OfferView({ offer: o, order, preview = false, toolbar, delivered }: { offer: Offer; order: Order; preview?: boolean; toolbar?: React.ReactNode; delivered?: string | null }) {
   const t = offerTotals(o);
   const docs = offerDocs(o);
   const terms = termSections(o.terms);
@@ -59,6 +59,12 @@ export function OfferView({ offer: o, order, preview = false, toolbar }: { offer
 
       <main className="ofMain">
         {preview && (toolbar ?? <div className="ofBanner">Previzualizare din CRM — așa vede clientul oferta. Butoanele de acceptare sunt dezactivate aici.</div>)}
+        {delivered && (
+          <div className="ofBanner ok" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, justifyContent: "space-between" }}>
+            <span><b>Raportul de evaluare este gata</b> (livrat pe {day(delivered)}).</span>
+            <a className="ofBtnGold" style={{ height: 44, padding: "0 20px", borderRadius: 999 }} href={`/api/offer/${o.token}/report`}>Descarcă raportul (PDF) ↓</a>
+          </div>
+        )}
         {o.status === "declined" && <div className="ofBanner err">Oferta a fost refuzată{o.declined_at ? ` pe ${day(o.declined_at)}` : ""}. Pentru o ofertă nouă, scrie-ne la <a href={`mailto:${EMAIL}`}>{EMAIL}</a>.</div>}
         {expired && <div className="ofBanner err">Oferta a expirat pe {day(o.valid_until)}. Scrie-ne la <a href={`mailto:${EMAIL}`}>{EMAIL}</a> sau sună la {PHONE} pentru o ofertă actualizată.</div>}
 

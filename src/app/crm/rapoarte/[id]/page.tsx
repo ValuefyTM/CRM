@@ -13,7 +13,9 @@ import { ReportList } from "@/components/ReportList";
 import { AssignInspection, CancelInspection } from "./InspectionActions";
 import { canAssign, inspectorChoices } from "@/lib/insp-assign";
 import { guessSheetType } from "@/lib/insp-forms";
-import { AddMember, DeleteDoc, DeliverButton, FinalDrop, MissingDoc, NotesEditor, RemoveMember, SafeImg, StatusButton, UploadButton } from "./ReportActions";
+import { AddMember, DeleteDoc, DeliverButton, FinalDrop, MissingDoc, NotesEditor, RemoveMember, SafeImg, StageActions, StatusButton, UploadButton } from "./ReportActions";
+import { dueOf, STAGE_LABEL, STAGE_ORDER, stageOf } from "@/lib/dossier";
+import { nextReportNumber, noticeTarget } from "@/lib/delivery";
 
 export const metadata: Metadata = { title: "Raport | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -52,7 +54,16 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   ]);
   const main = assets.find((a) => a.is_main) ?? assets[0];
   const [mayAssign, inspectors] = await Promise.all([canAssign(db, user, id), inspectorChoices(db, user.id)]);
-  const [history, log] = await Promise.all([main ? propertyHistory(db, main.property_id, id) : Promise.resolve([]), reportLog(db, r, assets)]);
+  const [history, log, suggested, notifyTo] = await Promise.all([
+    main ? propertyHistory(db, main.property_id, id) : Promise.resolve([]), reportLog(db, r, assets),
+    r.number ? Promise.resolve("") : nextReportNumber(db), r.delivered_at ? Promise.resolve(null) : noticeTarget(db, r.order_id),
+  ]);
+  // Working stage and deadline (from the offer: working days counted from the inspection).
+  const tasks = assets.filter((a) => a.inspection_status && a.inspection_status !== "cancelled");
+  const stage = stageOf(r, { total: tasks.length, done: tasks.filter((a) => a.inspection_status === "done").length });
+  const inspectedOn = tasks.map((a) => a.done_at).filter((d): d is string => !!d).sort().pop()?.slice(0, 10) ?? null;
+  const due = dueOf(r, inspectedOn);
+  const late = !!due && stage !== "delivered" && due < new Date().toISOString().slice(0, 10);
   const [label, cls] = REPORT_STATUS[r.status] ?? [r.status, ""];
   const cur = r.currency === "EUR" ? "EUR" : "lei";
   const evaluator = team.find((m) => m.role === "evaluator");
@@ -129,6 +140,21 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
         </dl>
       </section>
 
+      {!r.glide_id && r.status !== "cancelled" && (
+        <section className="card stageBar">
+          <ol className="stageSteps" aria-label="Etapa raportului">
+            {STAGE_ORDER.map((k, i) => {
+              const at = STAGE_ORDER.indexOf(stage);
+              return <li key={k} className={i < at ? "past" : i === at ? "on" : ""}><span className="dot">{i < at ? "✓" : i + 1}</span>{STAGE_LABEL[k]}</li>;
+            })}
+          </ol>
+          <div className="stageInfo">
+            <span className={late ? "pill pillErr" : due ? "pill pillInfo" : "pill"}><i />
+              {due ? `${late ? "Termen depășit" : "Termen"}: ${fmtDate(due)}` : r.term_days ? `Termen: ${r.term_days} zile lucrătoare de la inspecție` : "Fără termen"}</span>
+            <StageActions id={r.id} stage={stage} hasVerifier={!!verifier} />
+          </div>
+        </section>
+      )}
       {r.status === "suspended" && r.suspend_reason && <div className="note"><b>Suspendat:</b> {r.suspend_reason}</div>}
 
       <nav className="pillTabs" aria-label="Secțiuni raport">
@@ -443,7 +469,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
               <Row k="Predat">{r.delivered_at ? `${fmtDate(r.delivered_at, true)}${r.delivered_by_name ? ` · ${r.delivered_by_name}` : ""}` : null}</Row>
             </dl>
             {missing.length > 0 && <div className="note">{missing.length === 1 ? "Lipsește un document" : `Lipsesc ${missing.length} documente`} din lista de documente sursă.</div>}
-            {!r.delivered_at && <DeliverButton id={r.id} ready={!!final} />}
+            {r.client_notified_at && <p className="hint">Clientul a fost anunțat pe email la {fmtDate(r.client_notified_at, true)} și descarcă raportul din portal.</p>}
+            {!r.delivered_at && <DeliverButton id={r.id} ready={!!final} number={r.number} suggested={suggested} notifyTo={notifyTo} />}
           </section>
         </div>
       )}

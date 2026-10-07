@@ -15,6 +15,9 @@ import { hasDuty } from "@/lib/labels";
 import { isExpired, money, offerDocs, offerDraft, offerForOrder, offerTotals, type OfferInput } from "@/lib/offers";
 import { offerLink } from "@/lib/offer-emails";
 import { OfferEditor } from "./OfferEditor";
+import { DossierOpen } from "./DossierOpen";
+import { orderProgress } from "@/lib/delivery";
+import { inspectorChoices } from "@/lib/insp-assign";
 
 export const metadata: Metadata = { title: "Comandă | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -33,16 +36,22 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
   }
   const [docs, log, reports] = await Promise.all([orderDocuments(db, id), history(db, [id]), reportsForOrder(db, id)]);
   const portal = o.source === "partner" || o.source === "client";
+  const progress = o.glide_id ? null : await orderProgress(db, o);
   const lead = o.lead_id ? await getLead(db, o.lead_id) : null;
 
   // Offers: for orders from the portal and the website (bank orders follow the framework contract).
   const offerable = !o.glide_id && (portal || o.source === "site");
   const offer = offerable ? await offerForOrder(db, id) : null;
-  const evaluators = offerable
+  const evaluators = !o.glide_id
     ? (await db.prepare("SELECT id, COALESCE(NULLIF(name, ''), email) AS name, anevar_no, role, duties FROM users WHERE kind = 'internal' AND status <> 'disabled' AND (role IN ('evaluator', 'owner', 'admin') OR ',' || COALESCE(duties, '') || ',' LIKE '%,evaluator,%') ORDER BY name")
       .all<{ id: string; name: string; anevar_no: string | null; role: string; duties: string | null }>()).results
       .map((e) => ({ ...e, role: hasDuty(e, "evaluator") ? "evaluator" : e.role }))
     : [];
+  const inspectors = !o.glide_id && !reports.length ? await inspectorChoices(db, user.id) : [];
+  // Processing: the order becomes a report file. Portal / website orders open it when the offer is signed (or by hand,
+  // e.g. accepted by phone); bank and collaboration orders are processed straight away under their contract.
+  const dossier = reports[0] ?? null;
+  const contractOrder = o.source === "bank" || o.source === "collab";
   let offerInitial: OfferInput | null = null;
   if (offerable) {
     const draft = offerDraft(o, docs, evaluators.find((e) => e.id === user.id && e.role === "evaluator") ?? evaluators.find((e) => e.role === "evaluator") ?? null);
@@ -111,6 +120,39 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
               </dl>
             </section>
           )}
+          {!o.glide_id && o.status !== "cancelled" && (
+            <section className="card" style={{ border: `1.5px solid ${dossier ? "var(--line)" : "var(--acc)"}` }}>
+              <div className="cardHead">
+                <h2>Procesare</h2>
+                <span className={`pill ${dossier ? "pillOk" : offer?.status === "accepted" || contractOrder ? "pillWarn" : ""}`}><i />
+                  {dossier ? "Dosar deschis" : offer?.status === "accepted" || contractOrder ? "De deschis dosarul" : "Așteaptă acceptarea ofertei"}</span>
+              </div>
+              {dossier ? (
+                <div className="actions">
+                  <p className="hint" style={{ margin: 0 }}>Comanda se lucrează în dosarul {dossier.number ? `nr. ${dossier.number}` : dossier.label ?? ""}: inspecție, redactare, verificare și livrare.</p>
+                  <a className="btn btnNavy btnSm" href={`${base}/rapoarte/${dossier.id}`}>Deschide dosarul →</a>
+                </div>
+              ) : (
+                <div className="actions">
+                  <p className="hint" style={{ margin: 0, flex: "1 1 260px" }}>
+                    {contractOrder ? `Comandă în ${o.source === "bank" ? "contractul cadru" : "colaborarea"} ${o.contract_number ?? o.collab_firm ?? ""}: se procesează direct, fără ofertă.`
+                      : offer?.status === "accepted" ? "Oferta e semnată. Deschide dosarul și alocă evaluatorul și inspecția."
+                      : "Dosarul se deschide automat când clientul semnează oferta, pe evaluatorul din ofertă. Dacă a acceptat pe alt canal (telefon, email), îl poți deschide acum."}
+                  </p>
+                  <DossierOpen
+                    order={o.id} base={base} me={user.id} evaluator={offer?.evaluator_id ?? null}
+                    evaluators={evaluators.map((e) => ({ id: e.id, name: e.name, role: e.role }))}
+                    inspectors={inspectors.map((x) => ({ id: x.id, name: x.name, role: x.role }))}
+                    label={contractOrder || offer?.status === "accepted" ? "Deschide dosarul" : "Deschide dosarul acum"}
+                    primary={contractOrder || offer?.status === "accepted"}
+                    hint={`${orderWhat(o)}${o.address ? ` · ${orderPlace(o)}` : ""} · ${o.client_name ?? ""}. Evaluatorul principal primește dosarul pe email și alocă inspecția (sau o aloci acum).`}
+                    warn={!contractOrder && offer?.status !== "accepted" ? "Oferta nu este semnată în portal. Deschide dosarul doar dacă clientul a acceptat pe alt canal." : null}
+                    dueDefault={contractOrder ? null : undefined}
+                  />
+                </div>
+              )}
+            </section>
+          )}
           {offerable && offerInitial && (
             <OfferEditor
               orderId={o.id} base={base} initial={offerInitial} evaluators={evaluators}
@@ -127,7 +169,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
           {!o.glide_id && o.source !== "site" && <OrderDocuments o={o} docs={docs} canUpload={false} href={(d) => `/api/crm/orders/${o.id}/documents/${d.id}`} />}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
-          <OrderStatusCard o={o} docs={docs} />
+          <OrderStatusCard o={o} docs={docs} progress={progress ? { ...progress, due: progress.report?.due } : undefined} />
           <History log={log} />
         </div>
       </div>

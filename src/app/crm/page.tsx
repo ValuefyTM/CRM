@@ -23,7 +23,7 @@ export default async function CrmHome() {
       <section className="hero">
         <span className="eyebrow">Bun venit{first ? `, ${first}` : ""}</span>
         <h2>CRM-ul VALUEFY, prima etapă.</h2>
-        <p>Primești comenzile din portal, cu toate datele și documentele, și gestionezi utilizatorii: echipa și evaluatorii, colaboratorii și clienții. Ofertarea, alocarea evaluatorilor și facturarea vin în etapele următoare.</p>
+        <p>Primești comenzile din portal, cu toate datele și documentele, și gestionezi utilizatorii: echipa și evaluatorii, colaboratorii și clienții. Comenzile se procesează în dosare (oferta semnată sau contractul cadru), cu inspecție, verificare și livrare în portal. Facturarea vine în etapa următoare.</p>
         <div className="actions" style={{ position: "relative", zIndex: 1 }}>
           <a href={`${base}/comenzi`} className="btn btnGold btnPill">Comenzi primite →</a>
           <a href={`${base}/utilizatori/nou`} className="btn btnPill" style={{ background: "rgba(255,255,255,.1)", color: "#fff" }}>+ Utilizator nou</a>

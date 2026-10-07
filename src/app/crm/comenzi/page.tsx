@@ -54,7 +54,8 @@ export default async function CrmOrdersPage({ searchParams }: { searchParams: Pr
   ];
 
   return (
-    <CrmShell user={user} base={base} active="orders" title="Comenzi primite" subtitle={`${orders.length.toLocaleString("ro-RO")} comenzi${unread(rows) ? ` · ${unread(rows)} noi` : ""}${newLeads ? ` · ${newLeads} vânzări noi de pe site` : ""}`}>
+    <CrmShell user={user} base={base} active="orders" title="Comenzi primite" subtitle={`${orders.length.toLocaleString("ro-RO")} comenzi${unread(rows) ? ` · ${unread(rows)} noi` : ""}${newLeads ? ` · ${newLeads} vânzări noi de pe site` : ""}`}
+      actions={<a href={`${base}/comenzi/noua`} className="btn btnGold btnSm">+ Lucrare bancă / colaborare</a>}>
       <div className="kpis" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
         {CARDS.map(([f, label, dot, n, sub]) => (
           <a key={f} className="kpi" href={sp.f === f ? `${base}/comenzi${tabQs ? `?${tabQs}` : ""}` : link(f)} aria-current={sp.f === f ? "true" : undefined} style={{ ["--dot" as string]: dot }}>

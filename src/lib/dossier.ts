@@ -1,0 +1,179 @@
+// Server-only: processing an order. Every order becomes a report file ("dosar"): client, property and asset, team,
+// fee and deadline. Portal / website orders open it when the client accepts the offer; bank and collaboration orders are
+// registered directly under the framework contract or collaboration agreement (the order stays as the statement line).
+import { now, uuid } from "./db";
+import { audit } from "./auth";
+import { esc, layout, sendEmail } from "./email";
+import { appUrl } from "./site";
+import { getOrder, type Order } from "./orders";
+import { propertyLabel } from "./order-labels";
+import { offerForOrder, type Offer } from "./offers";
+
+// ---------- stages and deadline ----------
+
+/** Working stages shown on the report and, for the client, on the order timeline. */
+export const STAGE_LABEL: Record<string, string> = {
+  inspection: "Inspecție",
+  drafting: "Redactare",
+  review: "Verificare",
+  delivered: "Livrat",
+};
+export const STAGE_ORDER = ["inspection", "drafting", "review", "delivered"] as const;
+export type Stage = (typeof STAGE_ORDER)[number];
+
+/**
+ * Stage of a report: delivered once handed over; review when sent to the verifier; drafting when set by hand or once
+ * every inspection of the report is done (or there is nothing to inspect); otherwise waiting for the inspection.
+ */
+export function stageOf(r: { stage: string | null; delivered_at: string | null; status: string }, insp: { total: number; done: number }): Stage {
+  if (r.delivered_at || r.status === "done") return "delivered";
+  if (r.stage === "review") return "review";
+  if (r.stage === "drafting" || (insp.total > 0 && insp.done === insp.total)) return "drafting";
+  return "inspection";
+}
+
+/** YYYY-MM-DD plus n working days (Monday to Friday). */
+export function addWorkdays(iso: string, n: number) {
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
+  let left = n;
+  while (left > 0) {
+    d.setUTCDate(d.getUTCDate() + 1);
+    const w = d.getUTCDay();
+    if (w !== 0 && w !== 6) left--;
+  }
+  return d.toISOString().slice(0, 10);
+}
+
+/** Deadline: set by hand, else the offer's working days counted from the inspection (unknown before it is done). */
+export const dueOf = (r: { due_on: string | null; term_days: number | null }, inspectedOn: string | null) =>
+  r.due_on ?? (r.term_days && inspectedOn ? addWorkdays(inspectedOn, r.term_days) : null);
+
+// ---------- opening the file ----------
+
+const PROPERTY: Record<string, [category: string | null, type: string]> = {
+  apartment: ["REZIDENTIAL", "APARTAMENT"],
+  house: ["REZIDENTIAL", "CASA"],
+  land: ["TEREN", "TEREN"],
+  commercial: ["COMERCIAL", "SPATIU COMERCIAL"],
+  industrial: ["INDUSTRIAL", "HALA"],
+  other: [null, "ALTA PROPRIETATE"],
+};
+
+export type OpenOptions = {
+  evaluator_id?: string | null; verifier_id?: string | null; due_on?: string | null; term_days?: number | null; fee?: number | null; notes?: string | null;
+};
+
+/** Client of the order as a CRM client: the one already linked, the portal client's own record, a match by email / phone, or a new one. */
+async function clientFor(db: D1Database, o: Order, actor: string) {
+  if (o.client_id) return o.client_id;
+  if (o.source === "client" && o.created_by) {
+    const u = await db.prepare("SELECT entity_id FROM users WHERE id = ?").bind(o.created_by).first<{ entity_id: string | null }>();
+    if (u?.entity_id) return u.entity_id;
+  }
+  const email = (o.client_email ?? (o.source === "client" ? o.creator_email : null))?.trim().toLowerCase() || null;
+  const phone = (o.client_phone ?? "").replace(/\D/g, "").slice(-9);
+  const found = await db
+    .prepare(`SELECT id FROM entities WHERE kind IN ('person', 'company') AND ((? IS NOT NULL AND lower(email) = ?) OR (length(?) = 9 AND substr(replace(replace(replace(phone, ' ', ''), '.', ''), '-', ''), -9) = ?))
+      ORDER BY updated_at DESC LIMIT 1`)
+    .bind(email, email, phone, phone)
+    .first<{ id: string }>();
+  if (found) return found.id;
+  const id = uuid();
+  await db.prepare("INSERT INTO entities (id, kind, name, phone, email, city, created_by) VALUES (?, 'person', ?, ?, ?, ?, ?)")
+    .bind(id, o.client_name || o.creator_name || "Client", o.client_phone, email, o.city, actor).run();
+  return id;
+}
+
+/** The bank that receives the report: the one on the order, else the entity matching the bank chosen in the portal. */
+async function recipientFor(db: D1Database, o: Order) {
+  if (o.bank_id) return o.bank_id;
+  if (!o.bank) return null;
+  const b = await db.prepare("SELECT id FROM entities WHERE kind IN ('bank', 'ifn') AND (upper(code) = upper(?) OR upper(name) = upper(?) OR upper(name) LIKE upper(?) || '%') ORDER BY approved DESC LIMIT 1")
+    .bind(o.bank, o.bank, o.bank).first<{ id: string }>();
+  return b?.id ?? null;
+}
+
+/** Fee without VAT of an accepted offer (express delivery included when chosen). */
+const offerFee = (f: Offer) => f.fee + (f.travel_fee ?? 0) + (f.accepted_urgent && f.urgent_fee ? f.urgent_fee : 0);
+
+/**
+ * Opens the report file of an order (once: returns the existing one). `actor` is the team member, or null when it
+ * opens by itself (the client accepted the offer). The evaluator of the offer gets the file and an email.
+ */
+export async function openDossier(db: D1Database, orderId: string, actor: { id: string; name: string } | null, opts: OpenOptions = {}) {
+  const o = await getOrder(db, orderId);
+  if (!o) return { ok: false as const, error: "Comanda nu există." };
+  const existing = await db.prepare("SELECT id FROM reports WHERE order_id = ? ORDER BY created_at LIMIT 1").bind(orderId).first<{ id: string }>();
+  if (existing) return { ok: true as const, id: existing.id, created: false };
+  if (o.status === "cancelled") return { ok: false as const, error: "Comanda este anulată." };
+
+  const offer = o.source === "bank" || o.source === "collab" ? null : await offerForOrder(db, orderId);
+  const accepted = offer?.status === "accepted" ? offer : null;
+  const who = actor ? `user:${actor.id}` : "client:offer";
+  const t = now();
+  const day = t.slice(0, 10);
+
+  const [clientId, recipientId, issuer] = await Promise.all([
+    clientFor(db, o, actor?.id ?? "system"),
+    recipientFor(db, o),
+    db.prepare("SELECT id FROM entities WHERE kind = 'valuation_firm' AND upper(name) LIKE 'VALUEFY%' LIMIT 1").first<{ id: string }>(),
+  ]);
+
+  // Property and the asset valued (the main one); more assets can be added on the report.
+  const [category, type] = PROPERTY[o.property_type ?? ""] ?? [null, (o.report_type ?? "BUN").toUpperCase()];
+  const propertyId = uuid(), assetId = uuid(), reportId = uuid();
+  const where = [o.address, o.city].filter(Boolean).join(", ") || null;
+  const label = [o.client_name || o.creator_name, [o.property_type ? propertyLabel(o.property_type) : o.report_type, o.city].filter(Boolean).join(", ")].filter(Boolean).join(" · ");
+  const evaluator = opts.evaluator_id ?? accepted?.evaluator_id ?? null;
+  const term = opts.term_days ?? (accepted ? (accepted.accepted_urgent && accepted.urgent_days ? accepted.urgent_days : accepted.term_days) : null);
+  const fee = opts.fee ?? (accepted ? offerFee(accepted) : o.fee);
+
+  await db.batch([
+    db.prepare(`INSERT INTO crm_properties (id, category, type, city, full_address, usable_area, description) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      .bind(propertyId, category, type, o.city, where, o.surface_area ?? null,
+        [o.rooms ? `${o.rooms} camere` : null, o.land_area ? `teren ${o.land_area} mp` : null].filter(Boolean).join(" · ") || null),
+    db.prepare(`INSERT INTO reports (id, label, issuer_id, contract_id, order_id, client_id, recipient_id, bank_branch, report_type, valuation_types, purpose, value_type,
+        received_on, fee, status, reporting_year, referral_user_id, notes, term_days, due_on, offer_id, opened_by, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'EPI', ?, ?, ?, ?, 'in_progress', ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(reportId, label || null, issuer?.id ?? null, o.contract_id, o.id, clientId, recipientId, o.bank_branch, o.report_type, o.purpose,
+        accepted?.value_type ?? null, day, fee ?? null, Number(day.slice(0, 4)), o.source === "partner" ? o.created_by : null, opts.notes ?? null,
+        term ?? null, opts.due_on ?? null, accepted?.id ?? null, actor?.id ?? null, t, t),
+    // The asset after its report (foreign key).
+    db.prepare("INSERT INTO assets (id, report_id, property_id, is_main) VALUES (?, ?, ?, 1)").bind(assetId, reportId, propertyId),
+    ...(evaluator ? [db.prepare("INSERT OR IGNORE INTO report_members (report_id, user_id, role) VALUES (?, ?, 'evaluator')").bind(reportId, evaluator)] : []),
+    ...(opts.verifier_id ? [db.prepare("INSERT OR IGNORE INTO report_members (report_id, user_id, role) VALUES (?, ?, 'verifier')").bind(reportId, opts.verifier_id)] : []),
+    db.prepare("UPDATE orders SET status = 'in_progress', client_id = ?, updated_at = ? WHERE id = ?").bind(clientId, t, o.id),
+  ]);
+  await audit(db, who, "report.opened", "report", reportId, accepted ? `din oferta ${accepted.number}` : o.source === "bank" ? "comandă bancă" : o.source === "collab" ? "colaborare" : "din comandă");
+  await audit(db, who, "order.dossier", "order", o.id, reportId);
+
+  if (evaluator && evaluator !== actor?.id) await notifyEvaluator(db, reportId, evaluator, label || "dosar nou", actor?.name ?? null, !!accepted);
+  return { ok: true as const, id: reportId, created: true, assetId };
+}
+
+async function notifyEvaluator(db: D1Database, reportId: string, userId: string, label: string, by: string | null, fromOffer: boolean) {
+  const u = await db.prepare("SELECT email, COALESCE(NULLIF(name, ''), email) AS name FROM users WHERE id = ? AND status <> 'disabled'").bind(userId).first<{ email: string; name: string }>();
+  if (!u) return;
+  const link = await appUrl("crm", `/rapoarte/${reportId}`);
+  const why = fromOffer ? "Clientul a acceptat oferta, iar dosarul s-a deschis pe numele tău" : `${by ?? "Un coleg"} ți-a dat dosarul`;
+  await sendEmail({
+    to: u.email,
+    subject: `Dosar nou: ${label}`,
+    text: `${why}: ${label}.\nAlocă inspecția și urmărește raportul din CRM: ${link}`,
+    html: layout({
+      eyebrow: "CRM VALUEFY",
+      title: "Ai un dosar nou",
+      body: `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A66">${esc(why)}: <strong style="color:#17173A">${esc(label)}</strong>.</p>
+<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A66">Pasul următor: alocă inspecția (ție sau unui coleg) din pagina raportului.</p>`,
+      button: { label: "Deschide dosarul →", url: link },
+      foot: "Primești acest email pentru că ești evaluatorul principal al raportului.",
+    }),
+  });
+}
+
+/** Team members who can lead a report: evaluators (by role or duty), owners and administrators. */
+export async function evaluatorChoices(db: D1Database) {
+  return (await db.prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role FROM users WHERE kind = 'internal' AND status <> 'disabled'
+      AND (role IN ('evaluator', 'owner', 'admin') OR ',' || COALESCE(duties, '') || ',' LIKE '%,evaluator,%') ORDER BY name`)
+    .all<{ id: string; name: string; role: string }>()).results;
+}

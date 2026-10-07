@@ -3,7 +3,9 @@ import { fmtDate } from "@/lib/guard";
 import { DOCS, docLabel, fmtSize, missingDocs, orderCode, orderPlace, orderStatus, orderWhat, STAGES, type Order, type OrderDocument } from "@/lib/orders";
 import { DocUpload } from "./DocUpload";
 
-export function OrderStatusCard({ o, docs }: { o: Order; docs: OrderDocument[] }) {
+export type OrderProgress = { steps: { label: string; at: string | null }[]; reached: number; due?: string | null };
+
+export function OrderStatusCard({ o, docs, progress }: { o: Order; docs: OrderDocument[]; progress?: OrderProgress }) {
   const [label, cls] = orderStatus(o);
   const missing = missingDocs(o.property_type, docs);
   return (
@@ -15,23 +17,26 @@ export function OrderStatusCard({ o, docs }: { o: Order; docs: OrderDocument[] }
           <span className={`pill ${cls}`}><i />{label}</span>
         </span>
       </div>
-      {missing.length > 0 && (
+      {missing.length > 0 && o.status !== "done" && o.status !== "cancelled" && (
         <div className="note"><b>Documente lipsă:</b> {missing.map((d) => d.label).join(", ")}.</div>
       )}
       {(o.status === "cancelled" || o.status === "suspended") && <p className="hint">Comanda este {o.status === "cancelled" ? "anulată" : "suspendată"}.</p>}
       <ol className="timeline">
-        {STAGES.map((s, i) => {
-          // Processing is not built yet: new orders sit on stage 1; finished ones (Glide) are complete.
-          const reached = o.status === "done" ? 6 : o.status === "in_progress" ? 4 : 0;
-          const state = i < reached ? "past" : i === reached && reached < 6 ? "on" : i === 1 && missing.length ? "warn" : "";
+        {(progress?.steps ?? STAGES.map((label) => ({ label, at: null as string | null }))).map((st, i) => {
+          // Without progress (old callers): finished orders (Glide) are complete, the rest sit on the first stage.
+          const reached = progress ? progress.reached : o.status === "done" ? STAGES.length : o.status === "in_progress" ? 4 : 0;
+          const total = progress?.steps.length ?? STAGES.length;
+          const state = i < reached ? "past" : i === reached && reached < total ? "on" : i === 1 && missing.length ? "warn" : "";
+          const when = i === 0 ? fmtDate(o.created_at, true) : st.at && i <= reached ? fmtDate(st.at, st.at.length > 10) : null;
           return (
-            <li key={s} className={state}>
+            <li key={st.label} className={state}>
               <span className="dot">{state === "warn" ? "!" : state === "past" ? "✓" : ""}</span>
-              <span>{s}{i === 0 && <span className="muted"> · {fmtDate(o.created_at, true)}</span>}{state === "warn" && <span className="muted"> · așteptăm documentele</span>}</span>
+              <span>{st.label}{when && <span className="muted"> · {when}</span>}{state === "warn" && <span className="muted"> · așteptăm documentele</span>}</span>
             </li>
           );
         })}
       </ol>
+      {progress?.due && o.status !== "done" && <p className="hint">Termen estimat de livrare: <b>{fmtDate(progress.due)}</b></p>}
     </section>
   );
 }

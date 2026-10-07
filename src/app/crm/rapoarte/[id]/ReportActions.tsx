@@ -150,21 +150,70 @@ export function DeleteDoc({ id, doc, name }: { id: string; doc: string; name: st
   );
 }
 
-export function DeliverButton({ id, ready }: { id: string; ready: boolean }) {
+/**
+ * "Predă raportul": number and date of the report, then "Finalizat" on the report and the order. For portal and
+ * website orders the client gets an email with the download link (unless unticked).
+ */
+export function DeliverButton({ id, ready, number, suggested, notifyTo }: { id: string; ready: boolean; number: string | null; suggested: string; notifyTo: string | null }) {
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ number: number ?? suggested, report_date: new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" }), notify: !!notifyTo });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!f.number.trim()) return setMsg("Completează numărul raportului.");
+    setBusy(true); setMsg("");
+    const error = await patch(id, { delivered: true, ...f });
+    setBusy(false);
+    if (error) return setMsg(error);
+    location.reload();
+  };
   return (
     <>
-      <button type="button" className="btn btnNavy btnSm" style={{ alignSelf: "flex-start" }} disabled={busy || !ready} title={ready ? undefined : "Încarcă întâi PDF-ul semnat"} onClick={async () => {
-        if (!confirm("Marchezi raportul ca predat? Statusul devine Finalizat.")) return;
-        setBusy(true);
-        const error = await patch(id, { delivered: true });
-        setBusy(false);
-        if (error) return setMsg(error);
-        location.reload();
-      }}>{busy ? "Se salvează…" : "Marchează ca predat"}</button>
-      {msg && <div role="alert" className="error">{msg}</div>}
+      <button type="button" className="btn btnGold btnSm" style={{ alignSelf: "flex-start" }} disabled={!ready} title={ready ? undefined : "Încarcă întâi PDF-ul semnat"} onClick={() => setOpen(true)}>Predă raportul</button>
+      {open && (
+        <div className="vfModal" role="dialog" aria-modal="true" aria-labelledby="delTitle" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
+          <form className="vfModalBox" onSubmit={submit}>
+            <h2 id="delTitle">Predă raportul</h2>
+            <p className="hint">Raportul devine Finalizat, iar comanda se închide.</p>
+            <div className="formRow">
+              <label className="field">Nr. raport<input className="input mono" value={f.number} onChange={(e) => setF({ ...f, number: e.target.value })} readOnly={!!number} /></label>
+              <label className="field">Data raportului<input className="input" type="date" value={f.report_date} onChange={(e) => setF({ ...f, report_date: e.target.value })} /></label>
+            </div>
+            {notifyTo ? (
+              <label className="check"><input type="checkbox" checked={f.notify} onChange={(e) => setF({ ...f, notify: e.target.checked })} />
+                <span>Anunță clientul pe email (<b>{notifyTo}</b>) că raportul e gata, cu linkul de descărcare</span></label>
+            ) : <p className="hint">Comanda nu vine din portal sau de pe site: predarea către bancă / client o faci pe canalul obișnuit.</p>}
+            {msg && <div role="alert" className="error">{msg}</div>}
+            <div className="actions">
+              <button type="submit" className="btn btnNavy" disabled={busy}>{busy ? "Se salvează…" : "Predă raportul"}</button>
+              <button type="button" className="btn btnGhost" onClick={() => setOpen(false)}>Renunță</button>
+            </div>
+          </form>
+        </div>
+      )}
     </>
+  );
+}
+
+/** Working stage of the report: start drafting (also without an inspection), send to the verifier, or go back. */
+export function StageActions({ id, stage, hasVerifier }: { id: string; stage: string; hasVerifier: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const go = async (next: string | null, ask?: string) => {
+    if (ask && !confirm(ask)) return;
+    setBusy(true);
+    const error = await patch(id, { stage: next });
+    setBusy(false);
+    if (error) return alert(error);
+    location.reload();
+  };
+  if (stage === "delivered") return null;
+  return (
+    <span className="actions" style={{ gap: 8 }}>
+      {stage === "inspection" && <button type="button" className="linkBtn" disabled={busy} onClick={() => go("drafting", "Treci raportul la redactare fără să aștepți inspecția?")}>Începe redactarea</button>}
+      {stage === "drafting" && <button type="button" className="btn btnNavy btnSm" disabled={busy} onClick={() => go("review")}>{hasVerifier ? "Trimite la verificare" : "Marchează în verificare"}</button>}
+      {stage === "review" && <button type="button" className="linkBtn" disabled={busy} onClick={() => go("drafting")}>← Înapoi la redactare</button>}
+    </span>
   );
 }
 

@@ -92,6 +92,7 @@ export type Report = ReportRow & {
   bank_name: string | null; contract_number: string | null; contract_kind: string | null; contract_date: string | null; contract_fee: number | null;
   referral_name: string | null; referral_id: string | null;
   notes: string | null; delivered_at: string | null; delivered_by_name: string | null; updated_at: string;
+  stage: string | null; term_days: number | null; due_on: string | null; offer_id: string | null; client_notified_at: string | null;
   order_seq: number | null; order_bank_ref: string | null; order_source: string | null; statement_number: string | null; client_code: string | null;
   recipient_kind: string | null; recipient_email: string | null; recipient_phone: string | null; recipient_code: string | null; issuer_logo: string | null;
 };
@@ -215,7 +216,10 @@ const REPORT_ACTION: Record<string, (d: string | null) => string> = {
   "report.document_missing": (d) => `Document solicitat${d ? `: ${d}` : ""}`,
   "report.document_remove": (d) => `Document șters${d ? `: ${d}` : ""}`,
   "report.final": (d) => `Raport final încărcat${d ? `: ${d}` : ""}`,
-  "report.delivered": () => "Raport marcat ca predat",
+  "report.delivered": (d) => `Raport predat${d ? ` (${d})` : ""}`,
+  "report.opened": (d) => `Dosar deschis${d ? ` ${d}` : ""}`,
+  "report.stage": (d) => `Etapă: ${d ?? ""}`.trim(),
+  "report.client_notified": (d) => `Clientul a fost anunțat că raportul e gata${d ? ` (${d})` : ""}`,
   "report.member": (d) => `Echipă: adăugat ${d ?? ""}`.trim(),
   "report.inspection_assign": (d) => `Inspecție alocată${d ? `: ${d}` : ""}`,
   "report.inspection_reassign": (d) => `Inspecție realocată${d ? `: ${d}` : ""}`,

@@ -66,8 +66,8 @@ export const docLabel = (type: string, kind: string) =>
   kind === "other" ? "Alt document" : DOCS[type as PropertyType]?.find((d) => d.key === kind)?.label ?? kind;
 export const orderRef = (seq: number) => `CO-${seq}`;
 
-/** The six stages shown on the order timeline. Orders stay on the first one until processing is built. */
-export const STAGES = ["Comandă primită", "Documente complete", "Inspecție programată", "Inspecție realizată", "Raport în lucru", "Raport livrat"];
+/** Stages of the order timeline (the real progress comes from orderProgress in src/lib/delivery.ts). */
+export const STAGES = ["Comandă primită", "Ofertă acceptată", "Inspecție programată", "Inspecție realizată", "Raport în lucru", "În verificare", "Raport livrat"];
 
 export const ACCEPT = ".pdf,.jpg,.jpeg,.png,.heic,.webp,.doc,.docx";
 export const MAX_FILE_MB = 20;

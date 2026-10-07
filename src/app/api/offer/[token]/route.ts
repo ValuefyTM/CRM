@@ -4,6 +4,7 @@ import { err, json } from "@/lib/api";
 import { getOrder } from "@/lib/orders";
 import { isExpired, offerByToken, offerHash } from "@/lib/offers";
 import { sendAcceptedEmails, sendDeclinedEmail } from "@/lib/offer-emails";
+import { openDossier } from "@/lib/dossier";
 
 /**
  * Public: the client answers an offer from its page. The secret token in the link is the authorisation.
@@ -50,5 +51,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   if (urgent && !order.urgent) await db.prepare("UPDATE orders SET urgent = 1, updated_at = ? WHERE id = ?").bind(at, order.id).run();
   await audit(db, "client:offer", "offer.accepted", "order", order.id, `${offer.number} · semnată de ${name}${urgent ? " · urgent" : ""}`);
   await sendAcceptedEmails({ ...offer, status: "accepted", accepted_at: at, accepted_name: name, accepted_urgent: urgent ? 1 : 0 }, order);
+  // The signed offer opens the report file on the offer's evaluator, who then gives the inspection.
+  // A failure here must not undo the signature: the team can still open it from the order page.
+  try { await openDossier(db, order.id, null); } catch (e) { console.error("openDossier", e); }
   return Response.json({ ok: true });
 }
