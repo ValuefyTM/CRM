@@ -75,17 +75,32 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
 
           {doc && (
             <section className="card" id="termeni">
-              <div className="cardHead"><h2>Termeni de referință (Anexa 1) și plată (Anexa 2)</h2><ContractTermsEdit id={k.id} terms={doc.terms} defaults={doc.defaults} /></div>
+              <div className="cardHead"><h2>Termeni de referință{doc.annexes.length > 1 ? ` · ${doc.annexes.length} rapoarte (Anexele 1.1–1.${doc.annexes.length})` : " (Anexa 1)"}</h2></div>
+              <div className="ctAnnexes">
+                {doc.annexes.map((x) => (
+                  <div key={x.n} className="ctAnnex">
+                    <div className="ctAnnexHead">
+                      <b>{doc.annexes.length > 1 ? `Anexa 1.${x.n} · ` : ""}{x.purpose ?? "Scop nespecificat"}</b>
+                      {x.reportId ? <ContractTermsEdit id={k.id} report={x.reportId} title={`Termeni de referință${doc.annexes.length > 1 ? ` · Anexa 1.${x.n}` : ""} · ${x.purpose ?? ""}`} terms={x.terms} defaults={x.defaults} />
+                        : <span className="muted">după crearea raportului</span>}
+                    </div>
+                    <dl className="dl">
+                      <div><dt>Livrabil</dt><dd>{DELIVERABLES.find(([v]) => v === x.terms.deliverable)?.[1]}{x.terms.deliverable === "nop" ? (x.terms.nop_inspection ? ", cu inspecție" : ", fără inspecție") : ""}{x.reportType && x.reportType !== DELIVERABLES.find(([v]) => v === x.terms.deliverable)?.[1] ? ` · ${x.reportType}` : ""}</dd></div>
+                      <div><dt>Termen</dt><dd>{x.terms.term_days} zile lucrătoare de la inspecție</dd></div>
+                      <div><dt>Tipul valorii</dt><dd>{VALUE_TYPES.find(([v]) => v === x.terms.value_type)?.[1]}</dd></div>
+                      <div><dt>Utilizatori</dt><dd>{x.terms.users}</dd></div>
+                      <div><dt>Bunuri</dt><dd>{x.assets.length ? x.assets.map((a) => `${a.type}${a.shared ? " (inspecție comună)" : ""}`).join(", ") : "—"}</dd></div>
+                      {doc.annexes.length > 1 && <div><dt>Preț</dt><dd>{x.fee != null ? `${x.fee.toLocaleString("ro-RO")} lei` : "—"}</dd></div>}
+                    </dl>
+                  </div>
+                ))}
+              </div>
+              <div className="cardHead ctPayHead"><h2>Plată (Anexa 2)</h2><ContractTermsEdit id={k.id} report={null} title="Condiții de plată · Anexa 2" terms={doc.payment} defaults={doc.paymentDefaults} /></div>
               <dl className="dl">
-                <div><dt>Livrabil</dt><dd>{DELIVERABLES.find(([x]) => x === doc.terms.deliverable)?.[1]}{doc.terms.deliverable === "nop" ? (doc.terms.nop_inspection ? ", cu inspecție" : ", fără inspecție") : ""} · {doc.terms.reports} {doc.terms.reports === 1 ? "raport" : "rapoarte"}</dd></div>
-                <div><dt>Termen de livrare</dt><dd>{doc.terms.term_days} zile lucrătoare de la inspecție</dd></div>
-                <div><dt>Tipul valorii</dt><dd>{VALUE_TYPES.find(([x]) => x === doc.terms.value_type)?.[1]}</dd></div>
-                <div><dt>Utilizatori desemnați</dt><dd>{doc.terms.users}</dd></div>
-                <div><dt>Bunuri în contract</dt><dd>{doc.assets.length ? doc.assets.map((a) => a.type).join(", ") : "—"}</dd></div>
-                <div><dt>Ipoteze speciale</dt><dd>{doc.terms.special}</dd></div>
-                <div><dt>Plată</dt><dd>{doc.terms.tranches.split(/\n+/).join(" · ")}</dd></div>
+                <div><dt>Preț total</dt><dd>{doc.total != null ? `${doc.total.toLocaleString("ro-RO")} lei + TVA` : "—"}</dd></div>
+                <div><dt>Plata</dt><dd>{doc.payment.payment_when}</dd></div>
+                <div><dt>Tranșe</dt><dd>{doc.payment.tranches.split(/\n+/).join(" · ")}</dd></div>
               </dl>
-              {Object.keys(doc.saved).some((x) => doc.saved[x as keyof typeof doc.saved] !== undefined) && <p className="hint">Unele câmpuri sunt personalizate pe acest contract; restul se completează automat.</p>}
             </section>
           )}
           <section className="card flush">

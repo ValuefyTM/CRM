@@ -164,3 +164,19 @@ export async function getContract(db: D1Database, id: string) {
 export async function bankChoices(db: D1Database) {
   return (await db.prepare("SELECT id, name, code FROM entities WHERE kind IN ('bank', 'ifn') ORDER BY name").all<{ id: string; name: string; code: string | null }>()).results;
 }
+
+/**
+ * A classic contract with several reports: its purpose lists theirs and its price is the sum of their fees (each report
+ * has its own Annex 1). Kept in step whenever a report is added to it.
+ */
+export async function refreshClassicContract(db: D1Database, id: string) {
+  const k = await db.prepare("SELECT kind FROM contracts WHERE id = ?").bind(id).first<{ kind: string }>();
+  if (k?.kind !== "classic") return;
+  const { results } = await db.prepare("SELECT purpose, fee FROM reports WHERE contract_id = ? AND status <> 'cancelled' ORDER BY created_at").bind(id)
+    .all<{ purpose: string | null; fee: number | null }>();
+  if (results.length < 2) return;
+  const purpose = [...new Set(results.map((r) => r.purpose).filter(Boolean))].join(" + ") || null;
+  const fees = results.map((r) => r.fee);
+  await db.prepare("UPDATE contracts SET purpose = COALESCE(?, purpose), fee = CASE WHEN ? THEN ? ELSE fee END, updated_at = ? WHERE id = ?")
+    .bind(purpose, fees.some((f) => f != null) ? 1 : 0, fees.reduce<number>((s, f) => s + (f ?? 0), 0), now(), id).run();
+}

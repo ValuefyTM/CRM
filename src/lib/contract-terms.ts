@@ -88,3 +88,7 @@ export function cleanTerms(raw: unknown): ContractTerms {
     payment_when: s("payment_when", 200), tranches: s("tranches", 1000), print: s("print", 300),
   };
 }
+
+/** Terms kept per report (its Annex 1) and per contract (payment, Annex 2). */
+export const REPORT_FIELDS = ["users", "others", "value_type", "deliverable", "nop_inspection", "reports", "term_days", "limitations", "special", "sources"] as const;
+export const PAYMENT_FIELDS = ["payment_when", "tranches", "print"] as const;

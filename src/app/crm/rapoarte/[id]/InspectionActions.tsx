@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { NO_INSPECTION_REASONS, SHEET_TYPES } from "@/lib/insp-forms";
 import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
@@ -118,7 +118,9 @@ export type AllocRow = {
  * later. Opens by itself right after the report is created; it can be closed without giving anything.
  */
 export function AllocateAll({ report, me, people, rows, autoOpen }: { report: string; me: string; people: Person[]; rows: AllocRow[]; autoOpen: boolean }) {
-  const [open, setOpen] = useState(autoOpen);
+  // Opened after mounting: the window is a portal into document.body, which the server render does not have.
+  const [open, setOpen] = useState(false);
+  useEffect(() => { if (autoOpen) setOpen(true); }, [autoOpen]);
   const free = rows.filter((r) => r.state === "free" || r.state === "none");
   const [pick, setPick] = useState<Record<string, string>>(() => Object.fromEntries(free.map((r) => [r.asset, r.state === "none" ? "none" : ""])));
   const [reason, setReason] = useState<Record<string, string>>(() => Object.fromEntries(free.map((r) => [r.asset, r.none ?? NO_INSPECTION_REASONS[0]])));

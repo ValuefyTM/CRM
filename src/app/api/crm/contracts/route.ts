@@ -31,7 +31,10 @@ export async function POST(req: Request) {
     });
     return Response.json({ ok: true, contract: id });
   }
-  const assets = parseAssets(b.assets);
+  // A new report on an existing contract may value only properties already in it (shared inspection).
+  const onlyShared = Array.isArray(b.reports) && (!Array.isArray(b.assets) || b.assets.length === 0)
+    && (b.reports as { shared?: unknown[] }[]).some((r) => Array.isArray(r.shared) && r.shared.length > 0);
+  const assets = onlyShared ? { ok: true as const, assets: [] } : parseAssets(b.assets);
   if (!assets.ok) return err(assets.error);
   const r = await createDirectWork(a.db, { id: a.user.id, name: a.user.name }, b, assets.assets);
   if (!r.ok) return err(r.error);

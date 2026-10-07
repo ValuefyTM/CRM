@@ -24,18 +24,14 @@ export default async function ContractDocument({ params, searchParams }: { param
   const { id } = await params;
   const d = await contractDoc(db, id);
   if (!d) notFound();
-  const k = d.contract, t = d.terms;
+  const k = d.contract, pay = d.payment;
   const signed = (await searchParams).semnatura !== "0";
   // Some clients imported from Glide are firms recorded as persons: the legal form in the name tells.
   const company = k.client_kind !== "person" || /\b(S\.?R\.?L|S\.?A|PFA|S\.?C\.?S|S\.?N\.?C|II|IF)\.?$|\bSRL\b/i.test((k.client ?? "").trim());
   const client = upper(k.client) || "____________________";
   const number = k.number ?? "____";
   const date = day(k.signed_on);
-  const pk = purposeKey(k.purpose);
-  const other = !pk && k.purpose ? k.purpose : null;
-  const vt = VALUE_TYPES.find(([key]) => key === t.value_type) ?? VALUE_TYPES[0];
-  const deliverable = DELIVERABLES.find(([key]) => key === t.deliverable)?.[0] ?? "raport";
-  const fee = k.fee;
+  const many = d.annexes.length > 1;
   const address = [k.billing_address, k.city, k.county && `Jud. ${k.county}`].filter(Boolean).join(", ");
 
   const Signatures = () => (
@@ -96,7 +92,7 @@ export default async function ContractDocument({ params, searchParams }: { param
         </ul>
 
         <h2>2. CONTRACTUL ȘI OBIECTUL CONTRACTULUI</h2>
-        <p>2.1. Termenii și condițiile prestării serviciilor sunt reglementate prin Condițiile generale, Condițiile speciale (Anexa 1), Condițiile financiare (Anexa 2) și celelalte anexe, denumite în continuare, împreună, „Contractul”.</p>
+        <p>2.1. Termenii și condițiile prestării serviciilor sunt reglementate prin Condițiile generale, Condițiile speciale (Anexa 1{many ? `, câte o anexă pentru fiecare raport contractat: 1.1–1.${d.annexes.length}` : ""}), Condițiile financiare (Anexa 2) și celelalte anexe, denumite în continuare, împreună, „Contractul”.</p>
         <p>2.2. Serviciile pe care le poate presta EVALUATORUL sunt: evaluarea bunurilor imobile; evaluarea bunurilor mobile; evaluarea întreprinderilor / afacerilor; verificarea evaluărilor; servicii conexe evaluării; consultanță de specialitate.</p>
         <p>2.3. Obiectul Contractului îl reprezintă prestarea de către EVALUATOR a serviciilor solicitate de CLIENT, în condițiile și termenii prezentului Contract (denumite în continuare „Serviciile”), în schimbul achitării de către CLIENT, la termen și în integralitate, a prețului Contractului.</p>
         <p>2.4. Pentru fiecare dintre serviciile contractate se completează Condițiile speciale și anexele aferente. În cazul în care apar neconcordanțe între Condițiile speciale și Condițiile generale, au întâietate Condițiile speciale, astfel cum sunt prevăzute în Anexa 1.</p>
@@ -169,7 +165,7 @@ export default async function ContractDocument({ params, searchParams }: { param
         <p>14.2. CLIENTUL declară că nu se află în stare de insolvabilitate sau incapacitate de plată; declarațiile necorespunzătoare realității atrag răspunderea în condițiile legii.</p>
 
         <h2>15. CLAUZA PENALĂ</h2>
-        <p>15.1. Orice utilizare, distribuire, reproducere sau publicare în afara condițiilor din Anexa 1, pct. B.11 „Restricții de utilizare, difuzare sau publicare”, atrage răspunderea directă a CLIENTULUI, iar EVALUATORUL este îndreptățit la daune-interese egale cu prețul Contractului, pentru fiecare situație în parte, cu titlu de daune compensatorii conform art. 1538 din Codul civil.</p>
+        <p>15.1. Orice utilizare, distribuire, reproducere sau publicare în afara condițiilor din Anexa 1{many ? " (oricare dintre anexele 1.x)" : ""}, pct. B.11 „Restricții de utilizare, difuzare sau publicare”, atrage răspunderea directă a CLIENTULUI, iar EVALUATORUL este îndreptățit la daune-interese egale cu prețul Contractului, pentru fiecare situație în parte, cu titlu de daune compensatorii conform art. 1538 din Codul civil.</p>
 
         <h2>16. LEGISLAȚIA APLICABILĂ</h2>
         <p>16.1. Contractul, inclusiv încheierea, valabilitatea și executarea sa, este guvernat de legislația română.</p>
@@ -186,16 +182,25 @@ export default async function ContractDocument({ params, searchParams }: { param
       </article>
 
       {/* ---------- Annex 1 ---------- */}
-      <article className="cdPage">
+      {d.annexes.map((x) => {
+        const t = x.terms;
+        const pk = purposeKey(x.purpose);
+        const other = !pk && x.purpose ? x.purpose : null;
+        const vt = VALUE_TYPES.find(([key]) => key === t.value_type) ?? VALUE_TYPES[0];
+        const deliverable = DELIVERABLES.find(([key]) => key === t.deliverable)?.[0] ?? "raport";
+        const sharedAssets = x.assets.filter((a) => a.shared);
+        return (
+      <article className="cdPage" key={x.n}>
         <Head />
-        <h1>ANEXA 1 – CONDIȚII SPECIALE</h1>
+        <h1>ANEXA {many ? `1.${x.n}` : "1"} – CONDIȚII SPECIALE</h1>
+        {many && <p className="cdLead"><b>Raportul {x.n} din {d.annexes.length}{x.purpose ? ` · ${x.purpose}` : ""}</b>{x.number ? ` · nr. ${x.number}` : ""}</p>}
         <p className="cdLead">Prevederile prezentelor Condiții speciale se completează cu Condițiile generale și Condițiile financiare, împreună alcătuind Contractul.</p>
         <h2>A. SERVICIILE</h2>
         <h3>1. Serviciul contractat</h3>
         <p>La cererea Clientului au fost contractate următoarele servicii:</p>
         <ul className="cdChecks">
-          <li><Box on={d.services.immovable} /> Evaluarea bunurilor imobile</li>
-          <li><Box on={d.services.movable} /> Evaluarea bunurilor mobile</li>
+          <li><Box on={x.services.immovable} /> Evaluarea bunurilor imobile</li>
+          <li><Box on={x.services.movable} /> Evaluarea bunurilor mobile</li>
           <li><Box on={false} /> Evaluarea întreprinderilor / afacerilor</li>
           <li><Box on={false} /> Verificarea evaluărilor</li>
         </ul>
@@ -209,14 +214,14 @@ export default async function ContractDocument({ params, searchParams }: { param
         <p>2.2. Livrabilul va fi semnat cu semnătura electronică a EVALUATORULUI și va fi considerat exemplar original.</p>
         <p>2.3. Livrarea se face prin poștă electronică.</p>
         <p>2.4. Termenul de livrare este de <b>{t.term_days} {t.term_days === 1 ? "zi lucrătoare" : "zile lucrătoare"}</b> de la data realizării inspecției fizice a proprietății și a primirii tuturor informațiilor.</p>
-        <p>2.5. La solicitarea scrisă a Clientului, livrabilele pot fi tipărite și livrate prin curier{t.print ? ` (${t.print})` : ""}. Costurile de tipărire și curierat sunt suportate de Client, suplimentar față de prețul din Anexa 2, și se evidențiază în factura emisă de EVALUATOR.</p>
+        <p>2.5. La solicitarea scrisă a Clientului, livrabilele pot fi tipărite și livrate prin curier{pay.print ? ` (${pay.print})` : ""}. Costurile de tipărire și curierat sunt suportate de Client, suplimentar față de prețul din Anexa 2, și se evidențiază în factura emisă de EVALUATOR.</p>
 
         <h2>B. TERMENII DE REFERINȚĂ AI EVALUĂRII</h2>
         <h3>1. Identificarea obiectului evaluării</h3>
         <table className="cdTable">
           <thead><tr><th>Nr.</th><th>Tip bun</th><th>Nr. de identificare</th><th>Adresa / amplasament</th></tr></thead>
           <tbody>
-            {d.assets.length ? d.assets.map((a, i) => <tr key={i}><td>{i + 1}.</td><td>{a.type}</td><td>{a.ids}</td><td>{a.address}</td></tr>)
+            {x.assets.length ? x.assets.map((a, i) => <tr key={i}><td>{i + 1}.</td><td>{a.type}{a.shared && <small className="cdNote"> · inspecție comună</small>}</td><td>{a.ids}</td><td>{a.address}</td></tr>)
               : <tr><td>1.</td><td colSpan={3} className="cdBlank">bunurile se completează la crearea raportului</td></tr>}
           </tbody>
         </table>
@@ -248,6 +253,7 @@ export default async function ContractDocument({ params, searchParams }: { param
         <p>7.1. Valorile estimate vor fi emise în condițiile pieței specifice de la data evaluării. 7.2. Data evaluării / data de referință este {deliverable === "nop" && !t.nop_inspection ? "data emiterii notei de opinie" : "data inspecției"}.</p>
         <h3>8. Documentarea pentru elaborarea evaluării</h3>
         <p>8.1. Evaluarea include toate cercetările, informațiile, raționamentele, analizele și concluziile necesare pentru a ajunge la valoarea estimată. 8.2. {t.limitations}</p>
+        {sharedAssets.length > 0 && <p>8.3. Bunurile marcate „inspecție comună” sunt evaluate și în alt raport din prezentul Contract: inspecția lor se realizează o singură dată, iar constatările și fotografiile de la inspecție sunt folosite în ambele rapoarte.</p>}
         <h3>9. Natura și sursa informațiilor pe care se va baza evaluarea</h3>
         <p>9.1. Evaluatorul va utiliza informații specifice tipului de bun și scopului evaluării, după cum urmează: 9.1.1. furnizate de Client: {t.sources}; 9.1.2. din surse de piață: analize, studii, informații și statistici din mediul online, din publicații de specialitate sau furnizate de terți.</p>
         <h3>10. Ipoteze și ipoteze speciale</h3>
@@ -264,6 +270,8 @@ export default async function ContractDocument({ params, searchParams }: { param
         <p>Dacă pe durata misiunii apar modificări ale termenilor de referință, acestea se consemnează într-un act adițional la Contract.</p>
         <Signatures />
       </article>
+        );
+      })}
 
       {/* ---------- Annex 2 ---------- */}
       <article className="cdPage">
@@ -271,13 +279,24 @@ export default async function ContractDocument({ params, searchParams }: { param
         <h1>ANEXA 2 – CONDIȚII FINANCIARE</h1>
         <p className="cdLead">Prevederile prezentelor Condiții financiare se completează cu Condițiile generale și Condițiile speciale, împreună alcătuind Contractul.</p>
         <h2>1. PREȚUL CONTRACTULUI</h2>
-        <p>1.1. Prețul Serviciului este de <b>{money(fee)} lei + TVA</b>.</p>
-        <p>1.2. Prețul se plătește în contul EVALUATORULUI specificat pe factura fiscală, {t.payment_when}.</p>
+        {d.priced ? (
+          <>
+            <p>1.1. Prețul Serviciilor este următorul:</p>
+            <table className="cdTable">
+              <thead><tr><th>Nr.</th><th>Serviciu</th><th style={{ textAlign: "right" }}>Preț (lei, fără TVA)</th></tr></thead>
+              <tbody>
+                {d.annexes.map((x) => <tr key={x.n}><td>{x.n}.</td><td>{x.reportType ?? "Raport de evaluare"}{x.purpose ? ` – ${x.purpose}` : ""} (Anexa 1.{x.n})</td><td style={{ textAlign: "right" }}>{money(x.fee)}</td></tr>)}
+                <tr><td /><td><b>Total</b></td><td style={{ textAlign: "right" }}><b>{money(d.total)} lei + TVA</b></td></tr>
+              </tbody>
+            </table>
+          </>
+        ) : <p>1.1. Prețul Serviciului este de <b>{money(d.total)} lei + TVA</b>.</p>}
+        <p>1.2. Prețul se plătește în contul EVALUATORULUI specificat pe factura fiscală, {pay.payment_when}.</p>
         <h2>2. TERMENUL DE PLATĂ</h2>
         <p>2.1. Termenul de plată al facturilor emise de EVALUATOR este precizat în factura proformă și/sau fiscală, dar nu poate depăși data predării livrabilelor.</p>
         <h2>3. TRANȘE DE PLATĂ</h2>
         <p>3.1. Tranșele de plată agreate de Părți sunt următoarele:</p>
-        <ul className="cdPlain">{t.tranches.split(/\n+/).filter(Boolean).map((x, i) => <li key={i}>{x}</li>)}</ul>
+        <ul className="cdPlain">{pay.tranches.split(/\n+/).filter(Boolean).map((x, i) => <li key={i}>{x}</li>)}</ul>
         <p>3.2. EVALUATORUL va emite și comunica facturile astfel încât să asigure Clientului respectarea termenului de plată.</p>
         <Signatures />
       </article>

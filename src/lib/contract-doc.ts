@@ -1,11 +1,18 @@
-// Server-only: everything the contract document needs — the parties, the assets valued, and the terms of reference with
-// their defaults filled in from the contract, its reports and the accepted offer.
+// Server-only: everything the contract document needs — the parties, and per report of the contract its Annex 1 (the
+// assets valued and the terms of reference, with their defaults filled in from the report and the accepted offer),
+// plus the prices and payment terms of Annex 2.
 import { capType } from "./asset-labels";
 import {
-  cleanTerms, defaultDeliverable, defaultSources, defaultValueType, DEFAULT_LIMITATIONS, DEFAULT_PAYMENT_WHEN, DEFAULT_TRANCHES, type ContractTerms,
+  cleanTerms, defaultDeliverable, defaultSources, defaultValueType, DEFAULT_LIMITATIONS, DEFAULT_PAYMENT_WHEN, DEFAULT_TRANCHES, PAYMENT_FIELDS, REPORT_FIELDS,
+  type ContractTerms,
 } from "./contract-terms";
 
-export type DocAsset = { type: string; ids: string; address: string; movable: boolean };
+export type DocAsset = { type: string; ids: string; address: string; movable: boolean; shared: string | null };
+export type ReportTerms = Required<Pick<ContractTerms, (typeof REPORT_FIELDS)[number]>>;
+export type PaymentTerms = { payment_when: string; tranches: string; print: string };
+
+const pick = <T extends object>(o: ContractTerms, keys: readonly string[]) =>
+  Object.fromEntries(Object.entries(o).filter(([k, v]) => keys.includes(k) && v !== undefined)) as Partial<T>;
 
 export async function contractDoc(db: D1Database, id: string) {
   const k = await db.prepare(`SELECT k.*, e.kind AS client_kind, e.name AS client, e.cui, e.reg_no, e.billing_address, e.city, e.county, e.phone, e.email,
@@ -18,43 +25,62 @@ export async function contractDoc(db: D1Database, id: string) {
     }>();
   if (!k) return null;
   const [reports, assets] = await Promise.all([
-    db.prepare(`SELECT r.id, r.term_days, b.name AS recipient, f.value_type, f.term_days AS offer_term, f.payment_terms
-        FROM reports r LEFT JOIN entities b ON b.id = r.recipient_id LEFT JOIN offers f ON f.id = r.offer_id WHERE r.contract_id = ? ORDER BY r.created_at`).bind(id)
-      .all<{ id: string; term_days: number | null; recipient: string | null; value_type: string | null; offer_term: number | null; payment_terms: string | null }>(),
-    db.prepare(`SELECT p.category, p.type, p.cf_number, p.cad_building, p.cad_land, p.full_address, p.city FROM assets a JOIN reports r ON r.id = a.report_id
+    db.prepare(`SELECT r.id, r.number, r.label, r.purpose, r.report_type, r.fee, r.term_days, r.terms, b.name AS recipient, f.value_type, f.term_days AS offer_term, f.payment_terms
+        FROM reports r LEFT JOIN entities b ON b.id = r.recipient_id LEFT JOIN offers f ON f.id = r.offer_id WHERE r.contract_id = ? AND r.status <> 'cancelled' ORDER BY r.created_at`).bind(id)
+      .all<{ id: string; number: string | null; label: string | null; purpose: string | null; report_type: string | null; fee: number | null; term_days: number | null; terms: string | null;
+        recipient: string | null; value_type: string | null; offer_term: number | null; payment_terms: string | null }>(),
+    db.prepare(`SELECT a.report_id, a.no_inspection, p.category, p.type, p.cf_number, p.cad_building, p.cad_land, p.full_address, p.city FROM assets a JOIN reports r ON r.id = a.report_id
         JOIN crm_properties p ON p.id = a.property_id WHERE r.contract_id = ? ORDER BY r.created_at, a.is_main DESC`).bind(id)
-      .all<{ category: string | null; type: string | null; cf_number: string | null; cad_building: string | null; cad_land: string | null; full_address: string | null; city: string | null }>(),
+      .all<{ report_id: string; no_inspection: string | null; category: string | null; type: string | null; cf_number: string | null; cad_building: string | null; cad_land: string | null;
+        full_address: string | null; city: string | null }>(),
   ]);
-  const list: DocAsset[] = assets.results.map((a) => ({
-    type: capType(a.type) || "Bun",
-    ids: [a.cf_number && `CF ${a.cf_number}`, a.cad_building && `nr. cad. ${a.cad_building}`, !a.cad_building && a.cad_land && `nr. cad. teren ${a.cad_land}`].filter(Boolean).join(", ") || "—",
-    address: [a.full_address, a.full_address?.toLowerCase().includes((a.city ?? "").toLowerCase()) ? null : a.city].filter(Boolean).join(", ") || "—",
-    movable: a.category === "BUN MOBIL",
-  }));
-  const saved = cleanTerms(k.terms ? JSON.parse(k.terms) : {});
-  const r0 = reports.results[0];
-  const movableOnly = list.length > 0 && list.every((a) => a.movable);
-  const recipients = [...new Set(reports.results.map((r) => r.recipient).filter(Boolean))] as string[];
-  const city = assets.results[0]?.city;
-  const defaults: Required<Omit<ContractTerms, "print">> & { print: string } = {
-    // Designated users: the client, plus the bank that receives the report or the town hall for taxation.
-    users: [k.client, ...recipients, /impozit/i.test(k.purpose ?? "") && city ? `Primăria ${city}` : null].filter(Boolean).join(", "),
-    others: "Nu este cazul",
-    value_type: r0?.value_type && /pia/i.test(r0.value_type) ? "piata" : defaultValueType(k.purpose),
-    deliverable: defaultDeliverable(k.report_type),
-    nop_inspection: true,
-    reports: Math.max(1, reports.results.length),
-    term_days: r0?.offer_term ?? r0?.term_days ?? 3,
-    limitations: DEFAULT_LIMITATIONS,
-    special: "Nu este cazul.",
-    sources: defaultSources(k.purpose, movableOnly),
-    payment_when: DEFAULT_PAYMENT_WHEN,
-    tranches: r0?.payment_terms ?? DEFAULT_TRANCHES,
-    print: "",
-  };
-  const terms = { ...defaults, ...Object.fromEntries(Object.entries(saved).filter(([, v]) => v !== undefined)) } as typeof defaults;
+  const contractTerms = cleanTerms(k.terms ? JSON.parse(k.terms) : {});
+  const one = reports.results.length <= 1;
+  // Without reports yet (the offer is not accepted), one annex from the contract itself.
+  const list = reports.results.length ? reports.results
+    : [{ id: "", number: null, label: null, purpose: k.purpose, report_type: k.report_type, fee: k.fee, term_days: null, terms: null, recipient: null, value_type: null, offer_term: null, payment_terms: null }];
+
+  const annexes = list.map((r, n) => {
+    const own = assets.results.filter((a) => a.report_id === r.id);
+    const docAssets: DocAsset[] = own.map((a) => ({
+      type: capType(a.type) || "Bun",
+      ids: [a.cf_number && `CF ${a.cf_number}`, a.cad_building && `nr. cad. ${a.cad_building}`, !a.cad_building && a.cad_land && `nr. cad. teren ${a.cad_land}`].filter(Boolean).join(", ") || "—",
+      address: [a.full_address, a.full_address?.toLowerCase().includes((a.city ?? "").toLowerCase()) ? null : a.city].filter(Boolean).join(", ") || "—",
+      movable: a.category === "BUN MOBIL",
+      shared: a.no_inspection?.startsWith("Inspecție comună") ? a.no_inspection : null,
+    }));
+    const movableOnly = docAssets.length > 0 && docAssets.every((a) => a.movable);
+    const purpose = r.purpose ?? k.purpose;
+    const city = own[0]?.city;
+    const defaults: ReportTerms = {
+      // Designated users: the client, plus the bank that receives the report or the town hall for taxation.
+      users: [k.client, r.recipient, /impozit/i.test(purpose ?? "") && city ? `Primăria ${city}` : null].filter(Boolean).join(", "),
+      others: "Nu este cazul",
+      value_type: r.value_type && /pia/i.test(r.value_type) && !/impozit|raportare/i.test(purpose ?? "") ? "piata" : defaultValueType(purpose),
+      deliverable: defaultDeliverable(r.report_type ?? k.report_type),
+      nop_inspection: true,
+      reports: 1,
+      term_days: r.offer_term ?? r.term_days ?? 3,
+      limitations: DEFAULT_LIMITATIONS,
+      special: "Nu este cazul.",
+      sources: defaultSources(purpose, movableOnly),
+    };
+    // A single-report contract may still carry its terms on the contract (saved before reports had their own).
+    const saved = { ...(one ? pick<ReportTerms>(contractTerms, REPORT_FIELDS) : {}), ...pick<ReportTerms>(cleanTerms(r.terms ? JSON.parse(r.terms) : {}), REPORT_FIELDS) };
+    return {
+      n: n + 1, reportId: r.id || null, number: r.number, label: r.label, purpose, reportType: r.report_type ?? k.report_type, fee: r.fee,
+      assets: docAssets, terms: { ...defaults, ...saved } as ReportTerms, defaults, saved,
+      services: { immovable: !movableOnly && (k.valuation_types ?? "EPI").includes("EPI"), movable: (k.valuation_types ?? "").includes("EBM") || docAssets.some((a) => a.movable) },
+    };
+  });
+
+  const paymentDefaults: PaymentTerms = { payment_when: DEFAULT_PAYMENT_WHEN, tranches: list[0]?.payment_terms ?? DEFAULT_TRANCHES, print: "" };
+  const paymentSaved = pick<PaymentTerms>(contractTerms, PAYMENT_FIELDS);
+  // Prices: one line per report when the reports have their own fees, else the contract's fee.
+  const priced = annexes.length > 1 && annexes.some((a) => a.fee != null);
+  const total = priced ? annexes.reduce((s, a) => s + (a.fee ?? 0), 0) : k.fee;
   return {
-    contract: k, assets: list, terms, saved, defaults,
-    services: { immovable: !movableOnly && (k.valuation_types ?? "EPI").includes("EPI"), movable: (k.valuation_types ?? "").includes("EBM") || list.some((a) => a.movable) },
+    contract: k, annexes, total, priced,
+    payment: { ...paymentDefaults, ...paymentSaved } as PaymentTerms, paymentDefaults, paymentSaved,
   };
 }
