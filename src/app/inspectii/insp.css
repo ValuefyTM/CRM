@@ -99,6 +99,7 @@ body:has(.insp) { background: var(--cream); overscroll-behavior-y: none; }
 .iTags { display: flex; gap: 6px; flex-wrap: wrap; }
 .iTag { padding: 4px 9px; border-radius: 8px; background: #f7f8fa; font-size: 11px; font-weight: 700; color: var(--muted); }
 .iTag.warn { background: var(--acc-soft); color: var(--acc-text); }
+.iTag.err { background: var(--err-bg); color: var(--err); }
 .iPill { flex-shrink: 0; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.02em; background: var(--neutral-bg); color: var(--neutral-text); white-space: nowrap; }
 .iPill.ok { background: var(--ok-bg); color: var(--ok-text); }
 .iPill.warn, .iPill.acc { background: var(--acc-soft); color: var(--acc-text); }

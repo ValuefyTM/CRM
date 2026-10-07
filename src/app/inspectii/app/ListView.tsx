@@ -36,6 +36,7 @@ export function InspCard({ i, onOpen, now }: { i: Local; onOpen: () => void; now
         {i.purpose && <span className="iTag">{i.purpose}</span>}
         <span className="iTag">Fișă {sheetTypeLabel(i.sheet_type).toLowerCase()}</span>
         {i.local === "scheduled_offline" && <span className="iTag warn">Programare netrimisă</span>}
+        {i.status === "to_schedule" && i.due_on && !i.local && <span className={`iTag${i.due_on < dayKey(now ?? new Date()) ? " err" : " warn"}`}>Termen {i.due_on.split("-").reverse().slice(0, 2).join(".")}</span>}
       </div>
     </button>
   );

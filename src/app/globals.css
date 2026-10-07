@@ -525,3 +525,9 @@ a.rMeta:hover u { color: var(--acc-light); }
 .ofModal p b { color: var(--ink); }
 .ofModal .ofBtnNavy { margin-top: 8px; height: 50px; }
 .ofModalIcon { width: 56px; height: 56px; border-radius: 50%; background: var(--ok-bg); color: var(--ok-text); font-size: 26px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+
+/* ---------- Dialog (CRM forms) ---------- */
+.vfModal { position: fixed; inset: 0; z-index: 100; background: rgba(17, 17, 48, 0.55); display: flex; align-items: center; justify-content: center; padding: 16px; animation: vfIn 0.2s ease-out; }
+.vfModalBox { width: min(560px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; background: #fff; border-radius: 20px; padding: 22px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 30px 80px -20px rgba(17, 17, 48, 0.5); }
+.vfModalBox h2 { margin: 0; font-size: 19px; letter-spacing: -0.02em; }
+.formRow { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }

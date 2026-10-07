@@ -36,9 +36,18 @@ export async function audit(db: D1Database, actor: string, action: string, entit
     .run();
 }
 
-/** The inspections app is only for inspectors and evaluators; inspectors use only that app, not the CRM. */
-export const allowedIn = (app: App, u: User) =>
-  app === "insp" ? u.kind === "internal" && INSP_ROLES.includes(u.role) : app !== "crm" || u.role !== "inspector";
+/**
+ * The inspections app is for inspectors and evaluators, and for any team member who was given an inspection
+ * (e.g. an administrator who is the main evaluator of a report). Inspectors use only that app, not the CRM.
+ */
+export async function allowedIn(db: D1Database, app: App, u: User) {
+  if (app === "crm") return u.role !== "inspector";
+  if (app !== "insp") return true;
+  if (u.kind !== "internal") return false;
+  if (INSP_ROLES.includes(u.role)) return true;
+  const given = await db.prepare("SELECT 1 AS ok FROM inspections WHERE inspector_id = ? AND glide_id IS NULL AND status <> 'cancelled' LIMIT 1").bind(u.id).first<{ ok: number }>();
+  return !!given;
+}
 
 const appName = (app: App, kind: Kind) => (app === "insp" ? "Inspecții VALUEFY" : APP_NAME[kind]);
 
@@ -60,7 +69,7 @@ export async function requestSignIn(db: D1Database, kind: Kind, rawEmail: string
   if ((recent?.n ?? 0) >= MAX_CODES_PER_HOUR) return;
 
   const u = await accountFor(db, kind, email);
-  if (!u || !canSignIn(u) || !allowedIn(toApp, u)) return;
+  if (!u || !canSignIn(u) || !(await allowedIn(db, toApp, u))) return;
   if (mustAcceptInvite(u)) {
     await sendInvite(db, u.id, "system");
     return;
@@ -123,7 +132,7 @@ export async function consumeToken(db: D1Database, app: App, purpose: "login" | 
 
 export async function signInUserId(db: D1Database, kind: Kind, email: string, app: App = appOf(kind)) {
   const u = await accountFor(db, kind, email);
-  return u && canSignIn(u) && !mustAcceptInvite(u) && allowedIn(app, u) ? u.id : null;
+  return u && canSignIn(u) && !mustAcceptInvite(u) && (await allowedIn(db, app, u)) ? u.id : null;
 }
 
 // ---------- invitations ----------
@@ -228,7 +237,7 @@ export async function currentUser(db: D1Database, app: App): Promise<User | null
     .bind(await sha256(token), now())
     .first<{ user_id: string }>();
   const u = row ? await getUser(db, row.user_id) : null;
-  return u && u.status === "active" && canSignIn(u) && allowedIn(app, u) ? u : null;
+  return u && u.status === "active" && canSignIn(u) && (await allowedIn(db, app, u)) ? u : null;
 }
 
 export async function endSession(db: D1Database, app: App) {

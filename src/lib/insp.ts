@@ -29,6 +29,7 @@ export type Insp = {
   report_number: string | null; report_label: string | null; purpose: string | null; client: string | null; bank: string | null;
   reschedule_count: number; contact_notified_at: string | null; started_at: string | null;
   sheet_status: "draft" | "submitted" | null; updated_at: string | null;
+  due_on: string | null; instructions: string | null; assigned_by_name: string | null;
 };
 
 type Row = Omit<Insp, "sheet_type" | "property_label" | "address" | "lat" | "lng" | "cad"> & {
@@ -40,6 +41,7 @@ type Row = Omit<Insp, "sheet_type" | "property_label" | "address" | "lat" | "lng
 
 const SELECT = `SELECT i.id, i.status, i.scheduled_at, i.done_at, i.duration_min, i.sheet_type, i.address AS i_address, i.lat AS i_lat, i.lng AS i_lng,
     i.contact_kind, i.contact_name, i.contact_phone, i.notes, i.reschedule_count, i.contact_notified_at, i.started_at, i.updated_at,
+    i.due_on, i.instructions, (SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE x.id = i.assigned_by) AS assigned_by_name,
     p.category, p.type, p.full_address, p.street_type, p.street, p.number, p.block, p.stair, p.floor, p.apartment, p.city, p.county, p.geo,
     p.cf_number, p.cad_building, p.cad_land, p.usable_area, p.year_built,
     o.property_type AS order_type,
@@ -92,12 +94,13 @@ function toInsp(r: Row): Insp {
     report_number: r.report_number, report_label: r.report_label, purpose: r.purpose, client: r.client, bank: r.bank,
     reschedule_count: r.reschedule_count ?? 0, contact_notified_at: r.contact_notified_at, started_at: r.started_at,
     sheet_status: r.sheet_status as Insp["sheet_status"], updated_at: r.updated_at,
+    due_on: r.due_on, instructions: r.instructions, assigned_by_name: r.assigned_by_name,
   };
 }
 
 export async function myInspections(db: D1Database, user: User): Promise<Insp[]> {
   const { results } = await db
-    .prepare(`${SELECT} WHERE ${MINE} AND ${CURRENT} ORDER BY i.scheduled_at IS NULL, i.scheduled_at LIMIT 500`)
+    .prepare(`${SELECT} WHERE ${MINE} AND ${CURRENT} ORDER BY i.scheduled_at IS NULL, i.scheduled_at, i.due_on IS NULL, i.due_on LIMIT 500`)
     .bind(user.id)
     .all<Row>();
   return results.map(toInsp);

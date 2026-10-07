@@ -11,6 +11,7 @@ export type Insp = {
   report_number: string | null; report_label: string | null; purpose: string | null; client: string | null; bank: string | null;
   reschedule_count: number; contact_notified_at: string | null; started_at: string | null;
   sheet_status: "draft" | "submitted" | null; updated_at: string | null;
+  due_on: string | null; instructions: string | null; assigned_by_name: string | null;
 };
 export type ServerSheet = {
   id: string; status: "draft" | "submitted"; sheet_type: SheetType; answers: Answers; present_person: string | null; present_role: string | null;

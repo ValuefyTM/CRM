@@ -10,6 +10,9 @@ import { orderCode, SOURCE_LABEL } from "@/lib/order-labels";
 import { SPECIALIZATIONS } from "@/lib/labels";
 import { CrmShell } from "@/components/CrmShell";
 import { ReportList } from "@/components/ReportList";
+import { AssignInspection, CancelInspection } from "./InspectionActions";
+import { canAssign, inspectorChoices } from "@/lib/insp-assign";
+import { guessSheetType } from "@/lib/insp-forms";
 import { AddMember, DeleteDoc, DeliverButton, FinalDrop, MissingDoc, NotesEditor, RemoveMember, SafeImg, StatusButton, UploadButton } from "./ReportActions";
 
 export const metadata: Metadata = { title: "Raport | CRM VALUEFY" };
@@ -48,6 +51,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
     reportTeam(db, id), reportAssets(db, id), reportDocuments(db, id), reportOrderDocuments(db, r.order_id), teamCandidates(db),
   ]);
   const main = assets.find((a) => a.is_main) ?? assets[0];
+  const [mayAssign, inspectors] = await Promise.all([canAssign(db, user, id), inspectorChoices(db, user.id)]);
   const [history, log] = await Promise.all([main ? propertyHistory(db, main.property_id, id) : Promise.resolve([]), reportLog(db, r, assets)]);
   const [label, cls] = REPORT_STATUS[r.status] ?? [r.status, ""];
   const cur = r.currency === "EUR" ? "EUR" : "lei";
@@ -294,18 +298,48 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             {assets.length === 0 ? <p className="hint pad">Raportul nu are bunuri, deci nici inspecții.</p> : (
               <div className="tableWrap">
                 <table className="table">
-                  <thead><tr><th>Bun</th><th>Inspector</th><th>Programat / realizat</th><th>Contact la fața locului</th><th>Status</th><th>Fișă</th></tr></thead>
+                  <thead><tr><th>Bun</th><th>Inspector</th><th>Programat / realizat</th><th>Contact la fața locului</th><th>Status</th><th>Fișă</th>{mayAssign && <th />}</tr></thead>
                   <tbody>
                     {assets.map((a) => {
-                      const [ins, insCls] = INSPECTION_STATUS[a.inspection_status ?? ""] ?? ["Fără inspecție", ""];
+                      const fromApp = !!a.inspection_id && !a.inspection_from_glide;
+                      const active = fromApp && (a.inspection_status === "to_schedule" || a.inspection_status === "scheduled");
+                      const cancelled = a.inspection_status === "cancelled";
+                      const [ins, insCls] = cancelled ? ["Fără inspecție", ""] : INSPECTION_STATUS[a.inspection_status ?? ""] ?? ["Fără inspecție", ""];
+                      // Glide history counts as done only when it was done; a new task can always replace an unfinished one.
+                      const canGive = !active && a.inspection_status !== "done";
+                      const contact = cancelled ? null : [a.contact_kind ? CONTACT[a.contact_kind] : null, a.contact_name, a.contact_phone].filter(Boolean).join(" · ");
                       return (
                         <tr key={a.id}>
-                          <td>{cap(a.type) || "Bun"} {a.is_main ? <span className="muted">(principal)</span> : null}</td>
-                          <td>{a.inspector ?? <span className="muted">nealocat</span>}</td>
-                          <td className="mono">{a.done_at || a.scheduled_at ? fmtDate(a.done_at ?? a.scheduled_at, true) : "—"}</td>
-                          <td>{a.contact_name || a.contact_phone ? [a.contact_kind ? CONTACT[a.contact_kind] : null, a.contact_name, a.contact_phone].filter(Boolean).join(" · ") : "—"}</td>
-                          <td><span className={`pill ${insCls}`}><i />{ins}</span></td>
+                          <td>
+                            {cap(a.type) || "Bun"} {a.is_main ? <span className="muted">(principal)</span> : null}
+                            {fromApp && a.instructions && !cancelled && <span className="muted block">Instrucțiuni: {a.instructions}</span>}
+                          </td>
+                          <td>
+                            {!cancelled && a.inspector ? a.inspector : <span className="muted">nealocat</span>}
+                            {fromApp && !cancelled && a.assigned_by_name && <span className="muted block">alocată de {a.assigned_by_name}{a.assigned_at ? `, ${fmtDate(a.assigned_at)}` : ""}</span>}
+                          </td>
+                          <td className="mono">
+                            {!cancelled && (a.done_at || a.scheduled_at) ? fmtDate(a.done_at ?? a.scheduled_at, true) : "—"}
+                            {active && a.due_on && <span className="muted block">termen {fmtDate(a.due_on)}</span>}
+                          </td>
+                          <td>{contact || "—"}</td>
+                          <td><span className={`pill ${insCls}`}><i />{ins}</span>{fromApp && a.sheet_status === "draft" && active && <span className="muted block">fișă în lucru</span>}</td>
                           <td>{a.sheet_photo || a.sheet_person ? <a className="link" href={`#fisa-${a.id}`}>Vezi fișa</a> : "—"}</td>
+                          {mayAssign && (
+                            <td className="r">
+                              {(canGive || active) && (
+                                <span className="actions" style={{ justifyContent: "flex-end" }}>
+                                  <AssignInspection report={r.id} me={user.id} people={inspectors} initial={{
+                                    asset: a.id, label: `${cap(a.type) || "Bun"}${a.full_address ? ` · ${a.full_address}` : ""}`, inspection: active ? a.inspection_id : null,
+                                    inspector: active ? a.inspector_id : null, sheet_type: (active && a.sheet_type) || guessSheetType(a.category, a.type),
+                                    due_on: active ? a.due_on : null, contact_kind: cancelled ? null : a.contact_kind, contact_name: cancelled ? null : a.contact_name,
+                                    contact_phone: cancelled ? null : a.contact_phone, instructions: active ? a.instructions : null, scheduled: a.inspection_status === "scheduled",
+                                  }} />
+                                  {active && <CancelInspection report={r.id} inspection={a.inspection_id!} who={a.inspector ?? "inspector"} />}
+                                </span>
+                              )}
+                            </td>
+                          )}
                         </tr>
                       );
                     })}

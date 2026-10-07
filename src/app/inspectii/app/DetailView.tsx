@@ -123,6 +123,15 @@ export function DetailView({ ctx, id, item }: { ctx: Ctx; id: string; item: Loca
           </section>
         )}
 
+        {(i.instructions || i.due_on || i.assigned_by_name) && (
+          <section className="iBox">
+            <h3>De la evaluator</h3>
+            {i.assigned_by_name && <div className="iKv"><span>Alocată de</span><b>{i.assigned_by_name}</b></div>}
+            {i.due_on && <div className="iKv"><span>Termen inspecție</span><b>{i.due_on.split("-").reverse().join(".")}</b></div>}
+            {i.instructions && <p className="iText">{i.instructions}</p>}
+          </section>
+        )}
+
         {i.notes && (
           <section className="iBox">
             <h3>Observații la programare</h3>

@@ -152,7 +152,9 @@ export type AssetDetail = {
   category: string | null; type: string | null; construction: string | null; county: string | null; city: string | null; full_address: string | null;
   geo: string | null; cf_number: string | null; cad_building: string | null; usable_area: number | null; year_built: number | null;
   description: string | null; image_url: string | null; cf_file: string | null; plan_file: string | null;
-  inspection_status: string | null; scheduled_at: string | null; done_at: string | null; inspector: string | null;
+  inspection_id: string | null; inspection_from_glide: number | null; inspection_status: string | null; scheduled_at: string | null; done_at: string | null;
+  inspector: string | null; inspector_id: string | null; due_on: string | null; instructions: string | null; sheet_type: string | null;
+  assigned_at: string | null; assigned_by_name: string | null; sheet_status: string | null;
   contact_kind: string | null; contact_name: string | null; contact_phone: string | null;
   sheet_photo: string | null; sheet_signature: string | null; sheet_person: string | null; sheet_location: string | null; sheet_description: string | null;
   other_reports: number;
@@ -163,11 +165,18 @@ export async function reportAssets(db: D1Database, id: string) {
     .prepare(
       `SELECT a.id, a.is_main, a.value, a.approach, p.id AS property_id, p.category, p.type, p.construction, p.county, p.city, p.full_address, p.geo, p.cf_number,
         p.cad_building, p.usable_area, p.year_built, p.description, p.image_url, p.cf_file, p.plan_file,
-        i.status AS inspection_status, i.scheduled_at, i.done_at, u.name AS inspector, i.contact_kind, i.contact_name, i.contact_phone,
+        i.id AS inspection_id, i.glide_id IS NOT NULL AS inspection_from_glide, i.status AS inspection_status, i.scheduled_at, i.done_at,
+        COALESCE(NULLIF(u.name, ''), u.email) AS inspector, i.inspector_id, i.due_on, i.instructions, i.sheet_type, i.assigned_at,
+        (SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE x.id = i.assigned_by) AS assigned_by_name, s.status AS sheet_status,
+        i.contact_kind, i.contact_name, i.contact_phone,
         s.photo_url AS sheet_photo, s.signature_url AS sheet_signature, s.present_person AS sheet_person, s.location AS sheet_location, s.description AS sheet_description,
         (SELECT COUNT(*) FROM assets x WHERE x.property_id = p.id AND x.id <> a.id) AS other_reports
-       FROM assets a JOIN crm_properties p ON p.id = a.property_id LEFT JOIN inspections i ON i.asset_id = a.id LEFT JOIN users u ON u.id = i.inspector_id
-       LEFT JOIN inspection_sheets s ON s.asset_id = a.id
+       FROM assets a JOIN crm_properties p ON p.id = a.property_id
+       -- The current inspection of the asset: the one given from the CRM (newest, not cancelled), else the one imported from Glide.
+       LEFT JOIN inspections i ON i.id = (SELECT x.id FROM inspections x WHERE x.asset_id = a.id
+         ORDER BY x.glide_id IS NULL AND x.status <> 'cancelled' DESC, x.glide_id IS NOT NULL DESC, x.created_at DESC LIMIT 1)
+       LEFT JOIN users u ON u.id = i.inspector_id
+       LEFT JOIN inspection_sheets s ON s.id = (SELECT y.id FROM inspection_sheets y WHERE y.asset_id = a.id ORDER BY y.inspection_id = i.id DESC, y.created_at DESC LIMIT 1)
        WHERE a.report_id = ? ORDER BY a.is_main DESC`,
     )
     .bind(id)
@@ -208,6 +217,9 @@ const REPORT_ACTION: Record<string, (d: string | null) => string> = {
   "report.final": (d) => `Raport final încărcat${d ? `: ${d}` : ""}`,
   "report.delivered": () => "Raport marcat ca predat",
   "report.member": (d) => `Echipă: adăugat ${d ?? ""}`.trim(),
+  "report.inspection_assign": (d) => `Inspecție alocată${d ? `: ${d}` : ""}`,
+  "report.inspection_reassign": (d) => `Inspecție realocată${d ? `: ${d}` : ""}`,
+  "report.inspection_cancel": (d) => `Inspecție anulată${d ? ` (${d})` : ""}`,
   "report.member_remove": (d) => `Echipă: scos ${d ?? ""}`.trim(),
 };
 
