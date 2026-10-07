@@ -20,15 +20,21 @@ export type AssetInput = {
   category: string | null; type: string; construction: string | null; county: string | null; city: string | null; full_address: string | null;
   cf_number: string | null; cad_building: string | null; cad_land: string | null; usable_area: number | null; year_built: number | null; description: string | null;
   is_main: boolean; value: number | null; approach: string | null; notes: string | null;
+  contact_kind: string | null; contact_name: string | null; contact_phone: string | null;
 };
 
 /** Values of the asset form (strings, as typed). */
 export type AssetForm = {
   id?: string; category: string; type: string; construction: string; county: string; city: string; full_address: string; cf_number: string;
   cad_building: string; cad_land: string; usable_area: string; year_built: string; description: string; is_main: boolean; value: string; approach: string; notes: string;
+  contact_kind: string; contact_name: string; contact_phone: string;
 };
 export const emptyAsset = (near?: { county?: string | null; city?: string | null }): AssetForm => ({
   category: "REZIDENTIAL", type: "", construction: "existing", county: near?.county ?? "", city: near?.city ?? "", full_address: "", cf_number: "", cad_building: "", cad_land: "",
   usable_area: "", year_built: "", description: "", is_main: false, value: "", approach: "", notes: "",
+  contact_kind: "client", contact_name: "", contact_phone: "",
 });
+
+/** Who shows the asset at the inspection. */
+export const CONTACT_KINDS: [string, string][] = [["client", "Clientul"], ["owner", "Proprietarul"], ["agent", "Agent imobiliar"], ["other", "Altă persoană"]];
 

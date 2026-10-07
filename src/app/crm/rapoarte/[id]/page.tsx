@@ -46,6 +46,7 @@ const assetForm = (a: Awaited<ReturnType<typeof reportAssets>>[number]): AssetFo
   full_address: a.full_address ?? "", cf_number: a.cf_number ?? "", cad_building: a.cad_building ?? "", cad_land: a.cad_land ?? "",
   usable_area: a.usable_area != null ? String(a.usable_area) : "", year_built: a.year_built != null ? String(a.year_built) : "", description: a.description ?? "",
   is_main: !!a.is_main, value: a.value != null ? String(a.value) : "", approach: a.approach ?? "", notes: a.notes ?? "",
+  contact_kind: a.a_contact_kind ?? "client", contact_name: a.a_contact_name ?? "", contact_phone: a.a_contact_phone ?? "",
 });
 
 function Row({ k, children }: { k: string; children?: React.ReactNode }) {
@@ -236,7 +237,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
           <section className="card flush">
             <div className="cardHead" style={{ padding: "16px 22px 0" }}>
               <h2>Bunuri evaluate</h2>
-              <AssetEditor report={r.id} label="+ Adaugă bun" initial={{ ...emptyAsset({ county: main?.county, city: main?.city }), is_main: assets.length === 0 }} />
+              <AssetEditor report={r.id} label="+ Adaugă bun" client={{ name: r.client_name, phone: r.client_phone }}
+                initial={{ ...emptyAsset({ county: main?.county, city: main?.city }), is_main: assets.length === 0, contact_name: r.client_name ?? "", contact_phone: r.client_phone ?? "" }} />
             </div>
             {assets.length === 0 ? <p className="hint pad">Raportul nu are bunuri înregistrate.</p> : (
               <div className="tableWrap">
@@ -258,7 +260,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                         <td className="mono num r">{a.value != null ? lei(a.value, cur) : "—"}</td>
                         <td className="r">
                           <span className="actions" style={{ justifyContent: "flex-end", flexWrap: "nowrap" }}>
-                            <AssetEditor report={r.id} label="Modifică" shared={a.other_reports} initial={assetForm(a)} />
+                            <AssetEditor report={r.id} label="Modifică" shared={a.other_reports} client={{ name: r.client_name, phone: r.client_phone }} initial={assetForm(a)} />
                             {assets.length > 1 && a.inspection_status !== "done" && !a.sheet_status && <RemoveAsset report={r.id} asset={a.id} name={cap(a.type) || "bunul"} />}
                           </span>
                         </td>
@@ -378,8 +380,9 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                                   <AssignInspection report={r.id} me={user.id} people={inspectors} initial={{
                                     asset: a.id, label: `${cap(a.type) || "Bun"}${a.full_address ? ` · ${a.full_address}` : ""}`, inspection: active ? a.inspection_id : null,
                                     inspector: active ? a.inspector_id : null, sheet_type: (active && a.sheet_type) || guessSheetType(a.category, a.type),
-                                    due_on: active ? a.due_on : null, contact_kind: cancelled ? null : a.contact_kind, contact_name: cancelled ? null : a.contact_name,
-                                    contact_phone: cancelled ? null : a.contact_phone, instructions: active ? a.instructions : null, scheduled: a.inspection_status === "scheduled",
+                                    due_on: active ? a.due_on : null, contact_kind: (!cancelled && a.contact_kind) || a.a_contact_kind || "client",
+                                    contact_name: (!cancelled && a.contact_name) || a.a_contact_name || (a.a_contact_kind && a.a_contact_kind !== "client" ? null : r.client_name),
+                                    contact_phone: (!cancelled && a.contact_phone) || a.a_contact_phone || (a.a_contact_kind && a.a_contact_kind !== "client" ? null : r.client_phone), instructions: active ? a.instructions : null, scheduled: a.inspection_status === "scheduled",
                                   }} />
                                   {active && <CancelInspection report={r.id} inspection={a.inspection_id!} who={a.inspector ?? "inspector"} />}
                                 </span>

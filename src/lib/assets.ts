@@ -28,6 +28,8 @@ export function validateAsset(body: unknown): { ok: true; value: AssetInput } | 
       cad_land: opt(b.cad_land, 40), usable_area: num(b.usable_area), year_built: year != null ? Math.round(year) : null, description: opt(b.description, 2000),
       is_main: b.is_main === true, value: num(b.value), approach: ["market", "income", "cost"].includes(str(b.approach, 10)) ? str(b.approach, 10) : null,
       notes: opt(b.notes, 1000),
+      contact_kind: ["client", "owner", "agent", "other"].includes(str(b.contact_kind, 10)) ? str(b.contact_kind, 10) : null,
+      contact_name: opt(b.contact_name, 120), contact_phone: opt(b.contact_phone, 40),
     },
   };
 }
@@ -76,8 +78,8 @@ export async function addAsset(db: D1Database, actor: string, reportId: string, 
   const id = uuid();
   await db.batch([
     ...(main ? [db.prepare("UPDATE assets SET is_main = 0 WHERE report_id = ?").bind(reportId)] : []),
-    db.prepare("INSERT INTO assets (id, report_id, property_id, is_main, value, approach, notes) VALUES (?, ?, ?, ?, ?, ?, ?)")
-      .bind(id, reportId, propertyId, main ? 1 : 0, v.value, v.approach, v.notes),
+    db.prepare("INSERT INTO assets (id, report_id, property_id, is_main, value, approach, notes, contact_kind, contact_name, contact_phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(id, reportId, propertyId, main ? 1 : 0, v.value, v.approach, v.notes, v.contact_kind, v.contact_name, v.contact_phone),
     db.prepare("UPDATE reports SET updated_at = ? WHERE id = ?").bind(t, reportId),
   ]);
   await audit(db, `user:${actor}`, "report.asset_add", "report", reportId, `${capType(v.type) || "bun"}${linked ? " (proprietate existentă)" : ""}`);
@@ -91,8 +93,8 @@ export async function updateAsset(db: D1Database, actor: string, reportId: strin
   await db.batch([
     db.prepare(`UPDATE crm_properties SET ${PROP_COLS.map((c) => `${c} = ?`).join(", ")}, updated_at = ? WHERE id = ?`).bind(...propValues(v), t, a.property_id),
     ...(v.is_main ? [db.prepare("UPDATE assets SET is_main = 0 WHERE report_id = ? AND id <> ?").bind(reportId, assetId)] : []),
-    db.prepare("UPDATE assets SET is_main = CASE WHEN ? THEN 1 ELSE is_main END, value = ?, approach = ?, notes = ? WHERE id = ?")
-      .bind(v.is_main ? 1 : 0, v.value, v.approach, v.notes, assetId),
+    db.prepare("UPDATE assets SET is_main = CASE WHEN ? THEN 1 ELSE is_main END, value = ?, approach = ?, notes = ?, contact_kind = ?, contact_name = ?, contact_phone = ? WHERE id = ?")
+      .bind(v.is_main ? 1 : 0, v.value, v.approach, v.notes, v.contact_kind, v.contact_name, v.contact_phone, assetId),
     db.prepare("UPDATE reports SET updated_at = ? WHERE id = ?").bind(t, reportId),
   ]);
   await audit(db, `user:${actor}`, "report.asset_edit", "report", reportId, capType(v.type) || "bun");

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ASSET_CATEGORIES, capType, emptyAsset, type AssetForm } from "@/lib/asset-labels";
 import { PURPOSES } from "@/lib/order-labels";
+import { ContactFields } from "@/components/ContactFields";
 
 type Person = { id: string; name: string; role: string };
 type OrderInfo = {
@@ -14,7 +15,8 @@ type Extracted = {
   contact: { name: string | null; phone: string | null };
   bank: { branch: string | null; consultant: string | null; product: string | null; report_type: string | null; deadline: string | null };
   assets: { category: string | null; type: string | null; county: string | null; city: string | null; full_address: string | null; cf_number: string | null; cad_building: string | null;
-    cad_land: string | null; usable_area: number | null; land_area: number | null; rooms: number | null; year_built: number | null }[];
+    cad_land: string | null; usable_area: number | null; land_area: number | null; rooms: number | null; year_built: number | null;
+    contact_name: string | null; contact_phone: string | null }[];
   notes: string | null;
 };
 
@@ -65,11 +67,20 @@ export function ProcessWizard(p: {
     setBank((b) => ({ ...b, branch: x.bank.branch ?? b.branch, consultant: x.bank.consultant ?? b.consultant, report_type: x.bank.report_type ?? b.report_type,
       notes: [b.notes, x.bank.product && `Produs: ${x.bank.product}`, x.notes].filter(Boolean).join("\n") }));
     if (x.bank.deadline && /^\d{4}-\d{2}-\d{2}$/.test(x.bank.deadline)) setDos((d) => ({ ...d, due_on: x.bank.deadline! }));
+    const clientName = (x.client.name ?? client.name).trim().toLowerCase();
+    const contactOf = (n: string | null, ph: string | null) => {
+      const name = n ?? x.contact.name, phone = ph ?? x.contact.phone;
+      return name && name.trim().toLowerCase() !== clientName
+        ? { contact_kind: "other", contact_name: name, contact_phone: phone ?? "" }
+        : { contact_kind: "client", contact_name: "", contact_phone: "" };
+    };
     if (x.assets.length) setAssets(x.assets.map((a, i) => ({
+      ...contactOf(a.contact_name, a.contact_phone),
       ...emptyAsset(), category: a.category ?? "REZIDENTIAL", type: (a.type ?? "").toUpperCase(), county: s(a.county), city: s(a.city), full_address: s(a.full_address),
       cf_number: s(a.cf_number), cad_building: s(a.cad_building), cad_land: s(a.cad_land), usable_area: s(a.usable_area), year_built: s(a.year_built),
       description: [a.rooms ? `${a.rooms} camere` : "", a.land_area ? `teren ${a.land_area} mp` : ""].filter(Boolean).join(" · "), is_main: i === 0,
     })));
+    else if (x.contact.name) setAssets((cur) => cur.map((a) => ({ ...a, ...contactOf(null, null) })));
   };
 
   const readScreens = async () => {
@@ -91,6 +102,7 @@ export function ProcessWizard(p: {
     if (i >= 1 && !client.name.trim()) return "Completează numele clientului.";
     if (i >= 2) for (const [n, a] of assets.entries()) {
       if (!a.type.trim()) return `Bunul ${n + 1}: alege tipul.`;
+      if (a.contact_kind !== "client" && !a.contact_name.trim()) return `Bunul ${n + 1}: completează persoana de contact la inspecție (sau alege „Clientul”).`;
       if (!a.city.trim() && !a.full_address.trim() && a.category !== "BUN MOBIL") return `Bunul ${n + 1}: completează localitatea sau adresa.`;
     }
     return "";
@@ -103,7 +115,9 @@ export function ProcessWizard(p: {
     setBusy(true); setMsg("");
     const r = await fetch(`/api/crm/orders/${o.id}/process`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ client, bank, assets: assets.map((a, i) => ({ ...a, is_main: i === 0 })), dossier: dos }),
+      body: JSON.stringify({ client, bank, dossier: dos, assets: assets.map((a, i) => ({
+        ...a, is_main: i === 0, ...(a.contact_kind === "client" ? { contact_name: client.name, contact_phone: client.phone } : {}),
+      })) }),
     }).catch(() => null);
     const d = (await r?.json().catch(() => ({}))) as { report?: string; error?: string; inspectionError?: string | null } | undefined;
     setBusy(false);
@@ -176,10 +190,6 @@ export function ProcessWizard(p: {
               <label className="field">Telefon<input className="input" type="tel" value={client.phone} onChange={(e) => setClient({ ...client, phone: e.target.value })} /></label>
               <label className="field">Email<input className="input" type="email" value={client.email} onChange={(e) => setClient({ ...client, email: e.target.value })} /></label>
             </div>
-            <div className="formRow">
-              <label className="field">Contact la inspecție <small>(dacă nu e clientul)</small><input className="input" value={client.contact_name} onChange={(e) => setClient({ ...client, contact_name: e.target.value })} /></label>
-              <label className="field">Telefon contact<input className="input" type="tel" value={client.contact_phone} onChange={(e) => setClient({ ...client, contact_phone: e.target.value })} /></label>
-            </div>
             <div className="section">Banca</div>
             <div className="formRow">
               <label className="field">Agenție / sucursală<input className="input" value={bank.branch} onChange={(e) => setBank({ ...bank, branch: e.target.value })} /></label>
@@ -197,7 +207,8 @@ export function ProcessWizard(p: {
 
         {step === 2 && (
           <>
-            <div className="cardHead"><h2>Bunuri evaluate</h2><button type="button" className="btn btnGhost btnSm" onClick={() => setAssets([...assets, { ...emptyAsset({ county: assets[0]?.county, city: assets[0]?.city }), is_main: false }])}>+ Încă un bun</button></div>
+            <div className="cardHead"><h2>Bunuri evaluate</h2><button type="button" className="btn btnGhost btnSm" onClick={() => { const last = assets[assets.length - 1]; setAssets([...assets, { ...emptyAsset({ county: last?.county, city: last?.city }), is_main: false,
+                contact_kind: last?.contact_kind ?? "client", contact_name: last?.contact_name ?? "", contact_phone: last?.contact_phone ?? "" }]); }}>+ Încă un bun</button></div>
             <p className="hint">Fiecare bun (apartament, loc de parcare, boxă, teren) separat: are valoarea și inspecția lui. Primul e bunul principal.</p>
             {assets.map((a, i) => {
               const types = ASSET_CATEGORIES.find(([c]) => c === a.category)?.[2] ?? [];
@@ -232,6 +243,7 @@ export function ProcessWizard(p: {
                     <label className="field">An construcție<input className="input" inputMode="numeric" value={a.year_built} onChange={(e) => setA(i, "year_built", e.target.value)} /></label>
                     <label className="field">Descriere<input className="input" value={a.description} onChange={(e) => setA(i, "description", e.target.value)} placeholder="ex. 3 camere · teren 450 mp" /></label>
                   </div>
+                  <ContactFields value={a} client={{ name: client.name, phone: client.phone }} onChange={(c) => setAssets(assets.map((x, j) => (j === i ? { ...x, ...c } : x)))} />
                 </div>
               );
             })}

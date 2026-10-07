@@ -73,9 +73,11 @@ async function clientFor(db: D1Database, o: Order, actor: string) {
   const email = (o.client_email ?? (o.source === "client" ? o.creator_email : null))?.trim().toLowerCase() || null;
   const phone = (o.client_phone ?? "").replace(/\D/g, "").slice(-9);
   const found = await db
-    .prepare(`SELECT id FROM entities WHERE kind IN ('person', 'company') AND ((? IS NOT NULL AND lower(email) = ?) OR (length(?) = 9 AND substr(replace(replace(replace(phone, ' ', ''), '.', ''), '-', ''), -9) = ?))
+    // Same email or phone AND the same name: a shared phone (family, agent) must not merge two different clients.
+    .prepare(`SELECT id FROM entities WHERE kind IN ('person', 'company') AND lower(trim(name)) = lower(trim(?))
+        AND ((? IS NOT NULL AND lower(email) = ?) OR (length(?) = 9 AND substr(replace(replace(replace(phone, ' ', ''), '.', ''), '-', ''), -9) = ?))
       ORDER BY updated_at DESC LIMIT 1`)
-    .bind(email, email, phone, phone)
+    .bind(o.client_name || o.creator_name || "", email, email, phone, phone)
     .first<{ id: string }>();
   if (found) return found.id;
   const id = uuid();
@@ -139,7 +141,9 @@ export async function openDossier(db: D1Database, orderId: string, actor: { id: 
         accepted?.value_type ?? null, day, fee ?? null, Number(day.slice(0, 4)), o.source === "partner" ? o.created_by : null, opts.notes ?? null,
         term ?? null, opts.due_on ?? null, accepted?.id ?? null, actor?.id ?? null, t, t),
     // The asset after its report (foreign key).
-    db.prepare("INSERT INTO assets (id, report_id, property_id, is_main) VALUES (?, ?, ?, 1)").bind(assetId, reportId, propertyId),
+    // Who shows the property: the contact given with the order, else the client.
+    db.prepare("INSERT INTO assets (id, report_id, property_id, is_main, contact_kind, contact_name, contact_phone) VALUES (?, ?, ?, 1, ?, ?, ?)")
+      .bind(assetId, reportId, propertyId, o.contact_name ? "other" : "client", o.contact_name ?? o.client_name ?? o.creator_name, o.contact_phone ?? o.client_phone),
     ...(evaluator ? [db.prepare("INSERT OR IGNORE INTO report_members (report_id, user_id, role) VALUES (?, ?, 'evaluator')").bind(reportId, evaluator)] : []),
     ...(opts.verifier_id ? [db.prepare("INSERT OR IGNORE INTO report_members (report_id, user_id, role) VALUES (?, ?, 'verifier')").bind(reportId, opts.verifier_id)] : []),
     db.prepare("UPDATE orders SET status = 'in_progress', client_id = ?, updated_at = ? WHERE id = ?").bind(clientId, t, o.id),

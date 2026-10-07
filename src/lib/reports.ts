@@ -153,7 +153,7 @@ export type AssetDetail = {
   category: string | null; type: string | null; construction: string | null; county: string | null; city: string | null; full_address: string | null;
   geo: string | null; cf_number: string | null; cad_building: string | null; usable_area: number | null; year_built: number | null;
   description: string | null; image_url: string | null; cf_file: string | null; plan_file: string | null;
-  cad_land: string | null; notes: string | null;
+  cad_land: string | null; notes: string | null; a_contact_kind: string | null; a_contact_name: string | null; a_contact_phone: string | null;
   inspection_id: string | null; inspection_from_glide: number | null; inspection_status: string | null; scheduled_at: string | null; done_at: string | null;
   inspector: string | null; inspector_id: string | null; due_on: string | null; instructions: string | null; sheet_type: string | null;
   assigned_at: string | null; assigned_by_name: string | null; sheet_status: string | null;
@@ -166,7 +166,7 @@ export async function reportAssets(db: D1Database, id: string) {
   return (await db
     .prepare(
       `SELECT a.id, a.is_main, a.value, a.approach, p.id AS property_id, p.category, p.type, p.construction, p.county, p.city, p.full_address, p.geo, p.cf_number,
-        p.cad_building, p.usable_area, p.year_built, p.description, p.image_url, p.cf_file, p.plan_file, p.cad_land, a.notes,
+        p.cad_building, p.usable_area, p.year_built, p.description, p.image_url, p.cf_file, p.plan_file, p.cad_land, a.notes, a.contact_kind AS a_contact_kind, a.contact_name AS a_contact_name, a.contact_phone AS a_contact_phone,
         i.id AS inspection_id, i.glide_id IS NOT NULL AS inspection_from_glide, i.status AS inspection_status, i.scheduled_at, i.done_at,
         COALESCE(NULLIF(u.name, ''), u.email) AS inspector, i.inspector_id, i.due_on, i.instructions, i.sheet_type, i.assigned_at,
         (SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE x.id = i.assigned_by) AS assigned_by_name, s.status AS sheet_status,

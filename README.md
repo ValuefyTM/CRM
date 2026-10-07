@@ -56,7 +56,7 @@ be pasted in the CRM (Comenzi → Bănci → „Adaugă din email”).
 
 **Processing** (Comenzi → order → „Procesează”): screenshot of the bank's app → client → assets → contract and team →
 the report file opens with every asset (and the inspections, if chosen). With `ANTHROPIC_API_KEY` (secret) the screenshots
-are read by Claude (`claude-opus-5-5`, structured output) to pre-fill the form; without it they are only kept with the order.
+are read by Claude (`claude-sonnet-5-5` by default, `EXTRACT_MODEL` to change it, e.g. `claude-haiku-4-5`; structured output) to pre-fill the form; without it they are only kept with the order.
 
 ## Local development
 ```

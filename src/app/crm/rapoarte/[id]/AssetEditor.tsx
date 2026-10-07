@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { APPROACHES, ASSET_CATEGORIES, capType, type AssetForm } from "@/lib/asset-labels";
+import { ContactFields } from "@/components/ContactFields";
 
 type Hit = { id: string; type: string | null; category: string | null; full_address: string | null; city: string | null; cf_number: string | null; cad_building: string | null; usable_area: number | null; reports: number; last_report: string | null };
 
@@ -16,7 +17,7 @@ async function send(url: string, init: RequestInit) {
  * "+ Adaugă bun" / "Modifică": one asset of the report — a new property, or one already in the CRM (found by CF,
  * cadastral number or address, so its valuation history follows it) — with its own value and approach.
  */
-export function AssetEditor({ report, initial, shared = 0, label, className }: { report: string; initial: AssetForm; shared?: number; label: string; className?: string }) {
+export function AssetEditor({ report, initial, shared = 0, label, className, client }: { report: string; initial: AssetForm; shared?: number; label: string; className?: string; client: { name: string | null; phone: string | null } }) {
   const editing = !!initial.id;
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"new" | "find">("new");
@@ -130,6 +131,9 @@ export function AssetEditor({ report, initial, shared = 0, label, className }: {
               </>
             )}
 
+            <div className="section">Inspecție</div>
+            <ContactFields value={f} client={client} onChange={(c) => setF({ ...f, ...c })} />
+            <p className="hint" style={{ marginTop: -4 }}>Contactul se preia la alocarea inspecției acestui bun.</p>
             <div className="section">În acest raport</div>
             <div className="formRow">
               <label className="field">Valoare (opțional)<input className="input" inputMode="decimal" value={f.value} onChange={set("value")} /></label>

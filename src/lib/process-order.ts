@@ -67,7 +67,8 @@ export async function processBankOrder(db: D1Database, user: User, orderId: stri
       purpose = COALESCE(NULLIF(?, ''), purpose), report_type = COALESCE(NULLIF(?, ''), report_type), fee = COALESCE(?, fee), urgent = ?, contract_id = ?,
       property_type = ?, city = ?, address = ?, surface_area = ?, notes = TRIM(COALESCE(notes, '') || CASE WHEN ? <> '' THEN char(10) || ? ELSE '' END),
       processed_at = ?, updated_at = ? WHERE id = ?`)
-    .bind(name, str(c.phone, 40) || null, str(c.email, 160).toLowerCase() || null, clientId, str(c.contact_name, 120) || null, str(c.contact_phone, 40) || null,
+    .bind(name, str(c.phone, 40) || null, str(c.email, 160).toLowerCase() || null, clientId,
+      main.contact_kind && main.contact_kind !== "client" ? main.contact_name : null, main.contact_kind && main.contact_kind !== "client" ? main.contact_phone : null,
       str(bk.branch, 120) || o.bank_branch, str(bk.purpose, 120), str(bk.report_type, 120), amount(d.fee), d.urgent === true ? 1 : 0, contract,
       propertyType(main), main.city, main.full_address, main.usable_area, extra, extra, t, t, orderId)
     .run();
@@ -78,12 +79,17 @@ export async function processBankOrder(db: D1Database, user: User, orderId: stri
   if (!r.created || !r.assetId) return { ok: true as const, report: r.id };
 
   // The file opened with the order's main asset: complete it with everything filled in, then add the others.
-  const assetIds = [r.assetId];
+  // Who shows each asset: its own contact, else the client.
+  const contactOf = (a: AssetInput) => a.contact_kind && a.contact_kind !== "client" && a.contact_name
+    ? { kind: a.contact_kind, name: a.contact_name, phone: a.contact_phone ?? "" }
+    : { kind: "client", name, phone: str(c.phone, 40) };
+  for (const a of assets) { const k = contactOf(a); Object.assign(a, { contact_kind: k.kind, contact_name: k.name, contact_phone: k.phone || null }); }
+  const assetIds = [{ id: r.assetId, contact: contactOf(main) }];
   const up = await updateAsset(db, user.id, r.id, r.assetId, main);
   if (!up.ok) return { ok: false as const, error: up.error };
   for (const a of assets.slice(1)) {
     const add = await addAsset(db, user.id, r.id, a);
-    if (add.ok) assetIds.push(add.id);
+    if (add.ok) assetIds.push({ id: add.id, contact: contactOf(a) });
   }
 
   // Inspections: one per asset, all to the chosen inspector (they can be reallocated one by one on the report).
@@ -92,8 +98,8 @@ export async function processBankOrder(db: D1Database, user: User, orderId: stri
   if (inspector) {
     for (const asset of assetIds) {
       const i = await assignInspection(db, user, r.id, {
-        asset, inspector, due_on: str(d.inspection_due, 10), contact_kind: str(c.contact_name) ? "other" : "client",
-        contact_name: str(c.contact_name, 120) || name, contact_phone: str(c.contact_phone, 40) || str(c.phone, 40), instructions: str(d.instructions, 2000),
+        asset: asset.id, inspector, due_on: str(d.inspection_due, 10), contact_kind: asset.contact.kind,
+        contact_name: asset.contact.name, contact_phone: asset.contact.phone, instructions: str(d.instructions, 2000),
       });
       if (!i.ok) problems.push(i.error);
     }

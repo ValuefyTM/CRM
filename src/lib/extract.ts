@@ -17,7 +17,7 @@ const Extracted = z.object({
     cui: z.string().nullable().describe("CUI-ul firmei, doar pentru persoane juridice"),
   }),
   contact: z.object({
-    name: z.string().nullable().describe("Persoana de contact pentru inspecție, dacă e alta decât clientul"),
+    name: z.string().nullable().describe("Persoana de contact pentru inspecție / vizionare (ex. proprietar, vânzător, agent), dacă e indicată"),
     phone: z.string().nullable(),
   }),
   bank: z.object({
@@ -40,6 +40,8 @@ const Extracted = z.object({
     land_area: z.number().nullable().describe("Suprafața terenului în mp"),
     rooms: z.number().nullable(),
     year_built: z.number().nullable(),
+    contact_name: z.string().nullable().describe("Persoana care prezintă acest bun la inspecție / vizionare, dacă e indicată pentru el"),
+    contact_phone: z.string().nullable(),
   })).describe("Bunurile de evaluat (fiecare proprietate / loc de parcare / teren separat)"),
   notes: z.string().nullable().describe("Alte informații utile pentru evaluare, pe scurt"),
 });
@@ -47,9 +49,16 @@ export type ExtractedData = z.infer<typeof Extracted>;
 
 export const extractEnabled = () => !!process.env.ANTHROPIC_API_KEY;
 
+/**
+ * Model for reading the screenshots: Claude Sonnet 5.5 by default (good at reading numbers off screenshots, half the
+ * price of Claude Opus 5.5). EXTRACT_MODEL can switch it, e.g. to claude-haiku-4-5 (cheapest) or claude-opus-5-5.
+ */
+const model = () => process.env.EXTRACT_MODEL?.trim() || "claude-sonnet-5-5";
+
 const PROMPT = `Acestea sunt capturi de ecran din aplicația unei bănci pentru o cerere de evaluare imobiliară (garanție la credit).
 Extrage datele clientului, ale băncii și bunurile de evaluat. Completează doar ce apare clar în capturi; lasă null ce lipsește sau e ilizibil — nu ghici.
-Păstrează numerele exact cum apar (CF, cadastral, telefoane). Fiecare bun distinct (apartament, loc de parcare, boxă, teren) e un element separat în "assets".`;
+Păstrează numerele exact cum apar (CF, cadastral, telefoane). Fiecare bun distinct (apartament, loc de parcare, boxă, teren) e un element separat în "assets".
+Caută persoana de contact pentru inspecție / vizionare (adesea proprietarul sau vânzătorul, nu clientul care ia creditul) și telefonul ei.`;
 
 /** Fields read from 1–4 screenshots, or an error to show (no key, unreadable images, refusal). */
 export async function extractFromScreens(images: { data: ArrayBuffer; type: string }[], hint: { bank?: string | null; ref?: string | null; client?: string | null }) {
@@ -61,14 +70,15 @@ export async function extractFromScreens(images: { data: ArrayBuffer; type: stri
   }));
   content.push({ type: "text", text: `${PROMPT}${hint.bank ? `\nBanca: ${hint.bank}.` : ""}${hint.ref ? ` Nr. cerere: ${hint.ref}.` : ""}${hint.client ? ` Client (din email): ${hint.client}.` : ""}` });
   try {
+    const m = model();
+    const haiku = m.startsWith("claude-haiku");
     const res = await client.beta.messages.parse({
-      model: "claude-opus-5-5",
+      model: m,
       max_tokens: 16000,
-      // Reading values off screenshots: enough thinking to be careful with numbers, without the wait of the higher levels.
-      output_config: { effort: "medium", format: betaZodOutputFormat(Extracted) },
-      // If a safety classifier declines, the API retries on a fallback model inside the same call.
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
+      // Copying values off screenshots needs little reasoning: low effort keeps it quick and cheap. Haiku takes no effort setting.
+      output_config: haiku ? { format: betaZodOutputFormat(Extracted) } : { effort: "low", format: betaZodOutputFormat(Extracted) },
+      // If a safety classifier declines, the API retries on a fallback model inside the same call (newer models only).
+      ...(haiku ? {} : { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const }),
       messages: [{ role: "user", content }],
     });
     if (res.stop_reason === "refusal") return { ok: false as const, error: "Capturile nu au putut fi citite. Completează datele manual." };
