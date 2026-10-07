@@ -63,7 +63,7 @@ export function OfferEditor({ orderId, base, initial, status, evaluators }: {
   ] : [];
 
   return (
-    <section className="card offerCard">
+    <section className="card offerCard" id="oferta">
       <div className="cardHead">
         <h2>Ofertă{status ? ` ${status.number}` : ""}</h2>
         {status && (

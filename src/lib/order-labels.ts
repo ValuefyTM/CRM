@@ -88,7 +88,7 @@ export const orderStatus = (o: { docs_missing: number; status?: string }): [stri
 export const orderCode = (o: { seq: number | null; bank_ref?: string | null; bank?: string | null; source?: string; id: string }) =>
   o.seq ? orderRef(o.seq) : o.bank_ref ? `${o.bank ?? "Bancă"} ${o.bank_ref}` : `${o.source === "collab" ? "COL" : "CMD"}-${o.id.replace(/^g-ord-\w-/, "").slice(0, 6).toUpperCase()}`;
 
-export const SOURCE_LABEL: Record<string, string> = { partner: "Colaborator", client: "Client direct", bank: "Bancă · contract cadru", collab: "Colaborare firmă de evaluare", site: "Site valuefy.ro (asistent)" };
+export const SOURCE_LABEL: Record<string, string> = { partner: "Colaborator", client: "Client direct", bank: "Bancă · contract cadru", collab: "Colaborare firmă de evaluare", site: "Site valuefy.ro (asistent)", direct: "Lucrare directă · contract clasic" };
 
 /** Address line of an order ("—" when the order came without one, e.g. bank orders from Glide). */
 export const orderPlace = (o: { address: string | null; city: string | null }) => [o.address, o.city].filter(Boolean).join(", ") || "—";

@@ -25,7 +25,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
         { key: "home", label: "Dashboard", href: b || "/" },
         { group: "CRM", key: "g-crm", items: [
           { key: "clients", label: "Clienți / Entități", href: `${b}/clienti` },
-          { key: "contracts", label: "Contracte", soon: true },
+          { key: "contracts", label: "Contracte", href: `${b}/contracte` },
           { key: "collabs", label: "Colaborări", soon: true },
           { key: "orders", label: "Comenzi", href: `${b}/comenzi`, badge: unread, hot: true },
           { key: "followups", label: "Follow-up-uri", soon: true },

@@ -12,13 +12,14 @@ type Person = PickPerson;
 
 /** Bank (framework contract) or collaboration order: the statement line and the report file, in one form. */
 export function ContractOrderForm(p: {
-  base: string; me: string; initialKind: "bank" | "collab"; contracts: Contract[]; collabs: Collab[]; evaluators: Person[]; inspectors: Person[];
+  base: string; me: string; initialKind: "bank" | "collab"; initialContract?: string | null; contracts: Contract[]; collabs: Collab[]; evaluators: Person[]; inspectors: Person[];
 }) {
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
   const [kind, setKind] = useState(p.initialKind);
+  const preset = p.contracts.find((c) => c.id === p.initialContract) ?? (p.contracts.length === 1 ? p.contracts[0] : null);
   const [f, setF] = useState({
-    contract_id: p.contracts.length === 1 ? p.contracts[0].id : "", collaboration_id: "", bank_ref: "", bank_branch: "", ordered_on: today, report_type: "", purpose: "",
-    fee: "", client_name: "", client_phone: "", client_email: "", inspection_notes: "", notes: "",
+    contract_id: preset?.id ?? "", collaboration_id: "", bank_ref: "", bank_branch: "", ordered_on: today, report_type: preset?.report_type ?? "", purpose: preset?.purpose ?? "",
+    fee: preset?.fee ? String(preset.fee) : "", client_name: "", client_phone: "", client_email: "", inspection_notes: "", notes: "",
     evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "", verifier_id: "", due_on: "", urgent: false,
   });
   const [assets, setAssets] = useState<AssetForm[]>([{ ...emptyAsset(), full_address: "", is_main: true }]);

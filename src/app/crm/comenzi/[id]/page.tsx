@@ -40,7 +40,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
   const lead = o.lead_id ? await getLead(db, o.lead_id) : null;
 
   // Offers: for orders from the portal and the website (bank orders follow the framework contract).
-  const offerable = !o.glide_id && (portal || o.source === "site");
+  const offerable = !o.glide_id && (portal || o.source === "site" || o.source === "direct");
   const offer = offerable ? await offerForOrder(db, id) : null;
   const evaluators = !o.glide_id
     ? (await db.prepare("SELECT id, COALESCE(NULLIF(name, ''), email) AS name, anevar_no, role, duties, last_seen_at, avatar_at FROM users WHERE kind = 'internal' AND status NOT IN ('disabled', 'deleted') AND (role IN ('evaluator', 'owner', 'admin') OR ',' || COALESCE(duties, '') || ',' LIKE '%,evaluator,%') ORDER BY name")
@@ -102,6 +102,21 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
                 {o.creator_email && <div><dt>Email</dt><dd><a href={`mailto:${o.creator_email}`}>{o.creator_email}</a></dd></div>}
                 {o.bank_branch && <div><dt>Agenție</dt><dd>{o.bank_branch}</dd></div>}
               </dl>
+            </section>
+          ) : o.source === "direct" ? (
+            <section className="card">
+              <h2>Lucrare directă · contract clasic</h2>
+              <dl className="dl">
+                <div><dt>Client</dt><dd>{o.client_id ? <a className="rowLink" href={`${base}/clienti/${o.client_id}`}>{o.client_name ?? "—"}</a> : o.client_name ?? "—"}</dd></div>
+                {o.client_phone && <div><dt>Telefon</dt><dd><a href={`tel:${o.client_phone}`}>{o.client_phone}</a></dd></div>}
+                {o.client_email && <div><dt>Email</dt><dd><a href={`mailto:${o.client_email}`}>{o.client_email}</a></dd></div>}
+                {o.report_type && <div><dt>Tip raport</dt><dd>{o.report_type}</dd></div>}
+                {o.purpose && <div><dt>Scop</dt><dd>{o.purpose}</dd></div>}
+                <div><dt>Onorariu</dt><dd>{lei(o.fee)}</dd></div>
+                <div><dt>Înregistrată de</dt><dd>{o.creator_name || o.creator_email || "—"}</dd></div>
+                {o.contract_number && <div><dt>Contract</dt><dd>Clasic nr. {o.contract_number}</dd></div>}
+              </dl>
+              <p className="hint">Contractul clasic se generează automat la acceptarea ofertei (sau când creezi raportul de mai jos), cu numărul următor.</p>
             </section>
           ) : (
             <section className="card">

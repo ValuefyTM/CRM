@@ -9,6 +9,9 @@ import { appUrl } from "./site";
 import { getOrder, type Order } from "./orders";
 import { propertyLabel } from "./order-labels";
 import { offerForOrder, type Offer } from "./offers";
+import { createClassicContract } from "./contracts";
+import { fillReportAssets } from "./process-order";
+import type { AssetInput } from "./asset-labels";
 
 // ---------- stages and deadline ----------
 
@@ -150,11 +153,31 @@ export async function openDossier(db: D1Database, orderId: string, actor: { id: 
     ...(opts.verifier_id ? [db.prepare("INSERT OR IGNORE INTO report_members (report_id, user_id, role) VALUES (?, ?, 'verifier')").bind(reportId, opts.verifier_id)] : []),
     db.prepare("UPDATE orders SET status = 'in_progress', client_id = ?, updated_at = ? WHERE id = ?").bind(clientId, t, o.id),
   ]);
+  // The classic contract of the work (portal, website, direct work), unless the order is under a contract already
+  // (framework contract of a bank, collaboration, or another report of the same classic contract).
+  let contract: { id: string; number: string } | null = null;
+  if (!o.contract_id && o.source !== "bank" && o.source !== "collab") {
+    contract = await createClassicContract(db, who, {
+      client_id: clientId, fee: fee ?? null, purpose: o.purpose, report_type: o.report_type || "Raport de evaluare",
+      valuation_types: category === null && /mobil/i.test(o.report_type ?? "") ? "EBM" : "EPI", signed_on: accepted?.accepted_at?.slice(0, 10) ?? (o.source === "direct" ? o.ordered_on : null) ?? day,
+      notes: accepted ? `Generat la acceptarea ofertei ${accepted.number}.` : "Generat la procesarea comenzii.",
+    });
+    await db.prepare("UPDATE reports SET contract_id = ? WHERE id = ?").bind(contract.id, reportId).run();
+  }
+  // Direct work keeps its assets on the order until the report opens: the main one completes the asset made above.
+  if (o.assets_json) {
+    let list: AssetInput[] = [];
+    try { list = JSON.parse(o.assets_json) as AssetInput[]; } catch { /* malformed: the main asset stays as made from the order */ }
+    if (list.length) {
+      const f = await fillReportAssets(db, actor?.id ?? "system", reportId, assetId, list, { name: o.client_name ?? "", phone: o.client_phone ?? "" });
+      if (!f.ok) console.error("fillReportAssets", f.error);
+    }
+  }
   await audit(db, who, "report.opened", "report", reportId, accepted ? `din oferta ${accepted.number}` : o.source === "bank" ? "comandă bancă" : o.source === "collab" ? "colaborare" : "din comandă");
   await audit(db, who, "order.dossier", "order", o.id, reportId);
 
   if (evaluator && evaluator !== actor?.id) await notifyEvaluator(db, reportId, evaluator, label || "raport nou", actor?.name ?? null, !!accepted);
-  return { ok: true as const, id: reportId, created: true, assetId };
+  return { ok: true as const, id: reportId, created: true, assetId, contract };
 }
 
 async function notifyEvaluator(db: D1Database, reportId: string, userId: string, label: string, by: string | null, fromOffer: boolean) {

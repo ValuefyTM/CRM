@@ -202,7 +202,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                 <Row k="Client">{r.client_name ? <a className="rowLink" href={`${base}/clienti/${r.client_id}`}>{niceName(r.client_name)}</a> : null}</Row>
                 <Row k="Tip client">{r.client_kind ? KIND[r.client_kind] ?? r.client_kind : null}</Row>
                 <Row k="Utilizator / bancă">{niceName(r.bank_name) || null}</Row>
-                <Row k="Contract">{r.contract_number ? <span className="link">{r.contract_number} · {r.contract_kind === "framework" ? "cadru" : "clasic"}</span> : null}</Row>
+                <Row k="Contract">{r.contract_number ? <a className="link" href={`${base}/contracte/${r.contract_id}`}>{r.contract_number} · {r.contract_kind === "framework" ? "cadru" : "clasic"}</a> : null}</Row>
                 <Row k="Comandă">{order ? <a className="link" href={`${base}/comenzi/${r.order_id}`}>{order}{r.order_source ? ` · ${SOURCE_LABEL[r.order_source]?.toLowerCase() ?? r.order_source}` : ""}</a> : null}</Row>
                 <Row k="Agenție bancară">{r.bank_branch}</Row>
                 <Row k="Referral">{r.referral_name ? <a className="link" href={`${base}/utilizatori/${r.referral_id}`}>{r.referral_name}</a> : null}</Row>
