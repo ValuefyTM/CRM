@@ -1,3 +1,5 @@
+import { fileSrc } from "./files";
+
 // Server-only: the register of valued properties — every property with its latest valuation (date, value, value per
 // m²), filters, statistics and the points for the map.
 export type RegistryFilters = { q?: string; cat?: string; county?: string; city?: string; year?: string; geo?: string; sort?: string; page?: number };
@@ -6,6 +8,7 @@ export type RegistryRow = {
   id: string; category: string | null; type: string | null; county: string | null; city: string | null; full_address: string | null; geo: string | null;
   cf_number: string | null; cad_building: string | null; usable_area: number | null; year_built: number | null; image_url: string | null;
   valuations: number | null; last_date: string | null; report_id: string | null; report_number: string | null; value: number | null; sqm: number | null;
+  photo?: string | null;
 };
 export type RegistryPoint = { id: string; lat: number; lng: number; cat: string; label: string; address: string; value: number | null; date: string | null };
 
@@ -39,6 +42,11 @@ const BASE = `WITH v0 AS (
   )`;
 
 const HAS_GEO = "p.geo LIKE '%_,_%'";
+/** A picture of the property: its own photo (Glide), else an exterior photo from an inspection, else the inspection sheet photo. */
+const PHOTO = `COALESCE(NULLIF(p.image_url, ''),
+  (SELECT 'r2:' || f.r2_key FROM inspection_photos f JOIN inspections i ON i.id = f.inspection_id JOIN assets a ON a.id = i.asset_id
+    WHERE a.property_id = p.id AND f.deleted_at IS NULL ORDER BY f.category = 'exterior' DESC, f.taken_at DESC LIMIT 1),
+  (SELECT s.photo_url FROM inspection_sheets s JOIN assets a ON a.id = s.asset_id WHERE a.property_id = p.id AND s.photo_url IS NOT NULL AND s.photo_url <> '' LIMIT 1))`;
 
 function where(f: RegistryFilters) {
   const w: string[] = ["p.category IS NOT 'BUN MOBIL'"];
@@ -72,7 +80,7 @@ export async function registry(db: D1Database, f: RegistryFilters) {
   const page = Math.max(1, f.page ?? 1);
   const since = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
   const [rows, stats, pts] = await Promise.all([
-    db.prepare(`${BASE} SELECT p.* FROM p ${sql} ORDER BY ${(REGISTRY_SORTS[f.sort ?? ""] ?? REGISTRY_SORTS[""])[1]}, p.id LIMIT ${REGISTRY_PAGE} OFFSET ?`)
+    db.prepare(`${BASE} SELECT p.*, ${PHOTO} AS photo FROM p ${sql} ORDER BY ${(REGISTRY_SORTS[f.sort ?? ""] ?? REGISTRY_SORTS[""])[1]}, p.id LIMIT ${REGISTRY_PAGE} OFFSET ?`)
       .bind(...args, (page - 1) * REGISTRY_PAGE).all<RegistryRow>(),
     db.prepare(`${BASE} SELECT COUNT(*) AS n, SUM(p.valuations) AS valuations, SUM(${HAS_GEO}) AS geo, SUM(p.last_date >= ?) AS recent,
         AVG(CASE WHEN p.sqm BETWEEN 50 AND 100000 THEN p.sqm END) AS sqm, AVG(CASE WHEN p.value > 0 THEN p.value END) AS value,
@@ -89,7 +97,7 @@ export async function registry(db: D1Database, f: RegistryFilters) {
     if (ll) points.push({ id: p.id, lat: ll[0], lng: ll[1], cat: catKey(p.category), label: p.type ?? "Proprietate", address: p.address ?? "", value: p.value, date: p.last_date });
   }
   return {
-    rows: rows.results, points, page,
+    rows: rows.results.map((r) => ({ ...r, photo: fileSrc(r.photo) })), points, page,
     stats: { n: stats?.n ?? 0, valuations: stats?.valuations ?? 0, geo: stats?.geo ?? 0, recent: stats?.recent ?? 0, sqm: stats?.sqm ?? null, value: stats?.value ?? null, area: stats?.area ?? null },
   };
 }

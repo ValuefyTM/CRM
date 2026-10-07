@@ -37,6 +37,10 @@ export function RegistryMap({ points, base, hover, onPick, height = "100%" }: {
       m.setView([45.7489, 21.2087], 11);
       layer.current = l.layerGroup().addTo(m);
       map.current = m;
+      // The split view can be resized: the map follows the size of its box.
+      const ro = new ResizeObserver(() => m.invalidateSize({ pan: false }));
+      ro.observe(el.current);
+      m.on("unload", () => ro.disconnect());
       setReady(true);
     });
     return () => { off = true; map.current?.remove(); map.current = null; };
