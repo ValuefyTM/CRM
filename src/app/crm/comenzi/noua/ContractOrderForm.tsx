@@ -1,5 +1,6 @@
 "use client";
 
+import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
 import { useState } from "react";
 import { PURPOSES } from "@/lib/order-labels";
 import { emptyAsset, type AssetForm } from "@/lib/asset-labels";
@@ -7,7 +8,7 @@ import { AssetsEditor } from "@/components/AssetsEditor";
 
 type Contract = { id: string; number: string | null; bank: string; bank_code: string | null; fee: number | null; report_type: string | null; purpose: string | null };
 type Collab = { id: string; number: string | null; firm: string; share: number | null };
-type Person = { id: string; name: string; role: string };
+type Person = PickPerson;
 
 /** Bank (framework contract) or collaboration order: the statement line and the report file, in one form. */
 export function ContractOrderForm(p: {
@@ -118,18 +119,13 @@ export function ContractOrderForm(p: {
       <section className="card">
         <h2>Raport și echipă</h2>
         <div className="formRow">
-          <label className="field">Evaluator principal
-            <select className="select" value={f.evaluator_id} onChange={set("evaluator_id")}>
-              <option value="">Alege…</option>
-              {p.evaluators.map((x) => <option key={x.id} value={x.id}>{x.id === p.me ? `${x.name} (eu)` : x.name}</option>)}
-            </select>
-          </label>
-          <label className="field">Verificator <small>(opțional)</small>
-            <select className="select" value={f.verifier_id} onChange={set("verifier_id")}>
-              <option value="">Mai târziu</option>
-              {p.evaluators.filter((x) => x.id !== f.evaluator_id).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-            </select>
-          </label>
+          <div className="field">Evaluator principal
+            <PersonPicker label="Evaluator principal" value={f.evaluator_id} onChange={(v) => setF({ ...f, evaluator_id: v })} people={p.evaluators} me={p.me} />
+          </div>
+          <div className="field">Verificator <small>(opțional)</small>
+            <PersonPicker label="Verificator" value={f.verifier_id} onChange={(v) => setF({ ...f, verifier_id: v })} people={p.evaluators.filter((x) => x.id !== f.evaluator_id)} me={p.me}
+              extras={[{ value: "", label: "Mai târziu", hint: "se alege după creare" }]} placeholder="Mai târziu" />
+          </div>
           <label className="field">Termen predare raport <small>(opțional)</small><input className="input" type="date" value={f.due_on} onChange={set("due_on")} /></label>
         </div>
         <p className="hint">Inspecțiile le aloci după creare: se deschide raportul cu fereastra de alocare, bun cu bun.</p>

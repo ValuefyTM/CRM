@@ -3,6 +3,7 @@ import { countNewLeads } from "@/lib/leads";
 import { initials } from "@/lib/guard";
 import { roleLabel, type User } from "@/lib/users";
 import { Shell } from "./Shell";
+import { Heartbeat } from "./Heartbeat";
 
 export async function CrmShell(props: { user: User; base: string; active: string; title: string; subtitle?: string; actions?: React.ReactNode; children: React.ReactNode }) {
   const b = props.base;
@@ -23,11 +24,12 @@ export async function CrmShell(props: { user: User; base: string; active: string
         ...(props.user.role === "owner" ? [{ key: "import", label: "Import Glide", href: `${b}/setari/import` }] : []),
       ]}
       active={props.active}
-      me={{ initials: initials(props.user.name, props.user.email), name: props.user.name || props.user.email, sub: roleLabel("internal", props.user.role) }}
+      me={{ id: props.user.id, initials: initials(props.user.name, props.user.email), name: props.user.name || props.user.email, sub: roleLabel("internal", props.user.role) }}
       title={props.title}
       subtitle={props.subtitle}
       actions={props.actions}
     >
+      <Heartbeat url="/api/crm/presence" />
       {props.children}
     </Shell>
   );

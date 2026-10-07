@@ -6,6 +6,7 @@ import { audit } from "./auth";
 import { esc, layout, sendEmail } from "./email";
 import { dutiesOf, isAdmin, type User } from "./users";
 import { FORMS, guessSheetType, sheetTypeLabel, type SheetType } from "./insp-forms";
+import { presenceOf } from "./presence";
 import { missingDocs, missingText, type DocType } from "./insp-docs";
 
 /** Main evaluator of the report, owners and administrators. */
@@ -18,12 +19,12 @@ export async function canAssign(db: D1Database, user: User, reportId: string) {
 /** Who can receive an inspection: the one giving it, and colleagues who are inspectors or evaluators. */
 export async function inspectorChoices(db: D1Database, me: string) {
   return (await db
-    .prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role, duties, coverage FROM users
+    .prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role, duties, coverage, last_seen_at FROM users
       WHERE kind = 'internal' AND status <> 'disabled' AND (id = ? OR role IN ('evaluator', 'inspector') OR ',' || COALESCE(duties, '') || ',' LIKE '%,evaluator,%'
         OR ',' || COALESCE(duties, '') || ',' LIKE '%,inspector,%') ORDER BY name`)
     .bind(me)
-    .all<{ id: string; name: string; role: string; duties: string | null; coverage: string | null }>()).results
-    .map((u) => ({ ...u, role: dutiesOf(u).includes("inspector") ? "inspector" : dutiesOf(u).includes("evaluator") ? "evaluator" : u.role }));
+    .all<{ id: string; name: string; role: string; duties: string | null; coverage: string | null; last_seen_at: string | null }>()).results
+    .map((u) => ({ ...u, ...presenceOf(u.last_seen_at), role: dutiesOf(u).includes("inspector") ? "inspector" : dutiesOf(u).includes("evaluator") ? "evaluator" : u.role }));
 }
 
 /** The task in progress for an asset (made in the CRM, not yet done or cancelled). */

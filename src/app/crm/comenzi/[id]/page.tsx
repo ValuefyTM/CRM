@@ -16,6 +16,7 @@ import { isExpired, money, offerDocs, offerDraft, offerForOrder, offerTotals, ty
 import { offerLink } from "@/lib/offer-emails";
 import { OfferEditor } from "./OfferEditor";
 import { DossierOpen } from "./DossierOpen";
+import { presenceOf } from "@/lib/presence";
 import { orderProgress } from "@/lib/delivery";
 
 export const metadata: Metadata = { title: "Comandă | CRM VALUEFY" };
@@ -42,9 +43,9 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
   const offerable = !o.glide_id && (portal || o.source === "site");
   const offer = offerable ? await offerForOrder(db, id) : null;
   const evaluators = !o.glide_id
-    ? (await db.prepare("SELECT id, COALESCE(NULLIF(name, ''), email) AS name, anevar_no, role, duties FROM users WHERE kind = 'internal' AND status <> 'disabled' AND (role IN ('evaluator', 'owner', 'admin') OR ',' || COALESCE(duties, '') || ',' LIKE '%,evaluator,%') ORDER BY name")
-      .all<{ id: string; name: string; anevar_no: string | null; role: string; duties: string | null }>()).results
-      .map((e) => ({ ...e, role: hasDuty(e, "evaluator") ? "evaluator" : e.role }))
+    ? (await db.prepare("SELECT id, COALESCE(NULLIF(name, ''), email) AS name, anevar_no, role, duties, last_seen_at FROM users WHERE kind = 'internal' AND status <> 'disabled' AND (role IN ('evaluator', 'owner', 'admin') OR ',' || COALESCE(duties, '') || ',' LIKE '%,evaluator,%') ORDER BY name")
+      .all<{ id: string; name: string; anevar_no: string | null; role: string; duties: string | null; last_seen_at: string | null }>()).results
+      .map((e) => ({ ...e, ...presenceOf(e.last_seen_at), role: hasDuty(e, "evaluator") ? "evaluator" : e.role }))
     : [];
   // Processing: the order becomes a report file. Portal / website orders open it when the offer is signed (or by hand,
   // e.g. accepted by phone); bank and collaboration orders are processed straight away under their contract.
@@ -141,7 +142,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
                     <a className="btn btnGold" href={`${base}/comenzi/${o.id}/procesare`}>Procesează: client, bunuri, echipă →</a>
                   ) : <DossierOpen
                     order={o.id} base={base} me={user.id} evaluator={offer?.evaluator_id ?? null}
-                    evaluators={evaluators.map((e) => ({ id: e.id, name: e.name, role: e.role }))}
+                    evaluators={evaluators.map((e) => ({ id: e.id, name: e.name, sub: e.anevar_no ? `Evaluator ANEVAR ${e.anevar_no}` : "Evaluator", presence: e.presence, seen: e.seen }))}
                     label={contractOrder || offer?.status === "accepted" ? "Creează raportul" : "Creează raportul acum"}
                     primary={contractOrder || offer?.status === "accepted"}
                     hint={`${orderWhat(o)}${o.address ? ` · ${orderPlace(o)}` : ""} · ${o.client_name ?? ""}. Evaluatorul principal primește raportul pe email.`}

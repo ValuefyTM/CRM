@@ -1,5 +1,6 @@
 "use client";
 
+import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
 import { useEffect, useRef, useState } from "react";
 import { capType, emptyAsset, type AssetForm } from "@/lib/asset-labels";
 import { PURPOSES } from "@/lib/order-labels";
@@ -225,16 +226,13 @@ export function ProcessWizard(p: {
               <label className="field">Onorariu fără TVA (lei)<input className="input" inputMode="decimal" value={dos.fee} onChange={(e) => setDos({ ...dos, fee: e.target.value })} /></label>
             </div>
             <div className="formRow">
-              <label className="field">Evaluator principal
-                <select className="select" value={dos.evaluator_id} onChange={(e) => setDos({ ...dos, evaluator_id: e.target.value })}>
-                  <option value="">Alege…</option>{p.evaluators.map((x) => <option key={x.id} value={x.id}>{x.id === p.me ? `${x.name} (eu)` : x.name}</option>)}
-                </select>
-              </label>
-              <label className="field">Verificator <small>(opțional)</small>
-                <select className="select" value={dos.verifier_id} onChange={(e) => setDos({ ...dos, verifier_id: e.target.value })}>
-                  <option value="">Mai târziu</option>{p.evaluators.filter((x) => x.id !== dos.evaluator_id).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-                </select>
-              </label>
+              <div className="field">Evaluator principal
+                <PersonPicker label="Evaluator principal" value={dos.evaluator_id} onChange={(v) => setDos({ ...dos, evaluator_id: v })} people={p.evaluators} me={p.me} />
+              </div>
+              <div className="field">Verificator <small>(opțional)</small>
+                <PersonPicker label="Verificator" value={dos.verifier_id} onChange={(v) => setDos({ ...dos, verifier_id: v })} people={p.evaluators.filter((x) => x.id !== dos.evaluator_id)} me={p.me}
+                  extras={[{ value: "", label: "Mai târziu", hint: "se alege după creare" }]} placeholder="Mai târziu" />
+              </div>
               <label className="field">Termen predare raport<input className="input" type="date" value={dos.due_on} onChange={(e) => setDos({ ...dos, due_on: e.target.value })} /></label>
             </div>
             <p className="hint">Inspecțiile le aloci după creare: se deschide raportul cu fereastra de alocare, bun cu bun.</p>

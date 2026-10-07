@@ -1,4 +1,5 @@
 // Server-only: valuation reports (imported from Glide, later produced in the CRM).
+import { withPresence } from "./presence";
 
 export const REPORT_STATUS: Record<string, [string, string]> = {
   draft: ["Draft", ""],
@@ -120,15 +121,15 @@ export type TeamMember = {
 };
 
 export async function reportTeam(db: D1Database, id: string) {
-  return (await db.prepare(`SELECT m.role, u.id, u.name, u.email, u.phone, u.anevar_no, u.specializations, u.coverage, u.engagement, u.share_evaluator, u.share_verifier
+  return withPresence((await db.prepare(`SELECT m.role, u.id, u.name, u.email, u.phone, u.anevar_no, u.specializations, u.coverage, u.engagement, u.share_evaluator, u.share_verifier, u.last_seen_at
     FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = ?
-    ORDER BY CASE m.role WHEN 'evaluator' THEN 1 WHEN 'inspector' THEN 2 WHEN 'verifier' THEN 3 ELSE 4 END`).bind(id).all<TeamMember>()).results;
+    ORDER BY CASE m.role WHEN 'evaluator' THEN 1 WHEN 'inspector' THEN 2 WHEN 'verifier' THEN 3 ELSE 4 END`).bind(id).all<TeamMember & { last_seen_at: string | null }>()).results);
 }
 
 /** People who can be put on a report: active internal accounts. */
 export async function teamCandidates(db: D1Database) {
-  return (await db.prepare("SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role FROM users WHERE kind = 'internal' AND status <> 'disabled' ORDER BY name")
-    .all<{ id: string; name: string; role: string }>()).results;
+  return withPresence((await db.prepare("SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role, last_seen_at FROM users WHERE kind = 'internal' AND status <> 'disabled' ORDER BY name")
+    .all<{ id: string; name: string; role: string; last_seen_at: string | null }>()).results);
 }
 
 export type ReportDocument = {

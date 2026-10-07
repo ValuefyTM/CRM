@@ -4,12 +4,16 @@ import { useMemo, useState } from "react";
 import { FilterSelect } from "@/components/FilterSelect";
 import { STATUS_LABEL } from "@/lib/labels";
 import { PartnersTable, type FirmRow } from "./firme/PartnersTable";
+import { Avatar } from "@/components/Avatar";
+import { AvatarStack } from "@/components/PersonPicker";
+import type { Presence } from "@/lib/presence";
 
 export type Tab = "interni" | "colaboratori" | "clienti";
 type Row = {
   id: string; kind: string; name: string; email: string; phone: string | null; role: string; roleLabel: string; duties: string[]; status: string;
   partnerId: string | null; partnerName: string | null; engagement: string | null; anevar: string | null; specs: string | null;
   company: string | null; clientType: string; city: string | null; lastLogin: string; isMe: boolean;
+  presence: Presence; seen: string;
 };
 
 const TABS: [Tab, string, string][] = [
@@ -21,6 +25,7 @@ const TABS: [Tab, string, string][] = [
 const FILTERS: Record<Tab, [string, string, (r: Row) => boolean][]> = {
   interni: [
     ["all", "Toți", () => true],
+    ["online", "Online acum", (r) => r.presence === "online"],
     ["evaluator", "Evaluatori", (r) => r.duties.includes("evaluator") && r.status !== "disabled"],
     ["inspector", "Inspectori", (r) => r.duties.includes("inspector") && r.status !== "disabled"],
     ["admin", "Administrare", (r) => (r.role === "owner" || r.role === "admin") && r.status !== "disabled"],
@@ -112,7 +117,18 @@ export function UsersBrowser(props: { rows: Row[]; firms: FirmRow[]; base: strin
             {peopleOrFirms}
             {addBtn}
           </div>
-          <div className="resultLine"><span><b style={{ color: "var(--ink)" }}>{shown.length}</b> din {inTab.length}</span></div>
+          <div className="resultLine">
+            <span><b style={{ color: "var(--ink)" }}>{shown.length}</b> din {inTab.length}</span>
+            {(() => {
+              const on = inTab.filter((r) => r.presence !== "offline" && r.status === "active");
+              return on.length > 0 && (
+                <button type="button" className="onlineNow" onClick={() => setF(tab === "interni" ? "online" : "all")} title={on.map((r) => `${r.name} · ${r.seen}`).join("\n")}>
+                  <AvatarStack people={on.map((r) => ({ id: r.id, name: r.name, presence: r.presence, seen: r.seen }))} max={5} />
+                  <span><b>{on.filter((r) => r.presence === "online").length}</b> online acum</span>
+                </button>
+              );
+            })()}
+          </div>
           {shown.length === 0 ? (
             <div className="empty">{inTab.length ? "Niciun utilizator pentru filtrele alese." : EMPTY[tab]}</div>
           ) : (
@@ -124,7 +140,7 @@ export function UsersBrowser(props: { rows: Row[]; firms: FirmRow[]; base: strin
                     {tab === "interni" && <><th>Rol</th><th>Relație</th><th>ANEVAR</th></>}
                     {tab === "colaboratori" && <><th>Firmă</th><th>Rol în cont</th><th>Telefon</th></>}
                     {tab === "clienti" && <><th>Tip</th><th>Telefon</th><th>Localitate</th></>}
-                    <th>Ultima autentificare</th>
+                    <th>Activitate</th>
                     <th>Status</th>
                   </tr>
                 </thead>
@@ -132,9 +148,14 @@ export function UsersBrowser(props: { rows: Row[]; firms: FirmRow[]; base: strin
                   {shown.map((r) => (
                     <tr key={r.id}>
                       <td>
-                        <a className="rowLink" href={`${base}/utilizatori/${r.id}`}>{r.name}</a>
-                        {r.isMe && <span className="muted"> (tu)</span>}
-                        <div className="muted">{r.email}</div>
+                        <span className="userCell">
+                          <Avatar id={r.id} name={r.name} size={38} presence={r.status === "disabled" ? null : r.presence} title={`${r.name} · ${r.seen}`} />
+                          <span>
+                            <a className="rowLink" href={`${base}/utilizatori/${r.id}`}>{r.name}</a>
+                            {r.isMe && <span className="muted"> (tu)</span>}
+                            <div className="muted">{r.email}</div>
+                          </span>
+                        </span>
                       </td>
                       {tab === "interni" && (
                         <>
@@ -157,7 +178,7 @@ export function UsersBrowser(props: { rows: Row[]; firms: FirmRow[]; base: strin
                           <td>{r.city || <span className="muted">—</span>}</td>
                         </>
                       )}
-                      <td className="muted">{r.lastLogin}</td>
+                      <td>{r.status === "disabled" ? <span className="muted">—</span> : <span className={`pSeen ${r.presence}`} title={`Ultima autentificare: ${r.lastLogin}`}><i />{r.seen}</span>}</td>
                       <td><Status s={r.status} /></td>
                     </tr>
                   ))}

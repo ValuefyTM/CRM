@@ -237,7 +237,14 @@ export async function currentUser(db: D1Database, app: App): Promise<User | null
     .bind(await sha256(token), now())
     .first<{ user_id: string }>();
   const u = row ? await getUser(db, row.user_id) : null;
-  return u && u.status === "active" && canSignIn(u) && (await allowedIn(db, app, u)) ? u : null;
+  if (!(u && u.status === "active" && canSignIn(u) && (await allowedIn(db, app, u)))) return null;
+  // Presence: written at most once a minute.
+  const t = now();
+  if (!u.last_seen_at || Date.parse(t) - Date.parse(u.last_seen_at) > 60_000) {
+    await db.prepare("UPDATE users SET last_seen_at = ? WHERE id = ?").bind(t, u.id).run().catch(() => {});
+    u.last_seen_at = t;
+  }
+  return u;
 }
 
 export async function endSession(db: D1Database, app: App) {

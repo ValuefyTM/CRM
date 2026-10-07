@@ -3,9 +3,12 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { NO_INSPECTION_REASONS, SHEET_TYPES } from "@/lib/insp-forms";
+import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
+import { PersonLine } from "@/components/Avatar";
+import type { Presence } from "@/lib/presence";
 import { DocsConfirm, missingOf, type DocState } from "@/components/DocsConfirm";
 
-export type Person = { id: string; name: string; role: string; coverage: string | null };
+export type Person = { id: string; name: string; role: string; coverage: string | null; presence?: Presence; seen?: string };
 export type TaskInitial = {
   asset: string; label: string; inspection: string | null; inspector: string | null; sheet_type: string; due_on: string | null;
   contact_kind: string | null; contact_name: string | null; contact_phone: string | null; instructions: string | null; scheduled: boolean;
@@ -13,7 +16,8 @@ export type TaskInitial = {
 };
 
 const CONTACTS: [string, string][] = [["", "—"], ["client", "Clientul"], ["owner", "Proprietarul"], ["agent", "Agent imobiliar"], ["other", "Altă persoană"]];
-const ROLE: Record<string, string> = { inspector: "inspector", evaluator: "evaluator", owner: "evaluator principal", admin: "evaluator principal" };
+const ROLE: Record<string, string> = { inspector: "Inspector", evaluator: "Evaluator", owner: "Evaluator principal", admin: "Evaluator principal" };
+const picks = (people: Person[]): PickPerson[] => people.map((p) => ({ id: p.id, name: p.name, sub: [ROLE[p.role] ?? p.role, p.coverage].filter(Boolean).join(" · "), presence: p.presence, seen: p.seen }));
 
 async function send(url: string, init: RequestInit) {
   const r = await fetch(url, init).catch(() => null);
@@ -56,12 +60,9 @@ export function AssignInspection({ report, me, people, initial }: { report: stri
           <form className="vfModalBox" onSubmit={submit}>
             <h2 id="assignTitle">{realloc ? "Realocă inspecția" : "Alocă inspecția"}</h2>
             <p className="hint">{initial.label}. Inspectorul primește un email și vede inspecția în aplicația de inspecții la „De programat”; programarea o face el.</p>
-            <label className="field">Cine face inspecția
-              <select className="select" value={f.inspector} onChange={set("inspector")} required>
-                <option value="">Alege…</option>
-                {people.map((p) => <option key={p.id} value={p.id}>{p.id === me ? `${p.name} (eu)` : p.name} · {ROLE[p.role] ?? p.role}{p.coverage ? ` · ${p.coverage}` : ""}</option>)}
-              </select>
-            </label>
+            <div className="field">Cine face inspecția
+              <PersonPicker label="Cine face inspecția" value={f.inspector} onChange={(v) => setF({ ...f, inspector: v })} people={picks(people)} me={me} />
+            </div>
             <DocsConfirm have={initial.docs} checked={confirm} onChange={setConfirm} />
             {moving && <div className="note">Inspecția este deja programată. Dacă o dai altcuiva, programarea se anulează și noul inspector o programează din nou.</div>}
             <div className="formRow">
@@ -155,7 +156,6 @@ export function AllocateAll({ report, me, people, rows, autoOpen }: { report: st
     location.replace(u);
   };
 
-  const who = (id: string | null) => people.find((p) => p.id === id)?.name ?? "inspector";
   return (
     <>
       <button type="button" className="btn btnNavy btnSm" onClick={() => setOpen(true)}>Alocă inspecțiile</button>
@@ -165,13 +165,10 @@ export function AllocateAll({ report, me, people, rows, autoOpen }: { report: st
             <h2 id="allocTitle">Alocă inspecțiile</h2>
             <p className="hint">Pentru fiecare bun din raport alegi cine face inspecția, „Fără inspecție” (evaluare fără vizită în CRM) sau lași pentru mai târziu. Inspectorul primește email și vede inspecția în aplicație.</p>
             {free.length > 1 && (
-              <label className="field">Același inspector pentru toate bunurile
-                <select className="select" value="" onChange={(e) => { const v = e.target.value; if (v) setPick(Object.fromEntries(free.map((r) => [r.asset, v]))); }}>
-                  <option value="">Alege…</option>
-                  {people.map((p) => <option key={p.id} value={p.id}>{p.id === me ? `${p.name} (eu)` : p.name} · {ROLE[p.role] ?? p.role}</option>)}
-                  <option value="none">Toate fără inspecție</option>
-                </select>
-              </label>
+              <div className="field">Același inspector pentru toate bunurile
+                <PersonPicker label="Același inspector pentru toate bunurile" value="" onChange={(v) => { if (v) setPick(Object.fromEntries(free.map((r) => [r.asset, v]))); }}
+                  people={picks(people)} me={me} extras={[{ value: "none", label: "Toate fără inspecție", hint: "evaluare fără vizită în CRM", after: true }]} />
+              </div>
             )}
             <ul className="allocList">
               {rows.map((r) => {
@@ -191,11 +188,8 @@ export function AllocateAll({ report, me, people, rows, autoOpen }: { report: st
                     </div>
                     {editable ? (
                       <div className="allocPick">
-                        <select className="select" aria-label={`Inspecția: ${r.label}`} value={v} onChange={(e) => setPick({ ...pick, [r.asset]: e.target.value })}>
-                          <option value="">Mai târziu</option>
-                          {people.map((p) => <option key={p.id} value={p.id}>{p.id === me ? `${p.name} (eu)` : p.name} · {ROLE[p.role] ?? p.role}</option>)}
-                          <option value="none">Fără inspecție</option>
-                        </select>
+                        <PersonPicker label={`Inspecția: ${r.label}`} value={v} onChange={(x) => setPick({ ...pick, [r.asset]: x })} people={picks(people)} me={me} placeholder="Mai târziu"
+                          extras={[{ value: "", label: "Mai târziu", hint: "rămâne nealocată" }, { value: "none", label: "Fără inspecție", hint: "evaluare fără vizită în CRM", after: true }]} />
                         {v === "none" && (
                           <select className="select" aria-label={`Motiv: ${r.label}`} value={reason[r.asset]} onChange={(e) => setReason({ ...reason, [r.asset]: e.target.value })}>
                             {[...new Set([...NO_INSPECTION_REASONS, reason[r.asset]])].map((x) => <option key={x} value={x}>{x}</option>)}
@@ -203,7 +197,10 @@ export function AllocateAll({ report, me, people, rows, autoOpen }: { report: st
                         )}
                       </div>
                     ) : (
-                      <span className={`pill ${r.state === "done" ? "pillOk" : "pillInfo"}`}><i />{r.state === "done" ? "Realizată" : `Alocată: ${who(r.inspector)}`}</span>
+                      r.state === "done" ? <span className="pill pillOk"><i />Realizată</span> : (() => {
+                        const p = picks(people).find((x) => x.id === r.inspector);
+                        return p ? <PersonLine id={p.id} name={p.name} sub={`Alocată · ${p.seen ?? ""}`} presence={p.presence} size={30} me={p.id === me} /> : <span className="pill pillInfo"><i />Alocată</span>;
+                      })()
                     )}
                   </li>
                 );

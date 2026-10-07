@@ -14,6 +14,7 @@ export type User = {
   engagement: string | null; anevar_no: string | null; specializations: string | null; coverage: string | null; duties: string | null;
   client_type: string | null; company: string | null; cui: string | null; city: string | null; notes: string | null;
   entity_id?: string | null; created_by: string | null; invited_at: string | null; activated_at: string | null; last_login_at: string | null; created_at: string; updated_at: string;
+  last_seen_at?: string | null;
 };
 
 /** Owners and administrators manage the team and can suspend partner firms. */

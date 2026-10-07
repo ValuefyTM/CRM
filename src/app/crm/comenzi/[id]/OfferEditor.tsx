@@ -1,5 +1,6 @@
 "use client";
 
+import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
 import { useState } from "react";
 import type { OfferDoc, OfferInput } from "@/lib/offers";
 
@@ -15,7 +16,7 @@ const num = (s: string) => { const n = parseFloat(s.replace(/\s/g, "").replace("
 
 /** Offer card on a CRM order: status of the offer sent, and the form to prepare / edit / send it. */
 export function OfferEditor({ orderId, base, initial, status, evaluators }: {
-  orderId: string; base: string; initial: OfferInput; status: Status | null; evaluators: { id: string; name: string }[];
+  orderId: string; base: string; initial: OfferInput; status: Status | null; evaluators: PickPerson[];
 }) {
   const s = (v: number | null | undefined) => (v == null ? "" : String(v).replace(".", ","));
   const [f, setF] = useState({
@@ -117,12 +118,10 @@ export function OfferEditor({ orderId, base, initial, status, evaluators }: {
           <div className="grid2">
             <label className="field">Nume client<input className="input" value={f.client_name} onChange={set("client_name")} /></label>
             <label className="field">Email pentru ofertă<input className="input" type="email" value={f.client_email} onChange={set("client_email")} /></label>
-            <label className="field">Evaluator desemnat
-              <select className="select" value={f.evaluator_id} onChange={set("evaluator_id")}>
-                <option value="">— se comunică ulterior —</option>
-                {evaluators.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-              </select>
-            </label>
+            <div className="field">Evaluator desemnat
+              <PersonPicker label="Evaluator desemnat" value={f.evaluator_id} onChange={(v) => setF({ ...f, evaluator_id: v })} people={evaluators}
+                extras={[{ value: "", label: "Se comunică ulterior" }]} placeholder="Se comunică ulterior" />
+            </div>
             <label className="field span2"><span>Mesaj personal <small>(opțional, apare sus în ofertă)</small></span><textarea className="textarea" rows={2} value={f.message} onChange={set("message")} /></label>
           </div>
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
 import { useRef, useState } from "react";
 
 const STATUSES: [string, string][] = [["draft", "Draft"], ["in_progress", "În lucru"], ["suspended", "Suspendat"], ["done", "Finalizat"], ["cancelled", "Anulat"]];
@@ -243,7 +244,7 @@ export function StageActions({ id, stage, hasVerifier }: { id: string; stage: st
 
 const ROLES: [string, string][] = [["evaluator", "Evaluator"], ["inspector", "Inspector"], ["verifier", "Verificator"], ["assistant", "Asistent"]];
 
-export function AddMember({ id, people }: { id: string; people: { id: string; name: string }[] }) {
+export function AddMember({ id, people }: { id: string; people: PickPerson[] }) {
   const [open, setOpen] = useState(false);
   const [user, setUser] = useState("");
   const [role, setRole] = useState("evaluator");
@@ -252,14 +253,12 @@ export function AddMember({ id, people }: { id: string; people: { id: string; na
   return (
     <form className="inlineForm" onSubmit={async (e) => {
       e.preventDefault();
+      if (!user) return setMsg("Alege persoana.");
       const error = await send(`/api/crm/reports/${id}/members`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user, role }) });
       if (error) return setMsg(error);
       location.reload();
     }}>
-      <select className="select" value={user} onChange={(e) => setUser(e.target.value)} aria-label="Persoana" required>
-        <option value="">Alege persoana…</option>
-        {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-      </select>
+      <div style={{ minWidth: 280 }}><PersonPicker label="Persoana" value={user} onChange={setUser} people={people} placeholder="Alege persoana…" /></div>
       <select className="select" value={role} onChange={(e) => setRole(e.target.value)} aria-label="Rol">{ROLES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
       <button type="submit" className="btn btnNavy btnSm">Adaugă</button>
       <button type="button" className="btn btnGhost btnSm" onClick={() => setOpen(false)}>Renunță</button>

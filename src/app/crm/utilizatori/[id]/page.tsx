@@ -5,6 +5,7 @@ import { listPartners } from "@/lib/partners";
 import { history } from "@/lib/history";
 import { displayName, getUser, isAdmin, KIND_LABEL, roleLabel, teamLabel } from "@/lib/users";
 import { CrmShell } from "@/components/CrmShell";
+import { presenceOf } from "@/lib/presence";
 import { History } from "@/components/History";
 import { UserForm } from "../UserForm";
 import { AccessPanel } from "./AccessPanel";
@@ -35,7 +36,7 @@ export default async function UserPage({ params, searchParams }: { params: Promi
   return (
     <CrmShell
       user={me} base={base} active="users" title={displayName(u)}
-      subtitle={`${KIND_LABEL[u.kind]} · ${u.kind === "internal" ? teamLabel(u) : roleLabel(u.kind, u.role)}${u.partner_name ? ` · ${u.partner_name}` : ""} · adăugat ${fmtDate(u.created_at)}`}
+      subtitle={`${KIND_LABEL[u.kind]} · ${u.kind === "internal" ? teamLabel(u) : roleLabel(u.kind, u.role)}${u.partner_name ? ` · ${u.partner_name}` : ""} · adăugat ${fmtDate(u.created_at)}${u.kind === "internal" ? ` · ${presenceOf(u.last_seen_at).seen}` : ""}`}
       actions={<a href={`${base}/utilizatori?tab=${TAB[u.kind]}`} className="btn btnGhost btnSm">← Utilizatori</a>}
     >
       {nou && NEW_MSG[nou] && <div className={nou === "invitat" ? "okMsg" : "note"}>{NEW_MSG[nou]}</div>}

@@ -1,4 +1,5 @@
 import { LogoutButton } from "./LogoutButton";
+import { Avatar } from "./Avatar";
 
 export type NavItem = { label: string; href?: string; soon?: boolean; badge?: number; key: string };
 
@@ -9,7 +10,7 @@ export function Shell(props: {
   nav: NavItem[];
   active: string;
   cta?: { label: string; href?: string };
-  me: { initials: string; name: string; sub: string };
+  me: { id?: string; initials: string; name: string; sub: string };
   title: string;
   subtitle?: string;
   actions?: React.ReactNode;
@@ -45,7 +46,7 @@ export function Shell(props: {
         </nav>
         <div className="me">
           <div className="meCard">
-            <span className="avatar">{props.me.initials}</span>
+            {props.me.id ? <Avatar id={props.me.id} name={props.me.name} size={36} presence="online" /> : <span className="avatar">{props.me.initials}</span>}
             <span className="meText"><b>{props.me.name}</b><small>{props.me.sub}</small></span>
           </div>
           <LogoutButton app={props.app} />

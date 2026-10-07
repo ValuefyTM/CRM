@@ -1,9 +1,10 @@
 "use client";
 
+import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
 import { useState } from "react";
 import { createPortal } from "react-dom";
 
-export type Pick_ = { id: string; name: string; role: string };
+export type Pick_ = PickPerson;
 
 /**
  * "Creează raportul": the order becomes a report — main evaluator, verifier, deadline. The report then opens with the
@@ -43,18 +44,13 @@ export function DossierOpen(p: {
             <p className="hint">{p.hint}</p>
             {p.warn && <div className="note">{p.warn}</div>}
             <div className="formRow">
-              <label className="field">Evaluator principal
-                <select className="select" value={f.evaluator_id} onChange={set("evaluator_id")} required>
-                  <option value="">Alege…</option>
-                  {p.evaluators.map((x) => <option key={x.id} value={x.id}>{x.id === p.me ? `${x.name} (eu)` : x.name}</option>)}
-                </select>
-              </label>
-              <label className="field">Verificator <small>(opțional)</small>
-                <select className="select" value={f.verifier_id} onChange={set("verifier_id")}>
-                  <option value="">Mai târziu</option>
-                  {p.evaluators.filter((x) => x.id !== f.evaluator_id).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-                </select>
-              </label>
+              <div className="field">Evaluator principal
+                <PersonPicker label="Evaluator principal" value={f.evaluator_id} onChange={(v) => setF({ ...f, evaluator_id: v })} people={p.evaluators} me={p.me} />
+              </div>
+              <div className="field">Verificator <small>(opțional)</small>
+                <PersonPicker label="Verificator" value={f.verifier_id} onChange={(v) => setF({ ...f, verifier_id: v })} people={p.evaluators.filter((x) => x.id !== f.evaluator_id)} me={p.me}
+                  extras={[{ value: "", label: "Mai târziu", hint: "se alege după creare" }]} placeholder="Mai târziu" />
+              </div>
             </div>
             <label className="field">Termen de predare a raportului <small>{p.dueDefault === undefined ? "(opțional; altfel din ofertă, de la inspecție)" : ""}</small>
               <input className="input" type="date" value={f.due_on} onChange={set("due_on")} />

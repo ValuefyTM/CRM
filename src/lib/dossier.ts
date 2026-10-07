@@ -1,6 +1,7 @@
 // Server-only: processing an order. Every order becomes a report file ("dosar"): client, property and asset, team,
 // fee and deadline. Portal / website orders open it when the client accepts the offer; bank and collaboration orders are
 // registered directly under the framework contract or collaboration agreement (the order stays as the statement line).
+import { withPresence } from "./presence";
 import { now, uuid } from "./db";
 import { audit } from "./auth";
 import { esc, layout, sendEmail } from "./email";
@@ -178,7 +179,8 @@ async function notifyEvaluator(db: D1Database, reportId: string, userId: string,
 
 /** Team members who can lead a report: evaluators (by role or duty), owners and administrators. */
 export async function evaluatorChoices(db: D1Database) {
-  return (await db.prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role FROM users WHERE kind = 'internal' AND status <> 'disabled'
+  return withPresence((await db.prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role, anevar_no, last_seen_at FROM users WHERE kind = 'internal' AND status <> 'disabled'
       AND (role IN ('evaluator', 'owner', 'admin') OR ',' || COALESCE(duties, '') || ',' LIKE '%,evaluator,%') ORDER BY name`)
-    .all<{ id: string; name: string; role: string }>()).results;
+    .all<{ id: string; name: string; role: string; anevar_no: string | null; last_seen_at: string | null }>()).results)
+    .map((u) => ({ ...u, sub: u.anevar_no ? `Evaluator ANEVAR ${u.anevar_no}` : u.role === "owner" ? "Proprietar" : u.role === "admin" ? "Administrator" : "Evaluator" }));
 }
