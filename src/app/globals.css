@@ -901,3 +901,26 @@ a.navItem[aria-current="page"] .navBadge { color: #111; background: rgba(17, 17,
 .side .sideCta { margin: 0 2px; }
 .side .me { position: sticky; bottom: -16px; margin-bottom: -16px; padding: 12px 0 16px; background: linear-gradient(180deg, rgba(11, 11, 11, 0) 0, #0b0b0b 14px); z-index: 2; }
 .table td a.rowLink.muted { white-space: nowrap; }
+
+/* Sidebar v2 — compact */
+.side { width: 232px; padding: 20px 12px 12px; gap: 16px; }
+.brand { gap: 8px; padding: 0 8px; }
+.brand img { height: 19px; }
+.brandLabel { font-size: 9.5px; letter-spacing: 0.14em; }
+.sideNav { gap: 6px; }
+.navItem { height: 34px; padding: 0 10px; border-radius: 9px; font-size: 12.5px; }
+.navGroupItems .navItem { height: 32px; font-size: 12.5px; }
+.navGroupHead { height: 32px; padding: 0 10px; border-radius: 9px; font-size: 10.5px; letter-spacing: 0.12em; background: #171717; }
+.navGroupHead svg { width: 12px; height: 12px; }
+.navGroup { gap: 2px; }
+.navGroupItems { gap: 1px; margin: 2px 0 4px 10px; padding-left: 10px; }
+.navBadge { font-size: 11px; min-width: 18px; }
+a.navItem[aria-current="page"] .navBadge { padding: 1px 6px; border-radius: 6px; min-width: 0; }
+.navSoon { font-size: 8.5px; padding: 1px 6px; }
+.meCard { padding: 8px 6px 8px 10px; gap: 10px; border-radius: 12px; }
+.meCard .pAvatar { width: 32px !important; height: 32px !important; font-size: 12px !important; }
+.meText b { font-size: 12.5px; }
+.meText small { font-size: 11px; }
+.meMore { width: 28px; height: 28px; }
+.meMenu button { height: 34px; font-size: 12.5px; }
+.side .me { padding: 8px 0 12px; bottom: -12px; margin-bottom: -12px; }
