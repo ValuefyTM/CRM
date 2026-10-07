@@ -10,6 +10,8 @@ import { CrmShell } from "@/components/CrmShell";
 import { History } from "@/components/History";
 import { ContractEdit } from "./ContractEdit";
 import { ContractTermsEdit } from "./ContractTermsEdit";
+import { SendSign } from "./SendSign";
+import { billingMissing, signContractById, signLink } from "@/lib/contract-sign";
 import { contractDoc } from "@/lib/contract-doc";
 import { DELIVERABLES, VALUE_TYPES } from "@/lib/contract-terms";
 
@@ -25,7 +27,10 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
   if (!d) notFound();
   const k = d.contract;
   const framework = k.kind === "framework";
-  const [log, doc] = await Promise.all([history(db, [id]), framework ? null : contractDoc(db, id)]);
+  const [log, doc, sign] = await Promise.all([history(db, [id]), framework ? null : contractDoc(db, id), framework ? null : signContractById(db, id)]);
+  const signed = !!sign?.signed_at;
+  const link = sign?.sign_token ? await signLink(sign.sign_token) : null;
+  const missing = doc && !signed ? billingMissing(doc) : [];
   const t = d.totals;
 
   return (
@@ -36,7 +41,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
         {framework
           ? <a href={`${base}/comenzi/noua?contract=${k.id}`} className="btn btnGold btnSm">+ Comandă pe acest contract</a>
           : <>
-            <a href={`${base}/contracte/${k.id}/document`} className="btn btnNavy btnSm">Document contract (PDF)</a>
+            <a href={`${base}/contracte/${k.id}/document`} className="btn btnNavy btnSm">{signed ? "Contract semnat (PDF)" : "Document contract (PDF)"}</a>
             <a href={`${base}/contracte/nou?contract=${k.id}`} className="btn btnGold btnSm">+ Raport nou pe acest contract</a>
           </>}
       </>}>
@@ -54,8 +59,8 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
           <section className="card">
             <div className="cardHead">
               <h2>Detalii contract</h2>
-              <ContractEdit id={k.id} kind={k.kind} purposes={CONTRACT_PURPOSES} reportKinds={REPORT_KINDS}
-                initial={{ number: k.number ?? "", signed_on: k.signed_on ?? "", fee: k.fee != null ? String(k.fee) : "", report_type: k.report_type ?? "", purpose: k.purpose ?? "", notes: k.notes ?? "" }} />
+              {signed ? <span className="muted">semnat · se modifică prin act adițional</span> : <ContractEdit id={k.id} kind={k.kind} purposes={CONTRACT_PURPOSES} reportKinds={REPORT_KINDS}
+                initial={{ number: k.number ?? "", signed_on: k.signed_on ?? "", fee: k.fee != null ? String(k.fee) : "", report_type: k.report_type ?? "", purpose: k.purpose ?? "", notes: k.notes ?? "" }} />}
             </div>
             <dl className="dl">
               <div><dt>Tip</dt><dd><span className={`ctKind ${k.kind}`}>{framework ? "Cadru" : "Clasic"}</span></dd></div>
@@ -81,8 +86,8 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
                   <div key={x.n} className="ctAnnex">
                     <div className="ctAnnexHead">
                       <b>{doc.annexes.length > 1 ? `Anexa 1.${x.n} · ` : ""}{x.purpose ?? "Scop nespecificat"}</b>
-                      {x.reportId ? <ContractTermsEdit id={k.id} report={x.reportId} title={`Termeni de referință${doc.annexes.length > 1 ? ` · Anexa 1.${x.n}` : ""} · ${x.purpose ?? ""}`} terms={x.terms} defaults={x.defaults} />
-                        : <span className="muted">după crearea raportului</span>}
+                      {x.reportId && !signed ? <ContractTermsEdit id={k.id} report={x.reportId} title={`Termeni de referință${doc.annexes.length > 1 ? ` · Anexa 1.${x.n}` : ""} · ${x.purpose ?? ""}`} terms={x.terms} defaults={x.defaults} />
+                        : <span className="muted">{signed ? "semnat" : "după crearea raportului"}</span>}
                     </div>
                     <dl className="dl">
                       <div><dt>Livrabil</dt><dd>{DELIVERABLES.find(([v]) => v === x.terms.deliverable)?.[1]}{x.terms.deliverable === "nop" ? (x.terms.nop_inspection ? ", cu inspecție" : ", fără inspecție") : ""}{x.reportType && x.reportType !== DELIVERABLES.find(([v]) => v === x.terms.deliverable)?.[1] ? ` · ${x.reportType}` : ""}</dd></div>
@@ -95,7 +100,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
                   </div>
                 ))}
               </div>
-              <div className="cardHead ctPayHead"><h2>Plată (Anexa 2)</h2><ContractTermsEdit id={k.id} report={null} title="Condiții de plată · Anexa 2" terms={doc.payment} defaults={doc.paymentDefaults} /></div>
+              <div className="cardHead ctPayHead"><h2>Plată (Anexa 2)</h2>{!signed && <ContractTermsEdit id={k.id} report={null} title="Condiții de plată · Anexa 2" terms={doc.payment} defaults={doc.paymentDefaults} />}</div>
               <dl className="dl">
                 <div><dt>Preț total</dt><dd>{doc.total != null ? `${doc.total.toLocaleString("ro-RO")} lei + TVA` : "—"}</dd></div>
                 <div><dt>Plata</dt><dd>{doc.payment.payment_when}</dd></div>
@@ -127,6 +132,27 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
           </section>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+          {sign && (
+            <section className={`card ${signed ? "ctSigned" : ""}`}>
+              <div className="cardHead"><h2>Semnare online</h2>
+                <span className={`pill ${signed ? "pillOk" : sign.sign_viewed_at ? "pillWarn" : ""}`}><i />{signed ? "Semnat" : sign.sign_viewed_at ? "Deschis de client" : sign.sign_sent_at ? "Trimis" : "Netrimis"}</span></div>
+              {signed ? (
+                <dl className="dl">
+                  <div><dt>Semnat de</dt><dd>{sign.signed_name}</dd></div>
+                  <div><dt>Data</dt><dd>{fmtDate(sign.signed_at, true)}</dd></div>
+                  {sign.signed_ip && <div><dt>IP</dt><dd className="mono">{sign.signed_ip}</dd></div>}
+                  <div><dt>Amprentă</dt><dd className="mono" title={sign.signed_hash ?? ""}>{sign.signed_hash?.slice(0, 16)}…</dd></div>
+                </dl>
+              ) : (
+                <>
+                  {sign.sign_sent_at && <p className="hint" style={{ margin: 0 }}>Trimis la {sign.sign_sent_to} · {fmtDate(sign.sign_sent_at, true)}{sign.sign_viewed_at ? ` · deschis ${fmtDate(sign.sign_viewed_at, true)}` : ""}</p>}
+                  {missing.length > 0 && <p className="hint" style={{ margin: 0 }}>Clientul va completa la semnare: {missing.join(", ")}.</p>}
+                  <SendSign id={k.id} email={sign.sign_sent_to ?? k.client_email ?? ""} again={!!sign.sign_sent_at} link={link} />
+                </>
+              )}
+              {signed && <a className="btn btnNavy btnSm" href={`${base}/contracte/${k.id}/document`}>Vezi contractul semnat</a>}
+            </section>
+          )}
           <section className="card">
             <h2>{framework ? "Banca" : "Client"}</h2>
             {k.client_id ? (

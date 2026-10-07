@@ -5,6 +5,7 @@ import { getOrder } from "@/lib/orders";
 import { isExpired, offerByToken, offerHash } from "@/lib/offers";
 import { sendAcceptedEmails, sendDeclinedEmail } from "@/lib/offer-emails";
 import { openDossier } from "@/lib/dossier";
+import { sendForSignature } from "@/lib/contract-sign";
 
 /**
  * Public: the client answers an offer from its page. The secret token in the link is the authorisation.
@@ -53,6 +54,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   await sendAcceptedEmails({ ...offer, status: "accepted", accepted_at: at, accepted_name: name, accepted_urgent: urgent ? 1 : 0 }, order);
   // The signed offer opens the report file on the offer's evaluator, who then gives the inspection.
   // A failure here must not undo the signature: the team can still open it from the order page.
-  try { await openDossier(db, order.id, null); } catch (e) { console.error("openDossier", e); }
-  return Response.json({ ok: true });
+  let contract: string | null = null;
+  try {
+    const r = await openDossier(db, order.id, null);
+    // The signed offer becomes the classic contract: it goes to the client to complete the billing details and sign.
+    const email = offer.client_email ?? order.client_email ?? order.creator_email;
+    if (r.ok && r.created && r.contract && email) {
+      const s = await sendForSignature(db, "client:offer", r.contract.id, email);
+      if (s.ok) contract = s.link;
+    }
+  } catch (e) { console.error("openDossier", e); }
+  return Response.json({ ok: true, contract });
 }

@@ -45,7 +45,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
         ] },
         { group: "Personal", key: "g-me", items: [
           { key: "notes", label: "Notițe", soon: true },
-          { key: "settings", label: "Setări", soon: true },
+          { key: "settings", label: "Setări", href: `${b}/setari` },
         ] },
       ]}
       active={props.active}

@@ -1,5 +1,6 @@
 import { err, json, staffApi } from "@/lib/api";
 import { createDirectWork } from "@/lib/direct-work";
+import { sendForSignature } from "@/lib/contract-sign";
 import { createFrameworkContract } from "@/lib/contracts";
 import { parseAssets } from "@/lib/process-order";
 
@@ -38,5 +39,11 @@ export async function POST(req: Request) {
   if (!assets.ok) return err(assets.error);
   const r = await createDirectWork(a.db, { id: a.user.id, name: a.user.name }, b, assets.assets);
   if (!r.ok) return err(r.error);
-  return Response.json({ ok: true, order: r.order, report: r.report, contract: r.contract, client: { name: r.client.name, reused: r.client.reused } });
+  // Accepted now: the contract can go straight to the client for online signing.
+  let signSent = false;
+  if (b.send_contract === true && r.contract && r.client.email) {
+    const s = await sendForSignature(a.db, `user:${a.user.id}`, r.contract.id, r.client.email);
+    signSent = s.ok;
+  }
+  return Response.json({ ok: true, order: r.order, report: r.report, contract: r.contract, client: { name: r.client.name, reused: r.client.reused }, signSent });
 }

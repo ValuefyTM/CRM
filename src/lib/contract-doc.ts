@@ -15,7 +15,7 @@ const pick = <T extends object>(o: ContractTerms, keys: readonly string[]) =>
   Object.fromEntries(Object.entries(o).filter(([k, v]) => keys.includes(k) && v !== undefined)) as Partial<T>;
 
 export async function contractDoc(db: D1Database, id: string) {
-  const k = await db.prepare(`SELECT k.*, e.kind AS client_kind, e.name AS client, e.cui, e.reg_no, e.billing_address, e.city, e.county, e.phone, e.email,
+  const k = await db.prepare(`SELECT k.id, k.kind, k.number, k.signed_on, k.fee, k.currency, k.services, k.valuation_types, k.report_type, k.purpose, k.terms, k.client_id, e.kind AS client_kind, e.name AS client, e.cui, e.reg_no, e.billing_address, e.city, e.county, e.phone, e.email,
       (SELECT c.name || CASE WHEN c.role IS NOT NULL AND c.role <> '' THEN ' / ' || c.role ELSE '' END FROM entity_contacts c WHERE c.entity_id = e.id ORDER BY c.is_primary DESC, c.created_at LIMIT 1) AS rep
     FROM contracts k LEFT JOIN entities e ON e.id = k.client_id WHERE k.id = ?`).bind(id)
     .first<{
@@ -86,4 +86,18 @@ export async function contractDoc(db: D1Database, id: string) {
     contract: k, annexes, total, priced,
     payment: { ...paymentDefaults, ...paymentSaved } as PaymentTerms, paymentDefaults, paymentSaved,
   };
+}
+
+export type ContractDocData = NonNullable<Awaited<ReturnType<typeof contractDoc>>>;
+export type SignedSnapshot = { doc: ContractDocData; firm: import("./settings").FirmWithImages; sig: { name: string; signature: string; at: string } };
+
+/** What the client signed, exactly as it was (the document is rendered from it afterwards, not from current data). */
+export async function signedSnapshot(db: D1Database, id: string): Promise<SignedSnapshot | null> {
+  const r = await db.prepare("SELECT signed_snapshot, signed_name, signed_signature, signed_at FROM contracts WHERE id = ? AND signed_at IS NOT NULL").bind(id)
+    .first<{ signed_snapshot: string | null; signed_name: string; signed_signature: string; signed_at: string }>();
+  if (!r?.signed_snapshot) return null;
+  try {
+    const s = JSON.parse(r.signed_snapshot) as Omit<SignedSnapshot, "sig">;
+    return { ...s, sig: { name: r.signed_name, signature: r.signed_signature, at: r.signed_at } };
+  } catch { return null; }
 }

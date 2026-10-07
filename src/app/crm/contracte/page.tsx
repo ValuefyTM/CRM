@@ -28,7 +28,7 @@ export default async function ContractsPage({ searchParams }: { searchParams: Pr
     [`Valoare contracte ${year}`, lei(Math.round(s.value)), "var(--acc-ink)", link({ tip: "clasic", an: String(year) }), "onorarii fără TVA"],
     ["Fără raport", s.empty.toLocaleString("ro-RO"), "var(--err)", link({ tip: "clasic", an: String(year), stare: "fara-raport" }), `din ${year}`],
     ["Contracte cadru", s.framework.toLocaleString("ro-RO"), "var(--info)", link({ tip: "cadru", an: undefined, stare: undefined }), `${s.frameworkMonth} comenzi luna aceasta`],
-    ["Următorul număr", s.next, "var(--ok)", `${base}/contracte/nou`, "contract clasic"],
+    ["Așteaptă semnătura", s.unsigned.toLocaleString("ro-RO"), "var(--acc)", link({ stare: "de-semnat", tip: undefined, an: undefined }), `următorul nr. ${s.next}`],
   ];
 
   return (
@@ -61,6 +61,7 @@ export default async function ContractsPage({ searchParams }: { searchParams: Pr
                       <td>
                         <a className="ref rowLink" href={href}>{k.number ? `Nr. ${k.number}` : "fără număr"}</a>
                         <div className="muted"><span className={`ctKind ${k.kind}`}>{k.kind === "framework" ? "Cadru" : "Clasic"}</span> {fmtDate(k.signed_on)}</div>
+                        {k.signed_at ? <span className="ctSig ok">✓ semnat online</span> : k.sign_sent_at ? <span className="ctSig">trimis la semnat</span> : null}
                       </td>
                       <td>{k.client_id ? <a className="rowLink" href={`${base}/clienti/${k.client_id}`}>{niceName(k.client) || "—"}</a> : "—"}<div className="muted">{k.client_kind === "company" ? "Persoană juridică" : k.client_kind === "person" ? "Persoană fizică" : k.client_kind === "bank" ? "Bancă" : ""}</div></td>
                       <td>{k.purpose ?? "—"}<div className="muted">{[k.report_type, k.valuation_types].filter(Boolean).join(" · ")}</div></td>

@@ -1379,3 +1379,25 @@ div.dbKpi::after { content: none; }
 .ctRep { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
 .ctPickAssets { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; font-weight: 400; }
 .ctMixed { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 4px 0 8px; }
+
+/* ---------- Settings ---------- */
+.stGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; margin-bottom: 12px; }
+.stGrid .stWide { grid-column: 1 / -1; }
+.stImgs { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.stImg { display: flex; flex-direction: column; gap: 8px; }
+.stImgLabel { font-weight: 600; font-size: 12.5px; }
+.stImgBox { height: 130px; border: 1px dashed var(--line); border-radius: 10px; display: grid; place-items: center; background: #fff; padding: 10px; }
+.stImgBox img { max-height: 110px; max-width: 100%; object-fit: contain; }
+.stPreview { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
+@media (max-width: 640px) { .stGrid { grid-template-columns: 1fr; } }
+.cdOk { max-width: 210mm; margin: 14px auto 0; padding: 10px 14px; border-radius: 8px; background: #e3f4e8; font-size: 13px; }
+.cdClientSig { display: flex; flex-direction: column; margin-top: 6px; }
+.cdClientSig img { height: 70px; width: auto; max-width: 220px; object-fit: contain; }
+.cdClientSig small { font-size: 7.5pt; color: #555; }
+@media print { .cdOk { display: none !important; } }
+.csMain { display: flex; flex-direction: column; gap: 18px; }
+.csDoc { border-radius: 16px; overflow: hidden; background: #e9e6df; padding: 2px 0 20px; }
+@media print { .csDoc { background: #fff; padding: 0; } .ofPage { background: #fff !important; } }
+.ctSig { display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 600; color: var(--acc-ink); }
+.ctSig.ok { color: var(--ok); }
+.ctSigned { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); }

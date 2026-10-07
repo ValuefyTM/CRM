@@ -14,6 +14,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params;
   const k = await a.db.prepare("SELECT id, kind FROM contracts WHERE id = ?").bind(id).first<{ id: string; kind: string }>();
   if (!k) return err("Contractul nu există.", 404);
+  // A signed contract is changed only by an addendum.
+  if (await a.db.prepare("SELECT 1 AS x FROM contracts WHERE id = ? AND signed_at IS NOT NULL").bind(id).first()) return err("Contractul este semnat de client: modificările se fac prin act adițional.", 409);
   const b = await json(req);
   const number = str(b.number, 40);
   if (!number) return err("Completează numărul contractului.");

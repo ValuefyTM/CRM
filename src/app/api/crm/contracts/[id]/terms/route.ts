@@ -9,6 +9,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   if ("res" in a) return a.res;
   const { id } = await params;
   if (!(await a.db.prepare("SELECT 1 AS x FROM contracts WHERE id = ?").bind(id).first())) return err("Contractul nu există.", 404);
+  // A signed contract is changed only by an addendum.
+  if (await a.db.prepare("SELECT 1 AS x FROM contracts WHERE id = ? AND signed_at IS NOT NULL").bind(id).first()) return err("Contractul este semnat de client: modificările se fac prin act adițional.", 409);
   const b = await json(req);
   const report = typeof b.report === "string" ? b.report : null;
   // Per report: its terms of reference (Annex 1.N). Without a report: the contract's payment terms (Annex 2).

@@ -123,7 +123,7 @@ export function ContractForm(p: {
   const [fresh, setFresh] = useState({ on: false, kind: "person" as "person" | "company", name: "", cui: "", phone: "", email: "", city: "" });
   const [f, setF] = useState({
     fee: p.existing?.fee ? String(p.existing.fee) : "", purpose: p.existing?.purpose ?? "", report_type: p.existing?.report_type ?? "Raport de evaluare", ordered_on: today(),
-    evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "", verifier_id: "", due_on: "", urgent: false, inspection_notes: "", notes: "",
+    evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "", verifier_id: "", due_on: "", urgent: false, send_contract: true, inspection_notes: "", notes: "",
   });
   const [fw, setFw] = useState({ client_id: "", number: "", signed_on: today(), fee: "", report_type: "Raport de evaluare", purpose: "Garantare bancară", notes: "" });
   const [assets, setAssets] = useState<AssetForm[]>([{ ...emptyAsset(), full_address: "", is_main: true }]);
@@ -315,6 +315,10 @@ export function ContractForm(p: {
                 <label className="field">Termen predare <small>(opțional)</small><input className="input" type="date" value={f.due_on} onChange={set("due_on")} /></label>
               </div>
               <p className="hint">Inspecțiile le aloci după creare: se deschide raportul cu fereastra de alocare, bun cu bun.</p>
+              {!p.existing && (
+                <label className="check"><input type="checkbox" checked={f.send_contract && !!who.email.trim()} disabled={!who.email.trim()} onChange={(e) => setF({ ...f, send_contract: e.target.checked })} />
+                  <span>Trimite clientului contractul la semnat online{who.email.trim() ? ` (${who.email.trim()})` : " — clientul nu are email"}</span></label>
+              )}
             </section>
           )}
           <section className="card">

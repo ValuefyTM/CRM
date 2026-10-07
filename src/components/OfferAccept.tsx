@@ -8,7 +8,7 @@ export function PrintButton() {
 }
 
 /** Signature pad: draws with mouse, pen or finger; reports the PNG (or "" when cleared). */
-function SignaturePad({ onChange, disabled }: { onChange: (png: string) => void; disabled: boolean }) {
+export function SignaturePad({ onChange, disabled }: { onChange: (png: string) => void; disabled: boolean }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const strokes = useRef(0);
@@ -84,24 +84,25 @@ export function OfferAccept({ token, disabled, urgentFee, urgentDays, defaultNam
   const [declining, setDeclining] = useState(false);
   const [reason, setReason] = useState("");
   const [signed, setSigned] = useState(false);
+  const [contractLink, setContractLink] = useState<string | null>(null);
   const today = new Date().toLocaleDateString("ro-RO");
 
   const post = async (body: { action: string; [k: string]: unknown }) => {
     setBusy(true); setMsg("");
     const r = await fetch(`/api/offer/${encodeURIComponent(token)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
-    const d = (await r?.json().catch(() => ({}))) as { error?: string } | undefined;
+    const d = (await r?.json().catch(() => ({}))) as { error?: string; contract?: string | null } | undefined;
     setBusy(false);
     if (!r?.ok) return setMsg(d?.error || "Nu am putut trimite. Verifică conexiunea și încearcă din nou.");
     // After signing, explain what happens next before showing the signed offer.
-    if (body.action === "accept") setSigned(true);
+    if (body.action === "accept") { setContractLink(d?.contract ?? null); setSigned(true); }
     else location.reload();
   };
 
   return (
     <section className="ofCard ofAccept" id="acceptare">
-      {signed && <SignedModal onClose={() => location.reload()} />}
+      {signed && <SignedModal onClose={() => location.reload()} contract={contractLink} />}
       <h2>Acceptare și semnătură</h2>
-      <p className="ofMuted">Prin semnare accepți oferta tehnică și financiară și termenii de referință ai evaluării; după ce primim datele tale de facturare, oferta semnată se transformă automat în contract de prestări servicii. Primești o copie semnată pe email.</p>
+      <p className="ofMuted">Prin semnare accepți oferta tehnică și financiară și termenii de referință ai evaluării. Imediat după, primești contractul de prestări servicii: completezi datele de facturare și îl semnezi online. Primești copii semnate pe email.</p>
       <form className="ofForm" onSubmit={(e) => {
         e.preventDefault();
         if (disabled) return;
@@ -142,7 +143,7 @@ export function OfferAccept({ token, disabled, urgentFee, urgentDays, defaultNam
 }
 
 /** Shown right after the client signs: the signed offer becomes the contract once the billing details are in. */
-function SignedModal({ onClose }: { onClose: () => void }) {
+function SignedModal({ onClose, contract }: { onClose: () => void; contract: string | null }) {
   const ok = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     ok.current?.focus();
@@ -158,11 +159,22 @@ function SignedModal({ onClose }: { onClose: () => void }) {
       <div className="ofModal" role="dialog" aria-modal="true" aria-labelledby="signed-title" aria-describedby="signed-text">
         <span className="ofModalIcon" aria-hidden>✓</span>
         <h2 id="signed-title">Oferta a fost semnată</h2>
-        <p id="signed-text">
-          Mulțumim! Oferta semnată se va transforma <b>automat în contract de prestări servicii</b> odată ce primim <b>toate datele tale de facturare</b>.
-        </p>
-        <p className="ofMuted">Îți trimitem pe email o copie a ofertei semnate. Te contactăm în curând pentru datele de facturare și programarea inspecției.</p>
-        <button ref={ok} type="button" className="ofBtnNavy" onClick={onClose}>Am înțeles</button>
+        {contract ? (
+          <>
+            <p id="signed-text">Mulțumim! Am pregătit <b>contractul de prestări servicii</b>. Mai e un singur pas: completează datele de facturare și semnează contractul (durează 2 minute).</p>
+            <p className="ofMuted">Ți-am trimis linkul și pe email, dacă vrei să semnezi mai târziu.</p>
+            <a className="ofBtnNavy" href={contract}>Completează datele și semnează contractul <i>→</i></a>
+            <button ref={ok} type="button" className="ofLinkBtn" onClick={onClose}>Mai târziu</button>
+          </>
+        ) : (
+          <>
+            <p id="signed-text">
+              Mulțumim! Oferta semnată se va transforma <b>automat în contract de prestări servicii</b> odată ce primim <b>toate datele tale de facturare</b>.
+            </p>
+            <p className="ofMuted">Îți trimitem pe email o copie a ofertei semnate. Te contactăm în curând pentru datele de facturare și programarea inspecției.</p>
+            <button ref={ok} type="button" className="ofBtnNavy" onClick={onClose}>Am înțeles</button>
+          </>
+        )}
       </div>
     </div>,
     document.body,
