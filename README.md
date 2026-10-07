@@ -39,6 +39,25 @@ CRM migrations are numbered `1xxx` (`migrations/`) so they never clash with the 
    - `RESEND_API_KEY` (secret) and `CRM_EMAIL_FROM` — e.g. `VALUEFY <cont@valuefy.ro>`; the domain must be verified in Resend, otherwise codes and invitations can't be emailed.
 5. **Settings → Domains & Routes → Custom domain**: `crm.valuefy.ro` and `portal.valuefy.ro`.
 
+## Bank orders by email (BCR, BRD)
+The worker entry is `worker.ts`: the Next.js app plus an **email handler**. Bank notices (BCR "Cerere nouă primită în aplicatia
+de Valuator: EV…", BRD "Ati fost selectat … REV…, client …") received on the intake address become bank orders (status
+"Comandă primită", linked to the bank and its framework contract). The same request twice is recorded once. Notices can also
+be pasted in the CRM (Comenzi → Bănci → „Adaugă din email”).
+
+1. **Cloudflare → valuefy.ro → Email → Email Routing.** valuefy.ro mail stays where it is (Microsoft 365), so use a
+   subdomain: enable Email Routing for `in.valuefy.ro` (Cloudflare adds its MX/TXT records for the subdomain only).
+2. **Routing rules → Custom address** `comenzi@in.valuefy.ro` → action **Send to a Worker** → `crm`.
+3. **Outlook (the mailbox that receives the bank notices)**: rule "from `valuators.prod@bcr.ro` or `valuator@brd.ro`" →
+   **Redirect to** `comenzi@in.valuefy.ro` (redirect keeps the bank as sender; forward works too).
+4. Variables (optional): `BANK_MAIL_SENDERS` (accepted sender domains, default `bcr.ro,brd.ro,valuefy.ro`),
+   `BANK_MAIL_FORWARD` (a copy of each notice to a mailbox, must be a verified destination in Email Routing),
+   `CRM_URL` (link in the team email, default `https://crm.valuefy.ro`).
+
+**Processing** (Comenzi → order → „Procesează”): screenshot of the bank's app → client → assets → contract and team →
+the report file opens with every asset (and the inspections, if chosen). With `ANTHROPIC_API_KEY` (secret) the screenshots
+are read by Claude (`claude-opus-5-5`, structured output) to pre-fill the form; without it they are only kept with the order.
+
 ## Local development
 ```
 cp .dev.vars.example .dev.vars        # CRM_OWNER_EMAILS=…

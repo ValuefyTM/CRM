@@ -2,7 +2,8 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	// CRM + partner portal: crm.valuefy.ro and portal.valuefy.ro (one Worker, routed by host).
 	"name": "crm",
-	"main": ".open-next/worker.js",
+	// worker.ts = the Next.js app (.open-next/worker.js) + the email handler for bank order notices.
+	"main": "worker.ts",
 	"compatibility_date": "2026-09-25",
 	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
 	// Keep the variables set in the Cloudflare dashboard on every deploy.

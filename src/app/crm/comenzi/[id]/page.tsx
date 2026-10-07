@@ -135,11 +135,13 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
               ) : (
                 <div className="actions">
                   <p className="hint" style={{ margin: 0, flex: "1 1 260px" }}>
-                    {contractOrder ? `Comandă în ${o.source === "bank" ? "contractul cadru" : "colaborarea"} ${o.contract_number ?? o.collab_firm ?? ""}: se procesează direct, fără ofertă.`
+                    {contractOrder ? `Comandă ${o.source === "bank" ? `${o.bank ?? "bancă"}${o.contract_number ? ` · contract cadru ${o.contract_number}` : ""}` : `colaborare ${o.collab_firm ?? ""}`}: fără ofertă. Completezi clientul și bunurile (din captura aplicației băncii sau manual) și se deschide dosarul.`
                       : offer?.status === "accepted" ? "Oferta e semnată. Deschide dosarul și alocă evaluatorul și inspecția."
                       : "Dosarul se deschide automat când clientul semnează oferta, pe evaluatorul din ofertă. Dacă a acceptat pe alt canal (telefon, email), îl poți deschide acum."}
                   </p>
-                  <DossierOpen
+                  {contractOrder ? (
+                    <a className="btn btnGold" href={`${base}/comenzi/${o.id}/procesare`}>Procesează: client, bunuri, echipă →</a>
+                  ) : <DossierOpen
                     order={o.id} base={base} me={user.id} evaluator={offer?.evaluator_id ?? null}
                     evaluators={evaluators.map((e) => ({ id: e.id, name: e.name, role: e.role }))}
                     inspectors={inspectors.map((x) => ({ id: x.id, name: x.name, role: x.role }))}
@@ -148,7 +150,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
                     hint={`${orderWhat(o)}${o.address ? ` · ${orderPlace(o)}` : ""} · ${o.client_name ?? ""}. Evaluatorul principal primește dosarul pe email și alocă inspecția (sau o aloci acum).`}
                     warn={!contractOrder && offer?.status !== "accepted" ? "Oferta nu este semnată în portal. Deschide dosarul doar dacă clientul a acceptat pe alt canal." : null}
                     dueDefault={contractOrder ? null : undefined}
-                  />
+                  />}
                 </div>
               )}
             </section>

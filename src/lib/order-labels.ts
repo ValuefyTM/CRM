@@ -63,7 +63,7 @@ export const DOCS: Record<PropertyType, DocSpec[]> = {
 
 export const propertyLabel = (t: string) => PROPERTY_TYPES.find(([k]) => k === t)?.[1] ?? t;
 export const docLabel = (type: string, kind: string) =>
-  kind === "other" ? "Alt document" : DOCS[type as PropertyType]?.find((d) => d.key === kind)?.label ?? kind;
+  kind === "other" ? "Alt document" : kind === "bank_screen" ? "Captură din aplicația băncii" : DOCS[type as PropertyType]?.find((d) => d.key === kind)?.label ?? kind;
 export const orderRef = (seq: number) => `CO-${seq}`;
 
 /** Stages of the order timeline (the real progress comes from orderProgress in src/lib/delivery.ts). */
