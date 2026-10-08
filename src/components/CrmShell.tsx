@@ -39,7 +39,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
         ] },
         { group: "Financiar", key: "g-fin", items: [
           { key: "statements", label: "Borderouri", soon: true },
-          { key: "invoicing", label: "Facturare", soon: true },
+          { key: "invoicing", label: "Facturare", href: `${b}/facturare` },
         ] },
         { group: "Administrare", key: "g-admin", items: [
           { key: "users", label: "Utilizatori", href: `${b}/utilizatori` },

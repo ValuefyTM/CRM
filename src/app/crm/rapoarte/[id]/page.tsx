@@ -21,6 +21,9 @@ import { Avatar, PersonLine } from "@/components/Avatar";
 import { AddMember, DeleteDoc, DocTypeSelect, DeliverButton, FinalDrop, MissingDoc, NotesEditor, RemoveMember, SafeImg, StageActions, StatusButton, UploadButton } from "./ReportActions";
 import { dueOf, STAGE_LABEL, STAGE_ORDER, stageOf } from "@/lib/dossier";
 import { nextReportNumber, noticeTarget } from "@/lib/delivery";
+import { draftForReport, invoicesFor } from "@/lib/billing";
+import { isAdmin } from "@/lib/users";
+import { IssueInvoice, InvoiceList } from "@/components/Invoices";
 
 export const metadata: Metadata = { title: "Raport | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -67,6 +70,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const [team, assets, docs, orderDocs, people] = await Promise.all([
     reportTeam(db, id), reportAssets(db, id), reportDocuments(db, id), reportOrderDocuments(db, r.order_id), teamCandidates(db),
   ]);
+  // Billing: the invoices of this report, and whether it can be invoiced per order now (framework / collaboration rule).
+  const [repInvoices, perOrder] = await Promise.all([invoicesFor(db, { report: id }), isAdmin(user) ? draftForReport(db, id) : Promise.resolve({ error: "" })]);
   const main = assets.find((a) => a.is_main) ?? assets[0];
   const [mayAssign, inspectors, inspDocs] = await Promise.all([canAssign(db, user, id), inspectorChoices(db, user.id), docsByAsset(db, id, assets.map((a) => a.id))]);
   const docState = (assetId: string) => ({ cf: !!inspDocs[assetId]?.cf.length, rlv: !!inspDocs[assetId]?.rlv.length });
@@ -221,7 +226,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
               </dl>
             </section>
             <section className="card">
-              <h2>Comercial și status</h2>
+              <div className="cardHead"><h2>Comercial și status</h2>{!("error" in perOrder) && <IssueInvoice report={r.id} label="Emite factura" />}</div>
               <dl className="kv">
                 <Row k="Tarif">{r.fee != null ? <span className="mono num">{lei(r.fee, "RON")}</span> : null}</Row>
                 <Row k="Tarif colaborator">{r.collab_fee != null ? <span className="mono num">{lei(r.collab_fee, "RON")}</span> : null}</Row>
@@ -231,6 +236,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                 <Row k="Motiv suspendare">{r.suspend_reason}</Row>
                 <Row k="Intrat în lucru">{r.received_on ? fmtDate(r.received_on) : null}</Row>
               </dl>
+              {repInvoices.length > 0 && <><div className="section">Facturi</div><InvoiceList rows={repInvoices} admin={isAdmin(user)} /></>}
             </section>
           </div>
           <div className="cols">

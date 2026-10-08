@@ -6,6 +6,7 @@ import { FIRM_FIELDS, getFirmWithImages } from "@/lib/settings";
 import { CrmShell } from "@/components/CrmShell";
 import { History } from "@/components/History";
 import { FirmForm, FirmImage } from "./FirmForm";
+import { SettingsTabs } from "./SettingsTabs";
 
 export const metadata: Metadata = { title: "Setări | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -18,6 +19,7 @@ export default async function SettingsPage() {
   const values = Object.fromEntries(FIRM_FIELDS.map(([k]) => [k, firm[k]])) as Record<string, string>;
   return (
     <CrmShell user={user} base={base} active="settings" title="Setări" subtitle="Datele VALUEFY de pe contracte: firmă, reprezentant, cont bancar, ștampilă și semnătură">
+      <SettingsTabs base={base} active="firma" />
       {!edit && <div className="note">Doar proprietarul și administratorii pot modifica aceste date.</div>}
       <div className="cols">
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>

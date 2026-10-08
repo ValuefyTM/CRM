@@ -14,6 +14,9 @@ import { SendSign } from "./SendSign";
 import { billingMissing, signContractById, signLink } from "@/lib/contract-sign";
 import { contractDoc } from "@/lib/contract-doc";
 import { DELIVERABLES, VALUE_TYPES } from "@/lib/contract-terms";
+import { IssueInvoice, InvoiceList } from "@/components/Invoices";
+import { getBilling, invoicesFor } from "@/lib/billing";
+import { isAdmin } from "@/lib/users";
 
 export const metadata: Metadata = { title: "Contract | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -27,7 +30,9 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
   if (!d) notFound();
   const k = d.contract;
   const framework = k.kind === "framework";
-  const [log, doc, sign] = await Promise.all([history(db, [id]), framework ? null : contractDoc(db, id), framework ? null : signContractById(db, id)]);
+  const [log, doc, sign, invoices] = await Promise.all([history(db, [id]), framework ? null : contractDoc(db, id), framework ? null : signContractById(db, id), invoicesFor(db, { contract: id })]);
+  const admin = isAdmin(user);
+  const billing = framework ? null : await getBilling(db);
   const signed = !!sign?.signed_at;
   const link = sign?.sign_token ? await signLink(sign.sign_token) : null;
   const missing = doc && !signed ? billingMissing(doc) : [];
@@ -167,8 +172,17 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
             ) : <p className="hint">Contractul nu are client legat.</p>}
           </section>
           <section className="card">
-            <h2>Facturare</h2>
-            <p className="hint" style={{ margin: 0 }}>{framework ? "Pe borderoul lunar al băncii." : "O singură factură pe contract, cu câte o linie pentru fiecare raport (ca în Anexa 2), emisă din Oblio (în curând)."}</p>
+            <div className="cardHead"><h2>Facturare</h2>
+              {!framework && admin && (
+                <span className="actions">
+                  <IssueInvoice contract={k.id} kind="proforma" label="Proformă" primary={false} />
+                  <IssueInvoice contract={k.id} kind="invoice" label="Emite factura" primary={billing?.directFlow !== "proforma_then_invoice" || invoices.some((i) => i.kind === "proforma" && i.status !== "cancelled")} />
+                </span>
+              )}
+            </div>
+            {framework
+              ? <p className="hint" style={{ margin: 0 }}>Comenzile băncii se facturează după regula contractului (Setări → Facturare): per comandă din pagina raportului, sau lunar pe borderou.</p>
+              : <InvoiceList rows={invoices} admin={admin} empty="Nicio factură sau proformă emisă. O factură cuprinde câte o linie pentru fiecare raport (ca în Anexa 2)." />}
           </section>
           <History log={log} />
         </div>
