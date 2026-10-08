@@ -26,9 +26,50 @@ async function ask(items: { id: string; nr: string; city: string | null }[]) {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.LOCATOR_API_TOKEN}` },
       body: JSON.stringify({ items }),
     });
-    if (!r.ok) throw new Error(`locator ${r.status}`);
-    return ((await r.json()) as { results: Hit[] }).results;
+    if (!r.ok) throw new LocatorError(explain(r.status, await r.text().catch(() => "")));
+    const d = (await r.json().catch(() => null)) as { results?: Hit[] } | null;
+    if (!d?.results) throw new LocatorError("Localizatorul a răspuns, dar nu cu date de localizare (adresa LOCATOR_API_URL duce în altă parte?).");
+    return d.results;
+  } catch (e) {
+    if (e instanceof LocatorError) throw e;
+    throw new LocatorError((e as Error)?.name === "AbortError" ? "Localizatorul nu a răspuns în 15 secunde." : `Nu pot contacta ${API()} — domeniul Tools nu răspunde sau nu e cel corect (LOCATOR_API_URL).`);
   } finally { clearTimeout(t); }
+}
+
+/** An error of the link with the Tools locator, said so that it can be fixed (shown to the team). */
+export class LocatorError extends Error {}
+
+function explain(status: number, body: string) {
+  if (status === 401) return "Tools a refuzat tokenul: LOCATOR_API_TOKEN nu e setat în workerul Tools sau are altă valoare decât în CRM (trebuie identic în ambele, apoi deploy la amândouă).";
+  if (status === 403) return /cloudflare|challenge|cf-/i.test(body)
+    ? "Cloudflare a blocat cererea înainte de Tools (Bot Fight Mode / WAF pe valuefy.ro). Adaugă o regulă de excepție pentru /api/localizare/ sau dezactivează Bot Fight Mode pentru tools.valuefy.ro."
+    : "Cererea către Tools a fost blocată (HTTP 403) înainte să ajungă la localizator: firewall / reguli de securitate pe domeniu.";
+  if (status === 404) return /<html/i.test(body) ? "Tools nu are încă API-ul de localizare: fă deploy la Tools (versiunea cu /api/localizare/centroid)." : "Numărul nu a fost găsit în planuri.";
+  if (status >= 500) return `Tools a dat eroare (HTTP ${status}). Verifică logurile workerului Tools.`;
+  return `Răspuns neașteptat de la Tools (HTTP ${status}).`;
+}
+
+/**
+ * Checks the whole link (CRM → Tools → plan of the parcels) with one known parcel, and says where it stops.
+ * The parcel is any one already placed from the cadastre, else a fixed parcel in Timișoara.
+ */
+export async function locatorCheck(db: D1Database) {
+  const steps: { ok: boolean; text: string }[] = [];
+  if (!geolocateEnabled()) return { ok: false, steps: [{ ok: false, text: "LOCATOR_API_TOKEN nu este setat în workerul CRM (Cloudflare → crm → Settings → Variables and Secrets)." }] };
+  steps.push({ ok: true, text: `Token prezent în CRM · adresa localizatorului: ${API()}` });
+  const known = await db.prepare("SELECT city, cad_building, cad_land, cf_number FROM crm_properties WHERE geo_source = 'cadastru' LIMIT 1")
+    .first<{ city: string | null; cad_building: string | null; cad_land: string | null; cf_number: string | null }>().catch(() => null);
+  const nr = cadastralRoot(known?.cad_building ?? known?.cad_land ?? known?.cf_number) ?? "400015";
+  const city = known?.city ?? "Timișoara";
+  try {
+    const [hit] = await ask([{ id: "check", nr, city }]);
+    steps.push({ ok: true, text: "Tools a acceptat tokenul și a răspuns." });
+    if (hit?.lat != null) steps.push({ ok: true, text: `Parcela de probă ${nr} (${city}) a fost găsită: ${hit.lat.toFixed(5)}, ${hit.lng?.toFixed(5)} (plan ${hit.uat}).` });
+    else steps.push({ ok: !!hit?.error && !/plan|date|index/i.test(hit.error), text: `Parcela de probă ${nr} (${city}): ${hit?.error ?? "fără rezultat"}. Dacă nicio parcelă nu e găsită, la deploy-ul Tools trebuie rulat și scripts/copy-localizare.mjs (npm run cf:deploy îl rulează).` });
+  } catch (e) {
+    steps.push({ ok: false, text: e instanceof LocatorError ? e.message : "Eroare necunoscută la apelul către Tools." });
+  }
+  return { ok: steps.every((x) => x.ok), steps };
 }
 
 /** Looks up a set of properties and saves what is found. Returns how many were placed and how many not. */

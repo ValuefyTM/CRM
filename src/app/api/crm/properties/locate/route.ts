@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { err, json, staffApi } from "@/lib/api";
 import { audit } from "@/lib/auth";
-import { geolocateEnabled, locate, locateBatch, locateCounts } from "@/lib/geolocate";
+import { geolocateEnabled, locate, locateBatch, locateCounts, locatorCheck, LocatorError } from "@/lib/geolocate";
 
 /** How many properties are still to place on the map from their cadastral number. */
-export async function GET() {
+export async function GET(req: Request) {
   const a = await staffApi();
   if ("res" in a) return a.res;
+  // ?check=1: test the whole link with the Tools locator and say where it stops.
+  if (new URL(req.url).searchParams.get("check")) return NextResponse.json(await locatorCheck(a.db));
   return NextResponse.json({ enabled: geolocateEnabled(), ...(await locateCounts(a.db)) });
 }
 
@@ -35,6 +37,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ...r, ...(await locateCounts(a.db)) });
   } catch (e) {
     console.error("locate", e);
-    return err("Localizatorul nu a răspuns. Încearcă din nou peste un minut.", 502);
+    return err(e instanceof LocatorError ? e.message : "Localizatorul nu a răspuns. Încearcă din nou peste un minut.", 502);
   }
 }

@@ -23,7 +23,21 @@ export function LocateAll({ initial, enabled }: { initial: Counts; enabled: bool
     }
     setBusy(false);
   };
-  if (!enabled) return <div className="note">Localizarea automată din cadastru se activează cu variabila <b>LOCATOR_API_TOKEN</b> (aceeași valoare în Tools și în CRM).</div>;
+  const [check, setCheck] = useState<{ ok: boolean; steps: { ok: boolean; text: string }[] } | null>(null);
+  const [checking, setChecking] = useState(false);
+  const verify = async () => {
+    setChecking(true); setCheck(null);
+    const r = await fetch("/api/crm/properties/locate?check=1").catch(() => null);
+    setCheck(((await r?.json().catch(() => null)) as typeof check) ?? { ok: false, steps: [{ ok: false, text: "CRM-ul nu a răspuns." }] });
+    setChecking(false);
+  };
+  const checkBox = check && (
+    <div className={check.ok ? "note" : "error"} role="status" style={{ flexBasis: "100%" }}>
+      <b>{check.ok ? "Legătura cu localizatorul funcționează." : "Legătura cu localizatorul nu funcționează:"}</b>
+      <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{check.steps.map((x, i) => <li key={i}>{x.ok ? "✓" : "✗"} {x.text}</li>)}</ul>
+    </div>
+  );
+  if (!enabled) return <div className="note">Localizarea automată din cadastru se activează cu variabila <b>LOCATOR_API_TOKEN</b> (aceeași valoare în Tools și în CRM). Dacă ai setat-o, fă deploy din nou la CRM: variabilele noi intră în vigoare la următoarea versiune.</div>;
   return (
     <div className="locateBar">
       <span className="locateIc" aria-hidden="true">
@@ -43,8 +57,10 @@ export function LocateAll({ initial, enabled }: { initial: Counts; enabled: bool
         <span className="actions">
           {c.todo > 0 && <button type="button" className="btn btnNavy btnSm" onClick={() => start(false)}>Localizează {c.todo.toLocaleString("ro-RO")}</button>}
           {c.tried > 0 && <button type="button" className="btn btnGhost btnSm" onClick={() => start(true)}>Reîncearcă negăsitele</button>}
+          <button type="button" className="btn btnGhost btnSm" disabled={checking} onClick={verify}>{checking ? "Se verifică…" : "Verifică legătura"}</button>
         </span>
       )}
+      {checkBox}
     </div>
   );
 }
