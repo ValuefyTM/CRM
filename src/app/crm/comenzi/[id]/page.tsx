@@ -68,7 +68,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
     <CrmShell
       user={user} base={base} active="orders" title={`Comanda ${orderCode(o)}`}
       subtitle={`${SOURCE_LABEL[o.source]} · ${orderWhat(o)}${o.address ? ` · ${orderPlace(o)}` : ""} · ${o.glide_id ? `din ${fmtDate(o.ordered_on ?? o.created_at)}` : `primită ${fmtDate(o.created_at, true)}`}`}
-      actions={<a href={`${base}/comenzi${o.source === "bank" ? "?tab=banci" : ""}`} className="btn btnGhost btnSm">← Comenzi</a>}
+      actions={<a href={`${base}/comenzi?tab=${({ site: "site", partner: "parteneri", bank: "banci", collab: "colaborari" } as Record<string, string>)[o.source] ?? "directe"}`} className="btn btnGhost btnSm">← Comenzi</a>}
     >
       {o.glide_id && <div className="note">Comandă importată din Glide.</div>}
       <div className="cols">

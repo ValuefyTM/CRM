@@ -1,5 +1,4 @@
 import { getDb } from "@/lib/db";
-import { countNewLeads } from "@/lib/leads";
 import { initials } from "@/lib/guard";
 import { roleLabel, type User } from "@/lib/users";
 import { Shell } from "./Shell";
@@ -12,7 +11,8 @@ export async function CrmShell(props: { user: User; base: string; active: string
   const db = await getDb();
   const [unread, open] = db
     ? await Promise.all([
-        (async () => ((await db.prepare("SELECT COUNT(*) AS n FROM orders WHERE viewed_at IS NULL").first<{ n: number }>().catch(() => null))?.n ?? 0) + (await countNewLeads(db)))(),
+        // Sales offered on the website are not shown for now: only unopened orders count.
+        db.prepare("SELECT COUNT(*) AS n FROM orders WHERE viewed_at IS NULL").first<{ n: number }>().then((r) => r?.n ?? 0).catch(() => 0),
         db.prepare("SELECT COUNT(*) AS n FROM reports WHERE status IN ('draft', 'in_progress') AND delivered_at IS NULL").first<{ n: number }>().then((r) => r?.n ?? 0).catch(() => 0),
       ])
     : [0, 0];
