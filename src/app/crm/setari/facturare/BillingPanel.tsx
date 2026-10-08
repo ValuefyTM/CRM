@@ -127,10 +127,10 @@ export function BillingPanel({ edit, initial, creds, rules, modes, flows }: {
         <div className="cardHead"><h2>Contracte cadru și colaborări</h2>{ruleMsg && <span className="muted">{ruleMsg}</span>}</div>
         <div className="blDefaults">
           <label className="field">Implicit pentru contracte cadru
-            <select className="select" value={f.frameworkDefault} disabled={!edit} onChange={(e) => set("frameworkDefault", e.target.value as BillingMode)}>{modes.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+            <select className="select" value={f.frameworkDefault} disabled={!edit} onChange={(e) => set("frameworkDefault", e.target.value as BillingMode)}>{modes.map(([k, l]) => <option key={k} value={k} disabled={k === "monthly"}>{k === "monthly" ? `${l} (mai târziu)` : l}</option>)}</select>
           </label>
           <label className="field">Implicit pentru colaborări
-            <select className="select" value={f.collabDefault} disabled={!edit} onChange={(e) => set("collabDefault", e.target.value as BillingMode)}>{modes.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+            <select className="select" value={f.collabDefault} disabled={!edit} onChange={(e) => set("collabDefault", e.target.value as BillingMode)}>{modes.map(([k, l]) => <option key={k} value={k} disabled={k === "monthly"}>{k === "monthly" ? `${l} (mai târziu)` : l}</option>)}</select>
           </label>
         </div>
         <div className="tableWrap">
@@ -144,7 +144,7 @@ export function BillingPanel({ edit, initial, creds, rules, modes, flows }: {
                   <td>{k.reports.toLocaleString("ro-RO")} rapoarte</td>
                   <td><select className="select" defaultValue={k.billing_mode ?? ""} disabled={!edit} onChange={(e) => setRule("contract", k.id, e.target.value)}>
                     <option value="">Implicit ({modes.find(([m]) => m === f.frameworkDefault)?.[1]})</option>
-                    {modes.map(([m, l]) => <option key={m} value={m}>{l}</option>)}
+                    {modes.map(([m, l]) => <option key={m} value={m} disabled={m === "monthly"}>{m === "monthly" ? `${l} (mai târziu)` : l}</option>)}
                   </select></td>
                 </tr>
               ))}
@@ -155,14 +155,14 @@ export function BillingPanel({ edit, initial, creds, rules, modes, flows }: {
                   <td>{c.orders.toLocaleString("ro-RO")} comenzi</td>
                   <td><select className="select" defaultValue={c.billing_mode ?? ""} disabled={!edit} onChange={(e) => setRule("collab", c.id, e.target.value)}>
                     <option value="">Implicit ({modes.find(([m]) => m === f.collabDefault)?.[1]})</option>
-                    {modes.map(([m, l]) => <option key={m} value={m}>{l}</option>)}
+                    {modes.map(([m, l]) => <option key={m} value={m} disabled={m === "monthly"}>{m === "monthly" ? `${l} (mai târziu)` : l}</option>)}
                   </select></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="hint" style={{ padding: "0 16px 14px" }}>„Per comandă”: în pagina raportului apare „Emite factura” după predare (aprobare). „Lunar, pe borderou”: factura se face din borderoul lunii (pasul următor). Implicitele se salvează cu butonul de mai sus.</p>
+        <p className="hint" style={{ padding: "0 16px 14px" }}>„Per comandă”: în pagina raportului apare „Emite factura” după predare (aprobare). Facturarea lunară pe borderou se va adăuga mai târziu; până atunci, aceste facturi se fac în afara CRM-ului. Implicitele se salvează cu butonul de mai sus.</p>
       </section>
     </div>
   );
