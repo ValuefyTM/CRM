@@ -7,6 +7,7 @@ import { bucharestDay, now, parseJson, uuid } from "./db";
 import { audit } from "./auth";
 import { bucket } from "./orders";
 import { getFirm } from "./settings";
+import { DEFAULT_TEXT, fillText, type BillingText } from "./billing-text";
 import { oblioCancel, oblioCollect, oblioCreate, oblioDelete, OblioError } from "./oblio";
 
 export type BillingSettings = {
@@ -68,10 +69,10 @@ export async function saveBilling(db: D1Database, actor: string, b: Record<strin
 /** The billing rule of every framework contract and collaboration (their own, else the default). */
 export async function billingRules(db: D1Database) {
   const [contracts, collabs] = await Promise.all([
-    db.prepare(`SELECT k.id, k.number, k.billing_mode, e.name AS party, (SELECT COUNT(*) FROM reports r WHERE r.contract_id = k.id) AS reports
-      FROM contracts k LEFT JOIN entities e ON e.id = k.client_id WHERE k.kind = 'framework' ORDER BY e.name`).all<{ id: string; number: string | null; billing_mode: BillingMode | null; party: string | null; reports: number }>(),
-    db.prepare(`SELECT c.id, c.number, c.billing_mode, e.name AS party, c.share, (SELECT COUNT(*) FROM orders o WHERE o.collaboration_id = c.id) AS orders
-      FROM collaborations c JOIN entities e ON e.id = c.firm_id ORDER BY e.name`).all<{ id: string; number: string | null; billing_mode: BillingMode | null; party: string; share: number | null; orders: number }>(),
+    db.prepare(`SELECT k.id, k.number, k.billing_mode, k.billing_text IS NOT NULL AS custom, e.name AS party, (SELECT COUNT(*) FROM reports r WHERE r.contract_id = k.id) AS reports
+      FROM contracts k LEFT JOIN entities e ON e.id = k.client_id WHERE k.kind = 'framework' ORDER BY e.name`).all<{ id: string; number: string | null; billing_mode: BillingMode | null; custom: number; party: string | null; reports: number }>(),
+    db.prepare(`SELECT c.id, c.number, c.billing_mode, c.billing_text IS NOT NULL AS custom, e.name AS party, c.share, (SELECT COUNT(*) FROM orders o WHERE o.collaboration_id = c.id) AS orders
+      FROM collaborations c JOIN entities e ON e.id = c.firm_id ORDER BY e.name`).all<{ id: string; number: string | null; billing_mode: BillingMode | null; custom: number; party: string; share: number | null; orders: number }>(),
   ]);
   return { contracts: contracts.results, collabs: collabs.results };
 }
@@ -105,7 +106,12 @@ const totals = (lines: InvoiceLine[], vat: number) => {
   return { net, vat: v, total: round2(net + v) };
 };
 
-export type Draft = { kind: "invoice" | "proforma"; party: Party; lines: InvoiceLine[]; totals: ReturnType<typeof totals>; series: string; contractId: string | null; collaborationId: string | null; mentions: string; problems: string[] };
+export type Draft = {
+  kind: "invoice" | "proforma"; party: Party; lines: InvoiceLine[]; totals: ReturnType<typeof totals>; series: string; contractId: string | null; collaborationId: string | null;
+  mentions: string; problems: string[];
+  // For the preview, laid out like the invoice: the supplier, dates, unit and VAT.
+  supplier: { name: string; cui: string; reg: string; address: string; iban: string }; issueDate: string; dueDate: string | null; unit: string; vatPercent: number;
+};
 
 /** What would be invoiced for a classic contract: its reports not invoiced yet (one line each), else the contract fee. */
 export async function draftForContract(db: D1Database, contractId: string, kind: "invoice" | "proforma"): Promise<Draft | { error: string }> {
@@ -125,35 +131,83 @@ export async function draftForContract(db: D1Database, contractId: string, kind:
   const lines: InvoiceLine[] = withFee.length
     ? withFee.map((r) => ({ name: b.product, description: [r.report_type ?? "Raport de evaluare", r.valuation_types === "EBM" ? "bunuri mobile" : null, r.purpose, `contract nr. ${k.number}`].filter(Boolean).join(" · "), price: r.fee!, quantity: 1, reportId: r.id }))
     : k.fee ? [{ name: b.product, description: [k.report_type ?? "Raport de evaluare", k.purpose, `contract nr. ${k.number}`].filter(Boolean).join(" · "), price: k.fee, quantity: 1, reportId: null }] : [];
-  return finishDraft(b, kind, party, lines, k.id, null, `Conform contractului de prestări servicii nr. ${k.number}.`);
+  return finishDraft(db, b, kind, party, lines, k.id, null, `Conform contractului de prestări servicii nr. ${k.number}.`);
 }
 
-/** Per-order billing under a framework contract / collaboration: one approved (delivered) report. */
+/** The values a framework contract's invoice text can use, for one report. */
+export async function reportValues(db: D1Database, reportId: string) {
+  const r = await db.prepare(`SELECT r.number, r.report_type, r.delivered_at, r.bank_branch, k.number AS contract_number, k.signed_on, o.bank_ref, o.bank_branch AS order_branch,
+      COALESCE(NULLIF(o.client_name, ''), c.name) AS client,
+      (SELECT COALESCE(p.full_address, p.city) FROM assets a JOIN crm_properties p ON p.id = a.property_id WHERE a.report_id = r.id ORDER BY a.is_main DESC LIMIT 1) AS address
+    FROM reports r LEFT JOIN contracts k ON k.id = r.contract_id LEFT JOIN orders o ON o.id = r.order_id LEFT JOIN entities c ON c.id = r.client_id WHERE r.id = ?`).bind(reportId)
+    .first<{ number: string | null; report_type: string | null; delivered_at: string | null; bank_branch: string | null; contract_number: string | null; signed_on: string | null;
+      bank_ref: string | null; order_branch: string | null; client: string | null; address: string | null }>();
+  if (!r) return null;
+  const day = (d: string | null) => (d ? bucharestDay(d).split("-").reverse().join(".") : "");
+  const delivered = r.delivered_at ? bucharestDay(r.delivered_at) : null;
+  return {
+    contract: r.contract_number, contract_data: r.signed_on ? r.signed_on.split("-").reverse().join(".") : "", client: r.client, comanda: r.bank_ref,
+    raport: r.number, tip_raport: r.report_type ?? "Raport de evaluare", agentie: r.bank_branch ?? r.order_branch, adresa: r.address,
+    data_predare: day(r.delivered_at), luna: delivered ? new Date(`${delivered}T12:00:00Z`).toLocaleDateString("ro-RO", { month: "long", year: "numeric" }) : "",
+  } as Record<string, string | null>;
+}
+
+export async function getBillingText(db: D1Database, kind: "contract" | "collab", id: string): Promise<BillingText> {
+  const row = kind === "contract"
+    ? await db.prepare("SELECT billing_text FROM contracts WHERE id = ?").bind(id).first<{ billing_text: string | null }>()
+    : await db.prepare("SELECT billing_text FROM collaborations WHERE id = ?").bind(id).first<{ billing_text: string | null }>();
+  return parseJson<BillingText>(row?.billing_text, {});
+}
+
+export async function saveBillingText(db: D1Database, actor: string, kind: "contract" | "collab", id: string, b: Record<string, unknown>) {
+  const s = (k: string, max: number) => (typeof b[k] === "string" ? (b[k] as string).trim().slice(0, max) : "");
+  const t: BillingText = { product: s("product", 120) || undefined, line: s("line", 500) || undefined, mentions: s("mentions", 1000) || undefined };
+  const value = t.product || t.line || t.mentions ? JSON.stringify(t) : null;
+  const r = kind === "contract"
+    ? await db.prepare("UPDATE contracts SET billing_text = ?, updated_at = ? WHERE id = ? AND kind = 'framework'").bind(value, now(), id).run()
+    : await db.prepare("UPDATE collaborations SET billing_text = ? WHERE id = ?").bind(value, id).run();
+  if (!r.meta.changes) return { ok: false as const, error: "Contractul nu există." };
+  await audit(db, `user:${actor}`, "settings.billing_rule", "settings", "billing", `text factură ${kind === "contract" ? "contract cadru" : "colaborare"} ${id}`);
+  return { ok: true as const };
+}
+
+/** A recent report of the contract / collaboration, to preview its invoice text. */
+export async function sampleValues(db: D1Database, kind: "contract" | "collab", id: string) {
+  const r = kind === "contract"
+    ? await db.prepare("SELECT id FROM reports WHERE contract_id = ? ORDER BY delivered_at IS NULL, COALESCE(delivered_at, created_at) DESC LIMIT 1").bind(id).first<{ id: string }>()
+    : await db.prepare("SELECT r.id FROM reports r JOIN orders o ON o.id = r.order_id WHERE o.collaboration_id = ? ORDER BY r.delivered_at IS NULL, COALESCE(r.delivered_at, r.created_at) DESC LIMIT 1").bind(id).first<{ id: string }>();
+  return r ? await reportValues(db, r.id) : null;
+}
+
+/** Per-order billing under a framework contract / collaboration: one approved (delivered) report, with that partner's own invoice text. */
 export async function draftForReport(db: D1Database, reportId: string): Promise<Draft | { error: string }> {
   const b = await getBilling(db);
-  const r = await db.prepare(`SELECT r.id, r.number, r.label, r.fee, r.delivered_at, r.invoice_id, r.report_type, r.contract_id, k.kind AS contract_kind, k.number AS contract_number, k.client_id AS party_id, k.billing_mode,
-      o.collaboration_id, o.bank_ref, o.client_name, o.fee_net, c.billing_mode AS collab_mode, c.firm_id
+  const r = await db.prepare(`SELECT r.id, r.fee, r.delivered_at, r.status, r.glide_id, r.invoice_id, r.contract_id, k.kind AS contract_kind, k.client_id AS party_id, k.billing_mode, k.billing_text,
+      o.collaboration_id, o.fee_net, c.billing_mode AS collab_mode, c.billing_text AS collab_text, c.firm_id
     FROM reports r LEFT JOIN contracts k ON k.id = r.contract_id LEFT JOIN orders o ON o.id = r.order_id LEFT JOIN collaborations c ON c.id = o.collaboration_id WHERE r.id = ?`).bind(reportId)
-    .first<{ id: string; number: string | null; label: string | null; fee: number | null; delivered_at: string | null; invoice_id: string | null; report_type: string | null; contract_id: string | null;
-      contract_kind: string | null; contract_number: string | null; party_id: string | null; billing_mode: BillingMode | null; collaboration_id: string | null; bank_ref: string | null;
-      client_name: string | null; fee_net: number | null; collab_mode: BillingMode | null; firm_id: string | null }>();
+    .first<{ id: string; fee: number | null; delivered_at: string | null; status: string; glide_id: string | null; invoice_id: string | null; contract_id: string | null; contract_kind: string | null; party_id: string | null;
+      billing_mode: BillingMode | null; billing_text: string | null; collaboration_id: string | null; fee_net: number | null; collab_mode: BillingMode | null; collab_text: string | null; firm_id: string | null }>();
   if (!r) return { error: "Raportul nu există." };
   if (r.invoice_id) return { error: "Raportul este deja facturat." };
   const collab = !!r.collaboration_id;
   const mode = collab ? r.collab_mode ?? b.collabDefault : r.contract_kind === "framework" ? r.billing_mode ?? b.frameworkDefault : null;
   if (mode !== "per_order") return { error: "Acest raport nu se facturează per comandă (vezi Setări → Facturare)." };
-  if (!r.delivered_at) return { error: "Raportul se facturează după aprobare (după predare)." };
+  // Reports brought from Glide were invoiced outside the CRM; new ones once finished (approved / delivered).
+  if (r.glide_id) return { error: "Raport importat din Glide: a fost facturat în afara CRM-ului." };
+  if (!r.delivered_at && r.status !== "done") return { error: "Factura se emite după finalizarea raportului." };
   const party = await partyOf(db, collab ? r.firm_id : r.party_id);
   if (!party) return { error: "Nu știu cui se facturează: contractul nu are bancă / firmă." };
   const price = collab ? r.fee_net ?? r.fee : r.fee;
   if (!price) return { error: "Raportul nu are onorariu." };
-  const lines: InvoiceLine[] = [{ name: b.product, price, quantity: 1, reportId: r.id,
-    description: [r.report_type ?? "Raport de evaluare", r.number && `raport nr. ${r.number}`, r.bank_ref && `comanda ${r.bank_ref}`, r.client_name && `client ${r.client_name}`].filter(Boolean).join(" · ") }];
-  return finishDraft(b, "invoice", party, lines, collab ? null : r.contract_id, r.collaboration_id,
-    collab ? "" : `Conform contractului cadru nr. ${r.contract_number ?? ""}.`);
+  const text = { ...DEFAULT_TEXT, ...parseJson<BillingText>(collab ? r.collab_text : r.billing_text, {}) };
+  const vals = (await reportValues(db, r.id)) ?? {};
+  const lines: InvoiceLine[] = [{ name: text.product || b.product, price, quantity: 1, reportId: r.id, description: fillText(text.line, vals) }];
+  return finishDraft(db, b, "invoice", party, lines, collab ? null : r.contract_id, r.collaboration_id, fillText(text.mentions, vals));
 }
 
-function finishDraft(b: BillingSettings, kind: "invoice" | "proforma", party: Party, lines: InvoiceLine[], contractId: string | null, collaborationId: string | null, mention: string): Draft {
+async function finishDraft(db: D1Database, b: BillingSettings, kind: "invoice" | "proforma", party: Party, lines: InvoiceLine[], contractId: string | null, collaborationId: string | null, mention: string): Promise<Draft> {
+  const firm = await getFirm(db);
+  const issueDate = bucharestDay();
   const series = kind === "proforma" ? b.proformaSeries : b.invoiceSeries;
   const problems = [
     !b.cif && "firma (CIF) nu e aleasă în Setări → Facturare",
@@ -161,7 +215,12 @@ function finishDraft(b: BillingSettings, kind: "invoice" | "proforma", party: Pa
     !lines.length && "nu există nimic de facturat (onorariu lipsă sau rapoarte deja facturate)",
     !party.address && "clientul nu are adresă de facturare",
   ].filter(Boolean) as string[];
-  return { kind, party, lines, totals: totals(lines, b.vatPayer ? b.vatPercent : 0), series, contractId, collaborationId, mentions: [mention, b.mentions].filter(Boolean).join(" "), problems };
+  return {
+    kind, party, lines, totals: totals(lines, b.vatPayer ? b.vatPercent : 0), series, contractId, collaborationId, mentions: [mention, b.mentions].filter(Boolean).join(" "), problems,
+    supplier: { name: firm.name, cui: firm.cui, reg: firm.reg, address: firm.address, iban: firm.iban }, issueDate,
+    dueDate: kind === "invoice" ? new Date(Date.parse(`${issueDate}T12:00:00Z`) + b.dueDays * 86400000).toISOString().slice(0, 10) : null,
+    unit: b.unit, vatPercent: b.vatPayer ? b.vatPercent : 0,
+  };
 }
 
 /** Issues the draft in Oblio, keeps the invoice and a copy of its PDF, and marks its reports as invoiced. */

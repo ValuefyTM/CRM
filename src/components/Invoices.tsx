@@ -11,7 +11,7 @@ const today = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/B
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return createPortal(
     <div className="vfModal" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}>
-      <div className="vfModalBox" style={{ width: "min(720px, 100%)" }}><h2>{title}</h2>{children}</div>
+      <div className="vfModalBox" style={{ width: "min(860px, 100%)" }}><h2>{title}</h2>{children}</div>
     </div>, document.body);
 }
 
@@ -46,21 +46,39 @@ export function IssueInvoice({ contract, report, kind = "invoice", label, primar
           {!d && !msg && <p className="hint">Se pregătește…</p>}
           {d && (
             <>
-              <dl className="dl">
-                <div><dt>Către</dt><dd><b>{d.party.name}</b>{d.party.cif ? ` · CIF ${d.party.cif}` : ""}<br /><small className="muted">{[d.party.address, d.party.city, d.party.county].filter(Boolean).join(", ") || "fără adresă"}</small></dd></div>
-                <div><dt>Serie</dt><dd className="mono">{d.series || "—"}</dd></div>
-              </dl>
-              <div className="tableWrap">
-                <table className="table">
-                  <thead><tr><th>Serviciu</th><th style={{ textAlign: "right" }}>Preț fără TVA</th></tr></thead>
-                  <tbody>{d.lines.map((l, i) => <tr key={i}><td><b>{l.name}</b><div className="muted">{l.description}</div></td><td style={{ textAlign: "right" }}>{lei(l.price * l.quantity)}</td></tr>)}</tbody>
-                  <tfoot>
-                    <tr><td style={{ textAlign: "right" }}>TVA</td><td style={{ textAlign: "right" }}>{lei(d.totals.vat)}</td></tr>
-                    <tr><td style={{ textAlign: "right" }}><b>Total</b></td><td style={{ textAlign: "right" }}><b>{lei(d.totals.total)}</b></td></tr>
-                  </tfoot>
+              {/* Laid out like the invoice Oblio will issue; the number comes from the series at issue time. */}
+              <div className="invDoc">
+                <div className="invDocHead">
+                  <div>
+                    <span className="invDocKind">{d.kind === "proforma" ? "FACTURĂ PROFORMĂ" : "FACTURĂ"}</span>
+                    <span className="mono">Seria {d.series || "—"} nr. <i>se alocă la emitere</i></span>
+                  </div>
+                  <div className="invDocDates">
+                    <span>Data emiterii: <b>{day(d.issueDate)}</b></span>
+                    {d.dueDate && <span>Scadență: <b>{day(d.dueDate)}</b></span>}
+                  </div>
+                </div>
+                <div className="invDocParties">
+                  <div><small>Furnizor</small><b>{d.supplier.name}</b><span>CIF {d.supplier.cui} · {d.supplier.reg}</span><span>{d.supplier.address}</span><span className="mono">{d.supplier.iban}</span></div>
+                  <div><small>Client</small><b>{d.party.name}</b>{d.party.cif && <span>CIF {d.party.cif}{d.party.rc ? ` · ${d.party.rc}` : ""}</span>}
+                    <span>{[d.party.address, d.party.city, d.party.county].filter(Boolean).join(", ") || <em className="invMissing">adresă lipsă</em>}</span></div>
+                </div>
+                <table className="invDocTable">
+                  <thead><tr><th>Nr.</th><th>Denumire produs / serviciu</th><th>UM</th><th>Cant.</th><th>Preț unitar</th><th>Valoare</th><th>TVA {d.vatPercent}%</th></tr></thead>
+                  <tbody>
+                    {d.lines.map((l, i) => (
+                      <tr key={i}><td>{i + 1}</td><td><b>{l.name}</b><div>{l.description}</div></td><td>{d.unit}</td><td>{l.quantity}</td>
+                        <td>{lei(l.price)}</td><td>{lei(l.price * l.quantity)}</td><td>{lei(Math.round(l.price * l.quantity * d.vatPercent) / 100)}</td></tr>
+                    ))}
+                  </tbody>
                 </table>
+                <div className="invDocTotals">
+                  <span>Total fără TVA <b>{lei(d.totals.net)}</b></span>
+                  <span>TVA <b>{lei(d.totals.vat)}</b></span>
+                  <span className="grand">Total de plată <b>{lei(d.totals.total)}</b></span>
+                </div>
+                {d.mentions && <div className="invDocNote"><small>Mențiuni</small>{d.mentions}</div>}
               </div>
-              {d.mentions && <p className="hint">Mențiuni: {d.mentions}</p>}
               {d.problems.length > 0 && <div className="error" role="alert">De rezolvat întâi: {d.problems.join("; ")}.</div>}
             </>
           )}

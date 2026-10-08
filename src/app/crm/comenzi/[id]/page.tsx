@@ -20,6 +20,8 @@ import { DeleteOrder } from "./DeleteOrder";
 import { isAdmin } from "@/lib/users";
 import { photoUrl, presenceOf } from "@/lib/presence";
 import { orderProgress } from "@/lib/delivery";
+import { IssueInvoice, InvoiceList } from "@/components/Invoices";
+import { draftForReport, invoicesFor } from "@/lib/billing";
 
 export const metadata: Metadata = { title: "Comandă | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -52,6 +54,13 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
   // Processing: the order becomes a report file. Portal / website orders open it when the offer is signed (or by hand,
   // e.g. accepted by phone); bank and collaboration orders are processed straight away under their contract.
   const dossier = reports[0] ?? null;
+  // Per-order billing (e.g. BRD): the button appears once the order's report is finished; its invoices are listed here.
+  const billable = isAdmin(user) && (o.source === "bank" || o.source === "collab") && dossier
+    ? await Promise.all(reports.map(async (rep) => ({ id: rep.id, d: await draftForReport(db, rep.id) })))
+    : [];
+  const toBill = billable.find((x) => !("error" in x.d))?.id ?? null;
+  const why = billable.length && !toBill ? ("error" in billable[0].d ? billable[0].d.error : "") : "";
+  const orderInvoices = dossier ? (await Promise.all(reports.map((rep) => invoicesFor(db, { report: rep.id })))).flat() : [];
   const contractOrder = o.source === "bank" || o.source === "collab";
   let offerInitial: OfferInput | null = null;
   if (offerable) {
@@ -149,10 +158,15 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
                   {dossier ? "Raport creat" : offer?.status === "accepted" || contractOrder ? "De creat raportul" : "Așteaptă acceptarea ofertei"}</span>
               </div>
               {dossier ? (
-                <div className="actions">
-                  <p className="hint" style={{ margin: 0 }}>Comanda se lucrează în raportul {dossier.number ? `nr. ${dossier.number}` : dossier.label ?? ""}: inspecție, redactare, verificare și livrare.</p>
-                  <a className="btn btnNavy btnSm" href={`${base}/rapoarte/${dossier.id}`}>Deschide raportul →</a>
-                </div>
+                <>
+                  <div className="actions">
+                    <p className="hint" style={{ margin: 0 }}>Comanda se lucrează în raportul {dossier.number ? `nr. ${dossier.number}` : dossier.label ?? ""}: inspecție, redactare, verificare și livrare.</p>
+                    <a className="btn btnNavy btnSm" href={`${base}/rapoarte/${dossier.id}`}>Deschide raportul →</a>
+                    {toBill && <IssueInvoice report={toBill} label="Emite factura" />}
+                  </div>
+                  {billable.length > 0 && !toBill && why && !orderInvoices.length && <p className="hint" style={{ margin: 0 }}>Facturare: {why}</p>}
+                  {orderInvoices.length > 0 && <><div className="section">Facturi</div><InvoiceList rows={orderInvoices} admin={isAdmin(user)} /></>}
+                </>
               ) : (
                 <div className="actions">
                   <p className="hint" style={{ margin: 0, flex: "1 1 260px" }}>

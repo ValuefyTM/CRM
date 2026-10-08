@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import type { BillingMode, BillingSettings } from "@/lib/billing";
+import { BillingTextEdit } from "./BillingTextEdit";
 
 type Rules = {
-  contracts: { id: string; number: string | null; billing_mode: BillingMode | null; party: string | null; reports: number }[];
-  collabs: { id: string; number: string | null; billing_mode: BillingMode | null; party: string; share: number | null; orders: number }[];
+  contracts: { id: string; number: string | null; billing_mode: BillingMode | null; custom: number; party: string | null; reports: number }[];
+  collabs: { id: string; number: string | null; billing_mode: BillingMode | null; custom: number; party: string; share: number | null; orders: number }[];
 };
 type Conn = { ok: boolean; error?: string; companies?: { cif: string; company: string }[]; cif?: string; series?: { type: string; name: string; next: string; default: number | boolean }[]; vat?: { name: string; percent: number; default: boolean }[] };
 
@@ -156,7 +157,7 @@ export function BillingPanel({ edit, initial, creds, rules, modes, flows }: {
         </div>
         <div className="tableWrap">
           <table className="table">
-            <thead><tr><th>Partener</th><th>Contract</th><th>Lucrări</th><th>Când se facturează</th></tr></thead>
+            <thead><tr><th>Partener</th><th>Contract</th><th>Lucrări</th><th>Când se facturează</th><th>Ce scrie pe factură</th></tr></thead>
             <tbody>
               {rules.contracts.map((k) => (
                 <tr key={k.id}>
@@ -167,6 +168,7 @@ export function BillingPanel({ edit, initial, creds, rules, modes, flows }: {
                     <option value="">Implicit ({modes.find(([m]) => m === f.frameworkDefault)?.[1]})</option>
                     {modes.map(([m, l]) => <option key={m} value={m} disabled={m === "monthly"}>{m === "monthly" ? `${l} (mai târziu)` : l}</option>)}
                   </select></td>
+                  <td><BillingTextEdit kind="contract" id={k.id} party={k.party ?? "contract cadru"} custom={!!k.custom} product={f.product} /></td>
                 </tr>
               ))}
               {rules.collabs.map((c) => (
@@ -178,6 +180,7 @@ export function BillingPanel({ edit, initial, creds, rules, modes, flows }: {
                     <option value="">Implicit ({modes.find(([m]) => m === f.collabDefault)?.[1]})</option>
                     {modes.map(([m, l]) => <option key={m} value={m} disabled={m === "monthly"}>{m === "monthly" ? `${l} (mai târziu)` : l}</option>)}
                   </select></td>
+                  <td><BillingTextEdit kind="collab" id={c.id} party={c.party} custom={!!c.custom} product={f.product} /></td>
                 </tr>
               ))}
             </tbody>

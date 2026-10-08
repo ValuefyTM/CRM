@@ -1449,3 +1449,31 @@ div.dbKpi::after { content: none; }
 .invList .who { flex: 1; min-width: 140px; display: flex; flex-direction: column; }
 .invKind { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 5px; background: #111; color: #E9A227; }
 .invKind.proforma { background: var(--cream-2); color: var(--ink); }
+.btChips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 2px 0 10px; font-size: 12px; }
+.btChip { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11.5px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--cream); cursor: pointer; }
+.btChip:hover { border-color: var(--ink); }
+.btPreview { border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; margin-bottom: 10px; background: #fff; }
+.btPreview .section { margin: 0 0 4px; }
+/* Invoice preview (before issuing in Oblio) */
+.invDoc { border: 1px solid var(--line); border-radius: 10px; background: #fff; padding: 18px 20px; font-size: 12.5px; display: flex; flex-direction: column; gap: 14px; margin-bottom: 12px; }
+.invDocHead { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-bottom: 2px solid #E9A227; padding-bottom: 10px; }
+.invDocHead > div { display: flex; flex-direction: column; gap: 2px; }
+.invDocKind { font-size: 17px; font-weight: 700; letter-spacing: .04em; }
+.invDocHead i { color: var(--muted); font-style: italic; }
+.invDocDates { text-align: right; }
+.invDocParties { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.invDocParties > div { display: flex; flex-direction: column; gap: 1px; }
+.invDocParties small, .invDocNote small { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.invDocParties b { font-size: 13.5px; }
+.invMissing { color: var(--err); font-style: normal; font-weight: 600; }
+.invDocTable { width: 100%; border-collapse: collapse; }
+.invDocTable th { background: #111; color: #fff; font-size: 10.5px; font-weight: 600; text-align: left; padding: 6px 8px; }
+.invDocTable td { border-bottom: 1px solid var(--line); padding: 7px 8px; vertical-align: top; }
+.invDocTable td div { color: var(--muted); font-size: 11.5px; }
+.invDocTable th:nth-child(n+4), .invDocTable td:nth-child(n+4) { text-align: right; white-space: nowrap; }
+.invDocTotals { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.invDocTotals span { display: flex; gap: 16px; }
+.invDocTotals b { min-width: 110px; text-align: right; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.invDocTotals .grand { font-size: 14px; border-top: 1px solid var(--ink); padding-top: 4px; }
+.invDocNote { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+@media (max-width: 640px) { .invDocParties { grid-template-columns: 1fr; } .invDocTable th:nth-child(3), .invDocTable td:nth-child(3), .invDocTable th:nth-child(4), .invDocTable td:nth-child(4) { display: none; } }
