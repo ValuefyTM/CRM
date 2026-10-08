@@ -251,7 +251,11 @@ export function ContractForm(p: {
             {newAssets && <AssetsEditor assets={assets} setAssets={(next) => {
               // A new asset joins every report that holds the previous one; a removed asset leaves them.
               if (next.length > assets.length) addAssetTo(next.length - 1);
-              if (next.length < assets.length) setReps(reps.map((r) => ({ ...r, assets: r.assets.filter((i) => i < next.length) })));
+              if (next.length < assets.length) {
+                // The removed asset leaves every report; the ones after it move up one place.
+                const k = Math.max(0, assets.findIndex((a, i) => next[i] !== a));
+                setReps(reps.map((r) => ({ ...r, assets: r.assets.filter((i) => i !== k).map((i) => (i > k ? i - 1 : i)) })));
+              }
               setAssets(next);
             }} client={{ name: who.name, phone: who.phone }} />}
             <label className="field">Observații pentru inspecție <small>(opțional)</small><textarea className="textarea" rows={2} value={f.inspection_notes} onChange={set("inspection_notes")} /></label>

@@ -110,12 +110,13 @@ export async function verifyCode(db: D1Database, kind: Kind, rawEmail: string, c
     .bind(email, kind, now())
     .first<{ id: string; code_hash: string; attempts: number }>();
   if (!row || row.attempts >= MAX_ATTEMPTS) return null;
+  // The attempt is counted before comparing, in one statement: parallel guesses cannot all pass the limit.
+  const took = await db.prepare("UPDATE auth_codes SET attempts = attempts + 1 WHERE id = ? AND attempts < ? AND used_at IS NULL").bind(row.id, MAX_ATTEMPTS).run();
+  if (!took.meta.changes) return null;
   const ok = safeEqual(row.code_hash, await sha256(`${email}:${code.replace(/\D/g, "")}`));
-  if (!ok) {
-    await db.prepare("UPDATE auth_codes SET attempts = attempts + 1 WHERE id = ?").bind(row.id).run();
-    return null;
-  }
-  await db.prepare("UPDATE auth_codes SET used_at = ? WHERE id = ?").bind(now(), row.id).run();
+  if (!ok) return null;
+  const used = await db.prepare("UPDATE auth_codes SET used_at = ? WHERE id = ? AND used_at IS NULL").bind(now(), row.id).run();
+  if (!used.meta.changes) return null;
   return signInUserId(db, kind, email, app);
 }
 
@@ -126,7 +127,10 @@ export async function consumeToken(db: D1Database, app: App, purpose: "login" | 
     .bind(await sha256(token), purpose, now())
     .first<{ id: string; email: string; audience: Kind }>();
   if (!row) return null;
-  if (consume) await db.prepare("UPDATE auth_codes SET used_at = ? WHERE id = ?").bind(now(), row.id).run();
+  if (consume) {
+    const used = await db.prepare("UPDATE auth_codes SET used_at = ? WHERE id = ? AND used_at IS NULL").bind(now(), row.id).run();
+    if (!used.meta.changes) return null; // used at the same moment by another request
+  }
   return { email: row.email, kind: row.audience };
 }
 

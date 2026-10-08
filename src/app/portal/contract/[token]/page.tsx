@@ -2,9 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getDb, now } from "@/lib/db";
 import { audit } from "@/lib/auth";
-import { contractDoc, signedSnapshot } from "@/lib/contract-doc";
-import { billingMissing, contractByToken, isCompany } from "@/lib/contract-sign";
-import { getFirmWithImages } from "@/lib/settings";
+import { signedSnapshot } from "@/lib/contract-doc";
+import { billingMissing, contractByToken, currentVersion, isCompany } from "@/lib/contract-sign";
 import { ContractDocView } from "@/components/ContractDoc";
 import { PrintButton } from "@/components/OfferAccept";
 import { BillingForm, ContractSignForm } from "./ContractSign";
@@ -24,8 +23,9 @@ export default async function ContractSignPage({ params }: { params: Promise<{ t
     await audit(db, "client:contract", "contract.viewed", "contract", k.id, k.number ?? "");
   }
   const snap = k.signed_at ? await signedSnapshot(db, k.id) : null;
-  const [d, firm] = snap ? [snap.doc, snap.firm] : await Promise.all([contractDoc(db, k.id), getFirmWithImages(db)]);
-  if (!d) notFound();
+  const cur = snap ? null : await currentVersion(db, k.id);
+  const [d, firm] = snap ? [snap.doc, snap.firm] : cur ? [cur.doc, cur.firm] : [null, null];
+  if (!d || !firm) notFound();
   const missing = snap ? [] : billingMissing(d);
   const c = d.contract;
   const company = isCompany(c.client_kind, c.client);
@@ -58,7 +58,7 @@ export default async function ContractSignPage({ params }: { params: Promise<{ t
         ) : (
           <>
             <div className="csDoc"><ContractDocView d={d} firm={firm} sealed clientSig={snap?.sig ?? null} /></div>
-            {!snap && <ContractSignForm token={token} number={c.number ?? ""} defaultName={company ? (c.rep ?? "").split(" / ")[0] : c.client ?? ""} />}
+            {!snap && <ContractSignForm token={token} version={cur?.hash ?? ""} number={c.number ?? ""} defaultName={company ? (c.rep ?? "").split(" / ")[0] : c.client ?? ""} />}
           </>
         )}
       </main>

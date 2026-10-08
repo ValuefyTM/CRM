@@ -25,17 +25,20 @@ export const APP_NAME: Record<Kind, string> = {
   client: "Portal client VALUEFY",
 };
 
+/** Hosts the app answers on; anything else (a forged header) falls back to the production CRM host. */
+const OK_HOST = /^(?:[a-z0-9-]+\.)*(?:valuefy\.ro|workers\.dev|localhost)(?::\d+)?$|^127\.0\.0\.1(?::\d+)?$/i;
+
 async function host() {
   const h = await headers();
-  return h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3200";
+  const v = h.get("host") ?? "localhost:3200";
+  return OK_HOST.test(v) ? v : "crm.valuefy.ro";
 }
 
-/** Public origin of the request (https://crm.valuefy.ro, https://crm.<account>.workers.dev, http://localhost:3200…). */
+/** Public origin of the request (https://crm.valuefy.ro, https://crm.<account>.workers.dev, http://crm.localhost:8796…). */
 export async function origin() {
-  const h = await headers();
   const hst = await host();
-  const proto = h.get("x-forwarded-proto") ?? (hst.startsWith("localhost") ? "http" : "https");
-  return `${proto}://${hst}`;
+  const local = /^(?:[a-z0-9-]+\.)*localhost(?::\d+)?$|^127\.0\.0\.1/.test(hst);
+  return `${local ? "http" : "https"}://${hst}`;
 }
 
 /** Path prefix for links: "" on crm./portal. subdomains (the host already says which app), else /crm or /portal. */

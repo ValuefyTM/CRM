@@ -27,7 +27,7 @@ export default async function SettingsPage() {
           </section>
           <section className="card">
             <div className="cardHead"><h2>Ștampilă și semnătură</h2><span className="muted">pe contract, la „Evaluator”</span></div>
-            <p className="hint">Imagine PNG cu fundal transparent, cel mult 1 MB. Sunt folosite doar în contractele generate din CRM, nu sunt publice.</p>
+            <p className="hint">Imagine PNG cu fundal transparent, cel mult 300 KB. Sunt folosite doar în contractele generate din CRM, nu sunt publice.</p>
             <div className="stImgs">
               <FirmImage which="stamp" label="Ștampila" src={firm.stamp} custom={firm.stampCustom} edit={edit} />
               <FirmImage which="signature" label={`Semnătura (${firm.rep})`} src={firm.signature} custom={firm.signatureCustom} edit={edit} />

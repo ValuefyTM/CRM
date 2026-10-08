@@ -17,15 +17,31 @@ const allowed = (env: Env, addr: string) => {
   return list.some((d) => a === d || a.endsWith(`@${d}`) || a.endsWith(`.${d}`));
 };
 
+/** Browsers send Origin on cross-site POSTs: an API write must come from a page of the same host (no CSRF). */
+const SAFE = new Set(["GET", "HEAD", "OPTIONS"]);
+
 export default {
-  fetch: app.fetch,
+  async fetch(req: Request, env: Env, ctx: ExecutionContext) {
+    const url = new URL(req.url);
+    if (url.pathname.startsWith("/api/") && !SAFE.has(req.method)) {
+      const origin = req.headers.get("origin");
+      if (origin && origin !== "null" && new URL(origin).host !== url.host) return new Response("Cerere respinsă (origine străină).", { status: 403 });
+    }
+    // Links in emails are built from the request host: only Cloudflare's Host counts, never client-sent forwarding
+    // headers (which OpenNext would otherwise trust), so nobody can make a sign-in email point to another domain.
+    const headers = new Headers(req.headers);
+    headers.delete("x-forwarded-host");
+    headers.delete("x-forwarded-proto");
+    return app.fetch(new Request(req, { headers }), env, ctx);
+  },
 
   async email(message: ForwardableEmailMessage, env: Env) {
     // The shared helpers read settings from process.env (as in the app).
     for (const [k, v] of Object.entries(env)) if (typeof v === "string") process.env[k] = v;
     const mail = await PostalMime.parse(await new Response(message.raw).arrayBuffer());
     const from = mail.from?.address ?? message.from;
-    if (!allowed(env, from) && !allowed(env, message.from)) {
+    // The envelope sender is checked by Cloudflare (SPF); the From header alone can be forged.
+    if (!allowed(env, message.from)) {
       console.log("bank-mail: ignored sender", from, message.from);
       return;
     }

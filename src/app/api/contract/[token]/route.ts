@@ -24,6 +24,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   if (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(sig) || sig.length < 1500) return err("Semnează în chenar înainte de a trimite.");
   if (sig.length > 400_000) return err("Semnătura este prea mare. Șterge-o și semnează din nou.");
   if (b.agree !== true) return err("Bifează că ai citit și accepți contractul.");
-  const r = await signContract(db, k, { name, signature: sig }, req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for") ?? null, req.headers.get("user-agent") ?? "");
+  const version = typeof b.version === "string" ? b.version : "";
+  const r = await signContract(db, k, { name, signature: sig, version }, req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for") ?? null, req.headers.get("user-agent") ?? "");
   return r.ok ? Response.json({ ok: true }) : err(r.error, 409);
 }

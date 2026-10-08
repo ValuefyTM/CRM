@@ -2,7 +2,7 @@
 // fee and deadline. Portal / website orders open it when the client accepts the offer; bank and collaboration orders are
 // registered directly under the framework contract or collaboration agreement (the order stays as the statement line).
 import { withPresence } from "./presence";
-import { now, uuid } from "./db";
+import { bucharestDay, now, uuid } from "./db";
 import { audit } from "./auth";
 import { esc, layout, sendEmail } from "./email";
 import { appUrl } from "./site";
@@ -114,15 +114,48 @@ const offerFee = (f: Offer) => f.fee + (f.travel_fee ?? 0) + (f.accepted_urgent 
 export async function openDossier(db: D1Database, orderId: string, actor: { id: string; name: string } | null, opts: OpenOptions = {}) {
   const o = await getOrder(db, orderId);
   if (!o) return { ok: false as const, error: "Comanda nu există." };
-  const existing = await db.prepare("SELECT id FROM reports WHERE order_id = ? ORDER BY created_at LIMIT 1").bind(orderId).first<{ id: string }>();
-  if (existing) return { ok: true as const, id: existing.id, created: false };
+  const firstReport = () => db.prepare("SELECT id, contract_id FROM reports WHERE order_id = ? ORDER BY created_at, rowid LIMIT 1").bind(orderId).first<{ id: string; contract_id: string | null }>();
+  const existing = await firstReport();
+  if (existing) {
+    await repairContract(db, o, existing);
+    return { ok: true as const, id: existing.id, created: false, assetId: undefined, contract: null };
+  }
   if (o.status === "cancelled") return { ok: false as const, error: "Comanda este anulată." };
+  // Claim the order: of two requests at the same moment (a double click, a staff click while the client signs the
+  // offer) only one goes on to open the reports and the contract.
+  const claim = await db.prepare("UPDATE orders SET report_opened_at = ? WHERE id = ? AND report_opened_at IS NULL").bind(now(), orderId).run();
+  if (!claim.meta.changes) {
+    const other = await firstReport();
+    return other ? { ok: true as const, id: other.id, created: false, assetId: undefined, contract: null } : { ok: false as const, error: "Raportul se creează chiar acum (altă cerere). Reîncarcă pagina în câteva secunde." };
+  }
+  try {
+    return await openClaimed(db, o, actor, opts);
+  } catch (e) {
+    // Nothing was written yet: free the order for the next try. (Once the report exists, the next call repairs it.)
+    if (!(await firstReport())) await db.prepare("UPDATE orders SET report_opened_at = NULL WHERE id = ?").bind(orderId).run();
+    throw e;
+  }
+}
+
+/** A report opened from a portal / website / direct order whose contract was not made (an error half-way) gets it now. */
+async function repairContract(db: D1Database, o: Order, r: { id: string; contract_id: string | null }) {
+  if (r.contract_id || o.contract_id || o.source === "bank" || o.source === "collab") return;
+  const rep = await db.prepare("SELECT client_id, fee, purpose, report_type FROM reports WHERE id = ?").bind(r.id)
+    .first<{ client_id: string | null; fee: number | null; purpose: string | null; report_type: string | null }>();
+  if (!rep?.client_id) return;
+  const c = await createClassicContract(db, "system:repair", { client_id: rep.client_id, fee: rep.fee, purpose: rep.purpose, report_type: rep.report_type || "Raport de evaluare",
+    notes: "Generat la reluarea procesării comenzii." });
+  await db.prepare("UPDATE reports SET contract_id = ? WHERE order_id = ? AND contract_id IS NULL").bind(c.id, o.id).run();
+}
+
+async function openClaimed(db: D1Database, o: Order, actor: { id: string; name: string } | null, opts: OpenOptions) {
+  const orderId = o.id;
 
   const offer = o.source === "bank" || o.source === "collab" ? null : await offerForOrder(db, orderId);
   const accepted = offer?.status === "accepted" ? offer : null;
   const who = actor ? `user:${actor.id}` : "client:offer";
   const t = now();
-  const day = t.slice(0, 10);
+  const day = bucharestDay(t);
 
   const [clientId, recipientId, issuer] = await Promise.all([
     clientFor(db, o, actor?.id ?? "system"),
@@ -152,20 +185,36 @@ export async function openDossier(db: D1Database, orderId: string, actor: { id: 
   const where = [o.address, o.city].filter(Boolean).join(", ") || null;
   const label = [o.client_name || o.creator_name, [o.property_type ? propertyLabel(o.property_type) : o.report_type, o.city].filter(Boolean).join(", ")].filter(Boolean).join(" · ");
   const evaluator = opts.evaluator_id ?? accepted?.evaluator_id ?? null;
-  const term = opts.term_days ?? (accepted ? (accepted.accepted_urgent && accepted.urgent_days ? accepted.urgent_days : accepted.term_days) : null);
+  // The urgent delivery the client chose on the offer wins over the term planned per report.
+  const urgentDays = accepted?.accepted_urgent && accepted.urgent_days ? accepted.urgent_days : null;
+  const term = opts.term_days ?? (accepted ? urgentDays ?? accepted.term_days : null);
   const fee = opts.fee ?? (accepted ? offerFee(accepted) : o.fee);
   const several = specs.length > 1;
-  // With several reports each has its own fee; the contract's price is their sum (else the offer / order fee).
+  // With several reports each has its own fee; the contract's price is their sum. An accepted offer's price is what
+  // the client signed: the reports' fees are scaled to it (the last one takes the rounding).
+  if (accepted && fee != null && several && specs.every((x) => x.fee != null)) {
+    const sum = specs.reduce((n, x) => n + (x.fee ?? 0), 0);
+    if (sum > 0 && Math.abs(sum - fee) > 0.005) {
+      let left = fee;
+      specs = specs.map((x, j) => {
+        const v = j === specs.length - 1 ? Math.round(left * 100) / 100 : Math.round(((x.fee ?? 0) * fee / sum) * 100) / 100;
+        left -= v;
+        return { ...x, fee: v };
+      });
+    }
+  }
   const specFees = specs.map((x) => x.fee ?? null);
   const total = several && specFees.some((x) => x != null) ? specFees.reduce<number>((n, x) => n + (x ?? 0), 0) : fee;
-  const insertReport = (id: string, sp: ReportSpec | undefined, reportLabel: string) =>
+  // Several reports opened together keep their order (annex 1.1, 1.2…): each a millisecond after the previous.
+  const at = (j: number) => new Date(Date.parse(t) + j).toISOString();
+  const insertReport = (id: string, sp: ReportSpec | undefined, reportLabel: string, j = 0) =>
     db.prepare(`INSERT INTO reports (id, label, issuer_id, contract_id, order_id, client_id, recipient_id, bank_branch, report_type, valuation_types, purpose, value_type,
         received_on, fee, status, reporting_year, referral_user_id, notes, term_days, due_on, offer_id, opened_by, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'in_progress', ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .bind(id, reportLabel || null, issuer?.id ?? null, o.contract_id, o.id, clientId, recipientId, o.bank_branch, sp?.report_type || o.report_type,
         specs.length ? kindOf(sp?.assets) : "EPI", sp?.purpose || o.purpose,
-        accepted?.value_type ?? null, day, (several ? sp?.fee : null) ?? (several ? null : sp?.fee ?? fee) ?? null, Number(day.slice(0, 4)), o.source === "partner" ? o.created_by : null,
-        opts.notes ?? null, sp?.term_days ?? term ?? null, opts.due_on ?? null, accepted?.id ?? null, actor?.id ?? null, t, t);
+        accepted?.value_type ?? null, day, several ? sp?.fee ?? null : (accepted ? fee : sp?.fee ?? fee) ?? null, Number(day.slice(0, 4)), o.source === "partner" ? o.created_by : null,
+        opts.notes ?? null, urgentDays ?? sp?.term_days ?? term ?? null, opts.due_on ?? null, accepted?.id ?? null, actor?.id ?? null, at(j), at(j));
   const members = (id: string) => [
     ...(evaluator ? [db.prepare("INSERT OR IGNORE INTO report_members (report_id, user_id, role) VALUES (?, ?, 'evaluator')").bind(id, evaluator)] : []),
     ...(opts.verifier_id ? [db.prepare("INSERT OR IGNORE INTO report_members (report_id, user_id, role) VALUES (?, ?, 'verifier')").bind(id, opts.verifier_id)] : []),
@@ -192,7 +241,7 @@ export async function openDossier(db: D1Database, orderId: string, actor: { id: 
     const purposes = [...new Set((several ? specs.map((x) => x.purpose || o.purpose) : [o.purpose]).filter(Boolean))].join(" + ") || null;
     contract = await createClassicContract(db, who, {
       client_id: clientId, fee: total ?? null, purpose: purposes, report_type: s0?.report_type || o.report_type || "Raport de evaluare",
-      valuation_types: list.length ? kindOf(undefined) : category === null && /mobil/i.test(o.report_type ?? "") ? "EBM" : "EPI", signed_on: accepted?.accepted_at?.slice(0, 10) ?? (o.source === "direct" ? o.ordered_on : null) ?? day,
+      valuation_types: list.length ? kindOf(undefined) : category === null && /mobil/i.test(o.report_type ?? "") ? "EBM" : "EPI", signed_on: accepted?.accepted_at ? bucharestDay(accepted.accepted_at) : (o.source === "direct" ? o.ordered_on : null) ?? day,
       notes: accepted ? `Generat la acceptarea ofertei ${accepted.number}.` : "Generat la procesarea comenzii.",
     });
     await db.prepare("UPDATE reports SET contract_id = ? WHERE id = ?").bind(contract.id, reportId).run();
@@ -228,7 +277,7 @@ const linkInput = (property_id: string): AssetInput => ({
  */
 async function placeAssets(db: D1Database, actor: string, p: {
   reportId: string; assetId: string; propertyId: string; label: string; baseLabel: string; specs: ReportSpec[]; list: AssetInput[]; client: { name: string; phone: string };
-  contractId: string | null; insertReport: (id: string, sp: ReportSpec, label: string) => D1PreparedStatement; members: (id: string) => D1PreparedStatement[];
+  contractId: string | null; insertReport: (id: string, sp: ReportSpec, label: string, j?: number) => D1PreparedStatement; members: (id: string) => D1PreparedStatement[];
 }) {
   const withContact = (a: AssetInput): AssetInput => a.contact_kind && a.contact_kind !== "client" && a.contact_name
     ? a : { ...a, contact_kind: "client", contact_name: p.client.name, contact_phone: p.client.phone || null };
@@ -244,7 +293,7 @@ async function placeAssets(db: D1Database, actor: string, p: {
     const rlabel = j === 0 ? p.label : [p.baseLabel, sp.purpose].filter(Boolean).join(" · ");
     if (j > 0) {
       rid = uuid();
-      await db.batch([p.insertReport(rid, sp, rlabel), ...p.members(rid), ...(p.contractId ? [db.prepare("UPDATE reports SET contract_id = ? WHERE id = ?").bind(p.contractId, rid)] : [])]);
+      await db.batch([p.insertReport(rid, sp, rlabel, j), ...p.members(rid), ...(p.contractId ? [db.prepare("UPDATE reports SET contract_id = ? WHERE id = ?").bind(p.contractId, rid)] : [])]);
     }
     let placeholder = j === 0; // the main report starts with the asset made from the order
     const idx = sp.assets.filter((i) => p.list[i]);

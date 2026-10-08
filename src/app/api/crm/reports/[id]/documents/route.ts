@@ -2,6 +2,7 @@ import { audit } from "@/lib/auth";
 import { now, uuid } from "@/lib/db";
 import { err, json, staffApi } from "@/lib/api";
 import { bucket } from "@/lib/orders";
+import { fileType } from "@/lib/file-response";
 import { MAX_FILE_MB } from "@/lib/order-labels";
 
 const OK = /\.(pdf|jpe?g|png|heic|heif|webp|docx?|xlsx?|zip)$/i;
@@ -42,7 +43,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const docId = uuid();
   const safe = file.name.replace(/[^\w.\-() ăâîșțĂÂÎȘȚ]/g, "_").slice(-120) || "document";
   const key = `reports/${id}/${docId}-${safe}`;
-  await r2.put(key, file.stream(), { httpMetadata: { contentType: file.type || "application/octet-stream" }, customMetadata: { report: id, kind } });
+  await r2.put(key, file.stream(), { httpMetadata: { contentType: fileType(safe) }, customMetadata: { report: id, kind } });
 
   const requested = typeof form?.get("doc") === "string" ? (form.get("doc") as string) : "";
   const docType = kind === "source" && ["cf", "rlv", "other"].includes(String(form?.get("doc_type") ?? "")) ? String(form?.get("doc_type")) : null;

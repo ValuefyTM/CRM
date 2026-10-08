@@ -41,7 +41,14 @@ async function clientOf(db: D1Database, actor: string, b: Record<string, unknown
     vat_payer: null, caen: null, notes: null };
   const dup = await findDuplicate(db, v);
   if (dup) {
-    const e = (await db.prepare("SELECT id, name, phone, email FROM entities WHERE id = ?").bind(dup.id).first<{ id: string; name: string; phone: string | null; email: string | null }>())!;
+    const e = (await db.prepare("SELECT id, kind, name, cui, phone, email FROM entities WHERE id = ?").bind(dup.id)
+      .first<{ id: string; kind: string; name: string; cui: string | null; phone: string | null; email: string | null }>())!;
+    // The same client only when the CUI matches or the name is the same: a shared email / phone (an administrator, a
+    // family member) must not put the contract on someone else.
+    const norm = (x: string) => x.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+    const sameCui = !!cui && !!e.cui && e.cui.replace(/^RO/i, "") === cui.replace(/^RO/i, "");
+    if (!sameCui && norm(e.name) !== norm(name))
+      return { ok: false, error: `Emailul / telefonul aparține deja clientului „${e.name}”. Alege-l din „Client existent” sau folosește alte date de contact.` };
     return { ok: true, party: { ...e, phone: e.phone ?? phone, email: e.email ?? email, reused: true } };
   }
   const id = await createClient(db, v, [], actor);
@@ -59,10 +66,13 @@ export async function createDirectWork(db: D1Database, actor: { id: string; name
   if (mode === "accepted" && !evaluator) return { ok: false as const, error: "Alege evaluatorul principal." };
   let contractId: string | null = null;
   if (id_(b.contract_id)) {
-    const k = await db.prepare("SELECT id, client_id FROM contracts WHERE id = ? AND kind = 'classic'").bind(id_(b.contract_id)).first<{ id: string; client_id: string | null }>();
+    const k = await db.prepare("SELECT id, client_id, signed_at FROM contracts WHERE id = ? AND kind = 'classic'").bind(id_(b.contract_id))
+      .first<{ id: string; client_id: string | null; signed_at: string | null }>();
     if (!k) return { ok: false as const, error: "Contractul ales nu există." };
+    if (k.signed_at) return { ok: false as const, error: "Contractul este semnat de client: un raport nou se adaugă printr-un act adițional sau pe un contract nou." };
+    if (k.client_id && id_(b.client_id) && id_(b.client_id) !== k.client_id) return { ok: false as const, error: "Clientul nu este cel al contractului." };
     contractId = k.id;
-    if (k.client_id && !id_(b.client_id)) b = { ...b, client_id: k.client_id };
+    if (k.client_id) b = { ...b, client_id: k.client_id };
   }
   const who = await clientOf(db, actor.id, b);
   if (!who.ok) return who;
@@ -73,6 +83,14 @@ export async function createDirectWork(db: D1Database, actor: { id: string; name
   // properties already valued in this contract (`shared`, inspected in their first report).
   const specs = parseSpecs(b.reports, assets.length);
   if (!specs.ok) return specs;
+  // Properties "already in the contract" must really be in this contract's reports.
+  const shared = [...new Set(specs.list.flatMap((x) => x.shared ?? []))];
+  if (shared.length) {
+    if (!contractId) return { ok: false as const, error: "Bunurile din contract se aleg doar pe un contract existent." };
+    const inside = new Set((await db.prepare(`SELECT DISTINCT a.property_id AS id FROM assets a JOIN reports r ON r.id = a.report_id WHERE r.contract_id = ? AND r.status <> 'cancelled'`)
+      .bind(contractId).all<{ id: string }>()).results.map((x) => x.id));
+    if (shared.some((x) => !inside.has(x))) return { ok: false as const, error: "Un bun ales nu face parte din acest contract." };
+  }
   // A report of only properties already in the contract: the order takes its place from the first of them.
   const firstShared = specs.list.find((x) => x.shared?.length)?.shared?.[0];
   const sharedProp = !assets[0] && firstShared
@@ -125,7 +143,7 @@ function parseSpecs(raw: unknown, assets: number): { ok: true; list: ReportSpec[
     list.push({ purpose: str(r.purpose, 120) || null, report_type: str(r.report_type, 120) || null, fee: amount(r.fee), term_days: Number.isInteger(term) && term > 0 && term < 200 ? term : null,
       assets: [...new Set(idx)], shared });
   }
-  if (arr.length > 1 && used.size < assets) return { ok: false, error: "Fiecare bun trebuie să fie în cel puțin un raport." };
+  if (used.size < assets) return { ok: false, error: "Fiecare bun trebuie să fie în cel puțin un raport." };
   const fees = list.map((x) => x.fee);
   return { ok: true, list, total: fees.some((x) => x != null) ? fees.reduce<number>((a, x) => a + (x ?? 0), 0) : null };
 }

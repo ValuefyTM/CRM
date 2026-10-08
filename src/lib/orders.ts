@@ -4,6 +4,7 @@ import { now, uuid } from "./db";
 import { validEmail } from "./crypto";
 import { AREA_FIELDS, BANKS, DOCS, MAX_FILE_MB, PROPERTY_TYPES, PURPOSES, type PropertyType } from "./order-labels";
 import type { User } from "./users";
+import { fileHeaders, fileType } from "./file-response";
 
 export * from "./order-labels";
 
@@ -173,7 +174,6 @@ export async function bucket(): Promise<R2Bucket | null> {
   }
 }
 
-const OK_TYPES = /^(application\/pdf|image\/(jpeg|png|heic|heif|webp)|application\/msword|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document)$/;
 const OK_EXT = /\.(pdf|jpe?g|png|heic|heif|webp|docx?)$/i;
 
 /** Stores one uploaded file for an order and updates the "documents missing" flag. */
@@ -182,15 +182,16 @@ export async function addDocument(db: D1Database, order: { id: string; seq: numb
   if (!r2) return { ok: false as const, error: "Încărcarea documentelor nu este disponibilă momentan. Trimite-le pe email la contact@valuefy.ro." };
   if (!file.size) return { ok: false as const, error: "Fișierul este gol." };
   if (file.size > MAX_FILE_MB * 1024 * 1024) return { ok: false as const, error: `Fișierul „${file.name}” depășește ${MAX_FILE_MB} MB.` };
-  if (!OK_TYPES.test(file.type) && !OK_EXT.test(file.name)) return { ok: false as const, error: `„${file.name}”: acceptăm PDF, imagini (JPG, PNG, HEIC) și Word.` };
+  // The extension decides (the type a browser claims is not trusted): it is also what the file is served as.
+  if (!OK_EXT.test(file.name)) return { ok: false as const, error: `„${file.name}”: acceptăm PDF, imagini (JPG, PNG, HEIC) și Word.` };
   const validKind = kind === "other" || DOCS[order.property_type].some((d) => d.key === kind) ? kind : "other";
   const id = uuid();
   const safeName = file.name.replace(/[^\w.\-() ăâîșțĂÂÎȘȚ]/g, "_").slice(-120) || "document";
   const key = `orders/${order.id}/${id}-${safeName}`;
-  await r2.put(key, file.stream(), { httpMetadata: { contentType: file.type || "application/octet-stream" }, customMetadata: { order: `CO-${order.seq}`, kind: validKind } });
+  await r2.put(key, file.stream(), { httpMetadata: { contentType: fileType(safeName) }, customMetadata: { order: `CO-${order.seq}`, kind: validKind } });
   await db
     .prepare("INSERT INTO order_documents (id, order_id, kind, filename, content_type, size_bytes, r2_key, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(id, order.id, validKind, safeName, file.type || null, file.size, key, userId)
+    .bind(id, order.id, validKind, safeName, fileType(safeName), file.size, key, userId)
     .run();
   const missing = missingDocs(order.property_type, await orderDocuments(db, order.id)).length > 0;
   await db.prepare("UPDATE orders SET docs_missing = ?, updated_at = ? WHERE id = ?").bind(missing ? 1 : 0, now(), order.id).run();
@@ -202,15 +203,7 @@ export async function documentResponse(doc: OrderDocument) {
   const r2 = await bucket();
   const obj = r2 ? await r2.get(doc.r2_key) : null;
   if (!obj) return new Response("Documentul nu a fost găsit.", { status: 404 });
-  const inline = /^(application\/pdf|image\/)/.test(doc.content_type ?? "");
-  return new Response(obj.body, {
-    headers: {
-      "Content-Type": doc.content_type || "application/octet-stream",
-      "Content-Disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(doc.filename)}`,
-      "Cache-Control": "private, no-store",
-      "X-Content-Type-Options": "nosniff",
-    },
-  });
+  return new Response(obj.body, { headers: fileHeaders(doc.filename) });
 }
 
 export const fmtSize = (b: number) => (b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))} KB` : `${(b / 1024 / 1024).toFixed(1).replace(".", ",")} MB`);

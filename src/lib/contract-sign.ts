@@ -39,6 +39,14 @@ export function billingMissing(d: ContractDocData) {
   return miss;
 }
 
+/** The document as the client sees it now, and its fingerprint: signing is refused if it changed since the page was shown. */
+export async function currentVersion(db: D1Database, id: string) {
+  const [doc, firm] = await Promise.all([contractDoc(db, id), getFirmWithImages(db)]);
+  if (!doc) return null;
+  const snapshot = JSON.stringify({ doc, firm });
+  return { doc, firm, snapshot, hash: await sha256(snapshot) };
+}
+
 /** Sends (or sends again) the signing link to the client. Contracts already signed cannot be sent. */
 export async function sendForSignature(db: D1Database, actor: string, id: string, to: string) {
   const k = await signContractById(db, id);
@@ -82,12 +90,19 @@ export async function saveBilling(db: D1Database, k: SignContract, b: Record<str
   const cui = s("cui", 20).toUpperCase().replace(/\s/g, ""), reg = s("reg_no", 40).toUpperCase(), rep = s("rep", 120), role = s("rep_role", 60);
   if (company && (!cui || !reg || !rep)) return { ok: false as const, error: "Completează CUI-ul, nr. de înregistrare și reprezentantul legal." };
   const t = now();
-  await db.prepare("UPDATE entities SET billing_address = ?, city = ?, county = COALESCE(NULLIF(?, ''), county), cui = COALESCE(NULLIF(?, ''), cui), reg_no = COALESCE(NULLIF(?, ''), reg_no), updated_at = ? WHERE id = ?")
+  // The link only fills what the client record lacks: a CUI or registration number already known is never replaced
+  // from a public page (the team changes those in the CRM).
+  await db.prepare(`UPDATE entities SET billing_address = ?, city = ?, county = COALESCE(NULLIF(?, ''), county),
+      cui = CASE WHEN cui IS NULL OR cui = '' THEN NULLIF(?, '') ELSE cui END, reg_no = CASE WHEN reg_no IS NULL OR reg_no = '' THEN NULLIF(?, '') ELSE reg_no END, updated_at = ? WHERE id = ?`)
     .bind(address, city, county, cui, reg, t, k.client_id).run();
   if (company && rep) {
-    const c = await db.prepare("SELECT id FROM entity_contacts WHERE entity_id = ? ORDER BY is_primary DESC, created_at LIMIT 1").bind(k.client_id).first<{ id: string }>();
-    if (c) await db.prepare("UPDATE entity_contacts SET name = ?, role = COALESCE(NULLIF(?, ''), role), is_primary = 1 WHERE id = ?").bind(rep, role, c.id).run();
-    else await db.prepare("INSERT INTO entity_contacts (id, entity_id, name, role, is_primary, created_at) VALUES (?, ?, ?, ?, 1, ?)").bind(crypto.randomUUID(), k.client_id, rep, role || "Administrator", t).run();
+    // The legal representative is its own contact person: an existing contact (e.g. the accountant) is not renamed.
+    const same = await db.prepare("SELECT id FROM entity_contacts WHERE entity_id = ? AND lower(trim(name)) = lower(trim(?)) LIMIT 1").bind(k.client_id, rep).first<{ id: string }>();
+    await db.batch([
+      db.prepare("UPDATE entity_contacts SET is_primary = 0 WHERE entity_id = ?").bind(k.client_id),
+      same ? db.prepare("UPDATE entity_contacts SET is_primary = 1, role = COALESCE(NULLIF(?, ''), role) WHERE id = ?").bind(role, same.id)
+        : db.prepare("INSERT INTO entity_contacts (id, entity_id, name, role, is_primary, created_at) VALUES (?, ?, ?, ?, 1, ?)").bind(crypto.randomUUID(), k.client_id, rep, role || "Administrator", t),
+    ]);
   }
   await audit(db, "client:contract", "client.update", "client", k.client_id, `date de facturare completate la semnarea contractului ${k.number ?? ""}`);
   return { ok: true as const };
@@ -97,14 +112,15 @@ export async function saveBilling(db: D1Database, k: SignContract, b: Record<str
  * Signs the contract: the document as shown (contract, client, terms, VALUEFY's details and seal) is frozen into a
  * snapshot with its hash, next to the client's name, drawn signature, IP and browser.
  */
-export async function signContract(db: D1Database, k: SignContract, v: { name: string; signature: string }, ip: string | null, ua: string) {
+export async function signContract(db: D1Database, k: SignContract, v: { name: string; signature: string; version: string }, ip: string | null, ua: string) {
   if (k.signed_at) return { ok: false as const, error: "Contractul este deja semnat." };
-  const [doc, firm] = await Promise.all([contractDoc(db, k.id), getFirmWithImages(db)]);
-  if (!doc) return { ok: false as const, error: "Contractul nu există." };
-  const missing = billingMissing(doc);
+  const cur = await currentVersion(db, k.id);
+  if (!cur) return { ok: false as const, error: "Contractul nu există." };
+  const missing = billingMissing(cur.doc);
   if (missing.length) return { ok: false as const, error: `Completează întâi: ${missing.join(", ")}.` };
-  const snapshot = JSON.stringify({ doc, firm });
-  const hash = await sha256(snapshot);
+  // What is signed must be what was read: if the team changed the contract meanwhile, the client reloads it first.
+  if (v.version !== cur.hash) return { ok: false as const, error: "Contractul a fost actualizat între timp. Reîncarcă pagina, citește varianta nouă și semnează din nou." };
+  const { snapshot, hash } = cur;
   const at = now();
   const res = await db.prepare(`UPDATE contracts SET signed_at = ?, signed_name = ?, signed_signature = ?, signed_ip = ?, signed_ua = ?, signed_hash = ?, signed_snapshot = ?, updated_at = ?
       WHERE id = ? AND signed_at IS NULL`).bind(at, v.name, v.signature, ip, ua.slice(0, 300), hash, snapshot, at, k.id).run();

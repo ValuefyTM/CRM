@@ -1,4 +1,5 @@
 import { bucket } from "@/lib/orders";
+import { fileHeaders } from "@/lib/file-response";
 import { inspApi, myInspection } from "@/lib/insp";
 import { assetDocs } from "@/lib/insp-docs";
 
@@ -16,10 +17,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   }
   const doc = (await assetDocs(a.db, ins.report_id, assets)).find((d) => d.ref === decodeURIComponent(ref));
   if (!doc) return new Response("Nu există.", { status: 404 });
-  const headers = (type: string | null) => ({
-    "Content-Type": type || "application/octet-stream", "Cache-Control": "private, max-age=604800", "X-Content-Type-Options": "nosniff",
-    "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(doc.name)}`,
-  });
+  // Served by the file name's extension, whatever type was stored or sent by Glide.
+  const headers = (_type: string | null) => fileHeaders(/\.\w{2,5}$/.test(doc.name) ? doc.name : `${doc.name}.pdf`, "private, max-age=604800");
   if (doc.key) {
     const obj = await (await bucket())?.get(doc.key);
     if (!obj) return new Response("Fișierul nu a fost găsit.", { status: 404 });

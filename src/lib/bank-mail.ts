@@ -31,7 +31,10 @@ function bankLink(html: string | null, domain: RegExp) {
   if (!html) return null;
   for (const m of html.matchAll(/href\s*=\s*["']([^"']+)["']/gi)) {
     const u = m[1].replace(/&amp;/g, "&");
-    if (/^https?:\/\//i.test(u) && domain.test(u) && !/unsubscribe|facebook|linkedin|instagram|twitter|youtube|mailto:/i.test(u)) return u;
+    // The bank's domain must be the link's own host (not just anywhere in the URL, e.g. evil.tld/?bcr.ro).
+    let host = "";
+    try { host = new URL(u).hostname; } catch { continue; }
+    if (/^https:\/\//i.test(u) && domain.test(host) && !/unsubscribe|facebook|linkedin|instagram|twitter|youtube/i.test(u)) return u;
   }
   return null;
 }
@@ -51,7 +54,7 @@ export function parseBankEmail(m: { from?: string | null; subject?: string | nul
   if (bcr) {
     const client = flat.match(/Numele clientului:\s*(.+?)(?=\s+(?:Codul cererii|ID de cerere|V[ăa] rug[ăa]m|Link)\b|$)/i)?.[1] ?? null;
     const type = flat.match(/Codul cererii:\s*(.+?)(?=\s+(?:ID de cerere|Numele clientului|V[ăa] rug[ăa]m|Link)\b|$)/i)?.[1] ?? null;
-    return { bank: "BCR", ref: bcr[1].toUpperCase(), client: client ? nameCase(client) : null, requestType: type?.trim() || null, link: bankLink(m.html ?? null, /bcr\.ro/i) };
+    return { bank: "BCR", ref: bcr[1].toUpperCase(), client: client ? nameCase(client) : null, requestType: type?.trim() || null, link: bankLink(m.html ?? null, /(^|\.)bcr\.ro$/i) };
   }
   // BRD — "evaluari REV2610070090, client ALIN BOGDAN."
   const brd = flat.match(/evalu[aă]ri(?:i)?\s+(REV\d{6,})\s*,?\s*client\s+(.+?)(?:\.\s|\.$|\s+V[aă] rug[aă]m|$)/i)
@@ -59,7 +62,7 @@ export function parseBankEmail(m: { from?: string | null; subject?: string | nul
     ?? (from.includes("brd.ro") ? flat.match(/\b(REV\d{6,})\b()/) : null);
   if (brd) {
     const client = brd[2] || flat.match(/client\s+([A-ZĂÂÎȘȚŞŢ][A-ZĂÂÎȘȚŞŢa-zăâîșțşţ.\- ]{2,80}?)(?:\.|,|\s+V[aă] rug[aă]m|$)/)?.[1] || null;
-    return { bank: "BRD", ref: brd[1].toUpperCase(), client: client ? nameCase(client) : null, requestType: null, link: bankLink(m.html ?? null, /brd\.ro/i) };
+    return { bank: "BRD", ref: brd[1].toUpperCase(), client: client ? nameCase(client) : null, requestType: null, link: bankLink(m.html ?? null, /(^|\.)brd\.ro$/i) };
   }
   return null;
 }

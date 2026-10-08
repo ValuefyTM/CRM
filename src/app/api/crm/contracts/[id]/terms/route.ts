@@ -1,6 +1,6 @@
 import { err, json, staffApi } from "@/lib/api";
 import { audit } from "@/lib/auth";
-import { now } from "@/lib/db";
+import { now, parseJson } from "@/lib/db";
 import { cleanTerms, PAYMENT_FIELDS, REPORT_FIELDS } from "@/lib/contract-terms";
 
 /** Saves the terms of reference / payment terms of a contract (empty fields fall back to the defaults). */
@@ -22,7 +22,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (!r) return err("Raportul nu aparține acestui contract.");
     // A single-report contract may hold report fields on the contract (older saves): they move to the report.
     const old = await a.db.prepare("SELECT terms FROM contracts WHERE id = ?").bind(id).first<{ terms: string | null }>();
-    const kept = old?.terms ? Object.fromEntries(Object.entries(cleanTerms(JSON.parse(old.terms))).filter(([k, v]) => v !== undefined && (PAYMENT_FIELDS as readonly string[]).includes(k))) : {};
+    const kept = old?.terms ? Object.fromEntries(Object.entries(cleanTerms(parseJson(old.terms, {}))).filter(([k, v]) => v !== undefined && (PAYMENT_FIELDS as readonly string[]).includes(k))) : {};
     await a.db.batch([
       a.db.prepare("UPDATE reports SET terms = ?, updated_at = ? WHERE id = ?").bind(value, now(), report),
       a.db.prepare("UPDATE contracts SET terms = ?, updated_at = ? WHERE id = ?").bind(Object.keys(kept).length ? JSON.stringify(kept) : null, now(), id),
@@ -30,7 +30,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     await audit(a.db, `user:${a.user.id}`, "contract.terms", "contract", id, `termeni de referință · ${r.label ?? "raport"}`);
   } else {
     const old = await a.db.prepare("SELECT terms FROM contracts WHERE id = ?").bind(id).first<{ terms: string | null }>();
-    const kept = old?.terms ? Object.fromEntries(Object.entries(cleanTerms(JSON.parse(old.terms))).filter(([k, v]) => v !== undefined && !(PAYMENT_FIELDS as readonly string[]).includes(k))) : {};
+    const kept = old?.terms ? Object.fromEntries(Object.entries(cleanTerms(parseJson(old.terms, {}))).filter(([k, v]) => v !== undefined && !(PAYMENT_FIELDS as readonly string[]).includes(k))) : {};
     const merged = { ...kept, ...set };
     await a.db.prepare("UPDATE contracts SET terms = ?, updated_at = ? WHERE id = ?").bind(Object.keys(merged).length ? JSON.stringify(merged) : null, now(), id).run();
     await audit(a.db, `user:${a.user.id}`, "contract.terms", "contract", id, "condiții de plată");

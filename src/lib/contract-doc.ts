@@ -2,6 +2,7 @@
 // assets valued and the terms of reference, with their defaults filled in from the report and the accepted offer),
 // plus the prices and payment terms of Annex 2.
 import { capType } from "./asset-labels";
+import { parseJson } from "./db";
 import {
   cleanTerms, defaultDeliverable, defaultSources, defaultValueType, DEFAULT_LIMITATIONS, DEFAULT_PAYMENT_WHEN, DEFAULT_TRANCHES, PAYMENT_FIELDS, REPORT_FIELDS,
   type ContractTerms,
@@ -26,15 +27,15 @@ export async function contractDoc(db: D1Database, id: string) {
   if (!k) return null;
   const [reports, assets] = await Promise.all([
     db.prepare(`SELECT r.id, r.number, r.label, r.purpose, r.report_type, r.fee, r.term_days, r.terms, b.name AS recipient, f.value_type, f.term_days AS offer_term, f.payment_terms
-        FROM reports r LEFT JOIN entities b ON b.id = r.recipient_id LEFT JOIN offers f ON f.id = r.offer_id WHERE r.contract_id = ? AND r.status <> 'cancelled' ORDER BY r.created_at`).bind(id)
+        FROM reports r LEFT JOIN entities b ON b.id = r.recipient_id LEFT JOIN offers f ON f.id = r.offer_id WHERE r.contract_id = ? AND r.status <> 'cancelled' ORDER BY r.created_at, r.rowid`).bind(id)
       .all<{ id: string; number: string | null; label: string | null; purpose: string | null; report_type: string | null; fee: number | null; term_days: number | null; terms: string | null;
         recipient: string | null; value_type: string | null; offer_term: number | null; payment_terms: string | null }>(),
     db.prepare(`SELECT a.report_id, a.no_inspection, p.category, p.type, p.cf_number, p.cad_building, p.cad_land, p.full_address, p.city FROM assets a JOIN reports r ON r.id = a.report_id
-        JOIN crm_properties p ON p.id = a.property_id WHERE r.contract_id = ? ORDER BY r.created_at, a.is_main DESC`).bind(id)
+        JOIN crm_properties p ON p.id = a.property_id WHERE r.contract_id = ? ORDER BY r.created_at, r.rowid, a.is_main DESC`).bind(id)
       .all<{ report_id: string; no_inspection: string | null; category: string | null; type: string | null; cf_number: string | null; cad_building: string | null; cad_land: string | null;
         full_address: string | null; city: string | null }>(),
   ]);
-  const contractTerms = cleanTerms(k.terms ? JSON.parse(k.terms) : {});
+  const contractTerms = cleanTerms(parseJson(k.terms, {}));
   const one = reports.results.length <= 1;
   // Without reports yet (the offer is not accepted), one annex from the contract itself.
   const list = reports.results.length ? reports.results
@@ -60,13 +61,14 @@ export async function contractDoc(db: D1Database, id: string) {
       deliverable: defaultDeliverable(r.report_type ?? k.report_type),
       nop_inspection: true,
       reports: 1,
-      term_days: r.offer_term ?? r.term_days ?? 3,
+      // The report's own term (the urgent one when the client chose it), else the offer's.
+      term_days: r.term_days ?? r.offer_term ?? 3,
       limitations: DEFAULT_LIMITATIONS,
       special: "Nu este cazul.",
       sources: defaultSources(purpose, movableOnly),
     };
     // A single-report contract may still carry its terms on the contract (saved before reports had their own).
-    const saved = { ...(one ? pick<ReportTerms>(contractTerms, REPORT_FIELDS) : {}), ...pick<ReportTerms>(cleanTerms(r.terms ? JSON.parse(r.terms) : {}), REPORT_FIELDS) };
+    const saved = { ...(one ? pick<ReportTerms>(contractTerms, REPORT_FIELDS) : {}), ...pick<ReportTerms>(cleanTerms(parseJson(r.terms, {})), REPORT_FIELDS) };
     return {
       n: n + 1, reportId: r.id || null, number: r.number, label: r.label, purpose, reportType: r.report_type ?? k.report_type, fee: r.fee,
       assets: docAssets, terms: { ...defaults, ...saved } as ReportTerms, defaults, saved,

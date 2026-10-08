@@ -19,7 +19,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
     partnerId: u.partner_id, partnerName: u.partner_name, engagement: u.engagement, anevar: u.anevar_no, specs: u.specializations,
     company: u.company, clientType: clientTypeLabel(u.client_type), city: u.city, lastLogin: fmtDate(u.last_login_at, true), isMe: u.id === user.id,
     ...presenceOf(u.id === user.id ? new Date().toISOString() : u.last_seen_at), photo: photoUrl(u.id, u.avatar_at),
-    canEdit: canManageUser(user, u), canDelete: u.id !== user.id && canManageUser(user, u) && (u.kind !== "internal" || isAdmin(user)),
+    canEdit: canManageUser(user, u), canDelete: u.id !== user.id && canManageUser(user, u) && isAdmin(user),
   }));
   const firms = partners.map((p) => ({
     id: p.id, name: p.name, kind: p.kind, kindLabel: kindLabel(p.kind), city: p.city, cui: p.cui, status: p.status,

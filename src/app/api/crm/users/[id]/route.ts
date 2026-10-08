@@ -25,6 +25,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     // Nobody changes their own role; administrators may still tick their own duties (e.g. an owner who also inspects).
     if (self) Object.assign(v.value, { role: u.role, engagement: u.engagement, ...(isAdmin(a.user) ? {} : { duties: u.duties }) });
     if (u.kind === "partner" && !(await getPartner(a.db, v.value.partner_id!))) return err("Firma aleasă nu există.");
+    // A portal account's email (its sign-in) and firm (which orders it sees) are changed only by administrators:
+    // otherwise any team member could take the account over.
+    if (u.kind !== "internal" && !isAdmin(a.user) && (v.value.email !== u.email || (u.kind === "partner" && v.value.partner_id !== u.partner_id)))
+      return err("Doar un administrator poate schimba emailul sau firma unui cont din portal.", 403);
     const r = await updateUser(a.db, u, v.value);
     if (!r.ok) return err(r.error, 409);
     const changed = [v.value.role !== u.role && `rol: ${v.value.role}`, (v.value.duties ?? "") !== (u.duties ?? "") && `atribuții: ${v.value.duties ?? "—"}`].filter(Boolean).join(" · ");
@@ -36,6 +40,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (u.status === "active" && u.kind !== "internal") return err("Contul este deja activ.");
     return NextResponse.json({ ok: true, sent: await sendInvite(a.db, id, actor) });
   }
+  if ((b.action === "disable" || b.action === "enable") && u.kind !== "internal" && !isAdmin(a.user))
+    return err("Doar un administrator poate dezactiva sau reactiva conturile din portal.", 403);
   if (b.action === "disable") {
     if (self) return err("Nu îți poți dezactiva propriul cont.");
     if (u.role === "owner" && u.kind === "internal") return err("Contul de proprietar nu poate fi dezactivat.", 403);
@@ -61,7 +67,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
   const u = await getUser(a.db, id);
   if (!u || u.status === "deleted") return err("Utilizatorul nu există.", 404);
   if (u.id === a.user.id) return err("Nu îți poți șterge propriul cont.");
-  if (!canManageUser(a.user, u) || (u.kind === "internal" && !isAdmin(a.user))) return err("Nu ai drepturi să ștergi acest cont.", 403);
+  if (!canManageUser(a.user, u) || !isAdmin(a.user)) return err("Doar un administrator poate șterge conturi.", 403);
   if (u.kind === "internal" && u.role === "owner") {
     const owners = await a.db.prepare("SELECT COUNT(*) AS n FROM users WHERE kind = 'internal' AND role = 'owner' AND status = 'active'").first<{ n: number }>();
     if ((owners?.n ?? 0) <= 1) return err("Este singurul proprietar activ: nu poate fi șters.");

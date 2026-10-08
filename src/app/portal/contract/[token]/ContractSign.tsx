@@ -54,7 +54,7 @@ export function BillingForm({ token, company, initial, name }: { token: string; 
 }
 
 /** Name, drawn signature and agreement; signing freezes the contract as shown. */
-export function ContractSignForm({ token, number, defaultName }: { token: string; number: string; defaultName: string }) {
+export function ContractSignForm({ token, version, number, defaultName }: { token: string; version: string; number: string; defaultName: string }) {
   const [name, setName] = useState(defaultName);
   const [sig, setSig] = useState("");
   const [agree, setAgree] = useState(false);
@@ -71,7 +71,7 @@ export function ContractSignForm({ token, number, defaultName }: { token: string
         if (!sig) return setMsg("Semnează în chenar.");
         if (!agree) return setMsg("Bifează că ai citit și accepți contractul.");
         setBusy(true); setMsg("");
-        const err = await post(token, { action: "sign", name, signature: sig, agree });
+        const err = await post(token, { action: "sign", name, signature: sig, agree, version });
         setBusy(false);
         if (err) return setMsg(err);
         location.reload();

@@ -1,7 +1,7 @@
 // Server-only: the contracts of VALUEFY. Classic: one client, one piece of work (the report, sometimes several) — made
 // automatically when a report opens from an order of the portal, the website or direct work. Framework: an agreement
 // with a bank and its standard fees; the bank's orders are worked under it and invoiced on the monthly statement.
-import { now, uuid } from "./db";
+import { bucharestDay, now, uuid } from "./db";
 import { audit } from "./auth";
 import { fileSrc } from "./files";
 
@@ -48,7 +48,7 @@ export async function createClassicContract(db: D1Database, actor: string, v: Cl
   await db.prepare(`INSERT INTO contracts (id, kind, number, signed_on, client_id, currency, fee, services, valuation_types, report_type, purpose, notes, created_at, updated_at)
       SELECT ?, 'classic', CAST(COALESCE(MAX(CAST(number AS INTEGER)), 0) + 1 AS TEXT), ?, ?, 'RON', ?, 'SERVICII DE EVALUARE', ?, ?, ?, ?, ?, ?
       FROM contracts WHERE kind = 'classic'`)
-    .bind(id, v.signed_on ?? t.slice(0, 10), v.client_id, v.fee, v.valuation_types ?? "EPI", v.report_type ?? "Raport de evaluare", v.purpose, v.notes ?? null, t, t).run();
+    .bind(id, v.signed_on ?? bucharestDay(t), v.client_id, v.fee, v.valuation_types ?? "EPI", v.report_type ?? "Raport de evaluare", v.purpose, v.notes ?? null, t, t).run();
   const c = (await db.prepare("SELECT number FROM contracts WHERE id = ?").bind(id).first<{ number: string }>())!;
   await audit(db, actor, "contract.create", "contract", id, `clasic nr. ${c.number}`);
   return { id, number: c.number };
@@ -94,7 +94,7 @@ function where(f: ContractFilters) {
 export async function listContracts(db: D1Database, f: ContractFilters) {
   const { sql, args } = where(f);
   const page = Math.max(1, f.page ?? 1);
-  const month = now().slice(0, 7);
+  const month = bucharestDay().slice(0, 7);
   const [rows, total] = await Promise.all([
     db.prepare(`SELECT k.id, k.glide_id, k.kind, k.number, k.signed_on, k.client_id, k.currency, k.fee, k.services, k.valuation_types, k.report_type, k.purpose, k.notes, k.created_at, k.updated_at, k.sign_sent_at, k.signed_at, e.name AS client, e.kind AS client_kind,
         (SELECT COUNT(*) FROM reports r WHERE r.contract_id = k.id) AS reports,
@@ -113,7 +113,7 @@ export async function listContracts(db: D1Database, f: ContractFilters) {
 
 /** Numbers for the cards at the top of the page. */
 export async function contractStats(db: D1Database) {
-  const t = now();
+  const t = bucharestDay();
   const year = t.slice(0, 4), month = t.slice(0, 7);
   const [s, years] = await Promise.all([
     db.prepare(`SELECT SUM(kind = 'classic' AND substr(signed_on, 1, 4) = ?1) AS year, SUM(kind = 'classic' AND substr(signed_on, 1, 7) = ?2) AS month,
@@ -151,7 +151,7 @@ export async function getContract(db: D1Database, id: string) {
           FROM assets a JOIN crm_properties p ON p.id = a.property_id WHERE a.report_id = r.id ORDER BY a.is_main DESC LIMIT 1) AS photo
       FROM reports r WHERE r.contract_id = ? ORDER BY COALESCE(r.received_on, r.created_at) DESC LIMIT 40`).bind(id).all<ContractReport>(),
     db.prepare(`SELECT COUNT(*) AS n, SUM(${OPEN}) AS open, SUM(${DONE}) AS done, SUM(r.fee) AS fees, SUM(substr(COALESCE(r.received_on, r.created_at), 1, 7) = ?) AS month
-      FROM reports r WHERE r.contract_id = ?`).bind(now().slice(0, 7), id)
+      FROM reports r WHERE r.contract_id = ? AND r.status <> 'cancelled'`).bind(bucharestDay().slice(0, 7), id)
       .first<{ n: number; open: number | null; done: number | null; fees: number | null; month: number | null }>(),
     // The order the contract came from (direct work, portal, website) and its accepted offer.
     db.prepare(`SELECT o.id, o.source, o.seq, f.number AS offer_number, f.accepted_at FROM reports r JOIN orders o ON o.id = r.order_id
@@ -174,13 +174,14 @@ export async function bankChoices(db: D1Database) {
  * has its own Annex 1). Kept in step whenever a report is added to it.
  */
 export async function refreshClassicContract(db: D1Database, id: string) {
-  const k = await db.prepare("SELECT kind FROM contracts WHERE id = ?").bind(id).first<{ kind: string }>();
-  if (k?.kind !== "classic") return;
+  const k = await db.prepare("SELECT kind, signed_at FROM contracts WHERE id = ?").bind(id).first<{ kind: string; signed_at: string | null }>();
+  if (k?.kind !== "classic" || k.signed_at) return; // a signed contract changes only by an addendum
   const { results } = await db.prepare("SELECT purpose, fee FROM reports WHERE contract_id = ? AND status <> 'cancelled' ORDER BY created_at").bind(id)
     .all<{ purpose: string | null; fee: number | null }>();
   if (results.length < 2) return;
   const purpose = [...new Set(results.map((r) => r.purpose).filter(Boolean))].join(" + ") || null;
   const fees = results.map((r) => r.fee);
+  // The price is the sum only when every report has its fee (a missing one is not counted as 0).
   await db.prepare("UPDATE contracts SET purpose = COALESCE(?, purpose), fee = CASE WHEN ? THEN ? ELSE fee END, updated_at = ? WHERE id = ?")
-    .bind(purpose, fees.some((f) => f != null) ? 1 : 0, fees.reduce<number>((s, f) => s + (f ?? 0), 0), now(), id).run();
+    .bind(purpose, fees.every((f) => f != null) ? 1 : 0, fees.reduce<number>((s, f) => s + (f ?? 0), 0), now(), id).run();
 }

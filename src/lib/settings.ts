@@ -80,7 +80,8 @@ export async function saveFirmImage(db: D1Database, actor: string, which: "stamp
     return { ok: true as const };
   }
   if (!/^image\/(png|jpeg|webp)$/.test(file.type)) return { ok: false as const, error: "Încarcă o imagine PNG (de preferat cu fundal transparent), JPG sau WEBP." };
-  if (file.size > 1024 * 1024) return { ok: false as const, error: "Imaginea depășește 1 MB." };
+  // Small: the images go into every signed contract (database rows are limited to ~2 MB).
+  if (file.size > 300 * 1024) return { ok: false as const, error: "Imaginea depășește 300 KB. Folosește un PNG mai mic (ex. 600 px lățime)." };
   await r2.put(IMG[which], file.stream(), { httpMetadata: { contentType: file.type } });
   await audit(db, `user:${actor}`, "settings.image", "settings", "firm", `${label} înlocuită`);
   return { ok: true as const };

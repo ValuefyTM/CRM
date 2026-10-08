@@ -1,5 +1,6 @@
 import { staffApi } from "@/lib/api";
 import { bucket } from "@/lib/orders";
+import { fileHeaders } from "@/lib/file-response";
 
 /** Opens a report document (inline for PDFs and images). */
 export async function GET(_: Request, { params }: { params: Promise<{ id: string; doc: string }> }) {
@@ -10,12 +11,5 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     .first<{ filename: string; content_type: string | null; r2_key: string | null }>();
   const obj = d?.r2_key ? await (await bucket())?.get(d.r2_key) : null;
   if (!d || !obj) return new Response("Documentul nu a fost găsit.", { status: 404 });
-  const inline = /^(application\/pdf|image\/)/.test(d.content_type ?? "");
-  return new Response(obj.body, {
-    headers: {
-      "Content-Type": d.content_type || "application/octet-stream",
-      "Content-Disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(d.filename)}`,
-      "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff",
-    },
-  });
+  return new Response(obj.body, { headers: fileHeaders(d.filename) });
 }

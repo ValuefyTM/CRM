@@ -1,6 +1,7 @@
 import { getDb } from "@/lib/db";
 import { currentUser } from "@/lib/auth";
 import { bucket } from "@/lib/orders";
+import { fileHeaders } from "@/lib/file-response";
 
 /** Files moved from Glide (photos, logos) and inspection photos / signatures, for the team only. */
 export async function GET(_: Request, { params }: { params: Promise<{ key: string[] }> }) {
@@ -11,6 +12,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ key: strin
   const obj = await (await bucket())?.get(key);
   if (!obj) return new Response("Fișierul nu a fost găsit.", { status: 404 });
   return new Response(obj.body, {
-    headers: { "Content-Type": obj.httpMetadata?.contentType ?? "application/octet-stream", "Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff" },
+    headers: fileHeaders(key, "private, max-age=86400"),
   });
 }
