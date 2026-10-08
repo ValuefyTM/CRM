@@ -5,6 +5,7 @@ import { CLIENT_KINDS, CLIENT_PAGE, clientCounts, kindName, listClients } from "
 import { STATUS_LABEL } from "@/lib/labels";
 import { CrmShell } from "@/components/CrmShell";
 import { ClientFilters } from "./ClientFilters";
+import { ClickRow } from "@/components/ClickRow";
 
 export const metadata: Metadata = { title: "Clienți | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -34,7 +35,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                 {data.rows.map((c) => {
                   const [pl, pc] = c.portal ? STATUS_LABEL[c.portal] ?? [c.portal, ""] : ["—", ""];
                   return (
-                    <tr key={c.id}>
+                    <ClickRow key={c.id} href={`${base}/clienti/${c.id}`}>
                       <td><a className="rowLink" href={`${base}/clienti/${c.id}`}>{niceName(c.name)}</a><div className="muted">{[c.cui && `CUI ${c.cui}`, c.email].filter(Boolean).join(" · ")}</div></td>
                       <td>{kindName(c.kind)}</td>
                       <td style={{ whiteSpace: "nowrap" }}>{c.phone ?? <span className="muted">—</span>}</td>
@@ -42,7 +43,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                       <td style={{ textAlign: "right" }}>{c.reports || <span className="muted">—</span>}</td>
                       <td className="muted">{c.last_report ? fmtDate(c.last_report) : "—"}</td>
                       <td>{c.portal ? <span className={`pill ${pc}`}><i />{pl}</span> : <span className="muted">—</span>}</td>
-                    </tr>
+                    </ClickRow>
                   );
                 })}
               </tbody>

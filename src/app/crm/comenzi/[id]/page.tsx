@@ -16,6 +16,8 @@ import { isExpired, money, offerDocs, offerDraft, offerForOrder, offerTotals, ty
 import { offerLink } from "@/lib/offer-emails";
 import { OfferEditor } from "./OfferEditor";
 import { DossierOpen } from "./DossierOpen";
+import { DeleteOrder } from "./DeleteOrder";
+import { isAdmin } from "@/lib/users";
 import { photoUrl, presenceOf } from "@/lib/presence";
 import { orderProgress } from "@/lib/delivery";
 
@@ -64,11 +66,16 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
       : draft;
   }
 
+  const backTo = `${base}/comenzi?tab=${({ site: "site", partner: "parteneri", bank: "banci", collab: "colaborari" } as Record<string, string>)[o.source] ?? "directe"}`;
   return (
     <CrmShell
       user={user} base={base} active="orders" title={`Comanda ${orderCode(o)}`}
       subtitle={`${SOURCE_LABEL[o.source]} · ${orderWhat(o)}${o.address ? ` · ${orderPlace(o)}` : ""} · ${o.glide_id ? `din ${fmtDate(o.ordered_on ?? o.created_at)}` : `primită ${fmtDate(o.created_at, true)}`}`}
-      actions={<a href={`${base}/comenzi?tab=${({ site: "site", partner: "parteneri", bank: "banci", collab: "colaborari" } as Record<string, string>)[o.source] ?? "directe"}`} className="btn btnGhost btnSm">← Comenzi</a>}
+      actions={<>
+        <a href={backTo} className="btn btnGhost btnSm">← Comenzi</a>
+        {isAdmin(user) && <DeleteOrder id={o.id} label={orderCode(o)} back={backTo}
+          blocked={reports.length ? "Comanda are deja raport creat: anulează sau șterge întâi raportul." : offer?.status === "accepted" ? "Clientul a acceptat oferta: comanda nu se mai poate șterge, doar anula." : o.statement_id ? "Comanda este pe un borderou." : null} />}
+      </>}
     >
       {o.glide_id && <div className="note">Comandă importată din Glide.</div>}
       <div className="cols">

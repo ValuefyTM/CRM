@@ -3,6 +3,7 @@
 import { niceName } from "@/lib/labels";
 import { useMemo, useState } from "react";
 import { FilterSelect } from "@/components/FilterSelect";
+import { ClickRow } from "@/components/ClickRow";
 
 export type CrmOrderRow = {
   id: string; ref: string; created: string; type: string; address: string; client: string; clientPhone: string | null;
@@ -71,7 +72,7 @@ export function OrdersTable({ rows, base, initial }: { rows: CrmOrderRow[]; base
             <thead><tr><th>Comandă</th><th>Proprietate</th><th>Client</th><th>Trimisă de</th><th>Scop</th><th>Documente</th><th>Status</th></tr></thead>
             <tbody>
               {shown.slice(0, limit).map((r) => (
-                <tr key={r.id} className={r.unread ? "unread" : undefined}>
+                <ClickRow key={r.id} href={`${base}/comenzi/${r.id}`} className={r.unread ? "unread" : undefined}>
                   <td><a className="ref rowLink" href={`${base}/comenzi/${r.id}`}>{r.ref}</a><div className="muted">{r.created}</div></td>
                   <td><a className="rowLink" href={`${base}/comenzi/${r.id}`}>{r.type}</a><div className="muted">{r.address}</div></td>
                   <td><b>{niceName(r.client)}</b><div className="muted" style={{ whiteSpace: "nowrap" }}>{r.clientPhone}</div></td>
@@ -88,7 +89,7 @@ export function OrdersTable({ rows, base, initial }: { rows: CrmOrderRow[]; base
                       <span className={`pill ${r.status[1]}`}><i />{r.status[0]}</span>
                     </span>
                   </td>
-                </tr>
+                </ClickRow>
               ))}
             </tbody>
           </table>

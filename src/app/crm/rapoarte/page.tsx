@@ -5,6 +5,7 @@ import { cap, DUE_FILTERS, lei, listReports, PAGE_SIZE, REPORT_SORTS, REPORT_STA
 import { STAGE_LABEL } from "@/lib/dossier";
 import { ReportFilters } from "./ReportFilters";
 import { CrmShell } from "@/components/CrmShell";
+import { ClickRow } from "@/components/ClickRow";
 
 export const metadata: Metadata = { title: "Rapoarte | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -63,7 +64,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                   const [label, cls] = REPORT_STATUS[r.status] ?? [r.status, ""];
                   const [type, address] = (r.asset ?? "|").split("|");
                   return (
-                    <tr key={r.id}>
+                    <ClickRow key={r.id} href={`${base}/rapoarte/${r.id}`}>
                       <td>{r.number ? <a className="ref rowLink" href={`${base}/rapoarte/${r.id}`}>{r.number}</a> : <a className="rowLink muted" href={`${base}/rapoarte/${r.id}`}>fără număr</a>}<div className="muted">{fmtDate(r.report_date)}</div></td>
                       <td><a className="rowLink" href={`${base}/rapoarte/${r.id}`}>{niceName(r.client_name) || "—"}</a><div className="muted">{r.report_type}</div></td>
                       <td>{cap(type) || "—"}<div className="muted">{address}</div></td>
@@ -72,7 +73,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                       <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{lei(r.result_value)}</td>
                       <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{lei(r.fee)}</td>
                       <td><span className={`pill ${cls}`}><i />{label}</span></td>
-                    </tr>
+                    </ClickRow>
                   );
                 })}
               </tbody>

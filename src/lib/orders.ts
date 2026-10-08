@@ -25,7 +25,7 @@ export type Order = Nullable<Pick<PortalFields, "property_type" | "city" | "addr
   glide_id: string | null; contract_id: string | null; collaboration_id: string | null; client_id: string | null; bank_id: string | null;
   bank_branch: string | null; bank_ref: string | null; report_type: string | null; fee: number | null; share: number | null; fee_net: number | null;
   referral_order_id: string | null; ordered_on: string | null; intake: string | null; bank_link: string | null; processed_at: string | null;
-  assets_json: string | null; reports_json: string | null;
+  assets_json: string | null; reports_json: string | null; statement_id: string | null;
   // joined
   creator_name: string | null; creator_email: string | null; partner_name: string | null; doc_count: number;
   collab_firm: string | null; contract_number: string | null; contract_kind: string | null;
@@ -207,3 +207,34 @@ export async function documentResponse(doc: OrderDocument) {
 }
 
 export const fmtSize = (b: number) => (b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))} KB` : `${(b / 1024 / 1024).toFixed(1).replace(".", ",")} MB`);
+
+/**
+ * Deletes an order that has not become work yet: no report opened from it, no accepted offer, not on a statement.
+ * Its documents (and their files), offers and links go with it; bank emails and inspections only lose the link.
+ */
+export async function deleteOrder(db: D1Database, actor: string, id: string) {
+  const o = await db.prepare(`SELECT o.id, o.seq, o.source, o.client_name, o.bank_ref, o.statement_id,
+      (SELECT COUNT(*) FROM reports r WHERE r.order_id = o.id) AS reports,
+      (SELECT COUNT(*) FROM offers f WHERE f.order_id = o.id AND f.status = 'accepted') AS accepted
+    FROM orders o WHERE o.id = ?`).bind(id)
+    .first<{ id: string; seq: number | null; source: string; client_name: string | null; bank_ref: string | null; statement_id: string | null; reports: number; accepted: number }>();
+  if (!o) return { ok: false as const, error: "Comanda nu există." };
+  if (o.reports) return { ok: false as const, error: "Comanda are deja raport creat. Anulează sau șterge întâi raportul (sau marchează comanda ca anulată)." };
+  if (o.accepted) return { ok: false as const, error: "Clientul a acceptat oferta acestei comenzi: nu se mai poate șterge, doar anula." };
+  if (o.statement_id) return { ok: false as const, error: "Comanda este pe un borderou și nu se poate șterge." };
+  const files = (await db.prepare("SELECT r2_key FROM order_documents WHERE order_id = ? AND r2_key IS NOT NULL").bind(id).all<{ r2_key: string }>()).results;
+  await db.batch([
+    db.prepare("UPDATE bank_emails SET order_id = NULL WHERE order_id = ?").bind(id),
+    db.prepare("UPDATE inspections SET order_id = NULL WHERE order_id = ?").bind(id),
+    db.prepare("DELETE FROM order_leads WHERE order_id = ?").bind(id),
+    db.prepare("DELETE FROM offers WHERE order_id = ?").bind(id),
+    db.prepare("DELETE FROM order_documents WHERE order_id = ?").bind(id),
+    db.prepare("DELETE FROM orders WHERE id = ?").bind(id),
+  ]);
+  const r2 = files.length ? await bucket() : null;
+  if (r2) await r2.delete(files.map((f) => f.r2_key)).catch(() => {});
+  const ref = o.seq ? `CO-${o.seq}` : o.bank_ref ?? id.slice(0, 8);
+  await db.prepare("INSERT INTO audit_log (actor, action, entity, entity_id, details) VALUES (?, 'order.delete', 'order', ?, ?)")
+    .bind(actor, id, `${ref}${o.client_name ? ` · ${o.client_name}` : ""} · ${o.source}`).run().catch(() => null);
+  return { ok: true as const, source: o.source };
+}

@@ -1401,3 +1401,8 @@ div.dbKpi::after { content: none; }
 .ctSig { display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 600; color: var(--acc-ink); }
 .ctSig.ok { color: var(--ok); }
 .ctSigned { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); }
+.btnDangerSolid { background: var(--err); color: #fff; border: 1px solid var(--err); }
+.btnDangerSolid:hover:not(:disabled) { filter: brightness(0.92); }
+/* Whole row opens the item (links and buttons inside keep their own action). */
+.table tr.rowClick { cursor: pointer; }
+.table tr.rowClick:hover td { background: color-mix(in srgb, var(--acc) 7%, transparent); }

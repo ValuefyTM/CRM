@@ -5,6 +5,7 @@ import { cap, lei, REPORT_STATUS } from "@/lib/reports";
 import { CONTRACT_KINDS, CONTRACT_PAGE, CONTRACT_STATES, contractStats, listContracts, type ContractFilters as F } from "@/lib/contracts";
 import { CrmShell } from "@/components/CrmShell";
 import { ContractFilters } from "./ContractFilters";
+import { ClickRow } from "@/components/ClickRow";
 
 export const metadata: Metadata = { title: "Contracte | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -57,7 +58,7 @@ export default async function ContractsPage({ searchParams }: { searchParams: Pr
                   const href = `${base}/contracte/${k.id}`;
                   const [rl, rc] = k.report_status ? REPORT_STATUS[k.report_status] ?? [k.report_status, ""] : ["", ""];
                   return (
-                    <tr key={k.id}>
+                    <ClickRow key={k.id} href={href}>
                       <td>
                         <a className="ref rowLink" href={href}>{k.number ? `Nr. ${k.number}` : "fără număr"}</a>
                         <div className="muted"><span className={`ctKind ${k.kind}`}>{k.kind === "framework" ? "Cadru" : "Clasic"}</span> {fmtDate(k.signed_on)}</div>
@@ -76,7 +77,7 @@ export default async function ContractsPage({ searchParams }: { searchParams: Pr
                         {k.report_id ? <><a className="rowLink" href={`${base}/rapoarte/${k.report_id}`}>{k.report_number ? `Raport ${k.report_number}` : cap(k.report_label ?? "") || "Raport"}</a>
                           <div><span className={`pill ${rc}`}><i />{rl}</span></div></> : <span className="muted">—</span>}
                       </td>
-                    </tr>
+                    </ClickRow>
                   );
                 })}
               </tbody>
