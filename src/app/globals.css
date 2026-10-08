@@ -1411,3 +1411,28 @@ div.dbKpi::after { content: none; }
 .ordStates button { padding: 0 10px; }
 .ordStates small { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px; font-weight: 500; opacity: .6; }
 .ordStates button[aria-pressed="true"] small { opacity: .85; }
+
+/* ---------- Global search (top bar) ---------- */
+.gs { position: relative; flex: 0 1 440px; min-width: 220px; margin-left: auto; }
+.top:has(.gs) .actions { margin-left: 10px; }
+.gsIcon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+.gsInput { width: 100%; height: 36px; padding: 0 34px 0 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--cream); font: inherit; font-size: 13px; outline: none; }
+.gsInput:focus { border-color: var(--ink); background: #fff; box-shadow: 0 0 0 3px color-mix(in srgb, var(--acc) 25%, transparent); }
+.gsKbd { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; line-height: 17px; background: #fff; pointer-events: none; }
+.gsInput:focus + .gsKbd { display: none; }
+.gsPanel { position: absolute; z-index: 60; top: calc(100% + 6px); left: 0; right: 0; min-width: 380px; max-height: min(70vh, 560px); overflow: auto; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 14px 40px rgba(0,0,0,.14); padding: 6px; }
+.gsGroupHead { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding: 8px 8px 4px; }
+.gsHit { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px; color: var(--ink); text-decoration: none; }
+.gsHit[aria-selected="true"] { background: color-mix(in srgb, var(--acc) 14%, transparent); }
+.gsText { display: flex; flex-direction: column; min-width: 0; }
+.gsText b { font-size: 13px; font-weight: 600; }
+.gsText small { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gsBadge { width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0; display: grid; place-items: center; font-size: 11px; font-weight: 700; background: var(--cream-2); color: var(--ink); }
+.gsBadge.report { background: #111; color: #E9A227; }
+.gsBadge.order { background: color-mix(in srgb, var(--acc) 25%, #fff); }
+.gsBadge.contract { background: #e8e3f5; }
+.gsBadge.property { background: #e3f0ea; }
+.gsEmpty { padding: 14px; font-size: 13px; color: var(--muted); }
+.gsFoot { border-top: 1px solid var(--line); margin-top: 6px; padding: 7px 8px 3px; font-size: 10.5px; color: var(--muted); }
+@media (max-width: 760px) { .gs { order: 3; flex: 1 1 100%; } .gsPanel { min-width: 0; } .gsKbd { display: none; } }
+@media (max-width: 760px) { .top { flex-wrap: wrap; } }

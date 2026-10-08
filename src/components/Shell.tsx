@@ -14,6 +14,8 @@ export function Shell(props: {
   title: string;
   subtitle?: string;
   actions?: React.ReactNode;
+  /** Shown in the top bar between the page title and its actions (the CRM's general search). */
+  search?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const flat: NavItem[] = props.nav.flatMap((e) => ("group" in e ? (e as NavGroup).items : [e as NavItem]));
@@ -47,6 +49,7 @@ export function Shell(props: {
             <h1>{props.title}</h1>
             {props.subtitle && <p>{props.subtitle}</p>}
           </div>
+          {props.search}
           {props.actions && <div className="actions">{props.actions}</div>}
         </header>
         <main className="content">{props.children}</main>

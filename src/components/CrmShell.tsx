@@ -2,6 +2,7 @@ import { getDb } from "@/lib/db";
 import { initials } from "@/lib/guard";
 import { roleLabel, type User } from "@/lib/users";
 import { Shell } from "./Shell";
+import { GlobalSearch } from "./GlobalSearch";
 import { Heartbeat } from "./Heartbeat";
 import { photoUrl } from "@/lib/presence";
 
@@ -19,6 +20,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
   const owner = props.user.role === "owner";
   return (
     <Shell
+      search={<GlobalSearch base={b} />}
       app="crm"
       label="Evaluări ANEVAR · Cluj"
       nav={[
