@@ -3,7 +3,7 @@
 import { niceName } from "@/lib/labels";
 import { useMemo, useState } from "react";
 import { FilterSelect } from "@/components/FilterSelect";
-import { VIEWS, type CrmOrderRow } from "./OrdersTable";
+import { StatusTabs, VIEWS, type CrmOrderRow } from "./OrdersTable";
 import { ClickRow } from "@/components/ClickRow";
 
 const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -43,9 +43,9 @@ export function BankOrdersTable({ rows, base, initial = "all" }: { rows: CrmOrde
   return (
     <section className="card">
       <div className="filterBar">
-        <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută după nr. comandă, client, agenție…" aria-label="Caută" />
+        <StatusTabs rows={rows} value={f} onChange={setF} pre={byBank} />
         <FilterSelect label="Bancă" value={bank} onChange={setBank} options={banks.map((b) => [b, b, rows.filter((r) => r.bank === b && test(r)).length])} />
-        <FilterSelect label="Situație" value={f} onChange={setF} options={VIEWS.map(([k, l, t]) => [k, l, rows.filter((r) => byBank(r) && t(r)).length])} />
+        <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută după nr. comandă, client, agenție…" aria-label="Caută" />
       </div>
       <div className="resultLine">
         <span><b style={{ color: "var(--ink)" }}>{shown.length.toLocaleString("ro-RO")}</b> din {rows.length.toLocaleString("ro-RO")} comenzi</span>

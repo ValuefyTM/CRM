@@ -1406,3 +1406,8 @@ div.dbKpi::after { content: none; }
 /* Whole row opens the item (links and buttons inside keep their own action). */
 .table tr.rowClick { cursor: pointer; }
 .table tr.rowClick:hover td { background: color-mix(in srgb, var(--acc) 7%, transparent); }
+/* Order lists: status tabs like the inspections board, sized to their labels. */
+.ordStates { grid-auto-columns: max-content; }
+.ordStates button { padding: 0 10px; }
+.ordStates small { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px; font-weight: 500; opacity: .6; }
+.ordStates button[aria-pressed="true"] small { opacity: .85; }

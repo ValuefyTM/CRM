@@ -36,6 +36,25 @@ export const VIEWS: [string, string, (r: CrmOrderRow) => boolean][] = [
   ["suspended", "Suspendate", (r) => r.status[0] === "Suspendată"],
   ["cancelled", "Anulate", (r) => r.status[0] === "Anulată"],
 ];
+/** Status tabs above the order lists ("" = all); the other views (today, unopened…) come from the cards above. */
+export const STATUS_TABS: [string, string][] = [["", "Toate"], ["pending", "Neprocesate"], ["progress", "În lucru"], ["done", "Finalizate"], ["suspended", "Suspendate"], ["cancelled", "Anulate"]];
+const CARD_VIEWS = new Set(["today", "new", "docs", "urgent"]);
+
+/** Status as tabs (with counts), plus a removable chip when a card above filtered the list. */
+export function StatusTabs({ rows, value, onChange, pre }: { rows: CrmOrderRow[]; value: string; onChange: (v: string) => void; pre: (r: CrmOrderRow) => boolean }) {
+  const count = (k: string) => (k ? rows.filter((r) => pre(r) && (VIEWS.find(([v]) => v === k)?.[2] ?? (() => true))(r)).length : rows.filter(pre).length);
+  return (
+    <>
+      <span className="segment ibStates ordStates" role="group" aria-label="Status">
+        {STATUS_TABS.map(([k, l]) => (
+          <button key={k || "all"} type="button" aria-pressed={value === k} onClick={() => onChange(k)}>{l} <small>{count(k).toLocaleString("ro-RO")}</small></button>
+        ))}
+      </span>
+      {CARD_VIEWS.has(value) && <button type="button" className="chipX" onClick={() => onChange("")}>{VIEWS.find(([v]) => v === value)?.[1]} <b aria-hidden>×</b></button>}
+    </>
+  );
+}
+
 const SOURCES: [string, string][] = [["site", "Site valuefy.ro"], ["partner", "Colaboratori (brokeri)"], ["collab", "Colaborări firme evaluare"], ["client", "Clienți din portal"], ["direct", "Lucrări directe"]];
 
 /** Orders placed in the portal by partner users (for their clients) and by direct clients. */
@@ -55,10 +74,10 @@ export function OrdersTable({ rows, base, initial }: { rows: CrmOrderRow[]; base
   return (
     <section className="card">
       <div className="filterBar">
-        <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută după nr. comandă, adresă, client, colaborator…" aria-label="Caută" />
-        <FilterSelect label="Situație" value={f} onChange={setF} options={VIEWS.map(([k, l, t]) => [k, l, rows.filter((r) => bySource(r) && t(r)).length])} />
+        <StatusTabs rows={rows} value={f} onChange={setF} pre={bySource} />
         {/* Each tab is one channel already: the source filter only helps where several are mixed. */}
         {new Set(rows.map((r) => r.source)).size > 1 && <FilterSelect label="De la" value={src} onChange={setSrc} options={SOURCES.map(([k, l]) => [k, l, rows.filter((r) => r.source === k && test(r)).length])} all="Oricine" />}
+        <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută după nr. comandă, adresă, client, colaborator… ↵" aria-label="Caută" />
       </div>
       <div className="resultLine">
         <span><b style={{ color: "var(--ink)" }}>{shown.length.toLocaleString("ro-RO")}</b> din {rows.length.toLocaleString("ro-RO")} comenzi</span>
