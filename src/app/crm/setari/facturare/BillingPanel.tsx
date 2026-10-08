@@ -20,6 +20,15 @@ export function BillingPanel({ edit, initial, creds, rules, modes, flows }: {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [ruleMsg, setRuleMsg] = useState("");
+  const [trial, setTrial] = useState<{ ok: boolean; steps: string[]; error: string | null } | null>(null);
+  const [trying, setTrying] = useState(false);
+  const runTrial = async () => {
+    if (!confirm("Se emite în Oblio o proformă de 1 leu către VALUEFY, marcată TEST, apoi se șterge imediat. Nu se emite nicio factură. Continui?")) return;
+    setTrying(true); setTrial(null);
+    const r = await fetch("/api/crm/billing/test", { method: "POST" }).catch(() => null);
+    setTrial(((await r?.json().catch(() => null)) as typeof trial) ?? { ok: false, steps: [], error: "Nu am putut rula testul." });
+    setTrying(false);
+  };
   const set = <K extends keyof BillingSettings>(k: K, v: BillingSettings[K]) => setF((x) => ({ ...x, [k]: v }));
 
   const test = async (cif?: string) => {
@@ -82,7 +91,19 @@ export function BillingPanel({ edit, initial, creds, rules, modes, flows }: {
           </label>
         )}
         {(!conn || !conn.ok) && <label className="field">CIF firmă în Oblio<input className="input mono" value={f.cif} disabled={!edit} onChange={(e) => set("cif", e.target.value)} /></label>}
-        {edit && <div className="actions"><button type="button" className="btn btnGhost btnSm" disabled={testing} onClick={() => test(f.cif)}>{testing ? "Se verifică…" : "Testează conexiunea"}</button></div>}
+        {edit && (
+          <div className="actions">
+            <button type="button" className="btn btnGhost btnSm" disabled={testing} onClick={() => test(f.cif)}>{testing ? "Se verifică…" : "Testează conexiunea"}</button>
+            <button type="button" className="btn btnGhost btnSm" disabled={trying || !conn?.ok} onClick={runTrial} title="Proformă de 1 leu, ștearsă imediat">{trying ? "Se testează…" : "Test complet (proformă ștearsă automat)"}</button>
+          </div>
+        )}
+        <p className="hint" style={{ margin: 0 }}>„Testează conexiunea” doar citește din Oblio (firme, serii, TVA). „Test complet” emite o proformă de 1 leu către VALUEFY, îi descarcă PDF-ul și o șterge — fără factură, fără e-Factura. Salvează întâi seria de proforme.</p>
+        {trial && (
+          <div className={trial.ok ? "note" : "error"} role="status">
+            <b>{trial.ok ? "Testul a reușit." : trial.error}</b>
+            <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{trial.steps.map((x, i) => <li key={i}>{x}</li>)}</ul>
+          </div>
+        )}
       </section>
 
       <section className="card">

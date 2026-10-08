@@ -7,7 +7,7 @@ import { bucharestDay, now, parseJson, uuid } from "./db";
 import { audit } from "./auth";
 import { bucket } from "./orders";
 import { getFirm } from "./settings";
-import { oblioCancel, oblioCollect, oblioCreate, OblioError } from "./oblio";
+import { oblioCancel, oblioCollect, oblioCreate, oblioDelete, OblioError } from "./oblio";
 
 export type BillingSettings = {
   cif: string; invoiceSeries: string; proformaSeries: string; vatName: string; vatPercent: number; vatPayer: boolean;
@@ -258,3 +258,36 @@ export async function cancelInvoice(db: D1Database, actor: string, id: string) {
   return { ok: true as const };
 }
 
+
+/**
+ * Full test without a fiscal document: a proforma of 1 leu to VALUEFY itself, marked TEST, its PDF fetched, then
+ * deleted from Oblio (a proforma is not an invoice and does not go to e-Factura). Nothing is saved in the CRM.
+ */
+export async function testProforma(db: D1Database, actor: string) {
+  const [b, firm] = await Promise.all([getBilling(db), getFirm(db)]);
+  if (!b.cif || !b.proformaSeries) return { ok: false as const, steps: [], error: "Alege întâi firma și seria de proforme și salvează setările." };
+  const steps: string[] = [];
+  let doc;
+  try {
+    doc = await oblioCreate(db, "proforma", {
+      cif: b.cif, client: { cif: b.cif, name: firm.name, address: firm.address, city: "", country: "Romania", vatPayer: b.vatPayer },
+      issueDate: bucharestDay(), seriesName: b.proformaSeries, language: b.language, precision: 2, currency: "RON",
+      products: [{ name: "TEST CRM — document de probă, se șterge automat", price: 1, measuringUnit: b.unit, currency: "RON",
+        vatName: b.vatPayer ? b.vatName : "Neplatitor", vatPercentage: b.vatPayer ? b.vatPercent : 0, vatIncluded: false, quantity: 1, productType: "Serviciu" }],
+      mentions: "Document de test emis din CRM.",
+    });
+    steps.push(`Proformă de test emisă în Oblio: ${doc.seriesName} ${doc.number}`);
+  } catch (e) {
+    return { ok: false as const, steps, error: e instanceof OblioError ? `Oblio a refuzat proforma: ${e.message}` : "Oblio nu a răspuns la emitere." };
+  }
+  const pdf = doc.link ? await fetch(doc.link).catch(() => null) : null;
+  steps.push(pdf?.ok ? `PDF descărcat (${Math.round(Number(pdf.headers.get("content-length") ?? 0) / 1024) || "?"} KB)` : "PDF-ul nu a putut fi descărcat (linkul Oblio)");
+  try {
+    await oblioDelete(db, "proforma", b.cif, doc.seriesName, String(doc.number));
+    steps.push("Proforma de test a fost ștearsă din Oblio");
+  } catch (e) {
+    steps.push(`Proforma NU a putut fi ștearsă automat (${e instanceof OblioError ? e.message : "eroare"}) — șterge-o manual din Oblio: ${doc.seriesName} ${doc.number}`);
+  }
+  await audit(db, `user:${actor}`, "settings.billing_test", "settings", "billing", steps.join(" · "));
+  return { ok: !!pdf?.ok, steps, error: pdf?.ok ? null : "Emiterea merge, dar PDF-ul nu a putut fi descărcat." };
+}

@@ -76,3 +76,6 @@ export const oblioCancel = (db: D1Database, type: "invoice" | "proforma", cif: s
   oblio(db, "PUT", `/api/docs/${type}/cancel`, { cif, seriesName, number });
 export const oblioCollect = (db: D1Database, cif: string, seriesName: string, number: string, collect: Record<string, unknown>) =>
   oblio(db, "PUT", "/api/docs/invoice/collect", { cif, seriesName, number, collect });
+/** Deletes a document (Oblio allows it only for the last one of its series). */
+export const oblioDelete = (db: D1Database, type: "invoice" | "proforma", cif: string, seriesName: string, number: string) =>
+  oblio(db, "DELETE", `/api/docs/${type}`, { cif, seriesName, number });
