@@ -5,18 +5,21 @@ import { Shell } from "./Shell";
 import { GlobalSearch } from "./GlobalSearch";
 import { Heartbeat } from "./Heartbeat";
 import { photoUrl } from "@/lib/presence";
+import { countNewInquiries } from "@/lib/listings";
 
 export async function CrmShell(props: { user: User; base: string; active: string; title: string; subtitle?: string; actions?: React.ReactNode; children: React.ReactNode }) {
   const b = props.base;
   // Badge on "Comenzi": orders nobody in the team has opened yet, plus new requests from the website.
   const db = await getDb();
-  const [unread, open] = db
+  const [unread, open, inquiries] = db
     ? await Promise.all([
         // Sales offered on the website are not shown for now: only unopened orders count.
         db.prepare("SELECT COUNT(*) AS n FROM orders WHERE viewed_at IS NULL").first<{ n: number }>().then((r) => r?.n ?? 0).catch(() => 0),
         db.prepare("SELECT COUNT(*) AS n FROM reports WHERE status IN ('draft', 'in_progress') AND delivered_at IS NULL").first<{ n: number }>().then((r) => r?.n ?? 0).catch(() => 0),
+        // Viewing / report requests from the listings on valuefy.ro not handled yet.
+        countNewInquiries(db),
       ])
-    : [0, 0];
+    : [0, 0, 0];
   const owner = props.user.role === "owner";
   return (
     <Shell
@@ -31,6 +34,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
           { key: "collabs", label: "Colaborări", soon: true },
           { key: "orders", label: "Comenzi", href: `${b}/comenzi`, badge: unread, hot: true },
           { key: "followups", label: "Follow-up-uri", soon: true },
+          { key: "listings", label: "Anunțuri imobiliare", href: `${b}/anunturi`, badge: inquiries, hot: true },
         ] },
         { group: "Operațional", key: "g-ops", items: [
           { key: "reports", label: "Rapoarte", href: `${b}/rapoarte`, badge: open },
