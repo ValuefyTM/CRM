@@ -70,6 +70,13 @@ button, input, select, textarea { font-family: inherit; }
   }
   .bottomNav a { height: 50px; border-radius: 10px; color: var(--on-navy-2); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; text-align: center; }
   .bottomNav a[aria-current="page"] { color: #fff; background: rgba(255, 255, 255, 0.1); }
+  .bottomMenuBtn { height: 50px; border: 0; border-radius: 10px; background: transparent; color: var(--acc-light); font: inherit; font-size: 11px; font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; cursor: pointer; }
+  .bottomMenuBtn[aria-expanded="true"] { background: rgba(255, 255, 255, 0.1); color: #fff; }
+  /* The whole menu as a drawer from the left, above the page; the bottom bar stays usable to close it. */
+  .shell[data-menu] .side { display: flex; position: fixed; height: auto; top: 0; left: 0; bottom: calc(62px + env(safe-area-inset-bottom)); width: min(86vw, 300px); z-index: 30; box-shadow: 8px 0 32px rgba(0, 0, 0, 0.35); }
+  .menuBackdrop { position: fixed; inset: 0; z-index: 25; background: rgba(0, 0, 0, 0.45); }
+  .shell[data-menu] .bottomNav { z-index: 31; }
+  .shell[data-menu] { overflow: hidden; height: 100vh; }
 }
 
 /* ---------- Building blocks ---------- */

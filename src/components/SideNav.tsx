@@ -104,3 +104,32 @@ export function MeMenu({ children, app }: { children: React.ReactNode; app: "crm
     </div>
   );
 }
+
+/** Phone: the last button of the bottom bar opens the whole sidebar (all pages, account, sign out) as a drawer. */
+export function MobileMenu() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const shell = document.querySelector(".shell");
+    if (!shell) return;
+    if (open) shell.setAttribute("data-menu", "");
+    else shell.removeAttribute("data-menu");
+    if (!open) return;
+    const esc = (ev: KeyboardEvent) => { if (ev.key === "Escape") setOpen(false); };
+    // A page link in the drawer closes it (the new page loads under it otherwise).
+    const nav = (ev: MouseEvent) => { if ((ev.target as HTMLElement).closest(".side a[href]")) setOpen(false); };
+    document.addEventListener("keydown", esc);
+    document.addEventListener("click", nav);
+    return () => { document.removeEventListener("keydown", esc); document.removeEventListener("click", nav); };
+  }, [open]);
+  return (
+    <>
+      <button type="button" className="bottomMenuBtn" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+          {open ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
+        </svg>
+        {open ? "Închide" : "Meniu"}
+      </button>
+      {open && <div className="menuBackdrop" aria-hidden="true" onClick={() => setOpen(false)} />}
+    </>
+  );
+}

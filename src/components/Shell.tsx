@@ -1,5 +1,5 @@
 import { Avatar } from "./Avatar";
-import { MeMenu, SideNav, type NavEntry, type NavGroup, type NavItem } from "./SideNav";
+import { MeMenu, MobileMenu, SideNav, type NavEntry, type NavGroup, type NavItem } from "./SideNav";
 
 export type { NavItem, NavGroup, NavEntry } from "./SideNav";
 
@@ -55,9 +55,10 @@ export function Shell(props: {
         <main className="content">{props.children}</main>
       </div>
       <nav className="bottomNav" aria-label="Meniu">
-        {flat.filter((i) => i.href && !i.soon).slice(0, 4).map((i) => (
+        {flat.filter((i) => i.href && !i.soon).slice(0, 3).map((i) => (
           <a key={i.key} href={i.href} aria-current={props.active === i.key ? "page" : undefined}>{i.label}</a>
         ))}
+        <MobileMenu />
       </nav>
     </div>
   );
