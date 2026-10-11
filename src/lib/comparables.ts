@@ -31,17 +31,24 @@ export async function comparables(db: D1Database, propertyId: string, f: CompFil
   const subject = await db.prepare(`${BASE} SELECT p.* FROM p WHERE p.id = ?`).bind(propertyId)
     .first<{ id: string; type: string | null; category: string | null; full_address: string | null; city: string | null; geo: string | null; usable_area: number | null; value: number | null; sqm: number | null; last_date: string | null }>();
   if (!subject) return null;
-  const ll = parseGeo(subject.geo);
+  return { subject, ...(await nearby(db, parseGeo(subject.geo), subject, f)) };
+}
+
+/** What the comparables are measured against: a property in the registry, or any point (e.g. an address). */
+export type CompSubject = { id?: string; type: string | null; category: string | null; usable_area: number | null };
+
+/** Valued properties around a point, filtered like the comparables page (radius, years, type/category, area). */
+export async function nearby(db: D1Database, ll: [number, number] | null, subject: CompSubject, f: CompFilters) {
   const radius = RADII.includes(f.raza ?? "") ? Number(f.raza) : 1;
   const years = YEARS.some(([k]) => k === f.ani) ? Number(f.ani) : 3;
   const sameType = f.potrivire !== "categorie" && !!subject.type;
   const tol = AREA.some(([k]) => k === f.supr) ? Number(f.supr) : 50;
   const settings = { radius, years, sameType, tol };
-  if (!ll) return { subject, ll: null, settings, rows: [] as Comparable[], stats: null };
+  if (!ll) return { ll: null, settings, rows: [] as Comparable[], stats: null };
 
   const dLat = radius / 111, dLng = radius / (111 * Math.cos((ll[0] * Math.PI) / 180));
   const w = [`p.id <> ?`, `p.value > 0`, `p.geo LIKE '%_,_%'`, `${LAT} BETWEEN ? AND ?`, `${LNG} BETWEEN ? AND ?`];
-  const a: (string | number)[] = [subject.id, ll[0] - dLat, ll[0] + dLat, ll[1] - dLng, ll[1] + dLng];
+  const a: (string | number)[] = [subject.id ?? "", ll[0] - dLat, ll[0] + dLat, ll[1] - dLng, ll[1] + dLng];
   if (sameType) { w.push("p.type = ?"); a.push(subject.type!); } else if (subject.category) { w.push("p.category = ?"); a.push(subject.category); }
   if (years) { const d = new Date(); d.setFullYear(d.getFullYear() - years); w.push("p.last_date >= ?"); a.push(d.toISOString().slice(0, 10)); }
   if (tol && subject.usable_area) { w.push("p.usable_area BETWEEN ? AND ?"); a.push(subject.usable_area * (1 - tol / 100), subject.usable_area * (1 + tol / 100)); }
@@ -67,5 +74,5 @@ export async function comparables(db: D1Database, propertyId: string, f: CompFil
     mean: s.reduce((t, x) => t + x, 0) / s.length,
     estimate: median && subject.usable_area ? median * subject.usable_area : null,
   } : { n: list.length, withSqm: 0, median: null, p25: null, p75: null, min: null, max: null, mean: null, estimate: null };
-  return { subject, ll, settings, rows: list, stats };
+  return { ll, settings, rows: list, stats };
 }

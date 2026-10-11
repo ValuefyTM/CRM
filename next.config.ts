@@ -7,13 +7,20 @@ import type { NextConfig } from "next";
 // On any other host (workers.dev, localhost) the /crm, /portal and /inspectii paths are used directly.
 // The first segment must not be a shared path; the rest is a repeated param, because OpenNext
 // builds the destination per segment (a single ":path(.*)" fails on /utilizatori/123).
-const first = ":first((?!(?:api|_next|crm|portal|inspectii)(?:/|$)|favicon|icon|valuefy-logo)[^/]+)";
+const first = ":first((?!(?:api|_next|crm|portal|inspectii|\\.well-known)(?:/|$)|favicon|icon|valuefy-logo)[^/]+)";
 
 const nextConfig: NextConfig = {
   images: { unoptimized: true },
   async rewrites() {
     return {
       beforeFiles: [
+        // OAuth discovery for the Claude connector (MCP): standard addresses, on every host. Clients may append the
+        // resource path (/.well-known/oauth-protected-resource/api/mcp), so anything after the name is accepted.
+        { source: "/.well-known/oauth-protected-resource/:rest*", destination: "/api/mcp/meta/resource" },
+        { source: "/.well-known/oauth-protected-resource", destination: "/api/mcp/meta/resource" },
+        { source: "/.well-known/oauth-authorization-server/:rest*", destination: "/api/mcp/meta/server" },
+        { source: "/.well-known/oauth-authorization-server", destination: "/api/mcp/meta/server" },
+        { source: "/.well-known/openid-configuration", destination: "/api/mcp/meta/server" },
         { source: "/", has: [{ type: "host", value: "crm\\..*" }], destination: "/crm" },
         { source: "/", has: [{ type: "host", value: "portal\\..*" }], destination: "/portal" },
         { source: "/", has: [{ type: "host", value: "inspectii\\..*" }], destination: "/inspectii" },

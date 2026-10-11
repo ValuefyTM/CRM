@@ -8,10 +8,13 @@ import { LoginForm } from "@/components/LoginForm";
 export const metadata: Metadata = { title: "Autentificare CRM | VALUEFY" };
 export const dynamic = "force-dynamic";
 
-export default async function CrmLogin({ searchParams }: { searchParams: Promise<{ link?: string }> }) {
+export default async function CrmLogin({ searchParams }: { searchParams: Promise<{ link?: string; next?: string }> }) {
   const base = await basePath("crm");
+  const sp = await searchParams;
+  // After signing in, go back to the page that asked (only the Claude connector's approval page for now).
+  const next = sp.next?.startsWith("/api/mcp/oauth/authorize?") ? sp.next : undefined;
   const db = await getDb();
-  if (db && (await currentUser(db, "crm"))) redirect(base || "/");
+  if (db && (await currentUser(db, "crm"))) redirect(next ?? (base || "/"));
   return (
     <div className="authPage">
       <aside className="authSide">
@@ -30,7 +33,7 @@ export default async function CrmLogin({ searchParams }: { searchParams: Promise
         <div className="authBox">
           <h1>Intră în CRM</h1>
           <p>Introdu adresa de email a contului tău din echipa VALUEFY.</p>
-          <LoginForm kind="internal" base={base} expired={(await searchParams).link === "expired"} />
+          <LoginForm kind="internal" base={base} next={next} expired={sp.link === "expired"} />
         </div>
       </main>
     </div>

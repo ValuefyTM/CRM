@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 /** Email → 6-digit code (or the link from the email). */
-export function LoginForm({ kind, base, expired, app }: { kind: "internal" | "partner" | "client"; base: string; expired: boolean; app?: "insp" }) {
+export function LoginForm({ kind, base, expired, app, next }: { kind: "internal" | "partner" | "client"; base: string; expired: boolean; app?: "insp"; next?: string }) {
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -34,7 +34,7 @@ export function LoginForm({ kind, base, expired, app }: { kind: "internal" | "pa
     setBusy(true); setMsg("");
     const r = await post("/api/auth/verify", { email, code });
     if (!r.ok) { setBusy(false); return setMsg(r.data.error || "Codul nu este corect."); }
-    location.href = base || "/";
+    location.href = next ?? (base || "/");
   };
 
   if (step === "code") {
