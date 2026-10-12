@@ -2,7 +2,7 @@
 import { withPresence } from "./presence";
 
 export const REPORT_STATUS: Record<string, [string, string]> = {
-  draft: ["Draft", ""],
+  draft: ["În lucru", "pillInfo"], // drafts are reports being worked on
   in_progress: ["În lucru", "pillInfo"],
   suspended: ["Suspendat", "pillWarn"],
   done: ["Finalizat", "pillOk"],
@@ -19,10 +19,16 @@ export const INSPECTION_STATUS: Record<string, [string, string]> = {
 export type ReportRow = {
   id: string; number: string | null; label: string | null; report_date: string | null; status: string; fee: number | null; result_value: number | null;
   report_type: string | null; client_name: string | null; bank_code: string | null; issuer_name: string | null; evaluator: string | null; asset: string | null;
+  issuer_short: string | null; insp_total: number; insp_done: number; insp_next: string | null; insp_last: string | null; no_insp: number;
 };
 
 const ROW = `SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.result_value, r.report_type,
-  c.name AS client_name, COALESCE(b.code, b.name) AS bank_code, i.name AS issuer_name,
+  c.name AS client_name, COALESCE(b.code, b.name) AS bank_code, i.name AS issuer_name, COALESCE(NULLIF(i.code, ''), i.name) AS issuer_short,
+  (SELECT COUNT(*) FROM inspections x WHERE x.report_id = r.id AND x.status <> 'cancelled') AS insp_total,
+  (SELECT COUNT(*) FROM inspections x WHERE x.report_id = r.id AND x.status <> 'cancelled' AND (x.done_at IS NOT NULL OR x.status = 'done')) AS insp_done,
+  (SELECT MIN(x.scheduled_at) FROM inspections x WHERE x.report_id = r.id AND x.status = 'scheduled' AND x.done_at IS NULL) AS insp_next,
+  (SELECT MAX(x.done_at) FROM inspections x WHERE x.report_id = r.id AND x.status <> 'cancelled') AS insp_last,
+  (SELECT COUNT(*) FROM assets a WHERE a.report_id = r.id AND a.no_inspection IS NOT NULL) AS no_insp,
   (SELECT u.name FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = r.id AND m.role = 'evaluator' LIMIT 1) AS evaluator,
   (SELECT COALESCE(p.type, '') || '|' || COALESCE(p.full_address, p.city, '') FROM assets a JOIN crm_properties p ON p.id = a.property_id
      WHERE a.report_id = r.id ORDER BY a.is_main DESC LIMIT 1) AS asset
@@ -63,7 +69,9 @@ function where(f: ReportFilters) {
     const d = new Date(`${bucharestToday()}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 2);
     w.push(`${open} AND (${DUE_SQL}) BETWEEN ? AND ?`); p.push(bucharestToday(), d.toISOString().slice(0, 10));
   }
-  if (f.status && REPORT_STATUS[f.status]) { w.push("r.status = ?"); p.push(f.status); }
+  // "În lucru" covers drafts too (a draft is a report being worked on).
+  if (f.status === "in_progress" || f.status === "draft") w.push("r.status IN ('draft', 'in_progress')");
+  else if (f.status && REPORT_STATUS[f.status]) { w.push("r.status = ?"); p.push(f.status); }
   if (f.status === "deschise") w.push("r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL");
   if (f.year && /^\d{4}$/.test(f.year)) { w.push("COALESCE(r.reporting_year, CAST(substr(r.report_date, 1, 4) AS INTEGER)) = ?"); p.push(Number(f.year)); }
   if (f.bank) { w.push("COALESCE(b.code, b.name) = ?"); p.push(f.bank); }
@@ -90,6 +98,28 @@ export async function listReports(db: D1Database, f: ReportFilters) {
       .bind(...params).first<{ n: number; fees: number | null; done: number | null; open: number | null; suspended: number | null }>(),
   ]);
   return { rows: rows.results, total: sum?.n ?? 0, fees: sum?.fees ?? 0, done: sum?.done ?? 0, open: sum?.open ?? 0, suspended: sum?.suspended ?? 0 };
+}
+
+/** Status tabs of the list: "" = all; drafts count as "În lucru". */
+export const REPORT_TABS: [string, string][] = [["", "Toate"], ["in_progress", "În lucru"], ["done", "Finalizate"], ["suspended", "Suspendate"], ["cancelled", "Anulate"]];
+
+/** How many reports each status tab has under the other filters. */
+export async function reportTabCounts(db: D1Database, f: ReportFilters) {
+  const { sql, params } = where({ ...f, status: undefined });
+  const { results } = await db.prepare(`SELECT CASE WHEN r.status = 'draft' THEN 'in_progress' ELSE r.status END AS s, COUNT(*) AS n
+      FROM reports r LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id ${sql} GROUP BY s`)
+    .bind(...params).all<{ s: string; n: number }>();
+  const by = Object.fromEntries(results.map((x) => [x.s, x.n])) as Record<string, number>;
+  return { ...by, "": results.reduce((t, x) => t + x.n, 0) } as Record<string, number>;
+}
+
+/** Inspection state of a report row: done when every inspection has a completion date. */
+export function inspectionState(r: Pick<ReportRow, "insp_total" | "insp_done" | "insp_next" | "insp_last" | "no_insp">): [string, string, string | null] {
+  if (!r.insp_total) return r.no_insp ? ["Fără inspecție", "", null] : ["—", "", null];
+  if (r.insp_done >= r.insp_total) return ["Efectuată", "pillOk", r.insp_last];
+  if (r.insp_done > 0) return [`Parțial ${r.insp_done}/${r.insp_total}`, "pillWarn", r.insp_last];
+  if (r.insp_next) return ["Programată", "pillInfo", r.insp_next];
+  return ["De programat", "pillWarn", null];
 }
 
 /** Values for the filter chips. */

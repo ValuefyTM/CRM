@@ -1,7 +1,7 @@
 import { niceName } from "@/lib/labels";
 import type { Metadata } from "next";
 import { fmtDate, staffPage } from "@/lib/guard";
-import { cap, DUE_FILTERS, lei, listReports, PAGE_SIZE, REPORT_SORTS, REPORT_STATUS, reportFacets, STAGE_FILTERS } from "@/lib/reports";
+import { cap, DUE_FILTERS, inspectionState, lei, listReports, PAGE_SIZE, REPORT_SORTS, REPORT_STATUS, REPORT_TABS, reportFacets, reportTabCounts, STAGE_FILTERS } from "@/lib/reports";
 import { STAGE_LABEL } from "@/lib/dossier";
 import { ReportFilters } from "./ReportFilters";
 import { CrmShell } from "@/components/CrmShell";
@@ -16,7 +16,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const { db, user, base } = await staffPage();
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page) || 1);
-  const [data, facets] = await Promise.all([listReports(db, { ...sp, page }), reportFacets(db)]);
+  const [data, facets, counts] = await Promise.all([listReports(db, { ...sp, page }), reportFacets(db), reportTabCounts(db, { ...sp, page })]);
+  const tab = sp.status === "draft" ? "in_progress" : sp.status ?? "";
   const pages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
   const link = (change: Partial<SP>) => {
     const next = { ...sp, page: undefined, ...change };
@@ -26,20 +27,18 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
 
   return (
-    <CrmShell user={user} base={base} active="reports" title="Rapoarte" subtitle="Toate rapoartele: VALUEFY și colaborările">
-      <div className="kpis" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
-        <div className="kpi" style={{ ["--dot" as string]: "var(--info)" }}><span><i />Rapoarte</span><b>{data.total.toLocaleString("ro-RO")}</b></div>
-        <a className="kpi" href={link({ status: "done" })} style={{ ["--dot" as string]: "var(--ok)" }}><span><i />Finalizate</span><b>{data.done.toLocaleString("ro-RO")}</b></a>
-        <a className="kpi" href={link({ status: "in_progress" })} style={{ ["--dot" as string]: "var(--acc)" }}><span><i />În lucru / draft</span><b>{data.open.toLocaleString("ro-RO")}</b></a>
-        <a className="kpi" href={link({ status: "suspended" })} style={{ ["--dot" as string]: "var(--err)" }}><span><i />Suspendate</span><b>{data.suspended.toLocaleString("ro-RO")}</b></a>
-        <div className="kpi" style={{ ["--dot" as string]: "var(--acc-ink)" }}><span><i />Onorarii (finalizate)</span><b style={{ fontSize: 24 }}>{lei(Math.round(data.fees))}</b></div>
-      </div>
-
+    <CrmShell user={user} base={base} active="reports" title="Rapoarte" subtitle={`Toate rapoartele: VALUEFY și firmele partenere${data.fees ? ` · onorarii finalizate ${lei(Math.round(data.fees))}` : ""}`}>
+      <nav className="tabs" aria-label="Status raport">
+        {REPORT_TABS.map(([k, label]) => (
+          <a key={k || "all"} href={link({ status: k || undefined })} aria-current={tab === k ? "page" : undefined}>
+            {label} <small>{(counts[k] ?? 0).toLocaleString("ro-RO")}</small>
+          </a>
+        ))}
+      </nav>
       <section className="card">
         <ReportFilters
           base={base} total={data.total} current={{ q: sp.q, status: sp.status, year: sp.year, bank: sp.bank, issuer: sp.issuer, evaluator: sp.evaluator, sort: sp.sort }}
           years={facets.years.map((y) => [String(y.y), String(y.y), y.n])}
-          statuses={Object.entries(REPORT_STATUS).map(([k, [l]]) => [k, l])}
           banks={facets.banks.map((b) => [b.code, b.code, b.n])}
           issuers={facets.issuers.map((i) => [i.id, i.name, i.n])}
           evaluators={facets.evaluators.map((e) => [e.id, e.name, e.n])}
@@ -58,21 +57,23 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         ) : (
           <div className="tableWrap">
             <table className="table">
-              <thead><tr><th>Raport</th><th>Client</th><th>Proprietate</th><th>Bancă</th><th>Evaluator</th><th style={{ textAlign: "right" }}>Valoare</th><th style={{ textAlign: "right" }}>Onorariu</th><th>Status</th></tr></thead>
+              <thead><tr><th>Raport</th><th>Emis de · bancă</th><th>Client</th><th>Proprietate</th><th>Evaluator</th><th>Inspecție</th><th>Status raport</th><th style={{ textAlign: "right" }}>Valoare · onorariu</th></tr></thead>
               <tbody>
                 {data.rows.map((r) => {
                   const [label, cls] = REPORT_STATUS[r.status] ?? [r.status, ""];
                   const [type, address] = (r.asset ?? "|").split("|");
+                  const [insp, inspCls, inspDate] = inspectionState(r);
+                  const own = /valuefy/i.test(r.issuer_name ?? "");
                   return (
                     <ClickRow key={r.id} href={`${base}/rapoarte/${r.id}`}>
                       <td>{r.number ? <a className="ref rowLink" href={`${base}/rapoarte/${r.id}`}>{r.number}</a> : <a className="rowLink muted" href={`${base}/rapoarte/${r.id}`}>fără număr</a>}<div className="muted">{fmtDate(r.report_date)}</div></td>
+                      <td>{r.issuer_name ? <span className={`pill ${own ? "" : "pillWarn"}`} title={r.issuer_name}>{niceName(r.issuer_short ?? r.issuer_name)}</span> : <span className="muted">—</span>}<div className="muted">{r.bank_code ?? "fără bancă"}</div></td>
                       <td><a className="rowLink" href={`${base}/rapoarte/${r.id}`}>{niceName(r.client_name) || "—"}</a><div className="muted">{r.report_type}</div></td>
-                      <td>{cap(type) || "—"}<div className="muted">{address}</div></td>
-                      <td>{r.bank_code ?? "—"}</td>
+                      <td style={{ minWidth: 200 }}>{cap(type) || "—"}<div className="muted">{address}</div></td>
                       <td>{r.evaluator ?? "—"}</td>
-                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{lei(r.result_value)}</td>
-                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{lei(r.fee)}</td>
+                      <td style={{ whiteSpace: "nowrap" }}>{inspCls ? <span className={`pill ${inspCls}`}><i />{insp}</span> : <span className="muted">{insp}</span>}{inspDate && <div className="muted">{fmtDate(inspDate)}</div>}</td>
                       <td><span className={`pill ${cls}`}><i />{label}</span></td>
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{lei(r.result_value)}<div className="muted">{r.fee ? lei(r.fee) : "—"}</div></td>
                     </ClickRow>
                   );
                 })}
