@@ -69,6 +69,32 @@ async function importUsers(db: D1Database, rows: Row[], actor: string, resolve: 
   }
 }
 
+/** Columns that point to another table: checked before writing, and never emptied by an import. */
+const REFS: Record<string, string> = {
+  client_id: "entities", recipient_id: "entities", issuer_id: "entities", bank_id: "entities", firm_id: "entities",
+  order_id: "orders", referral_order_id: "orders", contract_id: "contracts", collaboration_id: "collaborations", statement_id: "statements",
+  report_id: "reports", property_id: "crm_properties", asset_id: "assets", inspection_id: "inspections",
+};
+
+/**
+ * References to rows of other tables that do not exist in the CRM become null (a partial export may name clients,
+ * banks or orders that were never imported) — and a null never overwrites a link already saved (see importRows).
+ */
+async function checkRefs(db: D1Database, table: TableName, rows: Row[], cols: Set<string>) {
+  for (const [col, target] of Object.entries(REFS)) {
+    if (!cols.has(col) || target === table) continue;
+    const ids = [...new Set(rows.map((r) => r[col]).filter((v): v is string => typeof v === "string" && v !== ""))];
+    if (!ids.length) continue;
+    const found = new Set<string>();
+    for (let i = 0; i < ids.length; i += 90) {
+      const part = ids.slice(i, i + 90);
+      const { results } = await db.prepare(`SELECT id FROM ${target} WHERE id IN (${part.map(() => "?").join(", ")})`).bind(...part).all<{ id: string }>();
+      for (const r of results) found.add(r.id);
+    }
+    for (const r of rows) if (typeof r[col] === "string" && !found.has(r[col] as string)) r[col] = null;
+  }
+}
+
 /** Upserts one batch of rows into a table. Returns how many rows were written. */
 export async function importRows(db: D1Database, table: string, rows: Row[], actor: string) {
   if (!(TABLES as readonly string[]).includes(table)) throw new Error("Tabel necunoscut.");
@@ -78,7 +104,10 @@ export async function importRows(db: D1Database, table: string, rows: Row[], act
   if (name === "users") { await importUsers(db, rows, actor, resolve); return rows.length; }
 
   const cols = await columns(db, name);
-  const statements = rows.map((r) => {
+  await checkRefs(db, name, rows, cols);
+  // A team member of a report that is not in the CRM cannot be saved.
+  const list = name === "report_members" ? rows.filter((r) => r.report_id && r.user_id) : rows;
+  const statements = list.map((r) => {
     const keys = Object.keys(r).filter((k) => cols.has(k));
     const values = keys.map((k) => resolve(r[k]));
     const insert = `INSERT INTO ${name} (${keys.join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`;
@@ -90,6 +119,8 @@ export async function importRows(db: D1Database, table: string, rows: Row[], act
       k === "updated_at" ? `updated_at = '${now()}'`
       : k === "viewed_at" ? "viewed_at = COALESCE(viewed_at, excluded.viewed_at)"
       : FILE_COLUMNS.some(([t, c]) => t === name && c === k) ? `${k} = CASE WHEN ${k} LIKE 'r2:%' OR ${k} LIKE 'lost:%' THEN ${k} ELSE excluded.${k} END` // files already moved to R2 stay
+      // A link (client, bank, issuer, order…) missing from this export keeps the one already saved.
+      : REFS[k] ? `${k} = COALESCE(excluded.${k}, ${k})`
       : `${k} = excluded.${k}`);
     return db.prepare(`${insert} ON CONFLICT(glide_id) DO UPDATE SET ${sets.join(", ")}`).bind(...values);
   });

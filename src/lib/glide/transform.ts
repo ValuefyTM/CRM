@@ -168,6 +168,11 @@ export function transform(files: Record<string, string>): ImportPlan {
     sources[base] = byName[base].length;
   }
   const T = (n: string) => byName[n] ?? [];
+  /**
+   * A table not in this upload: references to it keep their CRM id (rows imported before), checked on the server, so a
+   * partial export (e.g. only VFY_RAPOARTE) still links new reports to the clients and banks already in the CRM.
+   */
+  const absent = (n: string) => !(n in byName);
   const anomalies: Anomaly[] = [];
   const flag = (table: string, id: string, issue: string, detail = "") => anomalies.push({ table, id, issue, detail });
   const out: Record<TableName, Row[]> = Object.fromEntries(TABLES.map((n) => [n, []])) as unknown as Record<TableName, Row[]>;
@@ -229,7 +234,7 @@ export function transform(files: Record<string, string>): ImportPlan {
   }
   const firmEntity = (cui: string | null) => {
     const d = digits(cui);
-    return d && entities.has(`g-ent-f-${d}`) ? `g-ent-f-${d}` : null;
+    return d && (entities.has(`g-ent-f-${d}`) || absent("VFY_COMPANII EVALUARE")) ? `g-ent-f-${d}` : null;
   };
   const banks: { id: string; name: string; code: string | null }[] = [];
   for (const b of T("VFY_BANCI")) {
@@ -243,7 +248,7 @@ export function transform(files: Record<string, string>): ImportPlan {
     });
     banks.push({ id: `g-ent-b-${gid}`, name, code: t(b["COD COMPANIE"]) });
   }
-  const bankRef = (gid: string | null) => (gid && entities.has(`g-ent-b-${gid}`) ? `g-ent-b-${gid}` : null);
+  const bankRef = (gid: string | null) => (gid && (entities.has(`g-ent-b-${gid}`) || absent("VFY_BANCI")) ? `g-ent-b-${gid}` : null);
   /** A bank listed among the clients (framework contracts) is the same bank as in VFY_BANCI. */
   const matchBank = (name: string) => {
     const k = key(name);
@@ -294,6 +299,7 @@ export function transform(files: Record<string, string>): ImportPlan {
   const client = (gid: string | null, table: string, id: string) => {
     if (!gid) return null;
     const e = clientAlias.get(gid);
+    if (!e && absent("VFY_CLIENTI")) return `g-ent-c-${gid}`; // client imported before (checked on the server)
     if (!e) flag(table, id, "Client necunoscut", gid);
     return e ?? null;
   };
@@ -436,7 +442,9 @@ export function transform(files: Record<string, string>): ImportPlan {
     else if (nr) reportNumbers.set(nrKey, gid);
     const cadru = t(r["COMANDA/ID COMANDA CADRU"]);
     const colab = t(r["ID COMANDA COLABORATOR"]);
-    const orderId = cadru && orders.has(`g-ord-c-${cadru}`) ? `g-ord-c-${cadru}` : colab && orders.has(`g-ord-k-${colab}`) ? `g-ord-k-${colab}` : null;
+    const orderId = cadru && orders.has(`g-ord-c-${cadru}`) ? `g-ord-c-${cadru}` : colab && orders.has(`g-ord-k-${colab}`) ? `g-ord-k-${colab}`
+      // Orders not in this upload: the ones imported before (checked on the server).
+      : cadru && absent("VFY_COMENZI_CONTRACTE CADRU") ? `g-ord-c-${cadru}` : colab && absent("VFY_COMENZI_COLABORARI") ? `g-ord-k-${colab}` : null;
     if ((cadru || colab) && !orderId) flag("reports", gid, "Comanda raportului nu există", cadru ?? colab ?? "");
     const tipRaport = t(r["TIP RAPORT"]);
     const rt = pick(REPORT_TYPE, tipRaport);
