@@ -156,9 +156,6 @@ body:has(.insp) { background: var(--cream); overscroll-behavior-y: none; }
 .iDayItem { line-height: 1.4; }
 
 /* ---------- sheet ---------- */
-.iTypeSwitch { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px; border-radius: 14px; background: var(--cream-2); }
-.iTypeSwitch button { height: 40px; border: 0; border-radius: 10px; background: none; font-size: 12.5px; font-weight: 700; color: var(--muted); font-family: inherit; }
-.iTypeSwitch button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(17, 17, 17, 0.12); }
 .iSection { background: #fff; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
 .iSectionHead { width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 0; background: none; text-align: left; font-family: inherit; color: var(--ink); }
 .iSecN { width: 30px; height: 30px; flex-shrink: 0; border-radius: 50%; background: var(--cream-2); font-size: 13px; font-weight: 800; display: flex; align-items: center; justify-content: center; }

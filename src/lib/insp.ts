@@ -246,7 +246,8 @@ export async function schedule(db: D1Database, user: User, ins: Insp, b: Record<
 export async function saveSheet(db: D1Database, user: User, ins: Insp, b: Record<string, unknown>) {
   const current = await sheetOf(db, ins.id);
   if (current?.status === "submitted") return { ok: false as const, error: "Fișa a fost deja trimisă.", status: 409 };
-  const type = (FORMS as Record<string, unknown>)[str(b.sheet_type, 20)] ? (str(b.sheet_type, 20) as SheetType) : ins.sheet_type;
+  // The form is the one chosen in the CRM (what the phone sends is ignored).
+  const type = ins.sheet_type;
   const answers = (b.answers && typeof b.answers === "object" ? b.answers : {}) as Answers;
   const submit = b.submit === true;
   const person = str(b.present_person, 120) || null;

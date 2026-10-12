@@ -33,6 +33,9 @@ export function useDraft(ctx: Ctx, id: string, item: Local | undefined, detail: 
   const from = useRef<"" | "phone" | "server" | "blank">("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { sync, reload } = ctx;
+  // The form is chosen in the CRM; the phone always follows it (also for drafts started with another form).
+  const crmType = useRef<Draft["sheet_type"] | undefined>(undefined);
+  crmType.current = (detail?.inspection ?? item)?.sheet_type ?? crmType.current;
   const set = (d: Draft) => { cur.current = d; setDraft(d); };
 
   // Loaded once: what the phone has, else the sheet saved on the server, else an empty sheet.
@@ -67,7 +70,7 @@ export function useDraft(ctx: Ctx, id: string, item: Local | undefined, detail: 
   const update = useCallback((patch: Partial<Draft>) => {
     const c = cur.current;
     if (!c || c.submitted) return;
-    const next: Draft = { ...c, ...patch, updated_at: new Date().toISOString(), dirty: true, error: null };
+    const next: Draft = { ...c, ...patch, sheet_type: crmType.current ?? c.sheet_type, updated_at: new Date().toISOString(), dirty: true, error: null };
     from.current = "phone";
     set(next);
     putDraft(next).then(() => reload());
@@ -75,7 +78,8 @@ export function useDraft(ctx: Ctx, id: string, item: Local | undefined, detail: 
     timer.current = setTimeout(() => { if (navigator.onLine) sync(); }, 4000);
   }, [reload, sync]);
 
-  return { draft, update };
+  const shown = draft && crmType.current && draft.sheet_type !== crmType.current ? { ...draft, sheet_type: crmType.current } : draft;
+  return { draft: shown, update };
 }
 
 export type ShownPhoto = { id: string; category: string; caption: string | null; src: string; local: LocalPhoto | null; server: ServerPhoto | null };

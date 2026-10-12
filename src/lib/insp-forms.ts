@@ -1,7 +1,8 @@
 // Inspection sheets, one form per property type. Shared by the inspections app (client) and the API, which maps the
 // answers onto property_features columns. No server code here.
 
-export const FORM_VERSION = 1;
+/** 2: amplasament first, findings section and the fields the BCR / BRD reports ask for (October 2026). */
+export const FORM_VERSION = 2;
 
 export type SheetType = "apartament" | "casa" | "teren" | "comercial" | "accesoriu";
 
@@ -63,15 +64,68 @@ export const accFields = (inspectionId: string): Field[] => ACC_FIELDS.map((f) =
 /** Parking spaces, garages, storage boxes (CRM / Glide property types). */
 export const isAccessoryType = (type: string | null | undefined) => /PARCARE|GARAJ|\bBOX|ACCESORIU/i.test(type ?? "");
 
+// ---------- sections shared by the forms ----------
+
+const FINISAJ_EXT = ["Termosistem", "Tencuială decorativă", "Placaj", "Tencuială simplă", "Neterminat"];
+const USA_EXT = ["Metalică / antiefracție", "PVC", "Lemn", "Aluminiu"];
+const USI_INT = ["MDF / celular", "Lemn masiv", "PVC", "Sticlă"];
+const TAMPLARIE = ["PVC cu termopan", "Aluminiu cu termopan", "Lemn stratificat", "Lemn simplu"];
+
+/** First section of every form: where the property is (banks ask for position, zone type, transport and flood risk). */
+const amplasament = (extra: Field[] = [], neighbours: Field = { k: "neighbourhood", label: "Vecinătăți", kind: "one", opts: VECINATATI }): Section => ({
+  id: "amplasament", title: "Amplasament și zonă", fields: [
+    { k: "locality_position", label: "Poziția în localitate", kind: "one", opts: ["Central", "Semicentral", "Median", "Periferic", "Izolat / extravilan"] },
+    { k: "zone_type", label: "Tipul zonei", kind: "one", opts: ["Rezidențial", "Mixt rezidențial-comercial", "Comercial", "Industrial", "Agricol"] },
+    neighbours,
+    ...extra,
+    { k: "public_transport", label: "Transport public în zonă", kind: "many", opts: ["Autobuz", "Troleibuz", "Tramvai", "Metrou", "Maxi-taxi", "Tren", "Nu există"] },
+    { k: "transport_distance_m", label: "Distanța până la stația de transport public", kind: "num", unit: "m" },
+    { k: "flood_risk", label: "Risc de inundație vizibil", kind: "one", opts: ["Fără risc vizibil", "Aproape de râu / canal, cu dig", "Aproape de râu / canal, fără dig", "Urme de băltire / inundații"] },
+    { k: "water_body_distance_m", label: "Distanța până la cel mai apropiat râu / canal", kind: "num", unit: "m" },
+  ],
+});
+
+/** Installations shared by the residential forms (after heating and the utility connections). */
+const RESIDENTIAL_EXTRA: Field[] = [
+  { k: "telecom", label: "Telecomunicații", kind: "many", opts: ["Internet / cablu", "Telefon fix", "Nu există"] },
+  { k: "renewables", label: "Surse regenerabile", kind: "many", opts: ["Panouri fotovoltaice", "Panouri solare apă caldă", "Pompă de căldură", "Nu există"] },
+  { k: "thermal_renovation_year", label: "Anul renovării termice (dacă e cazul)", kind: "int" },
+];
+
+/** Last section of every form: what the inspector found compared with the documents. */
+const constatari = (occupancy = true): Section => ({
+  id: "constatari", title: "Constatări", fields: [
+    { k: "inspection_scope", label: "Tipul inspecției", kind: "one", opts: ["Interior și exterior", "Doar exterior"] },
+    ...(occupancy ? [{ k: "occupancy", label: "Utilizarea la data inspecției", kind: "one", opts: ["Locuit de proprietar", "Închiriat", "Nelocuit", "În construcție"] } as Field] : []),
+    { k: "completed", label: "Construcție finalizată", kind: "one", opts: DA_NU },
+    { k: "completion_pct", label: "Grad de finalizare (dacă nu e finalizată)", kind: "num", unit: "%" },
+    { k: "doc_differences", label: "Diferențe față de acte", kind: "many", opts: ["Nu există", "Construcții / anexe neintabulate", "Extindere sau supraetajare", "Compartimentare modificată", "Mansardă / pod amenajat", "Suprafață diferită de acte", "Altă destinație decât în acte"] },
+    { k: "doc_differences_notes", label: "Detalii diferențe", kind: "text", long: true, placeholder: "ex. anexă din lemn de cca 15 m² în curte, neintabulată" },
+    { k: "defects", label: "Defecte vizibile", kind: "many", opts: ["Nu sunt", "Infiltrații", "Igrasie / umezeală", "Mucegai", "Fisuri", "Tencuieli căzute", "Instalații degradate", "Azbest (învelitoare / plăci)"] },
+    { k: "notes", label: "Observații", kind: "text", long: true },
+  ],
+});
+
 export const FORMS: Record<SheetType, Section[]> = {
   apartament: [
+    amplasament([
+      { k: "access_road", label: "Drum de acces", kind: "one", opts: ["Asfalt", "Pavat", "Pietruit", "De pământ"] },
+      { k: "parking", label: "Parcare", kind: "one", opts: ["Loc propriu", "Stradă", "Garaj", "Lipsă"] },
+    ]),
     { id: "cladire", title: "Clădirea", fields: [
-      { k: "year_built", label: "An construcție bloc", kind: "int", placeholder: "ex. 1978" },
-      { k: "structure", label: "Structură", kind: "one", opts: ["Panouri mari prefabricate", "Cadre beton armat", "Zidărie portantă", "Metalică"] },
+      { k: "building_kind", label: "Tipul clădirii", kind: "one", opts: ["Bloc de locuințe", "Casă / duplex", "Vilă"] },
+      { k: "year_built", label: "An construcție", kind: "int", placeholder: "ex. 1978" },
       { k: "height_regime", label: "Regim de înălțime", kind: "text", placeholder: "ex. P+10" },
       { k: "floor", label: "Etaj", kind: "text", placeholder: "ex. 3" },
+      { k: "structure", label: "Structură", kind: "one", opts: ["Panouri mari prefabricate", "Cadre beton armat", "Zidărie portantă", "Metalică"] },
+      { k: "foundation", label: "Fundație", kind: "one", opts: ["Fundații continue de beton", "Radier general", "Fundații izolate", "Nu se cunoaște"] },
+      { k: "walls", label: "Închideri", kind: "one", opts: ["Cărămidă", "BCA", "Cărămidă și BCA", "Panouri prefabricate", "Bolțari"] },
+      { k: "roof", label: "Acoperiș", kind: "one", opts: ["Terasă", "Șarpantă de lemn", "Șarpantă metalică"] },
+      { k: "roof_cover", label: "Învelitoare", kind: "one", opts: ["Țiglă", "Tablă", "Bitum / membrană", "Azbociment"] },
       { k: "elevator", label: "Lift", kind: "one", opts: DA_NU },
-      { k: "thermal_insulation", label: "Bloc anvelopat termic", kind: "one", opts: ["Da", "Parțial", "Nu"] },
+      { k: "thermal_insulation", label: "Clădire anvelopată termic", kind: "one", opts: ["Da", "Parțial", "Nu"] },
+      { k: "seismic_class", label: "Risc seismic (plăcuța clădirii)", kind: "one", opts: ["Fără încadrare / neexpertizat", "Bulină roșie / clasa I", "Clasa II", "Clasa III", "Clasa IV"] },
+      { k: "common_areas", label: "Spații comune", kind: "many", opts: ["Hol / casa scării", "Lift", "Curte comună", "Loc de parcare", "Boxă", "Terasă comună", "Nu există"] },
       { k: "building_condition", label: "Starea clădirii", kind: "one", opts: STARE },
     ] },
     { id: "apartament", title: "Apartamentul", fields: [
@@ -79,7 +133,9 @@ export const FORMS: Record<SheetType, Section[]> = {
       { k: "usable_area", label: "Suprafață utilă măsurată", kind: "num", unit: "m²" },
       { k: "bathrooms", label: "Băi", kind: "int" },
       { k: "layout", label: "Compartimentare", kind: "one", opts: ["Decomandat", "Semidecomandat", "Nedecomandat", "Circular"] },
-      { k: "balconies", label: "Balcon / logie", kind: "one", opts: ["Nu", "1", "2", "3+", "Închis"] },
+      { k: "balconies", label: "Balcon / logie / terasă", kind: "one", opts: ["Nu", "1", "2", "3+", "Închis"] },
+      { k: "balcony_area", label: "Suprafață balcoane / terase", kind: "num", unit: "m²" },
+      { k: "ceiling_height_m", label: "Înălțimea interioară", kind: "num", unit: "m" },
       { k: "orientation", label: "Orientare", kind: "many", opts: ["N", "S", "E", "V"] },
     ] },
     { id: "finisaje", title: "Finisaje", fields: [
@@ -87,36 +143,41 @@ export const FORMS: Record<SheetType, Section[]> = {
       { k: "floors_rooms", label: "Pardoseli camere", kind: "many", opts: ["Parchet", "Laminat", "Gresie", "Mozaic", "Dușumea lemn"] },
       { k: "floors_wet", label: "Pardoseli zone umede", kind: "many", opts: ["Gresie", "Mozaic", "Ciment"] },
       { k: "wall_finish", label: "Pereți", kind: "many", opts: ["Vopsea lavabilă", "Tapet", "Faianță", "Tencuieli simple"] },
-      { k: "windows", label: "Tâmplărie exterioară", kind: "one", opts: ["PVC cu termopan", "Aluminiu cu termopan", "Lemn stratificat", "Lemn simplu"] },
+      { k: "windows", label: "Tâmplărie exterioară", kind: "one", opts: TAMPLARIE },
+      { k: "entrance_door", label: "Ușa de intrare", kind: "one", opts: USA_EXT },
+      { k: "interior_doors", label: "Tâmplărie interioară", kind: "one", opts: USI_INT },
       { k: "last_renovation", label: "Anul ultimei renovări", kind: "int" },
     ] },
     { id: "instalatii", title: "Instalații și branșamente", fields: [
-      { k: "heating", label: "Încălzire", kind: "one", opts: ["Centrală proprie pe gaz", "Termoficare", "Centrală de bloc", "Sobe", "Electric", "Pompă de căldură"] },
+      { k: "heating", label: "Încălzire", kind: "one", opts: ["Centrală proprie pe gaz", "Termoficare", "Centrală de bloc", "Sobe", "Electric", "Pompă de căldură", "Fără sistem de încălzire"] },
       ...UTILS(),
+      { k: "own_sources", label: "Surse proprii (apartament în casă)", kind: "many", opts: ["Puț", "Fosă septică", "Rezervor GPL", "Nu există"] },
+      ...RESIDENTIAL_EXTRA,
       { k: "installations_condition", label: "Starea instalațiilor", kind: "one", opts: STARE },
       { k: "air_conditioning", label: "Climatizare", kind: "one", opts: DA_NU },
     ] },
-    { id: "zona", title: "Zona și observații", fields: [
-      { k: "neighbourhood", label: "Vecinătăți", kind: "one", opts: VECINATATI },
-      { k: "public_transport", label: "Transport public în zonă", kind: "many", opts: ["Autobuz", "Troleibuz", "Tramvai", "Metrou", "Maxi-taxi"] },
-      { k: "parking", label: "Parcare", kind: "one", opts: ["Loc propriu", "Stradă", "Garaj", "Lipsă"] },
-      { k: "notes", label: "Observații", kind: "text", long: true },
-    ] },
+    constatari(),
   ],
   casa: [
+    amplasament(),
     { id: "teren", title: "Terenul", fields: [
       { k: "land_area", label: "Suprafață teren", kind: "num", unit: "m²" },
       { k: "frontage_m", label: "Front stradal", kind: "num", unit: "m" },
       { k: "shape", label: "Formă", kind: "one", opts: ["Regulată", "Neregulată"] },
+      { k: "slope", label: "Planeitate", kind: "one", opts: ["Plan", "Ușor înclinat", "Înclinat"] },
       { k: "fencing", label: "Împrejmuire", kind: "many", opts: ["Gard beton", "Gard metalic", "Gard lemn", "Plasă", "Lipsă"] },
       { k: "access_road", label: "Drum de acces", kind: "one", opts: ["Asfalt", "Pavat", "Pietruit", "De pământ"] },
     ] },
     { id: "constructie", title: "Construcția principală", fields: [
       { k: "height_regime", label: "Regim de înălțime", kind: "text", placeholder: "ex. P+1" },
       { k: "year_built", label: "An construcție", kind: "int" },
+      { k: "last_renovation", label: "Anul modernizării / renovării majore", kind: "int" },
       { k: "rooms", label: "Număr camere", kind: "int" },
+      { k: "bathrooms", label: "Băi", kind: "int" },
       { k: "usable_area", label: "Suprafață utilă măsurată", kind: "num", unit: "m²" },
       { k: "built_area", label: "Suprafață construită la sol", kind: "num", unit: "m²" },
+      { k: "balcony_area", label: "Suprafață terase / balcoane", kind: "num", unit: "m²" },
+      { k: "ceiling_height_m", label: "Înălțimea interioară", kind: "num", unit: "m" },
       { k: "foundation", label: "Fundație", kind: "one", opts: ["Fundații continue de beton", "Radier general", "Fundații izolate", "Fără fundație"] },
       { k: "structure", label: "Structură", kind: "one", opts: ["Zidărie portantă cu centuri", "Cadre beton armat", "Lemn", "Metalică", "Chirpici / paiantă"] },
       { k: "walls", label: "Închideri", kind: "one", opts: ["Cărămidă", "BCA", "Cărămidă și BCA", "Bolțari", "Lemn"] },
@@ -126,23 +187,30 @@ export const FORMS: Record<SheetType, Section[]> = {
     ] },
     { id: "finisaje", title: "Finisaje", fields: [
       { k: "finish_level", label: "Nivelul finisajelor", kind: "one", opts: FINISAJ },
-      { k: "exterior_finish", label: "Finisaj exterior", kind: "one", opts: ["Termosistem", "Tencuială decorativă", "Placaj", "Tencuială simplă", "Neterminat"] },
-      { k: "floors_rooms", label: "Pardoseli", kind: "many", opts: ["Parchet", "Gresie", "Laminat", "Marmură", "Dușumea lemn"] },
-      { k: "windows", label: "Tâmplărie exterioară", kind: "one", opts: ["PVC cu termopan", "Aluminiu cu termopan", "Lemn stratificat", "Lemn simplu"] },
+      { k: "exterior_finish", label: "Finisaj exterior", kind: "one", opts: FINISAJ_EXT },
+      { k: "floors_rooms", label: "Pardoseli camere", kind: "many", opts: ["Parchet", "Gresie", "Laminat", "Marmură", "Dușumea lemn", "Ciment"] },
+      { k: "floors_wet", label: "Pardoseli zone umede", kind: "many", opts: ["Gresie", "Mozaic", "Ciment"] },
+      { k: "wall_finish", label: "Pereți", kind: "many", opts: ["Vopsea lavabilă", "Tapet", "Faianță", "Tencuieli simple"] },
+      { k: "windows", label: "Tâmplărie exterioară", kind: "one", opts: TAMPLARIE },
+      { k: "entrance_door", label: "Ușa de intrare", kind: "one", opts: USA_EXT },
+      { k: "interior_doors", label: "Tâmplărie interioară", kind: "one", opts: USI_INT },
     ] },
     { id: "instalatii", title: "Instalații și branșamente", fields: [
-      { k: "heating", label: "Încălzire", kind: "one", opts: ["Centrală pe gaz", "Pompă de căldură", "Combustibil solid", "Sobe", "Electric"] },
+      { k: "heating", label: "Încălzire", kind: "one", opts: ["Centrală pe gaz", "Pompă de căldură", "Combustibil solid", "Sobe", "Electric", "Fără sistem de încălzire"] },
       ...UTILS(),
-      { k: "own_sources", label: "Surse proprii", kind: "many", opts: ["Puț", "Fosă septică", "Panouri fotovoltaice", "Nu există"] },
+      { k: "own_sources", label: "Surse proprii", kind: "many", opts: ["Puț", "Fosă septică", "Rezervor GPL", "Generator", "Nu există"] },
+      ...RESIDENTIAL_EXTRA,
       { k: "installations_condition", label: "Starea instalațiilor", kind: "one", opts: STARE },
     ] },
-    { id: "anexe", title: "Anexe și zona", fields: [
+    { id: "anexe", title: "Anexe", fields: [
       { k: "annexes", label: "Anexe pe teren", kind: "many", opts: ["Garaj", "Magazie", "Foișor", "Piscină", "Nu există"] },
-      { k: "neighbourhood", label: "Vecinătăți", kind: "one", opts: VECINATATI },
-      { k: "notes", label: "Observații", kind: "text", long: true },
     ] },
+    constatari(),
   ],
   teren: [
+    amplasament([
+      { k: "access_road", label: "Drum de acces", kind: "one", opts: ["Asfalt", "Pietruit", "De pământ", "Fără acces direct"] },
+    ], { k: "surroundings", label: "Vecinătăți", kind: "many", opts: ["Rezidențial", "Agricol", "Industrial", "Comercial"] }),
     { id: "incadrare", title: "Încadrare", fields: [
       { k: "land_area", label: "Suprafață măsurată", kind: "num", unit: "m²" },
       { k: "urban_zone", label: "Încadrare", kind: "one", opts: ["Intravilan", "Extravilan"] },
@@ -152,21 +220,30 @@ export const FORMS: Record<SheetType, Section[]> = {
     { id: "configuratie", title: "Configurație", fields: [
       { k: "shape", label: "Formă", kind: "one", opts: ["Regulată", "Neregulată"] },
       { k: "frontage_m", label: "Front stradal", kind: "num", unit: "m" },
+      { k: "street_fronts", label: "Număr de deschideri la stradă", kind: "int" },
       { k: "depth_m", label: "Adâncime", kind: "num", unit: "m" },
       { k: "slope", label: "Planeitate", kind: "one", opts: ["Plan", "Ușor înclinat", "Înclinat"] },
       { k: "fencing", label: "Împrejmuire", kind: "many", opts: ["Gard", "Parțială", "Lipsă"] },
+      { k: "land_improvements", label: "Îmbunătățiri", kind: "many", opts: ["Pavaje / alei", "Platforme betonate", "Drenaje", "Nu există"] },
+      { k: "easements", label: "Rețele care traversează terenul", kind: "many", opts: ["Linie electrică aeriană", "Conducte / rețele subterane", "Drum de servitute", "Nu există vizibile"] },
     ] },
-    { id: "acces", title: "Acces și branșamente", fields: [
-      { k: "access_road", label: "Drum de acces", kind: "one", opts: ["Asfalt", "Pietruit", "De pământ", "Fără acces direct"] },
-      ...UTILS("Curent electric", "Contor electric montat (firidă)"),
-    ] },
-    { id: "zona", title: "Construcții și zonă", fields: [
+    { id: "bransamente", title: "Branșamente", fields: UTILS("Curent electric", "Contor electric montat (firidă)") },
+    { id: "constructii", title: "Construcții pe teren", fields: [
       { k: "land_constructions", label: "Construcții pe teren", kind: "one", opts: ["Nu există", "Provizorii", "De demolat", "În construcție"] },
-      { k: "surroundings", label: "Vecinătăți", kind: "many", opts: ["Rezidențial", "Agricol", "Industrial", "Comercial"] },
+    ] },
+    { id: "constatari", title: "Constatări", fields: [
+      { k: "inspection_scope", label: "Tipul inspecției", kind: "one", opts: ["La fața locului", "Doar de la limita terenului"] },
+      { k: "doc_differences", label: "Diferențe față de acte", kind: "many", opts: ["Nu există", "Construcții neintabulate", "Suprafață / limite diferite de acte", "Altă folosință decât în acte"] },
+      { k: "doc_differences_notes", label: "Detalii diferențe", kind: "text", long: true },
       { k: "notes", label: "Observații", kind: "text", long: true },
     ] },
   ],
   comercial: [
+    amplasament([
+      { k: "road_access", label: "Acces rutier", kind: "one", opts: ["Drum național", "Drum județean", "Stradă", "Drum de exploatare"] },
+      { k: "visibility", label: "Vizibilitate de la drum", kind: "one", opts: ["Ridicată", "Medie", "Redusă"] },
+      { k: "yard_area", label: "Curte / parcare", kind: "num", unit: "m²" },
+    ]),
     { id: "spatiu", title: "Spațiul", fields: [
       { k: "use_type", label: "Destinație", kind: "one", opts: ["Comercial stradal", "Birouri", "Hală de producție", "Depozit / logistică", "Turism / cazare"] },
       { k: "built_area", label: "Suprafață construită", kind: "num", unit: "m²" },
@@ -188,6 +265,7 @@ export const FORMS: Record<SheetType, Section[]> = {
       { k: "heating", label: "Încălzire", kind: "one", opts: ["Aeroterme pe gaz", "Centrală termică", "Pompă de căldură", "Termoficare", "Fără"] },
       ...UTILS("Curent electric (trifazic)"),
       { k: "power_kw", label: "Putere electrică", kind: "num", unit: "kW" },
+      { k: "renewables", label: "Surse regenerabile", kind: "many", opts: ["Panouri fotovoltaice", "Pompă de căldură", "Nu există"] },
       { k: "fire_safety", label: "Siguranță la incendiu", kind: "many", opts: ["Hidranți", "Sprinklere", "Detecție incendiu", "Avizat ISU"] },
     ] },
     { id: "birouri", title: "Birouri și anexe", fields: [
@@ -195,12 +273,7 @@ export const FORMS: Record<SheetType, Section[]> = {
       { k: "offices_finish", label: "Finisaje birouri", kind: "one", opts: ["Superioare", "Medii", "Inferioare", "Nu există"] },
       { k: "sanitary", label: "Grupuri sanitare / vestiare", kind: "one", opts: DA_NU },
     ] },
-    { id: "amplasament", title: "Amplasament", fields: [
-      { k: "road_access", label: "Acces rutier", kind: "one", opts: ["Drum național", "Drum județean", "Stradă", "Drum de exploatare"] },
-      { k: "yard_area", label: "Curte / parcare", kind: "num", unit: "m²" },
-      { k: "visibility", label: "Vizibilitate de la drum", kind: "one", opts: ["Ridicată", "Medie", "Redusă"] },
-      { k: "notes", label: "Observații", kind: "text", long: true },
-    ] },
+    constatari(false),
   ],
   accesoriu: [
     { id: "accesoriu", title: "Accesoriul", fields: ACC_FIELDS.filter((f) => f.k !== "acc_notes") },
@@ -262,8 +335,11 @@ export function isFilled(f: Field, a: Answers[string]): boolean {
   return typeof a === "string" && a.trim() !== "";
 }
 
+/** Free text and answers needed only in some cases (details, completion %) do not count towards completion. */
+export const isOptional = (f: Field) => f.k === "notes" || f.k.endsWith("acc_notes") || f.k.endsWith("_notes") || f.k === "completion_pct";
+
 export function progress(t: SheetType, answers: Answers) {
-  const fields = allFields(t).filter((f) => f.k !== "notes");
+  const fields = allFields(t).filter((f) => !isOptional(f));
   const done = fields.filter((f) => isFilled(f, answers[f.k])).length;
   return { done, total: fields.length };
 }
@@ -274,8 +350,31 @@ const toNum = (v: unknown) => {
   return Number.isFinite(n) ? n : null;
 };
 
-/** Maps the answers onto property_features columns. Only fields of the chosen form are kept; values are checked. */
+/**
+ * Fields added in form v2: property_features is close to D1's 100-column limit, so their values are kept together
+ * as JSON in its "extra" column (same names and value rules as the other columns).
+ */
+export const EXTRA_FEATURES = new Set([
+  "locality_position", "zone_type", "transport_distance_m", "flood_risk", "water_body_distance_m", "building_kind", "seismic_class",
+  "common_areas", "balcony_area", "ceiling_height_m", "entrance_door", "interior_doors", "telecom", "renewables", "thermal_renovation_year",
+  "street_fronts", "land_improvements", "easements", "inspection_scope", "completed", "completion_pct", "doc_differences",
+  "doc_differences_notes", "defects",
+]);
+
+/** Maps the answers onto property_features columns (v2 fields → "extra" JSON). Only fields of the chosen form are kept; values are checked. */
 export function featureColumns(t: SheetType, answers: Answers): Record<string, string | number | null> {
+  const all = featureValues(t, answers);
+  const out: Record<string, string | number | null> = {};
+  const extra: Record<string, string | number> = {};
+  for (const [k, v] of Object.entries(all)) {
+    if (!EXTRA_FEATURES.has(k)) out[k] = v;
+    else if (v !== null) extra[k] = v;
+  }
+  if (t !== "accesoriu") out.extra = Object.keys(extra).length ? JSON.stringify(extra) : null;
+  return out;
+}
+
+function featureValues(t: SheetType, answers: Answers): Record<string, string | number | null> {
   const out: Record<string, string | number | null> = {};
   if (t === "accesoriu") return out; // accessories keep their answers on the sheet only
   for (const f of allFields(t)) {
