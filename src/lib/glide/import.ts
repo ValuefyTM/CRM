@@ -98,6 +98,24 @@ async function checkRefs(db: D1Database, table: TableName, rows: Row[], cols: Se
   }
 }
 
+/** Files copied into R2 before the Glide data was deleted (see purge.ts) are linked again instead of the Glide URL. */
+async function relinkFiles(db: D1Database, table: TableName, rows: Row[]) {
+  const cols = FILE_COLUMNS.filter(([t]) => t === table).map(([, c]) => c);
+  const ids = rows.map((r) => r.id).filter((v): v is string => typeof v === "string");
+  if (!cols.length || !ids.length) return;
+  const saved = new Map<string, string>();
+  for (let i = 0; i < ids.length; i += 90) {
+    const part = ids.slice(i, i + 90);
+    const { results } = await db.prepare(`SELECT col, row_id, value FROM glide_files WHERE tbl = ? AND row_id IN (${part.map(() => "?").join(", ")})`)
+      .bind(table, ...part).all<{ col: string; row_id: string; value: string }>();
+    for (const f of results) saved.set(`${f.row_id}|${f.col}`, f.value);
+  }
+  for (const r of rows) for (const c of cols) {
+    const v = saved.get(`${r.id}|${c}`);
+    if (v && r[c]) r[c] = v;
+  }
+}
+
 /** Upserts one batch of rows into a table. Returns how many rows were written. */
 export async function importRows(db: D1Database, table: string, rows: Row[], actor: string) {
   if (!(TABLES as readonly string[]).includes(table)) throw new Error("Tabel necunoscut.");
@@ -108,6 +126,7 @@ export async function importRows(db: D1Database, table: string, rows: Row[], act
 
   const cols = await columns(db, name);
   await checkRefs(db, name, rows, cols);
+  await relinkFiles(db, name, rows);
   // A team member of a report that is not in the CRM cannot be saved.
   const list = name === "report_members" ? rows.filter((r) => r.report_id && resolve(r.user_id ?? null)) : rows;
   const statements = list.map((r) => {
