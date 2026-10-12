@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import type { Ctx } from "./InspApp";
 import { useDetail, useDraft } from "./hooks";
 import { Chips, Icon, TopBar, type Local } from "./ui";
 import { DocsFab } from "./DocsViewer";
-import { accFields, FORMS, isFilled, isOptional, progress, SHEET_TYPES, type Answers, type Field, type Section, type UtilAnswer } from "@/lib/insp-forms";
+import { RoomsSection } from "./RoomsSection";
+import { accFields, FORMS, hasRooms, isFilled, isOptional, progress, ROOMS_KEY, roomsOf, SHEET_TYPES, type Answers, type Field, type Section, type UtilAnswer } from "@/lib/insp-forms";
 
 function UtilBlock({ f, value, onChange, readOnly }: { f: Extract<Field, { kind: "util" }>; value: UtilAnswer; onChange: (v: UtilAnswer) => void; readOnly: boolean }) {
   const yn = (cur: string | undefined, set: (v: "da" | "nu" | undefined) => void, label: string) => (
@@ -36,7 +37,7 @@ function FieldInput({ f, answers, set, readOnly }: { f: Field; answers: Answers;
   const a = answers[f.k];
   if (f.kind === "util") return <UtilBlock f={f} value={(a ?? {}) as UtilAnswer} onChange={(v) => set(f.k, v)} readOnly={readOnly} />;
   if (f.kind === "one" || f.kind === "many") {
-    const v = Array.isArray(a) ? a : typeof a === "string" && a ? [a] : [];
+    const v = Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : typeof a === "string" && a ? [a] : [];
     return (
       <fieldset className="iChipsWrap" disabled={readOnly}>
         <Chips label={f.label} opts={f.opts} value={v} multi={f.kind === "many"} onChange={(n) => set(f.k, f.kind === "many" ? n : n[0] ?? "")} />
@@ -98,13 +99,21 @@ export function SheetView({ ctx, id, item }: { ctx: Ctx; id: string; item: Local
         {ro && <p className="iNote ok">{draft.submitted ? "Fișa a fost trimisă și nu mai poate fi modificată." : "Fișa este semnată și așteaptă să fie trimisă."}</p>}
         {draft.error && <p className="iNote err">{draft.error}</p>}
         {(i.hosted ?? []).length > 0 && <p className="iNote">Pe această fișă inspectezi și {(i.hosted ?? []).map((h) => h.label.toLowerCase()).join(", ")}: secțiunile „Accesoriu” de la final.</p>}
-        {sections.map((s, n) => {
+        {sections.map((s, idx) => {
+          // The rooms of the survey come right after the finishes (the space, for commercial properties).
+          const anchor = type === "comercial" ? "spatiu" : "finisaje";
+          const roomsAt = hasRooms(type) ? sections.findIndex((x) => x.id === anchor) : -1;
+          const n = idx + (roomsAt >= 0 && idx > roomsAt ? 1 : 0);
+          const rooms = idx === roomsAt
+            ? <RoomsSection key="rooms" id={id} rooms={roomsOf(draft.answers)} onChange={(r) => set(ROOMS_KEY, r)} readOnly={ro} n={n + 2} online={ctx.online} />
+            : null;
           const free = isOptional;
           const filled = s.fields.filter((f) => !free(f) && isFilled(f, draft.answers[f.k])).length;
           const total = s.fields.filter((f) => !free(f)).length;
           const isOpen = !!open[s.id];
           return (
-            <section key={s.id} className={`iSection${isOpen ? " open" : ""}`}>
+            <Fragment key={s.id}>
+            <section className={`iSection${isOpen ? " open" : ""}`}>
               <button type="button" className="iSectionHead" aria-expanded={isOpen} onClick={() => setOpen({ ...open, [s.id]: !isOpen })}>
                 <span className={`iSecN${filled === total ? " ok" : ""}`}>{filled === total ? <Icon.check /> : n + 1}</span>
                 <span className="iSecT"><b>{s.title}</b><small>{filled} din {total} completate</small></span>
@@ -121,6 +130,8 @@ export function SheetView({ ctx, id, item }: { ctx: Ctx; id: string; item: Local
                 </div>
               )}
             </section>
+            {rooms}
+            </Fragment>
           );
         })}
         <p className="hint center">Totul se salvează pe telefon pe măsură ce completezi{ctx.online ? " și se trimite automat ca ciornă" : ""}.</p>

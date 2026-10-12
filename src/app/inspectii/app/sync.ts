@@ -132,3 +132,16 @@ export function syncAll(): Promise<SyncResult> {
   })();
   return running;
 }
+
+export type SurveyRooms = { rooms: { pos: string | null; name: string; level: string | null; area: number | null }[]; usable_total: number | null; note: string | null };
+
+/** Room list read from the floor survey by AI (needs signal). */
+export async function readRooms(id: string): Promise<{ ok: true; data: SurveyRooms } | { ok: false; error: string }> {
+  try {
+    const r = await call<SurveyRooms>(`/api/insp/inspections/${encodeURIComponent(id)}/rooms`, { method: "POST" });
+    return r.ok ? r : { ok: false, error: r.error };
+  } catch (e) {
+    if (e instanceof AuthExpired) throw e;
+    return { ok: false, error: "Fără semnal sau serviciul nu răspunde. Încearcă din nou când ai semnal, sau adaugă încăperile manual." };
+  }
+}

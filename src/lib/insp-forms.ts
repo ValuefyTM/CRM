@@ -28,7 +28,26 @@ export type Section = { id: string; title: string; fields: Field[] };
 
 /** Answers as kept on the phone: choice → label, many → labels, num → text as typed, util → object. */
 export type UtilAnswer = { on?: "da" | "nu"; meter?: "da" | "nu"; dist?: string };
-export type Answers = Record<string, string | string[] | UtilAnswer | undefined>;
+/** One room of the floor survey (releveu): listed from the survey (by AI or by hand), then described at the visit. */
+export type Room = {
+  id: string; pos: string; name: string; level: string; area: string;
+  floor?: string[]; walls?: string[]; ceiling?: string; condition?: string; notes?: string;
+};
+export type Answers = Record<string, string | string[] | UtilAnswer | Room[] | undefined>;
+
+/** Answers key of the room list (apartment, house, commercial sheets). */
+export const ROOMS_KEY = "incaperi";
+export const hasRooms = (t: SheetType) => t === "apartament" || t === "casa" || t === "comercial";
+export const ROOM_FIELDS = {
+  floor: { label: "Pardoseală", opts: ["Parchet", "Laminat", "Gresie", "Mozaic", "Dușumea lemn", "Ciment", "Mochetă / PVC"] },
+  walls: { label: "Pereți", opts: ["Vopsea lavabilă", "Faianță", "Tapet", "Tencuieli simple", "Lambriu", "Neterminat"] },
+  ceiling: { label: "Plafon", opts: ["Vopsea lavabilă", "Gips-carton", "Tavan fals", "Lambriu", "Tencuială simplă"] },
+} as const;
+export const ROOM_LEVELS = ["Subsol", "Demisol", "Parter", "Etaj 1", "Etaj 2", "Etaj 3", "Mansardă", "Pod"];
+/** "Dormitor · rlv 8": the room as written on its photos and in the inspection sheet. */
+export const roomLabel = (r: Pick<Room, "name" | "pos">) => `${r.name || "Încăpere"}${r.pos ? ` · rlv ${r.pos}` : ""}`;
+/** The room list of a sheet (empty when none). */
+export const roomsOf = (a: Answers): Room[] => (Array.isArray(a[ROOMS_KEY]) ? (a[ROOMS_KEY] as unknown[]).filter((r): r is Room => !!r && typeof r === "object" && "name" in r) : []);
 
 const STARE = ["Foarte bună", "Bună", "Satisfăcătoare", "Deteriorată"];
 const FINISAJ = ["Superioare", "Medii-superioare", "Medii", "Medii-inferioare", "Inferioare"];
@@ -325,6 +344,7 @@ export const allFields = (t: SheetType) => FORMS[t].flatMap((s) => s.fields);
 
 /** A field counts as filled when it has an answer; a utility needs the meter (connected) or the distance (not connected). */
 export function isFilled(f: Field, a: Answers[string]): boolean {
+  if (Array.isArray(a) && a.some((x) => typeof x !== "string")) return false; // a room list is not a field answer
   if (f.kind === "util") {
     const u = (a ?? {}) as UtilAnswer;
     if (u.on === "da") return f.k === "sewer" || !!u.meter;
@@ -388,7 +408,7 @@ function featureValues(t: SheetType, answers: Answers): Record<string, string | 
     } else if (f.kind === "one") {
       out[f.k] = typeof a === "string" && f.opts.includes(a) ? a : null;
     } else if (f.kind === "many") {
-      const list = Array.isArray(a) ? f.opts.filter((o) => a.includes(o)) : [];
+      const list = Array.isArray(a) ? f.opts.filter((o) => (a as unknown[]).includes(o)) : [];
       out[f.k] = list.length ? list.join(", ") : null;
     } else if (f.kind === "num") {
       const n = toNum(a);

@@ -358,7 +358,8 @@ export async function addPhoto(db: D1Database, user: User, ins: Insp, form: Form
   if (!r2) return { ok: false as const, error: "Stocarea fișierelor nu este disponibilă.", status: 503 };
   const ext = type === "image/png" ? "png" : type === "image/webp" ? "webp" : type.startsWith("image/hei") ? "heic" : "jpg";
   const key = `inspectii/${ins.id}/${id}.${ext}`;
-  await r2.put(key, file.stream(), { httpMetadata: { contentType: type, cacheControl: "private, max-age=604800" } });
+  // R2 needs the length up front: a form file's stream has none (photos are already shrunk on the phone, so they fit in memory).
+  await r2.put(key, await file.arrayBuffer(), { httpMetadata: { contentType: type, cacheControl: "private, max-age=604800" } });
   const n = (v: FormDataEntryValue | null) => (v === null || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
   const cat = str(form.get("category"), 30) || "other";
   await db

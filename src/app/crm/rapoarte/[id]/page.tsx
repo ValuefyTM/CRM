@@ -456,7 +456,10 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             const sig = fileSrc(a.sheet_signature);
             return (
               <section key={a.id} id={`fisa-${a.id}`} className="card">
-                <h2>Fișa de inspecție <span className="muted">· {cap(a.type) || "bun"}{a.done_at ? ` · efectuată ${fmtDate(a.done_at, true)}` : ""}{a.inspector ? ` · ${a.inspector}` : ""}</span></h2>
+                <div className="cardHead">
+                  <h2>Fișa de inspecție <span className="muted">· {cap(a.type) || "bun"}{a.done_at ? ` · efectuată ${fmtDate(a.done_at, true)}` : ""}{a.inspector ? ` · ${a.inspector}` : ""}</span></h2>
+                  {a.sheet_type && <a className="btn btnGhost btnSm" href={`${base}/rapoarte/${r.id}/fisa/${a.id}`}>Fișa pentru raport (PDF)</a>}
+                </div>
                 <div className="grid3 tight">
                   <div>
                     <div className="section">Constatări</div>

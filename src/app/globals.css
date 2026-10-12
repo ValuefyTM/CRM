@@ -1511,3 +1511,15 @@ div.dbKpi::after { content: none; }
 .lstPhotoBtns { position: absolute; right: 6px; bottom: 6px; display: flex; gap: 4px; }
 .lstPhotoBtns button { width: 30px; height: 30px; border-radius: 8px; border: 0; background: rgba(17, 17, 17, 0.72); color: #fff; font-size: 14px; cursor: pointer; }
 .lstPhotoBtns button:disabled { opacity: 0.35; cursor: default; }
+
+/* Inspection sheet document (annex to the report) */
+.fsPage { font-size: 9.5pt; }
+.fsSection { break-inside: avoid; }
+.fsKv th { width: 42%; font-weight: 600; background: #faf8f3; }
+.fsNote { font-size: 8pt; color: #666; }
+.fsSig { max-height: 70px; max-width: 220px; object-fit: contain; margin-top: auto; }
+.fsPhotos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fsPhotos figure { margin: 0; break-inside: avoid; }
+.fsPhotos img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; border: 1px solid #ddd; }
+.fsPhotos figcaption { font-size: 8.5pt; padding-top: 3px; color: #333; }
+@media print { .fsPhotosPage { break-before: page; } }

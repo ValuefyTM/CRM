@@ -5,7 +5,7 @@ import type { Ctx } from "./InspApp";
 import { newId } from "./store";
 import { position, shrink, useDetail, useDraft, usePhotos, type ShownPhoto } from "./hooks";
 import { Icon, TopBar, type Local } from "./ui";
-import { photoCategories } from "@/lib/insp-forms";
+import { photoCategories, roomLabel, roomsOf, type Room } from "@/lib/insp-forms";
 
 /** Photos by category, taken with the phone camera. Kept on the phone until they reach the server. */
 export function PhotosView({ ctx, id, item }: { ctx: Ctx; id: string; item: Local | undefined }) {
@@ -17,22 +17,26 @@ export function PhotosView({ ctx, id, item }: { ctx: Ctx; id: string; item: Loca
   const input = useRef<HTMLInputElement>(null);
   const gallery = useRef<HTMLInputElement>(null);
   const cat = useRef("exterior");
+  const caption = useRef<string | null>(null);
   const ro = !!draft?.submitted || !!draft?.submit;
 
   if (!draft) return (<><TopBar title="Fotografii" onBack={ctx.back} /><div className="iPad"><p className="iEmpty">Se încarcă…</p></div></>);
   const cats = photoCategories(draft.sheet_type);
 
-  const take = (k: string, fromGallery = false) => { cat.current = k; (fromGallery ? gallery : input).current?.click(); };
+  const take = (k: string, fromGallery = false, label: string | null = null) => { cat.current = k; caption.current = label; (fromGallery ? gallery : input).current?.click(); };
+  // Photos of a room of the survey: the category from its name, the caption "Baie · rlv 5" (as the banks label them).
+  const roomCat = (r: Room) => (/buc[aă]t/i.test(r.name) ? "kitchen" : /baie|sanitar|\bwc\b|du[sș]/i.test(r.name) ? "bathroom" : "interior");
+  const rooms = roomsOf(draft.answers);
   const onFiles = async (files: FileList | null) => {
     if (!files?.length) return;
-    const k = cat.current;
-    setBusy(k);
+    const k = cat.current, label = caption.current;
+    setBusy(label ?? k);
     const pos = await position(4000);
     let sort = photos.length;
     for (const file of Array.from(files)) {
       const { blob, width, height } = await shrink(file);
       await add({
-        id: newId(), inspection_id: id, category: k, caption: null, blob, width, height, taken_at: new Date().toISOString(),
+        id: newId(), inspection_id: id, category: k, caption: label, blob, width, height, taken_at: new Date().toISOString(),
         lat: pos?.coords.latitude ?? null, lng: pos?.coords.longitude ?? null, sort: sort++, uploaded: false, deleted: false, error: null,
       });
     }
@@ -50,8 +54,47 @@ export function PhotosView({ ctx, id, item }: { ctx: Ctx; id: string; item: Loca
       <input ref={gallery} type="file" accept="image/*" multiple hidden onChange={(e) => onFiles(e.target.files)} />
       <div className="iPad withCta">
         {missingRequired.length > 0 && !ro && <p className="iNote warn">Obligatoriu: cel puțin o fotografie la „{missingRequired.map((c) => c.label).join("”, „")}”.</p>}
+        {rooms.length > 0 && (
+          <section className="iBox">
+            <div className="iCardHead"><h3>Pe încăperi (releveu)</h3><span className="muted">{rooms.filter((r) => photos.some((p) => p.caption === roomLabel(r))).length} din {rooms.length}</span></div>
+            <p className="hint">Cel puțin o fotografie pentru fiecare încăpere. Fotografia primește automat numele încăperii.</p>
+            <ul className="iRoomPhotos">
+              {rooms.map((r) => {
+                const label = roomLabel(r);
+                const list = photos.filter((p) => p.caption === label);
+                return (
+                  <li key={r.id}>
+                    <div className="iRoomPhotosHead">
+                      <span className={`iRoomPos${list.length ? " ok" : ""}`}>{r.pos || "–"}</span>
+                      <b>{r.name || "Încăpere"}</b>
+                      {!ro && (
+                        <span className="iRoomPhotosBtns">
+                          <button type="button" className="iBtn ghost sm" onClick={() => take(roomCat(r), false, label)} disabled={busy !== null} aria-label={`Fotografiază ${label}`}><Icon.camera /></button>
+                          <button type="button" className="iBtn ghost sm" onClick={() => take(roomCat(r), true, label)} disabled={busy !== null}>Galerie</button>
+                        </span>
+                      )}
+                    </div>
+                    {busy === label && <p className="hint">Se pregătesc…</p>}
+                    {list.length > 0 && (
+                      <div className="iThumbs">
+                        {list.map((p) => (
+                          <button key={p.id} type="button" className="iThumb" onClick={() => setView(p)} aria-label="Deschide fotografia">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={p.src} alt="" loading="lazy" />
+                            {p.local && !p.local.uploaded && <span className="iThumbTag" title="Netrimisă"><Icon.upload /></span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
         {cats.map((c) => {
-          const list = photos.filter((p) => p.category === c.k);
+          // Photos of a survey room are shown with their room above, not again in their category.
+          const list = photos.filter((p) => p.category === c.k && !rooms.some((r) => p.caption === roomLabel(r)));
           return (
             <section key={c.k} className="iBox">
               <div className="iCardHead">
