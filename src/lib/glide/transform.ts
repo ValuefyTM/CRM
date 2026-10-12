@@ -199,7 +199,8 @@ export function transform(files: Record<string, string>): ImportPlan {
   }
   const userRef = (gid: string | null, table: string, id: string, what: string) => {
     if (!gid) return null;
-    if (users.has(gid)) return `g-usr-${gid}`;
+    // Without the users file the person is looked up in the CRM by Glide id (see the import).
+    if (users.has(gid) || absent("VFY_USERS")) return `g-usr-${gid}`;
     flag(table, id, `${what} necunoscut`, gid);
     return null;
   };
@@ -478,6 +479,8 @@ export function transform(files: Record<string, string>): ImportPlan {
   const propertyByCf = new Map<string, string>();
   const assets = new Set<string>();
   let orphanAssets = 0;
+  const reportRows = new Map(out.reports.map((r) => [r.id as string, r]));
+  let lateDone = 0;
   for (const b of T("VFY_BUNURI")) {
     const gid = t(b["ID BUN"])!;
     const city = ro(t(b["LOCALITATE"]));
@@ -510,10 +513,19 @@ export function transform(files: Record<string, string>): ImportPlan {
       id: aid, glide_id: gid, report_id: report, property_id: pid, is_main: principal === "true" || principal === "" ? 1 : 0,
       value: pos(b["REZULTAT EVALUARE/VALOARE DE PIATA"]), approach: pick(APPROACH, t(b["REZULTAT EVALUARE/ABORDARE APLICATA"])),
     });
-    const st = pick(INSPECTION, t(b["STATUS INSPECTIE"])) ?? "to_schedule";
+    let st = pick(INSPECTION, t(b["STATUS INSPECTIE"])) ?? "to_schedule";
     const rawDone = t(b["DATA INSPECTIEI"]);
-    const done = date(rawDone ?? "");
+    let done = date(rawDone ?? "");
     if (rawDone && !done) flag("inspections", gid, "Dată inspecție necitibilă", rawDone);
+    // An inspection with a date of its own was done; one of a finished report too (on the valuation date), even
+    // when its status was left "programată" in Glide.
+    const rep = report ? reportRows.get(report) : undefined;
+    if (st !== "cancelled" && done) st = "done";
+    else if (st !== "done" && st !== "cancelled" && rep?.status === "done") {
+      st = "done";
+      done = (rep.valuation_date as string | null) ?? (rep.report_date as string | null);
+      lateDone++;
+    }
     out.inspections.push({
       id: `g-ins-${gid}`, glide_id: gid, asset_id: aid, report_id: report,
       inspector_id: userRef(t(b["INSPECTORUL/INSPECTOR ID"]) ?? t(b["ID INSPECTOR"]), "inspections", gid, "Inspector"),
@@ -522,6 +534,7 @@ export function transform(files: Record<string, string>): ImportPlan {
       contact_phone: t(b["TELEFON CONTACT INSPECTIE"]) ?? t(b["TELEFON CONTACT"]),
     });
   }
+  if (lateDone) flag("inspections", "—", "Inspecții nemarcate în Glide, la rapoarte finalizate (marcate efectuate la data evaluării)", `${lateDone} inspecții`);
   if (orphanAssets) flag("assets", "—", "Bunuri fără raport în export (importate fără raport)", `${orphanAssets} bunuri`);
   const reportsWithAssets = new Set(out.assets.map((a) => a.report_id));
   const noAssets = [...reports].filter((r) => !reportsWithAssets.has(r)).length;

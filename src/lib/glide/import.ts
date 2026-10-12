@@ -76,6 +76,9 @@ const REFS: Record<string, string> = {
   report_id: "reports", property_id: "crm_properties", asset_id: "assets", inspection_id: "inspections",
 };
 
+/** People and dates set in the CRM that an export without them must not clear. */
+const KEEP = new Set(["inspector_id", "referral_user_id", "scheduled_at", "done_at"]);
+
 /**
  * References to rows of other tables that do not exist in the CRM become null (a partial export may name clients,
  * banks or orders that were never imported) — and a null never overwrites a link already saved (see importRows).
@@ -106,7 +109,7 @@ export async function importRows(db: D1Database, table: string, rows: Row[], act
   const cols = await columns(db, name);
   await checkRefs(db, name, rows, cols);
   // A team member of a report that is not in the CRM cannot be saved.
-  const list = name === "report_members" ? rows.filter((r) => r.report_id && r.user_id) : rows;
+  const list = name === "report_members" ? rows.filter((r) => r.report_id && resolve(r.user_id ?? null)) : rows;
   const statements = list.map((r) => {
     const keys = Object.keys(r).filter((k) => cols.has(k));
     const values = keys.map((k) => resolve(r[k]));
@@ -120,7 +123,9 @@ export async function importRows(db: D1Database, table: string, rows: Row[], act
       : k === "viewed_at" ? "viewed_at = COALESCE(viewed_at, excluded.viewed_at)"
       : FILE_COLUMNS.some(([t, c]) => t === name && c === k) ? `${k} = CASE WHEN ${k} LIKE 'r2:%' OR ${k} LIKE 'lost:%' THEN ${k} ELSE excluded.${k} END` // files already moved to R2 stay
       // A link (client, bank, issuer, order…) missing from this export keeps the one already saved.
-      : REFS[k] ? `${k} = COALESCE(excluded.${k}, ${k})`
+      : REFS[k] || KEEP.has(k) ? `${k} = COALESCE(excluded.${k}, ${k})`
+      // An inspection done in the CRM app stays done.
+      : name === "inspections" && k === "status" ? "status = CASE WHEN status = 'done' AND excluded.status <> 'cancelled' THEN status ELSE excluded.status END"
       : `${k} = excluded.${k}`);
     return db.prepare(`${insert} ON CONFLICT(glide_id) DO UPDATE SET ${sets.join(", ")}`).bind(...values);
   });
