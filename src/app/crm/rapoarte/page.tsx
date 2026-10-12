@@ -28,13 +28,6 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
   return (
     <CrmShell user={user} base={base} active="reports" title="Rapoarte" subtitle={`Toate rapoartele: VALUEFY și firmele partenere${data.fees ? ` · onorarii finalizate ${lei(Math.round(data.fees))}` : ""}`}>
-      <nav className="tabs" aria-label="Status raport">
-        {REPORT_TABS.map(([k, label]) => (
-          <a key={k || "all"} href={link({ status: k || undefined })} aria-current={tab === k ? "page" : undefined}>
-            {label} <small>{(counts[k] ?? 0).toLocaleString("ro-RO")}</small>
-          </a>
-        ))}
-      </nav>
       <section className="card">
         <ReportFilters
           base={base} total={data.total} current={{ q: sp.q, status: sp.status, year: sp.year, bank: sp.bank, issuer: sp.issuer, evaluator: sp.evaluator, sort: sp.sort }}
@@ -43,6 +36,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           issuers={facets.issuers.map((i) => [i.id, i.name, i.n])}
           evaluators={facets.evaluators.map((e) => [e.id, e.name, e.n])}
           sorts={Object.entries(REPORT_SORTS).map(([k, [l]]) => [k, l])}
+          tab={tab} tabs={REPORT_TABS.map(([k, label]) => [k, label, counts[k] ?? 0, link({ status: k || undefined })])}
         />
         {(STAGE_FILTERS[sp.etapa ?? ""] || DUE_FILTERS[sp.termen ?? ""] || sp.status === "deschise") && (
           <div className="activeFilters">

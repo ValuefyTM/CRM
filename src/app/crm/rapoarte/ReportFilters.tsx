@@ -11,6 +11,8 @@ export type ReportQuery = { q?: string; status?: string; year?: string; bank?: s
 export function ReportFilters(props: {
   base: string; current: ReportQuery; total: number;
   years: Facet; banks: Facet; issuers: Facet; evaluators: Facet; sorts: Facet;
+  /** Status tabs: key, label, count, link. */
+  tab: string; tabs: [string, string, number, string][];
 }) {
   const router = useRouter();
   const [q, setQ] = useState(props.current.q ?? "");
@@ -20,18 +22,25 @@ export function ReportFilters(props: {
     router.push(`${props.base}/rapoarte${qs ? `?${qs}` : ""}`);
   };
   const c = props.current;
-  // Status is chosen with the tabs above the list: not counted (nor cleared) here.
+  // Status is chosen with the tabs: not counted (nor cleared) here.
   const active = [c.q, c.year, c.bank, c.issuer, c.evaluator].filter(Boolean).length;
 
   return (
     <>
       <form className="filterBar" onSubmit={(e) => { e.preventDefault(); go({ q: q.trim() || undefined }); }}>
+        <span className="segment ibStates ordStates" role="group" aria-label="Status raport">
+          {props.tabs.map(([k, label, n, href]) => (
+            <a key={k || "all"} href={href} aria-current={props.tab === k ? "page" : undefined}>{label} <small>{n.toLocaleString("ro-RO")}</small></a>
+          ))}
+        </span>
         <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută client, nr. raport, adresă, CF, telefon… ↵" aria-label="Caută" />
+      </form>
+      <div className="filterBar">
         <FilterSelect label="An" value={c.year ?? ""} options={props.years} onChange={(v) => go({ year: v || undefined })} all="Toți" />
         <FilterSelect label="Bancă" value={c.bank ?? ""} options={props.banks} onChange={(v) => go({ bank: v || undefined })} />
         <FilterSelect label="Evaluator" value={c.evaluator ?? ""} options={props.evaluators} onChange={(v) => go({ evaluator: v || undefined })} all="Toți" />
         {props.issuers.length > 1 && <FilterSelect label="Emis de" value={c.issuer ?? ""} options={props.issuers} onChange={(v) => go({ issuer: v || undefined })} all="Toți" />}
-      </form>
+      </div>
       <div className="resultLine">
         <span>
           <b style={{ color: "var(--ink)" }}>{props.total.toLocaleString("ro-RO")}</b> rapoarte
