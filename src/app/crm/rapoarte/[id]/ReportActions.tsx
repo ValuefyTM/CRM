@@ -2,6 +2,7 @@
 
 import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
 import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 // "Draft" is shown as "În lucru" (a report being worked on): one choice, not two that look the same.
 const STATUSES: [string, string][] = [["in_progress", "În lucru"], ["suspended", "Suspendat"], ["done", "Finalizat"], ["cancelled", "Anulat"]];
@@ -13,36 +14,56 @@ async function send(url: string, init: RequestInit) {
 }
 const patch = (id: string, body: object) => send(`/api/crm/reports/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
-/** "Schimbă status" in the report header: a small panel with the status and, for suspended, the reason. */
+const STATUS_HINT: Record<string, string> = {
+  in_progress: "Raportul se lucrează (inspecție, redactare, verificare).",
+  suspended: "Lucrul e oprit temporar; scrii motivul.",
+  done: "Raportul e gata și predat.",
+  cancelled: "Lucrarea nu se mai face.",
+};
+
+/** "Schimbă status" in the report header: a sheet (from the bottom on a phone) with one big button per status. */
 export function StatusButton({ id, status, reason }: { id: string; status: string; reason: string | null }) {
+  const cur = status === "draft" ? "in_progress" : status;
   const [open, setOpen] = useState(false);
-  const [s, setS] = useState(status === "draft" ? "in_progress" : status);
+  const [pick, setPick] = useState<string | null>(null); // suspended: waits for the reason
   const [why, setWhy] = useState(reason ?? "");
   const [msg, setMsg] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const save = async (s: string) => {
+    if (s === "suspended" && !why.trim()) { setPick("suspended"); return setMsg(""); }
+    setBusy(s); setMsg("");
+    const error = await patch(id, { status: s, suspend_reason: why });
+    setBusy(null);
+    if (error) return setMsg(error);
+    location.reload();
+  };
   return (
-    <div className="popWrap">
-      <button type="button" className="btn btnOnNavy btnSm" aria-expanded={open} onClick={() => setOpen(!open)}>Schimbă status</button>
-      {open && (
-        <form className="pop" onSubmit={async (e) => {
-          e.preventDefault(); setBusy(true); setMsg("");
-          const error = await patch(id, { status: s, suspend_reason: why });
-          setBusy(false);
-          if (error) return setMsg(error);
-          location.reload();
-        }}>
-          <label className="field">Status
-            <select className="select" value={s} onChange={(e) => setS(e.target.value)}>{STATUSES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
-          </label>
-          {s === "suspended" && <label className="field">Motivul suspendării<textarea className="textarea" rows={3} value={why} onChange={(e) => setWhy(e.target.value)} required /></label>}
-          {msg && <div role="alert" className="error">{msg}</div>}
-          <div className="actions">
-            <button type="submit" className="btn btnNavy btnSm" disabled={busy}>{busy ? "Se salvează…" : "Salvează"}</button>
-            <button type="button" className="btn btnGhost btnSm" onClick={() => setOpen(false)}>Renunță</button>
+    <>
+      <button type="button" className="btn btnOnNavy btnSm" onClick={() => { setOpen(true); setPick(null); setMsg(""); }}>Schimbă status</button>
+      {open && createPortal(
+        <div className="vfModal sheet" role="dialog" aria-modal="true" aria-labelledby="stTitle" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
+          <div className="vfModalBox">
+            <div className="cardHead"><h2 id="stTitle">Statusul raportului</h2><button type="button" className="btn btnGhost btnSm" onClick={() => setOpen(false)} aria-label="Închide">×</button></div>
+            <div className="stChoices">
+              {STATUSES.map(([k, l]) => (
+                <button key={k} type="button" className={`stChoice st-${k}${k === cur ? " on" : ""}`} aria-pressed={k === cur} disabled={!!busy}
+                  onClick={() => (k === cur && k !== "suspended" ? setOpen(false) : save(k))}>
+                  <i aria-hidden />
+                  <span><b>{l}{k === cur ? " · acum" : ""}</b><small>{STATUS_HINT[k]}</small></span>
+                  {busy === k && <em>Se salvează…</em>}
+                </button>
+              ))}
+            </div>
+            {pick === "suspended" && (
+              <div className="stReason">
+                <label className="field">Motivul suspendării<textarea className="textarea" rows={3} value={why} onChange={(e) => setWhy(e.target.value)} autoFocus placeholder="ex. așteptăm actele de la client" /></label>
+                <button type="button" className="btn btnNavy" disabled={!!busy || !why.trim()} onClick={() => save("suspended")}>{busy ? "Se salvează…" : "Suspendă raportul"}</button>
+              </div>
+            )}
+            {msg && <div role="alert" className="error">{msg}</div>}
           </div>
-        </form>
-      )}
-    </div>
+        </div>, document.body)}
+    </>
   );
 }
 
