@@ -13,7 +13,7 @@ export type ImportPlan = { tables: { name: TableName; rows: Row[] }[]; anomalies
 /** Insert order: every table only references tables before it. */
 export const TABLES = [
   "partners", "users", "entities", "contracts", "collaborations", "statements", "orders",
-  "reports", "report_members", "crm_properties", "assets", "inspections", "inspection_sheets", "notes",
+  "reports", "report_members", "crm_properties", "assets", "inspections", "inspection_sheets", "notes", "messages",
 ] as const;
 export type TableName = (typeof TABLES)[number];
 
@@ -21,7 +21,7 @@ export const TABLE_LABEL: Record<TableName, string> = {
   partners: "Firme partenere", users: "Utilizatori (echipă și colaboratori)", entities: "Clienți, bănci, firme",
   contracts: "Contracte", collaborations: "Contracte de colaborare", statements: "Borderouri", orders: "Comenzi",
   reports: "Rapoarte", report_members: "Echipa rapoartelor", crm_properties: "Proprietăți", assets: "Bunuri evaluate",
-  inspections: "Inspecții", inspection_sheets: "Fișe de inspecție", notes: "Notițe",
+  inspections: "Inspecții", inspection_sheets: "Fișe de inspecție", notes: "Notițe", messages: "Mesaje pe rapoarte și comenzi",
 };
 
 // ---------- CSV ----------
@@ -156,14 +156,23 @@ const evalTypes = (v: string | null) => {
   return list.length ? [...new Set(list)].join(",") : null;
 };
 
+/** Short stable hash (FNV-1a, base 36) for ids of rows without a Glide id. */
+const hash = (v: string) => { let h = 0x811c9dc5; for (let i = 0; i < v.length; i++) { h ^= v.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36); };
+
 // ---------- the transform ----------
 
 /** `files`: CSV text by file name, as found in the Glide export zip. */
 export function transform(files: Record<string, string>): ImportPlan {
   const byName: Record<string, Record<string, string>[]> = {};
   const sources: Record<string, number> = {};
+  // A zip may hold several downloads of one table ("VFY_RAPOARTE (23).csv", "VFY_RAPOARTE (24).csv"): the newest wins.
+  const version: Record<string, number> = {};
   for (const [name, text] of Object.entries(files)) {
-    const base = name.split("/").pop()!.replace(/\.csv$/i, "").replace(/\s*\(\d+\)$/, "").trim().toUpperCase();
+    const file = name.split("/").pop()!.replace(/\.csv$/i, "");
+    const n = Number(file.match(/\((\d+)\)\s*$/)?.[1] ?? 0);
+    const base = file.replace(/\s*\(\d+\)$/, "").trim().toUpperCase();
+    if (base in version && version[base] >= n) continue;
+    version[base] = n;
     byName[base] = parseCsv(text);
     sources[base] = byName[base].length;
   }
@@ -462,6 +471,8 @@ export function transform(files: Record<string, string>): ImportPlan {
       valuation_date: day(r["DATA EVALUARII"]), report_date: day(r["DATA RAPORT"]), received_on: day(r["DATA INTRARII"]), uploaded_on: day(r["DATA INCARCARII"]),
       result_value: pos(r["REZULTAT EVALUARE"]), fee: num(r["TARIF RAPORT"]), collab_fee: num(r["TARIF COLABORATOR"]),
       status: pick(STATUS, t(r["STATUS LABEL"])) ?? pick(STATUS, t(r["STATUS EVALUARE"])) ?? "draft", suspend_reason: t(r["MOTIV SUSPENDARE"]),
+      // "Încasat": only a yes is taken (the CRM keeps what was marked there).
+      ...(bool(r["INCASAT"]) || /^DA$/i.test(t(r["Status INCASAT"]) ?? "") ? { collected: 1 } : {}),
       reporting_year: num(r["ANUL RAPORTARII"]), referral_user_id: ref && partnerUsers.has(ref) ? `g-usr-${ref}` : null,
       market_analysis: t(r["ANALIZA DE PIATA/OUTPUT"]),
       created_at: stamp(r["TIMESTAMP"]) ?? stamp(r["DATA INTRARII"]) ?? stamp(r["DATA RAPORT"]),
@@ -505,7 +516,8 @@ export function transform(files: Record<string, string>): ImportPlan {
     }
     const rid = t(b["ID RAPORT"]);
     const report = rid && reports.has(`g-rap-${rid}`) ? `g-rap-${rid}` : null;
-    if (!report) orphanAssets++;
+    // Assets of reports deleted from Glide: kept as properties only (history: address, CF, inspection date).
+    if (!report) { orphanAssets++; continue; }
     const aid = `g-ast-${gid}`;
     assets.add(aid);
     const principal = (b["BUN PRINCIPAL"] ?? "").trim().toLowerCase();
@@ -535,7 +547,7 @@ export function transform(files: Record<string, string>): ImportPlan {
     });
   }
   if (lateDone) flag("inspections", "—", "Inspecții nemarcate în Glide, la rapoarte finalizate (marcate efectuate la data evaluării)", `${lateDone} inspecții`);
-  if (orphanAssets) flag("assets", "—", "Bunuri fără raport în export (importate fără raport)", `${orphanAssets} bunuri`);
+  if (orphanAssets) flag("assets", "—", "Bunuri ale unor rapoarte care nu mai sunt în Glide (importate doar ca proprietăți)", `${orphanAssets} bunuri`);
   const reportsWithAssets = new Set(out.assets.map((a) => a.report_id));
   const noAssets = [...reports].filter((r) => !reportsWithAssets.has(r)).length;
   if (noAssets) flag("reports", "—", "Rapoarte fără niciun bun", `${noAssets} rapoarte`);
@@ -563,6 +575,35 @@ export function transform(files: Record<string, string>): ImportPlan {
       status: pick(NOTE_STATUS, t(n["STATUS"])) ?? "todo", deadline: day(n["DEADLINE"]), created_at: stamp(n["DATA ADAUGARII"]),
     });
   }
+
+  // --- messages on reports and partner orders (the Glide chat) ---
+  const byEmail = new Map<string, string>();
+  for (const u of T("VFY_USERS")) for (const e of [u["Email"], u["Email notificari"]]) { const m = lower(t(e)); if (m && t(u["ID USER"])) byEmail.set(m, t(u["ID USER"])!); }
+  for (const p of T("VFY_PARTENERI")) { const m = lower(t(p["ADRESA EMAIL"])); if (m && !byEmail.has(m)) byEmail.set(m, t(p["ID PARTENER"])!); }
+  const partnerOrders = new Set(T("VFY_COMENZI PARTENERI").map((o) => t(o["ID COMANDA"])));
+  let lostMessages = 0;
+  const seenMsg = new Set<string>();
+  for (const m of T("VFY_PC_CHATS")) {
+    const on = t(m["ID COMANDA"]);
+    const body = t(m["Message"]);
+    const file = url(m["New Column"]);
+    if (!on || (!body && !file)) continue;
+    const entity = reports.has(`g-rap-${on}`) ? ["report", `g-rap-${on}`] : partnerOrders.has(on) ? ["order", `g-ord-p-${on}`] : null;
+    if (!entity) { lostMessages++; continue; }
+    const at = stamp(m["Time"]);
+    const email = lower(t(m["User Email"]));
+    const who = email ? byEmail.get(email) : undefined;
+    // No row id in the export: the message is identified by where, when and what.
+    const gid = `chat:${on}:${at ?? ""}:${hash(`${email ?? ""}|${body ?? ""}|${file ?? ""}`)}`;
+    if (seenMsg.has(gid)) continue;
+    seenMsg.add(gid);
+    out.messages.push({
+      id: `g-msg-${hash(gid)}`, glide_id: gid, entity: entity[0], entity_id: entity[1],
+      author_id: who && (users.has(who) || partnerUsers.has(who)) ? `g-usr-${who}` : null,
+      author_name: ro(t(m["User Name"])), author_email: email, body: body ?? "Fișier atașat", attachment_url: file, created_at: at,
+    });
+  }
+  if (lostMessages) flag("messages", "—", "Mesaje la comenzi sau rapoarte care nu mai există (sărite)", `${lostMessages} mesaje`);
 
   // created_at must never be empty (NOT NULL with a default): drop nulls so the default applies.
   for (const rows of Object.values(out)) for (const r of rows) for (const k of ["created_at", "viewed_at"]) if (r[k] === null) delete r[k];

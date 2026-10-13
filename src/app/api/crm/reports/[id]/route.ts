@@ -26,6 +26,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     await audit(a.db, actor, "report.status", "report", id, `${REPORT_STATUS[r.status]?.[0] ?? r.status} → ${REPORT_STATUS[b.status][0]}${reason && b.status === "suspended" ? ` (${reason})` : ""}`);
     return Response.json({ ok: true });
   }
+  // Payment collected (marked by hand, for reports not paid through an invoice of the CRM).
+  if (typeof b.collected === "boolean") {
+    await a.db.prepare("UPDATE reports SET collected = ?, collected_at = ?, updated_at = ? WHERE id = ?").bind(b.collected ? 1 : 0, b.collected ? now() : null, now(), id).run();
+    await audit(a.db, actor, "report.collected", "report", id, b.collected ? "Marcat încasat" : "Marcat neîncasat");
+    return Response.json({ ok: true });
+  }
   if (typeof b.notes === "string") {
     await a.db.prepare("UPDATE reports SET notes = ?, updated_at = ? WHERE id = ?").bind(b.notes.trim().slice(0, 8000) || null, now(), id).run();
     await audit(a.db, actor, "report.notes", "report", id);

@@ -7,6 +7,7 @@ export const FILE_COLUMNS: [table: string, column: string][] = [
   ["inspection_sheets", "photo_url"],
   ["inspection_sheets", "signature_url"],
   ["entities", "logo_url"],
+  ["messages", "attachment_url"],
 ];
 
 export const GLIDE_URL = "https://storage.googleapis.com/glide-prod%";

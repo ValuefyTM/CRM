@@ -17,6 +17,8 @@ import { offerLink } from "@/lib/offer-emails";
 import { OfferEditor } from "./OfferEditor";
 import { DossierOpen } from "./DossierOpen";
 import { DeleteOrder } from "./DeleteOrder";
+import { Messages } from "@/components/Messages";
+import { messagesOf } from "@/lib/messages";
 import { isAdmin } from "@/lib/users";
 import { photoUrl, presenceOf } from "@/lib/presence";
 import { orderProgress } from "@/lib/delivery";
@@ -33,6 +35,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   const o = await getOrder(db, id);
   if (!o) notFound();
+  const messages = await messagesOf(db, "order", o.id, user.id);
   // The first time someone in the team opens the order it stops being "new".
   if (!o.viewed_at) {
     await db.prepare("UPDATE orders SET viewed_at = ?, viewed_by = ? WHERE id = ? AND viewed_at IS NULL").bind(now(), user.id, id).run();
@@ -205,6 +208,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
           <OrderStatusCard o={o} docs={docs} progress={progress ? { ...progress, due: progress.report?.due } : undefined} />
+          <Messages entity="order" id={o.id} rows={messages} />
           <History log={log} />
         </div>
       </div>

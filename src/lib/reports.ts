@@ -142,6 +142,7 @@ export type Report = ReportRow & {
   bank_branch: string | null; valuation_types: string | null; purpose: string | null; value_type: string | null; valuation_date: string | null;
   received_on: string | null; uploaded_on: string | null; currency: string; collab_fee: number | null; suspend_reason: string | null;
   reporting_year: number | null; market_analysis: string | null; glide_id: string | null; created_at: string;
+  collected: number; collected_at: string | null;
   client_kind: string | null; client_phone: string | null; client_email: string | null; client_cui: string | null; client_address: string | null;
   bank_name: string | null; contract_number: string | null; contract_kind: string | null; contract_date: string | null; contract_fee: number | null;
   referral_name: string | null; referral_id: string | null;

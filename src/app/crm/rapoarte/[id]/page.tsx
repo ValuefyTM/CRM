@@ -18,7 +18,9 @@ import { canAssign, inspectorChoices } from "@/lib/insp-assign";
 import { guessSheetType } from "@/lib/insp-forms";
 import { docsByAsset, guessDocType } from "@/lib/insp-docs";
 import { Avatar, PersonLine } from "@/components/Avatar";
-import { AddMember, DeleteDoc, DocTypeSelect, DeliverButton, FinalDrop, MissingDoc, NotesEditor, RemoveMember, SafeImg, StageActions, StatusButton, UploadButton } from "./ReportActions";
+import { Messages } from "@/components/Messages";
+import { messagesOf } from "@/lib/messages";
+import { AddMember, CollectedToggle, DeleteDoc, DocTypeSelect, DeliverButton, FinalDrop, MissingDoc, NotesEditor, RemoveMember, SafeImg, StageActions, StatusButton, UploadButton } from "./ReportActions";
 import { dueOf, STAGE_LABEL, STAGE_ORDER, stageOf } from "@/lib/dossier";
 import { nextReportNumber, noticeTarget } from "@/lib/delivery";
 import { draftForReport, invoicesFor } from "@/lib/billing";
@@ -67,6 +69,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const tab: Tab = TABS.find(([k]) => k === wanted)?.[0] ?? "general";
   const r = await getReport(db, id);
   if (!r) notFound();
+  const messages = await messagesOf(db, "report", r.id, user.id);
   const [team, assets, docs, orderDocs, people] = await Promise.all([
     reportTeam(db, id), reportAssets(db, id), reportDocuments(db, id), reportOrderDocuments(db, r.order_id), teamCandidates(db),
   ]);
@@ -229,6 +232,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
               <div className="cardHead"><h2>Comercial și status</h2>{!("error" in perOrder) && <IssueInvoice report={r.id} label="Emite factura" />}</div>
               <dl className="kv">
                 <Row k="Tarif">{r.fee != null ? <span className="mono num">{lei(r.fee, "RON")}</span> : null}</Row>
+                <Row k="Încasare"><CollectedToggle id={r.id} collected={!!r.collected} at={r.collected_at} /></Row>
                 <Row k="Tarif colaborator">{r.collab_fee != null ? <span className="mono num">{lei(r.collab_fee, "RON")}</span> : null}</Row>
                 <Row k="Cotă evaluator">{evaluator?.share_evaluator != null ? `${evaluator.share_evaluator}%` : null}</Row>
                 <Row k="Borderou">{r.statement_number ? `B-${r.statement_number}` : <span className="muted">neinclus</span>}</Row>
@@ -254,6 +258,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             </section>
           </div>
           {r.market_analysis && <section className="card"><h2>Analiza de piață</h2><p className="prose">{r.market_analysis}</p></section>}
+          <Messages entity="report" id={r.id} rows={messages} />
         </>
       )}
 

@@ -284,3 +284,24 @@ export function SafeImg({ src, alt = "", className, fallback = null }: { src: st
   // eslint-disable-next-line @next/next/no-img-element
   return bad ? <>{fallback}</> : <img src={src} alt={alt} className={className} loading="lazy" onError={() => setBad(true)} />;
 }
+
+/** "Încasat": marked by hand on the report. */
+export function CollectedToggle({ id, collected, at }: { id: string; collected: boolean; at: string | null }) {
+  const [on, setOn] = useState(collected);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  return (
+    <span className="collToggle">
+      <label className="check" style={{ alignItems: "center" }}>
+        <input type="checkbox" checked={on} disabled={busy} onChange={async (e) => {
+          const v = e.target.checked; setBusy(true); setErr("");
+          const error = await patch(id, { collected: v });
+          setBusy(false);
+          if (error) setErr(error); else setOn(v);
+        }} />
+        {on ? <b style={{ color: "var(--ok-text)" }}>Încasat{at && collected ? ` · ${at.slice(0, 10).split("-").reverse().join(".")}` : ""}</b> : "Neîncasat"}
+      </label>
+      {err && <small className="error">{err}</small>}
+    </span>
+  );
+}
