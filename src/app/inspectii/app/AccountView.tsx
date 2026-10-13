@@ -1,11 +1,60 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { Ctx } from "./InspApp";
 import { Icon, TopBar } from "./ui";
 
 const ROLE: Record<string, string> = { inspector: "Inspector", evaluator: "Evaluator", admin: "Administrator", owner: "Proprietar" };
 
-/** The signed-in inspector: sync and sign out. The sheet templates are edited in the CRM. */
+type Row = { id: string; done_at: string | null; report_number: string | null; bank: string | null; client: string | null; type: string | null; address: string };
+type Range = "luna" | "trecuta" | "toate";
+
+/** Borderou: the inspections done by the inspector, by month (needs signal; the last one seen is kept). */
+function Statement() {
+  const [range, setRange] = useState<Range>("luna");
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    let off = false;
+    setRows(null); setErr("");
+    fetch(`/api/insp/done?luna=${range}`, { cache: "no-store" })
+      .then((r) => (r.ok ? (r.json() as Promise<{ rows: Row[] }>) : Promise.reject()))
+      .then((d: { rows: Row[] }) => { if (!off) setRows(d.rows); })
+      .catch(() => { if (!off) setErr("Lista se încarcă doar cu semnal."); });
+    return () => { off = true; };
+  }, [range]);
+  const now = new Date();
+  const month = (k: number) => new Date(now.getFullYear(), now.getMonth() - k, 1).toLocaleDateString("ro-RO", { month: "long" });
+  const tabs: [Range, string][] = [["luna", `Luna curentă (${month(0)})`], ["trecuta", `Luna trecută (${month(1)})`], ["toate", "Toate"]];
+  return (
+    <section className="iBox">
+      <div className="iCardHead"><h3>Inspecții efectuate</h3>{rows && <b className="bTotal">{rows.length}</b>}</div>
+      <div className="hFilters bTabs" role="group" aria-label="Perioada">
+        {tabs.map(([k, l]) => <button key={k} type="button" aria-pressed={range === k} onClick={() => setRange(k)}>{l}</button>)}
+      </div>
+      {err && <p className="hint">{err}</p>}
+      {!rows && !err && <p className="hint">Se încarcă…</p>}
+      {rows && !rows.length && <p className="hint">Nicio inspecție efectuată în perioada aleasă.</p>}
+      {rows && rows.length > 0 && (
+        <ol className="bList">
+          {rows.map((r, n) => (
+            <li key={r.id}>
+              <span className="bN">{rows.length - n}</span>
+              <span className="bMain">
+                <b>{r.type ?? "Proprietate"}{r.report_number ? ` · raport ${r.report_number}` : ""}</b>
+                <small>{r.address}</small>
+                <small>{[r.bank, r.client].filter(Boolean).join(" · ")}</small>
+              </span>
+              <span className="bDate">{r.done_at ? r.done_at.slice(0, 10).split("-").reverse().join(".") : "—"}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+/** The signed-in inspector: sync, the statement of inspections done, sign out. */
 export function AccountView({ ctx }: { ctx: Ctx }) {
   const last = ctx.lastSync ? new Date(ctx.lastSync) : null;
   return (
@@ -24,10 +73,7 @@ export function AccountView({ ctx }: { ctx: Ctx }) {
           <div className="iKv"><span>De trimis</span><b>{ctx.pending.count}</b></div>
           <button type="button" className="iBtn ghost" onClick={() => ctx.sync()} disabled={ctx.syncing}><Icon.refresh />Sincronizează acum</button>
         </section>
-        <section className="iBox">
-          <h3>Fișele de inspecție</h3>
-          <p className="iText">Inspecțiile și tipul fișei vin din CRM. Întrebările fișelor le stabilesc administratorii VALUEFY în CRM, la Setări → Fișe de inspecție.</p>
-        </section>
+        <Statement />
         <button type="button" className="iBtn ghost danger-text" onClick={() => ctx.logout()}>Ieși din cont</button>
         <p className="hint center">VALUEFY Inspecții</p>
       </div>

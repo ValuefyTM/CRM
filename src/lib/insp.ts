@@ -413,3 +413,27 @@ export async function canSeeFile(db: D1Database, user: User, key: string) {
   const r = await db.prepare(`SELECT 1 AS ok FROM inspections i WHERE i.id = ?2 AND ${MINE}`).bind(user.id, m[1]).first<{ ok: number }>();
   return !!r;
 }
+
+// ---------- the inspector's statement ----------
+
+export type DoneRow = { id: string; done_at: string | null; report_number: string | null; bank: string | null; client: string | null; type: string | null; address: string };
+
+/** Inspections done by the inspector (borderou): this month, last month or all (latest 1000). */
+export async function doneInspections(db: D1Database, user: User, range: "luna" | "trecuta" | "toate"): Promise<DoneRow[]> {
+  const d = new Date();
+  const ym = (y: number, m: number) => `${y}-${String(m + 1).padStart(2, "0")}`;
+  const month = range === "luna" ? ym(d.getFullYear(), d.getMonth()) : range === "trecuta" ? ym(new Date(d.getFullYear(), d.getMonth() - 1, 1).getFullYear(), new Date(d.getFullYear(), d.getMonth() - 1, 1).getMonth()) : null;
+  const { results } = await db.prepare(
+    `SELECT i.id, COALESCE(i.done_at, i.scheduled_at) AS done_at, r.number AS report_number, b.code AS bank_short, b.name AS bank, c.name AS client,
+        p.type, COALESCE(NULLIF(p.full_address, ''), i.address, p.city, '') AS address
+      FROM inspections i
+      LEFT JOIN assets a ON a.id = i.asset_id
+      LEFT JOIN crm_properties p ON p.id = a.property_id
+      LEFT JOIN reports r ON r.id = i.report_id
+      LEFT JOIN entities c ON c.id = r.client_id
+      LEFT JOIN entities b ON b.id = r.recipient_id
+      WHERE i.inspector_id = ?1 AND i.status = 'done' AND (?2 IS NULL OR substr(COALESCE(i.done_at, i.scheduled_at), 1, 7) = ?2)
+      ORDER BY COALESCE(i.done_at, i.scheduled_at) DESC LIMIT 1000`,
+  ).bind(user.id, month).all<DoneRow & { bank_short: string | null }>();
+  return results.map(({ bank_short, ...r }) => ({ ...r, bank: bank_short || r.bank, type: title(r.type) || null, address: r.address }));
+}
