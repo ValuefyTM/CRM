@@ -132,3 +132,17 @@ export function DocsFab({ docs }: { docs: InspDoc[] | undefined }) {
     </>
   );
 }
+
+/** Header button of the sheet, rooms and photo screens ("Acte" / "Releveul"): opens the viewer, on a type if given. */
+export function DocsButton({ docs, type, label }: { docs: InspDoc[] | undefined; type?: "cf" | "rlv"; label: string }) {
+  const [open, setOpen] = useState(false);
+  usePrefetchDocs(docs);
+  if (!docs?.length) return null;
+  const start = type ? docs.find((d) => d.type === type) ?? null : null;
+  return (
+    <>
+      <button type="button" className="sHeadBtn" onClick={() => setOpen(true)}>{label}</button>
+      {open && <DocsModal docs={docs} start={start} onClose={() => setOpen(false)} />}
+    </>
+  );
+}

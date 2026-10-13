@@ -4,15 +4,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { allDrafts, allOps, allPhotos, wipe, type Draft, type LocalPhoto, type ScheduleOp } from "./store";
 import { AuthExpired, cachedList, fetchList, syncAll } from "./sync";
 import { Icon, type Local } from "./ui";
-import { ListView } from "./ListView";
+import { HomeView } from "./HomeView";
 import { CalendarView } from "./CalendarView";
-import { MapView } from "./MapView";
 import { OutboxView } from "./OutboxView";
 import { DetailView } from "./DetailView";
 import { ScheduleView } from "./ScheduleView";
 import { SheetView } from "./SheetView";
 import { PhotosView } from "./PhotosView";
 import { SignView } from "./SignView";
+import { RoomsView } from "./RoomsView";
+import { AccountView } from "./AccountView";
+import type { Section, SheetType } from "@/lib/insp-forms";
 
 export type Me = { id: string; name: string; email: string; role: string };
 
@@ -21,6 +23,8 @@ export type Ctx = {
   me: Me;
   base: string;
   list: Local[];
+  /** The firm's sheet templates (from the last list), used for the sheets started on this phone. */
+  forms: Partial<Record<SheetType, Section[]>> | null;
   loaded: boolean;
   online: boolean;
   syncing: boolean;
@@ -43,6 +47,7 @@ const parse = (h: string): Route => {
 export function InspApp({ base, me }: { base: string; me: Me }) {
   const [route, setRoute] = useState<Route>({ view: "list" });
   const [server, setServer] = useState<Local[]>([]);
+  const [forms, setForms] = useState<Ctx["forms"]>(null);
   const [loaded, setLoaded] = useState(false);
   const [ops, setOps] = useState<ScheduleOp[]>([]);
   const [photos, setPhotos] = useState<LocalPhoto[]>([]);
@@ -55,7 +60,7 @@ export function InspApp({ base, me }: { base: string; me: Me }) {
 
   const reload = useCallback(async () => {
     const [l, o, p, d] = await Promise.all([cachedList(), allOps(), allPhotos(), allDrafts()]);
-    if (l) { setServer(l.inspections); setLastSync(l.at); setLoaded(true); }
+    if (l) { setServer(l.inspections); setForms(l.forms ?? null); setLastSync(l.at); setLoaded(true); }
     setOps(o); setPhotos(p); setDrafts(d);
   }, []);
 
@@ -128,31 +133,32 @@ export function InspApp({ base, me }: { base: string; me: Me }) {
     toLogin();
   }, [pending.count, toLogin]);
 
-  const ctx: Ctx = { me, base, list, loaded, online, syncing, lastSync, pending, go, back, reload, sync, logout };
+  const ctx: Ctx = { me, base, list, forms, loaded, online, syncing, lastSync, pending, go, back, reload, sync, logout };
   const item = route.id ? list.find((i) => i.id === route.id) : undefined;
 
   let body: React.ReactNode;
   if (route.id) {
     if (route.view === "programeaza") body = <ScheduleView ctx={ctx} id={route.id} item={item} />;
     else if (route.view === "fisa") body = <SheetView ctx={ctx} id={route.id} item={item} />;
+    else if (route.view === "incaperi") body = <RoomsView ctx={ctx} id={route.id} item={item} />;
     else if (route.view === "foto") body = <PhotosView ctx={ctx} id={route.id} item={item} />;
     else if (route.view === "semnatura") body = <SignView ctx={ctx} id={route.id} item={item} />;
     else body = <DetailView ctx={ctx} id={route.id} item={item} />;
   } else if (route.view === "calendar") body = <CalendarView ctx={ctx} />;
-  else if (route.view === "harta") body = <MapView ctx={ctx} />;
   else if (route.view === "detrimis") body = <OutboxView ctx={ctx} />;
-  else body = <ListView ctx={ctx} />;
+  else if (route.view === "cont") body = <AccountView ctx={ctx} />;
+  else body = <HomeView ctx={ctx} />;
 
-  const tab = route.id ? "" : route.view;
-  const tabs: [string, string, () => React.ReactNode][] = [["list", "Inspecții", Icon.list], ["calendar", "Calendar", Icon.calendar], ["harta", "Hartă", Icon.pin], ["detrimis", "De trimis", Icon.upload]];
+  const tab = route.id ? "" : route.view === "harta" ? "list" : route.view;
+  const tabs: [string, string, () => React.ReactNode][] = [["list", "Acasă", Icon.home], ["calendar", "Calendar", Icon.calendar], ["detrimis", "De trimis", Icon.upload], ["cont", "Cont", Icon.user]];
   return (
     <div className="iApp">
       {!online && <div className="iOffline" role="status">Fără semnal · lucrezi pe telefon, se trimite automat</div>}
       <div className="iBody">{body}</div>
       {!route.id && (
-        <nav className="iNav" aria-label="Navigare">
+        <nav className="iNav" aria-label="Meniu">
           {tabs.map(([k, label, I]) => (
-            <a key={k} href={k === "list" ? "#/" : `#/${k}`} aria-current={tab === k || (k === "list" && tab === "list") ? "page" : undefined}>
+            <a key={k} href={k === "list" ? "#/" : `#/${k}`} aria-current={tab === k ? "page" : undefined}>
               <I />{label}
               {k === "detrimis" && pending.count > 0 && <span className="iBadge">{pending.count}</span>}
             </a>

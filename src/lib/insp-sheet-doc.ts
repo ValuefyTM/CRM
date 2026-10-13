@@ -1,7 +1,9 @@
 // Server-only: the inspection sheet of one asset as a printable document (annex to the valuation report, as the banks
 // ask for it): property and report details, the answers of the form, the rooms of the floor survey, the findings,
 // the photos (rooms labelled with their survey position) and the signature of the person present.
-import { FORMS, PHOTO_CATEGORIES, PRESENT_ROLES, roomsOf, sheetTypeLabel, type Answers, type Field, type Room, type SheetType, type UtilAnswer } from "./insp-forms";
+import { FORMS, PHOTO_CATEGORIES, PRESENT_ROLES, otherKey, roomsOf, sheetTypeLabel, type Answers, type Field, type Room, type Section, type SheetType, type UtilAnswer } from "./insp-forms";
+import { cleanForm } from "./insp-templates";
+import { currentForms } from "./insp-templates-db";
 import { fileSrc } from "./files";
 
 export type SheetRow = { label: string; value: string };
@@ -18,8 +20,15 @@ export type SheetDoc = {
 
 const UTIL_LABEL: Record<string, string> = { water: "Apă", sewer: "Canalizare", gas: "Gaz", power: "Curent electric" };
 
-/** One answer as text ("" when not answered). */
-function answerText(f: Field, a: Answers[string]): string {
+/** One answer as text ("" when not answered), with the "Altele" text of the question. */
+function answerText(f: Field, answers: Answers): string {
+  const base = baseText(f, answers[f.k]);
+  const alt = f.other && typeof answers[otherKey(f.k)] === "string" ? (answers[otherKey(f.k)] as string).trim() : "";
+  return [base, alt].filter(Boolean).join(", ");
+}
+
+function baseText(f: Field, a: Answers[string]): string {
+  if (f.kind === "photo") return a ? "Fotografie atașată (anexa foto)" : "";
   if (f.kind === "util") {
     const u = (a && typeof a === "object" && !Array.isArray(a) ? a : {}) as UtilAnswer;
     if (u.on === "da") return f.k === "sewer" ? "Branșat" : `Branșat${u.meter === "da" ? ", contor montat" : u.meter === "nu" ? ", fără contor" : ""}`;
@@ -47,12 +56,15 @@ export async function inspectionSheetDoc(db: D1Database, reportId: string, asset
   if (!row?.inspection_id || !row.sheet_type) return null;
 
   const type = (FORMS as Record<string, unknown>)[row.sheet_type as string] ? (row.sheet_type as SheetType) : "apartament";
-  let answers: Answers = {};
-  try { answers = (JSON.parse((row.details as string) ?? "{}") as { answers?: Answers }).answers ?? {}; } catch { /* old Glide sheet */ }
+  let answers: Answers = {}, form: Section[] | null = null;
+  try { const d = JSON.parse((row.details as string) ?? "{}") as { answers?: Answers; form?: unknown }; answers = d.answers ?? {}; form = cleanForm(d.form); } catch { /* old Glide sheet */ }
+  // The form the sheet was filled in with; older sheets: the current template (same keys).
+  const fields = form ?? (await currentForms(db))[type] ?? FORMS[type];
 
-  const sections = FORMS[type].map((s) => ({
+  const sections = fields.map((s) => ({
     title: s.title,
-    rows: s.fields.filter((f) => f.k !== "notes").map((f) => ({ label: f.kind === "util" ? UTIL_LABEL[f.k] ?? f.label : f.label, value: answerText(f, answers[f.k]) })).filter((r) => r.value),
+    rows: s.fields.filter((f) => f.k !== "notes" && f.pdf !== false)
+      .map((f) => ({ label: f.kind === "util" ? UTIL_LABEL[f.k] ?? f.label : f.label, value: answerText(f, answers) })).filter((r) => r.value),
   })).filter((s) => s.rows.length);
 
   const { results } = await db.prepare("SELECT category, caption, r2_key FROM inspection_photos WHERE inspection_id = ? AND deleted_at IS NULL ORDER BY sort, created_at")

@@ -5,6 +5,7 @@ import type { Ctx } from "./InspApp";
 import { allPhotos, getDraft, putDraft, putPhoto, type Draft, type LocalPhoto, type ServerPhoto } from "./store";
 import { AuthExpired, cachedDetail, fetchDetail, type DetailData } from "./sync";
 import type { Local } from "./ui";
+import { defaultAnswers, FORMS, type Section } from "@/lib/insp-forms";
 
 export function useDetail(ctx: Ctx, id: string) {
   const [detail, setDetail] = useState<DetailData | null>(null);
@@ -20,7 +21,13 @@ export function useDetail(ctx: Ctx, id: string) {
   return { detail, missing };
 }
 
-const blank = (item: Local | undefined, id: string): Draft => ({
+/** A new sheet: the firm's current template for the type, with its default answers. */
+const blank = (item: Local | undefined, id: string, forms: Ctx["forms"]): Draft => {
+  const type = item?.sheet_type ?? "apartament";
+  const form: Section[] = forms?.[type] ?? FORMS[type];
+  return { ...empty(item, id), sheet_type: type, form, answers: defaultAnswers(form) };
+};
+const empty = (item: Local | undefined, id: string): Draft => ({
   id, sheet_type: item?.sheet_type ?? "apartament", answers: {}, present_person: item?.contact_name ?? "", present_role: item?.contact_kind === "owner" ? "owner" : "",
   present_phone: item?.contact_phone ?? "", signature: null, lat: null, lng: null, accuracy_m: null, updated_at: new Date().toISOString(),
   dirty: false, submit: false, submitted: false, error: null,
@@ -49,13 +56,13 @@ export function useDraft(ctx: Ctx, id: string, item: Local | undefined, detail: 
       if (s && !cur.current?.dirty) {
         from.current = "server";
         set({
-          ...blank(item, id), sheet_type: s.sheet_type, answers: s.answers ?? {}, present_person: s.present_person ?? "", present_role: s.present_role ?? "",
+          ...empty(item, id), sheet_type: s.sheet_type, form: s.form ?? null, answers: s.answers ?? {}, present_person: s.present_person ?? "", present_role: s.present_role ?? "",
           present_phone: s.present_phone ?? "", submitted: s.status === "submitted", updated_at: s.updated_at ?? new Date().toISOString(),
         });
-      } else if (!cur.current && (item || detail)) { from.current = "blank"; set(blank(item ?? detail?.inspection, id)); }
+      } else if (!cur.current && (item || detail)) { from.current = "blank"; set(blank(item ?? detail?.inspection, id, ctx.forms)); }
     });
     return () => { off = true; };
-  }, [id, item, detail]);
+  }, [id, item, detail, ctx.forms]);
 
   // What sync did meanwhile (sent, refused, accepted) comes back from the phone storage; the answers on screen are kept.
   useEffect(() => {
@@ -70,15 +77,19 @@ export function useDraft(ctx: Ctx, id: string, item: Local | undefined, detail: 
   const update = useCallback((patch: Partial<Draft>) => {
     const c = cur.current;
     if (!c || c.submitted) return;
-    const next: Draft = { ...c, ...patch, sheet_type: crmType.current ?? c.sheet_type, updated_at: new Date().toISOString(), dirty: true, error: null };
+    const type = crmType.current ?? c.sheet_type;
+    const form = type !== c.sheet_type ? ctx.forms?.[type] ?? null : c.form;
+    const next: Draft = { ...c, ...patch, sheet_type: type, form, updated_at: new Date().toISOString(), dirty: true, error: null };
     from.current = "phone";
     set(next);
     putDraft(next).then(() => reload());
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => { if (navigator.onLine) sync(); }, 4000);
-  }, [reload, sync]);
+  }, [reload, sync, ctx.forms]);
 
-  const shown = draft && crmType.current && draft.sheet_type !== crmType.current ? { ...draft, sheet_type: crmType.current } : draft;
+  // The CRM changed the sheet type: the current template of that type.
+  const shown = draft && crmType.current && draft.sheet_type !== crmType.current
+    ? { ...draft, sheet_type: crmType.current, form: ctx.forms?.[crmType.current] ?? null } : draft;
   return { draft: shown, update };
 }
 

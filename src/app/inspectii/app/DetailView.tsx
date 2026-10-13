@@ -32,7 +32,7 @@ export function DetailView({ ctx, id, item }: { ctx: Ctx; id: string; item: Loca
   const i: Local | undefined = item ?? detail?.inspection;
   const { draft } = useDraft(ctx, id, item, detail);
   const { photos } = usePhotos(ctx, id, detail);
-  const prog = useMemo(() => (draft ? progress(draft.sheet_type, draft.answers) : null), [draft]);
+  const prog = useMemo(() => (draft ? progress(draft.sheet_type, draft.answers, draft.form) : null), [draft]);
 
   if (!i) {
     return (
@@ -54,8 +54,20 @@ export function DetailView({ ctx, id, item }: { ctx: Ctx; id: string; item: Loca
 
   return (
     <>
-      <TopBar title={i.property_label} sub={i.report_number ? `Raport ${i.report_number}${i.bank ? ` · ${i.bank}` : ""}` : sheetTypeLabel(i.sheet_type)} onBack={ctx.back} />
-      <div className="iPad withCta">
+      <TopBar title={i.property_label} sub={[sheetTypeLabel(i.sheet_type).split(" (")[0], i.cad && `nr. cad. ${i.cad}`, i.report_number && `raport ${i.report_number}`].filter(Boolean).join(" · ")} onBack={ctx.back} />
+      <div className={`iPad${sent || sending ? " withCta" : ""}`}>
+        {!sent && !sending && (
+          <div className="dTiles">
+            {i.host_id ? (
+              <a className="dTile dark wide" href={`#/i/${encodeURIComponent(i.host_id)}/fisa`}><Icon.sheet /><b>Completează pe fișa principală</b><small>accesoriul are câmpurile lui acolo</small></a>
+            ) : (
+              <>
+                <a className="dTile" href={`#/i/${encodeURIComponent(id)}/programeaza`}><Icon.calendar /><b>{i.status === "scheduled" ? "Reprogramează" : "Programează"}</b><small>{i.status === "scheduled" ? fmtWhen(i.scheduled_at) : "și anunță contactul"}</small></a>
+                <a className="dTile dark" href={sheetHref}><Icon.sheet /><b>{started ? "Continuă fișa" : "Începe fișa acum"}</b><small>{started && prog ? `${prog.done} din ${prog.total} completate` : "sunt la proprietate"}</small></a>
+              </>
+            )}
+          </div>
+        )}
         <section className="iBox">
           <div className="iCardHead">
             <span className="iTime">{i.status === "to_schedule" && !i.local ? "Neprogramată" : fmtWhen(i.scheduled_at)}</span>
@@ -63,14 +75,7 @@ export function DetailView({ ctx, id, item }: { ctx: Ctx; id: string; item: Loca
           </div>
           {i.duration_min && i.status === "scheduled" && <span className="muted">Durată estimată {i.duration_min} min{i.contact_notified_at ? " · contactul a fost anunțat" : ""}</span>}
           {i.local === "scheduled_offline" && <span className="iNote warn">Programarea e salvată pe telefon și se trimite când ai semnal.</span>}
-          {!sent && (
-            <div className="iRow2">
-              <button type="button" className="iBtn ghost" onClick={() => ctx.go(`#/i/${encodeURIComponent(id)}/programeaza`)}>
-                <Icon.calendar />{i.status === "scheduled" ? "Reprogramează" : "Programează"}
-              </button>
-              {cal ? <a className="iBtn ghost" href={cal} download={`inspectie-${i.report_number ?? id}.ics`}><Icon.clock />În calendar</a> : <span />}
-            </div>
-          )}
+          {!sent && cal && <a className="iBtn ghost" href={cal} download={`inspectie-${i.report_number ?? id}.ics`}><Icon.clock />Adaugă în calendarul telefonului</a>}
         </section>
 
         {i.host_id && (
@@ -110,10 +115,10 @@ export function DetailView({ ctx, id, item }: { ctx: Ctx; id: string; item: Loca
         </section>
 
         <section className="iBox">
-          <h3>Persoană de contact</h3>
+          <h3 className="dEyebrow">{(CONTACT[i.contact_kind ?? ""] ?? "Persoană de contact").toUpperCase()}</h3>
           {i.contact_name || i.contact_phone ? (
             <>
-              <div className="iKv"><span>{CONTACT[i.contact_kind ?? ""] ?? "Contact"}</span><b>{i.contact_name || "—"}</b></div>
+              <div className="iKv big"><b>{i.contact_name || "—"}</b>{i.contact_phone && <span>{i.contact_phone}</span>}</div>
               {i.contact_phone && (
                 <div className="iRow2">
                   <a className="iBtn" href={telUrl(i.contact_phone)}><Icon.phone />Sună</a>
@@ -174,17 +179,11 @@ export function DetailView({ ctx, id, item }: { ctx: Ctx; id: string; item: Loca
         )}
       </div>
 
-      <div className="iCta">
-        {i.host_id && !sent ? (
-          <a className="iBtn big acc" href={`#/i/${encodeURIComponent(i.host_id)}/fisa`}>Completează pe fișa principală →</a>
-        ) : sent ? (
-          <a className="iBtn big ghost" href={sheetHref}>Vezi fișa trimisă</a>
-        ) : sending ? (
-          <a className="iBtn big ghost" href="#/detrimis">Vezi ce e de trimis</a>
-        ) : (
-          <a className="iBtn big acc" href={sheetHref}>{started ? "Continuă fișa →" : "Începe inspecția →"}</a>
-        )}
-      </div>
+      {(sent || sending) && (
+        <div className="iCta">
+          {sent ? <a className="iBtn big ghost" href={sheetHref}>Vezi fișa trimisă</a> : <a className="iBtn big ghost" href="#/detrimis">Vezi ce e de trimis</a>}
+        </div>
+      )}
     </>
   );
 }

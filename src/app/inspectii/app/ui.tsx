@@ -5,6 +5,10 @@ import type { Insp } from "./store";
 const P = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
 
 export const Icon = {
+  home: () => <svg {...P}><path d="M3 11l9-7 9 7v9H3z" /></svg>,
+  user: () => <svg {...P}><circle cx="12" cy="8" r="4" /><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" /></svg>,
+  doc: () => <svg {...P}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /></svg>,
+  sheet: () => <svg {...P}><path d="M9 4h6v3H9z" /><path d="M9 5H6v16h12V5h-3M9 12l2 2 4-4" /></svg>,
   list: () => <svg {...P}><rect x="3" y="4" width="18" height="17" rx="3" /><path d="M8 2v4M16 2v4M3 10h18" /></svg>,
   calendar: () => <svg {...P}><rect x="3" y="4" width="18" height="17" rx="3" /><path d="M8 2v4M16 2v4M3 10h18M8 14h3M8 17h6" /></svg>,
   pin: () => <svg {...P}><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" /></svg>,

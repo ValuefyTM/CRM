@@ -47,6 +47,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
         ] },
         { group: "Administrare", key: "g-admin", items: [
           { key: "users", label: "Utilizatori", href: `${b}/utilizatori` },
+          { key: "templates", label: "Fișe de inspecție", href: `${b}/setari/fise` },
           ...(owner ? [{ key: "import", label: "Import Glide", href: `${b}/setari/import` }] : []),
         ] },
         { group: "Personal", key: "g-me", items: [

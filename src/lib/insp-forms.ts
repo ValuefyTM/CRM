@@ -18,11 +18,22 @@ export const sheetTypeLabel = (t: string | null | undefined) => SHEET_TYPES.find
 /** Utility connections: connected yes/no; connected → meter fitted yes/no; not connected → distance to the network (ml). */
 export type Utility = "water" | "sewer" | "gas" | "power";
 
-export type Field =
+/**
+ * Set in the CRM sheet templates (Setări → Fișe de inspecție): required before sending, a free "Altele" text next to
+ * the options, left out of the PDF sheet, options ticked when the sheet starts, a question added by the firm.
+ */
+export type FieldMeta = { req?: boolean; other?: boolean; pdf?: boolean; defaults?: string[]; custom?: boolean };
+
+export type Field = (
   | { k: string; label: string; kind: "one" | "many"; opts: string[] }
   | { k: string; label: string; kind: "num" | "int"; unit?: string; placeholder?: string }
   | { k: string; label: string; kind: "text"; placeholder?: string; long?: boolean }
-  | { k: Utility; label: string; kind: "util"; meterLabel?: string };
+  | { k: Utility; label: string; kind: "util"; meterLabel?: string }
+  | { k: string; label: string; kind: "photo" }
+) & FieldMeta;
+
+/** Key of the free text next to the options of a question with "Altele". */
+export const otherKey = (k: string) => `${k}.alt`;
 
 export type Section = { id: string; title: string; fields: Field[] };
 
@@ -340,7 +351,9 @@ export function guessSheetType(category: string | null, type: string | null, ord
 
 // ---------- answers ----------
 
-export const allFields = (t: SheetType) => FORMS[t].flatMap((s) => s.fields);
+/** The sections of a sheet: the ones it was started with (template snapshot), else the built-in form. */
+export const formOf = (t: SheetType, form?: Section[] | null): Section[] => (form && form.length ? form : FORMS[t]);
+export const allFields = (t: SheetType, form?: Section[] | null) => formOf(t, form).flatMap((s) => s.fields);
 
 /** A field counts as filled when it has an answer; a utility needs the meter (connected) or the distance (not connected). */
 export function isFilled(f: Field, a: Answers[string]): boolean {
@@ -355,13 +368,32 @@ export function isFilled(f: Field, a: Answers[string]): boolean {
   return typeof a === "string" && a.trim() !== "";
 }
 
-/** Free text and answers needed only in some cases (details, completion %) do not count towards completion. */
-export const isOptional = (f: Field) => f.k === "notes" || f.k.endsWith("acc_notes") || f.k.endsWith("_notes") || f.k === "completion_pct";
+/** Filled, counting the "Altele" text of a question that has one. */
+export const answered = (f: Field, answers: Answers) =>
+  isFilled(f, answers[f.k]) || (!!f.other && typeof answers[otherKey(f.k)] === "string" && (answers[otherKey(f.k)] as string).trim() !== "");
 
-export function progress(t: SheetType, answers: Answers) {
-  const fields = allFields(t).filter((f) => !isOptional(f));
-  const done = fields.filter((f) => isFilled(f, answers[f.k])).length;
+/** Free text and answers needed only in some cases (details, completion %) do not count towards completion. */
+export const isOptional = (f: Field) => !f.req && (f.k === "notes" || f.k.endsWith("acc_notes") || f.k.endsWith("_notes") || f.k === "completion_pct");
+
+export function progress(t: SheetType, answers: Answers, form?: Section[] | null) {
+  const fields = allFields(t, form).filter((f) => !isOptional(f));
+  const done = fields.filter((f) => answered(f, answers)).length;
   return { done, total: fields.length };
+}
+
+/** Questions marked required in the template that are still empty. */
+export const missingRequired = (t: SheetType, answers: Answers, form?: Section[] | null) =>
+  allFields(t, form).filter((f) => f.req && !answered(f, answers));
+
+/** Answers the sheet starts with: the options the template ticks by default. */
+export function defaultAnswers(sections: Section[]): Answers {
+  const out: Answers = {};
+  for (const f of sections.flatMap((s) => s.fields)) {
+    if (!f.defaults?.length || (f.kind !== "one" && f.kind !== "many")) continue;
+    const d = f.defaults.filter((o) => f.opts.includes(o));
+    if (d.length) out[f.k] = f.kind === "many" ? d : d[0];
+  }
+  return out;
 }
 
 const toNum = (v: unknown) => {
@@ -382,8 +414,8 @@ export const EXTRA_FEATURES = new Set([
 ]);
 
 /** Maps the answers onto property_features columns (v2 fields → "extra" JSON). Only fields of the chosen form are kept; values are checked. */
-export function featureColumns(t: SheetType, answers: Answers): Record<string, string | number | null> {
-  const all = featureValues(t, answers);
+export function featureColumns(t: SheetType, answers: Answers, form?: Section[] | null): Record<string, string | number | null> {
+  const all = featureValues(t, answers, form);
   const out: Record<string, string | number | null> = {};
   const extra: Record<string, string | number> = {};
   for (const [k, v] of Object.entries(all)) {
@@ -394,10 +426,11 @@ export function featureColumns(t: SheetType, answers: Answers): Record<string, s
   return out;
 }
 
-function featureValues(t: SheetType, answers: Answers): Record<string, string | number | null> {
+function featureValues(t: SheetType, answers: Answers, form?: Section[] | null): Record<string, string | number | null> {
   const out: Record<string, string | number | null> = {};
   if (t === "accesoriu") return out; // accessories keep their answers on the sheet only
-  for (const f of allFields(t)) {
+  // Only the built-in questions have columns; the firm's own questions stay in the sheet's answers.
+  for (const f of allFields(t, form).filter((x) => !x.custom)) {
     const a = answers[f.k];
     if (f.kind === "util") {
       const u = (a && typeof a === "object" && !Array.isArray(a) ? a : {}) as UtilAnswer;

@@ -1,12 +1,15 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Ctx } from "./InspApp";
-import { useDetail, useDraft } from "./hooks";
-import { Chips, Icon, TopBar, type Local } from "./ui";
-import { DocsFab } from "./DocsViewer";
-import { RoomsSection } from "./RoomsSection";
-import { accFields, FORMS, hasRooms, isFilled, isOptional, progress, ROOMS_KEY, roomsOf, SHEET_TYPES, type Answers, type Field, type Section, type UtilAnswer } from "@/lib/insp-forms";
+import { newId } from "./store";
+import { position, shrink, useDetail, useDraft, usePhotos } from "./hooks";
+import { Chips, Icon, type Local } from "./ui";
+import { DocsButton } from "./DocsViewer";
+import {
+  accFields, answered, formOf, hasRooms, isFilled, isOptional, otherKey, roomsOf, sheetTypeLabel,
+  type Answers, type Field, type Section, type UtilAnswer,
+} from "@/lib/insp-forms";
 
 function UtilBlock({ f, value, onChange, readOnly }: { f: Extract<Field, { kind: "util" }>; value: UtilAnswer; onChange: (v: UtilAnswer) => void; readOnly: boolean }) {
   const yn = (cur: string | undefined, set: (v: "da" | "nu" | undefined) => void, label: string) => (
@@ -33,14 +36,27 @@ function UtilBlock({ f, value, onChange, readOnly }: { f: Extract<Field, { kind:
   );
 }
 
-function FieldInput({ f, answers, set, readOnly }: { f: Field; answers: Answers; set: (k: string, v: Answers[string]) => void; readOnly: boolean }) {
+function FieldInput({ f, answers, set, readOnly, onPhoto, photos }: {
+  f: Field; answers: Answers; set: (k: string, v: Answers[string]) => void; readOnly: boolean; onPhoto: (f: Field) => void; photos: number;
+}) {
   const a = answers[f.k];
   if (f.kind === "util") return <UtilBlock f={f} value={(a ?? {}) as UtilAnswer} onChange={(v) => set(f.k, v)} readOnly={readOnly} />;
+  if (f.kind === "photo") {
+    return (
+      <button type="button" className={`sPhotoQ${photos ? " ok" : ""}`} disabled={readOnly} onClick={() => onPhoto(f)}>
+        <Icon.camera />{photos ? `Fotografiat (${photos}) · mai adaugă` : "Fotografiază"}
+      </button>
+    );
+  }
   if (f.kind === "one" || f.kind === "many") {
     const v = Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : typeof a === "string" && a ? [a] : [];
+    const alt = answers[otherKey(f.k)];
     return (
       <fieldset className="iChipsWrap" disabled={readOnly}>
         <Chips label={f.label} opts={f.opts} value={v} multi={f.kind === "many"} onChange={(n) => set(f.k, f.kind === "many" ? n : n[0] ?? "")} />
+        {f.other && (
+          <input className="sOther" value={typeof alt === "string" ? alt : ""} onChange={(e) => set(otherKey(f.k), e.target.value)} placeholder="Altele…" aria-label={`${f.label}: altele`} />
+        )}
       </fieldset>
     );
   }
@@ -58,87 +74,117 @@ function FieldInput({ f, answers, set, readOnly }: { f: Field; answers: Answers;
   );
 }
 
-/** The inspection sheet, with the form of the property type. Saved on the phone at every change. */
+const counts = (s: Section, answers: Answers) => {
+  const req = s.fields.filter((f) => !isOptional(f));
+  return { done: req.filter((f) => answered(f, answers)).length, total: req.length };
+};
+
+/** The inspection sheet, one group of questions at a time (the firm's template). Saved on the phone at every change. */
 export function SheetView({ ctx, id, item }: { ctx: Ctx; id: string; item: Local | undefined }) {
   const { detail } = useDetail(ctx, id);
   const { draft, update } = useDraft(ctx, id, item, detail);
-  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const { photos, add } = usePhotos(ctx, id, detail);
   const i = item ?? detail?.inspection;
+  const key = `insp-sec-${id}`;
+  const [cur, setCur] = useState<string | null>(() => { try { return sessionStorage.getItem(key); } catch { return null; } });
+  const nav = useRef<HTMLElement>(null);
+  const cam = useRef<HTMLInputElement>(null);
+  const photoQ = useRef<Field | null>(null);
 
+  const sections = useMemo<Section[]>(() => {
+    if (!draft) return [];
+    // Accessories at the same address (parking, garage, box) get their own group on this sheet.
+    const extra = (i?.hosted ?? []).map((h) => ({ id: `acc-${h.id}`, title: `Accesoriu: ${h.label}`, fields: accFields(h.id) }));
+    return [...formOf(draft.sheet_type, draft.form), ...extra];
+  }, [draft, i?.hosted]);
+
+  // Start on the first group that is not complete.
+  const current = sections.find((s) => s.id === cur) ?? (draft ? sections.find((s) => { const c = counts(s, draft.answers); return c.done < c.total; }) ?? sections[0] : undefined);
   useEffect(() => {
-    if (draft && !Object.keys(open).length) {
-      // Open the first sections that are not complete yet.
-      const o: Record<string, boolean> = {};
-      let n = 0;
-      for (const s of [...FORMS[draft.sheet_type], ...(i?.hosted ?? []).map((h) => ({ id: `acc-${h.id}`, title: "", fields: accFields(h.id) }))]) {
-        const full = s.fields.every((f) => isOptional(f) || isFilled(f, draft.answers[f.k]));
-        if (!full && n < 2) { o[s.id] = true; n++; }
-      }
-      setOpen(o);
-    }
-  }, [draft, open]);
+    if (!current) return;
+    try { sessionStorage.setItem(key, current.id); } catch { /* private mode */ }
+    nav.current?.querySelector('[aria-current="step"]')?.scrollIntoView({ inline: "center", block: "nearest" });
+  }, [current, key]);
 
-  if (!draft || !i) return (<><TopBar title="Fișa de inspecție" onBack={ctx.back} /><div className="iPad"><p className="iEmpty">Se încarcă…</p></div></>);
+  if (!draft || !i || !current) return (<div className="sLoading"><p className="iEmpty">Se încarcă fișa…</p></div>);
 
   const ro = draft.submitted || draft.submit;
-  const type = draft.sheet_type;
-  // Accessories at the same address (parking, garage, box) get their own section on this sheet.
-  const extra: Section[] = (i.hosted ?? []).map((h) => ({ id: `acc-${h.id}`, title: `Accesoriu: ${h.label}`, fields: accFields(h.id) }));
-  const sections = [...FORMS[type], ...extra];
-  const base = progress(type, draft.answers);
-  const extraFields = extra.flatMap((x) => x.fields).filter((f) => !isOptional(f));
-  const p = { done: base.done + extraFields.filter((f) => isFilled(f, draft.answers[f.k])).length, total: base.total + extraFields.length };
+  const all = sections.flatMap((s) => s.fields).filter((f) => !isOptional(f));
+  const done = all.filter((f) => answered(f, draft.answers)).length;
   const set = (k: string, v: Answers[string]) => update({ answers: { ...draft.answers, [k]: v } });
+  const idx = sections.findIndex((s) => s.id === current.id);
+  const nextS = sections[idx + 1];
+  const go = (s: Section) => { setCur(s.id); window.scrollTo(0, 0); };
+  const rooms = roomsOf(draft.answers);
+  const roomsDone = rooms.filter((r) => r.floor?.length && r.walls?.length && r.condition).length;
+  const base = `#/i/${encodeURIComponent(id)}`;
+  const photoCount = (f: Field) => photos.filter((p) => p.caption === f.label && p.category === "other").length;
+
+  const takeFor = (f: Field) => { photoQ.current = f; cam.current?.click(); };
+  const onFile = async (files: FileList | null) => {
+    const f = photoQ.current;
+    if (!files?.length || !f) return;
+    const pos = await position(4000);
+    let sort = photos.length;
+    for (const file of Array.from(files)) {
+      const { blob, width, height } = await shrink(file);
+      await add({ id: newId(), inspection_id: id, category: "other", caption: f.label, blob, width, height, taken_at: new Date().toISOString(),
+        lat: pos?.coords.latitude ?? null, lng: pos?.coords.longitude ?? null, sort: sort++, uploaded: false, deleted: false, error: null });
+    }
+    set(f.k, "1");
+    if (cam.current) cam.current.value = "";
+  };
 
   return (
     <>
-      <TopBar title={`Fișa: ${SHEET_TYPES.find(([k]) => k === type)?.[1]}`} sub={i.address} onBack={ctx.back}
-        right={<span className="iCount">{p.done}/{p.total}</span>} />
-      <div className="iProgress" aria-hidden="true"><i style={{ width: `${(p.done / Math.max(1, p.total)) * 100}%` }} /></div>
-      <div className="iPad withCta">
+      <header className="sHead">
+        <div className="sHeadRow">
+          <button type="button" className="iIconBtn" onClick={() => ctx.go(base)} aria-label="Înapoi"><Icon.back /></button>
+          <span className="sHeadText"><b>Fișa · {sheetTypeLabel(draft.sheet_type).split(" (")[0]}</b><small>{ro ? (draft.submitted ? "Trimisă" : "Semnată · se trimite") : "Salvat pe telefon"} · {done} din {all.length} completate</small></span>
+          <DocsButton docs={detail?.docs} label="Acte" />
+        </div>
+        <div className="sBar" aria-hidden="true"><i style={{ width: `${(done / Math.max(1, all.length)) * 100}%` }} /></div>
+        <nav ref={nav} className="sNav" aria-label="Secțiuni">
+          {sections.map((s) => {
+            const c = counts(s, draft.answers);
+            const on = s.id === current.id;
+            const full = c.total > 0 && c.done === c.total;
+            return (
+              <button key={s.id} type="button" aria-current={on ? "step" : undefined} className={on ? "on" : full ? "ok" : ""} onClick={() => go(s)}>
+                {full && !on ? "✓ " : ""}{s.title}{on && c.total ? ` ${c.done}/${c.total}` : ""}
+              </button>
+            );
+          })}
+        </nav>
+      </header>
+
+      <input ref={cam} type="file" accept="image/*" capture="environment" hidden onChange={(e) => onFile(e.target.files)} />
+      <div className="sBody">
         {ro && <p className="iNote ok">{draft.submitted ? "Fișa a fost trimisă și nu mai poate fi modificată." : "Fișa este semnată și așteaptă să fie trimisă."}</p>}
         {draft.error && <p className="iNote err">{draft.error}</p>}
-        {(i.hosted ?? []).length > 0 && <p className="iNote">Pe această fișă inspectezi și {(i.hosted ?? []).map((h) => h.label.toLowerCase()).join(", ")}: secțiunile „Accesoriu” de la final.</p>}
-        {sections.map((s, idx) => {
-          // The rooms of the survey come right after the finishes (the space, for commercial properties).
-          const anchor = type === "comercial" ? "spatiu" : "finisaje";
-          const roomsAt = hasRooms(type) ? sections.findIndex((x) => x.id === anchor) : -1;
-          const n = idx + (roomsAt >= 0 && idx > roomsAt ? 1 : 0);
-          const rooms = idx === roomsAt
-            ? <RoomsSection key="rooms" id={id} rooms={roomsOf(draft.answers)} onChange={(r) => set(ROOMS_KEY, r)} readOnly={ro} n={n + 2} online={ctx.online} />
-            : null;
-          const free = isOptional;
-          const filled = s.fields.filter((f) => !free(f) && isFilled(f, draft.answers[f.k])).length;
-          const total = s.fields.filter((f) => !free(f)).length;
-          const isOpen = !!open[s.id];
-          return (
-            <Fragment key={s.id}>
-            <section className={`iSection${isOpen ? " open" : ""}`}>
-              <button type="button" className="iSectionHead" aria-expanded={isOpen} onClick={() => setOpen({ ...open, [s.id]: !isOpen })}>
-                <span className={`iSecN${filled === total ? " ok" : ""}`}>{filled === total ? <Icon.check /> : n + 1}</span>
-                <span className="iSecT"><b>{s.title}</b><small>{filled} din {total} completate</small></span>
-                <span className="iSecChev"><Icon.chevron /></span>
-              </button>
-              {isOpen && (
-                <div className="iSectionBody">
-                  {s.fields.map((f) => (
-                    <div key={f.k} className={`iQ${f.kind === "util" ? " util" : ""}`}>
-                      <span className="iQLabel">{f.label}{isFilled(f, draft.answers[f.k]) && <Icon.check />}</span>
-                      <FieldInput f={f} answers={draft.answers} set={set} readOnly={ro} />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-            {rooms}
-            </Fragment>
-          );
-        })}
-        <p className="hint center">Totul se salvează pe telefon pe măsură ce completezi{ctx.online ? " și se trimite automat ca ciornă" : ""}.</p>
+        {idx === 0 && (i.hosted ?? []).length > 0 && <p className="iNote">Pe această fișă inspectezi și {(i.hosted ?? []).map((h) => h.label.toLowerCase()).join(", ")}: grupurile „Accesoriu” de la final.</p>}
+        <h2 className="sTitle">{current.title}</h2>
+        {current.fields.map((f) => (
+          <div key={f.k} className={`iQ${f.kind === "util" ? " util" : ""}`}>
+            <span className="iQLabel">{f.label}{f.req && <span className="sReq" aria-label="obligatoriu">*</span>}{isFilled(f, draft.answers[f.k]) && <Icon.check />}</span>
+            <FieldInput f={f} answers={draft.answers} set={set} readOnly={ro} onPhoto={takeFor} photos={f.kind === "photo" ? photoCount(f) : 0} />
+          </div>
+        ))}
       </div>
-      <DocsFab docs={detail?.docs} />
-      <div className="iCta">
-        <a className="iBtn big acc" href={`#/i/${encodeURIComponent(id)}/foto`}>Fotografii →</a>
+
+      <div className="sFoot">
+        <div className={`sFootLinks${hasRooms(draft.sheet_type) ? "" : " two"}`}>
+          {hasRooms(draft.sheet_type) && <a href={`${base}/incaperi`}>Încăperi {rooms.length ? `${roomsDone}/${rooms.length}` : ""}</a>}
+          <a href={`${base}/foto`}>Foto · {photos.length}</a>
+          <a href={`${base}/semnatura`}>Semnătură</a>
+        </div>
+        {nextS ? (
+          <button type="button" className="sNext" onClick={() => go(nextS)}>Secțiunea următoare: {nextS.title} →</button>
+        ) : (
+          <a className="sNext" href={hasRooms(draft.sheet_type) && rooms.length > roomsDone ? `${base}/incaperi` : `${base}/semnatura`}>
+            {hasRooms(draft.sheet_type) && rooms.length > roomsDone ? "Mai departe: încăperile →" : "Încheie: semnătură și trimitere →"}
+          </a>
+        )}
       </div>
     </>
   );

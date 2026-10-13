@@ -1,6 +1,6 @@
 // What the phone keeps (IndexedDB): the last list and details from the server, the sheets being filled in, the photos
 // not sent yet and the schedulings made without signal. Everything is sent by sync.ts when the signal is back.
-import type { Answers, SheetType } from "@/lib/insp-forms";
+import type { Answers, Section, SheetType } from "@/lib/insp-forms";
 
 export type InspStatus = "to_schedule" | "scheduled" | "done" | "cancelled";
 export type Insp = {
@@ -20,6 +20,7 @@ export type Insp = {
 export type ServerSheet = {
   id: string; status: "draft" | "submitted"; sheet_type: SheetType; answers: Answers; present_person: string | null; present_role: string | null;
   present_phone: string | null; has_signature: boolean; submitted_at: string | null; updated_at: string | null;
+  form?: Section[] | null;
 };
 export type ServerPhoto = { id: string; category: string; caption: string | null; url: string; taken_at: string | null; width: number | null; height: number | null };
 
@@ -27,6 +28,8 @@ export type ServerPhoto = { id: string; category: string; caption: string | null
 export type Draft = {
   id: string; // inspection id
   sheet_type: SheetType;
+  /** The form (the firm's template) the sheet was started with; older drafts: none (the built-in form). */
+  form?: Section[] | null;
   answers: Answers;
   present_person: string; present_role: string; present_phone: string;
   signature: string | null; // PNG data URL, until sent

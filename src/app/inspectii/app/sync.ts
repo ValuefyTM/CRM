@@ -1,4 +1,5 @@
 // Sends what was done on the phone (schedulings, photos, sheets) and refreshes the inspections list.
+import type { Section, SheetType } from "@/lib/insp-forms";
 import {
   allDrafts, allOps, allPhotos, deleteOp, deletePhoto, getDraft, kvGet, kvSet, putDraft, putOp, putPhoto,
   type Insp, type ServerPhoto, type ServerSheet,
@@ -25,7 +26,7 @@ async function call<T = Json>(path: string, init?: RequestInit): Promise<{ ok: t
   return { ok: true, data: data as T };
 }
 
-export type ListData = { inspections: Insp[]; at: string };
+export type ListData = { inspections: Insp[]; at: string; forms?: Partial<Record<SheetType, Section[]>> };
 /** CF extract / floor survey of the inspection (or of an accessory inspected on its sheet: `for`). */
 export type InspDoc = { ref: string; type: "cf" | "rlv"; name: string; content_type: string | null; for: string | null; url: string };
 export type DetailData = { inspection: Insp; sheet: ServerSheet | null; photos: ServerPhoto[]; docs?: InspDoc[] };
@@ -103,7 +104,7 @@ export function syncAll(): Promise<SyncResult> {
         const r = await call<{ sheet: ServerSheet }>(`/api/insp/inspections/${encodeURIComponent(d.id)}/sheet`, {
           method: "PUT", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            sheet_type: d.sheet_type, answers: d.answers, present_person: d.present_person, present_role: d.present_role, present_phone: d.present_phone,
+            sheet_type: d.sheet_type, form: d.form ?? null, answers: d.answers, present_person: d.present_person, present_role: d.present_role, present_phone: d.present_phone,
             signature: d.signature, lat: d.lat, lng: d.lng, accuracy_m: d.accuracy_m, submit,
           }),
         });

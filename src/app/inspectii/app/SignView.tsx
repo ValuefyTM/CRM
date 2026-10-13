@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { Ctx } from "./InspApp";
 import { position, useDetail, useDraft, usePhotos } from "./hooks";
-import { Icon, TopBar, type Local } from "./ui";
-import { photoCategories, PRESENT_ROLES, progress } from "@/lib/insp-forms";
+import { Icon, type Local } from "./ui";
+import { hasRooms, missingRequired, photoCategories, PRESENT_ROLES, progress, roomsOf } from "@/lib/insp-forms";
 
 /** Signature pad: pointer events, drawn at the screen's pixel density, exported as PNG. */
 function Pad({ onDone, disabled }: { onDone: (png: string | null) => void; disabled: boolean }) {
@@ -46,13 +46,18 @@ function Pad({ onDone, disabled }: { onDone: (png: string | null) => void; disab
   );
 }
 
+const ROLE_OF: Record<string, string> = { owner: "owner", client: "client", agent: "agent" };
+
 export function SignView({ ctx, id, item }: { ctx: Ctx; id: string; item: Local | undefined }) {
   const { detail } = useDetail(ctx, id);
   const { draft, update } = useDraft(ctx, id, item, detail);
   const { photos } = usePhotos(ctx, id, detail);
   const [gps, setGps] = useState<"" | "wait" | "ok" | "no">("");
   const [msg, setMsg] = useState("");
+  const [other, setOther] = useState(false);
+  const [signedAt, setSignedAt] = useState<Date | null>(null);
   const asked = useRef(false);
+  const i = item ?? detail?.inspection;
 
   useEffect(() => {
     if (!draft || draft.submitted || draft.submit || asked.current || draft.lat != null) return;
@@ -65,83 +70,119 @@ export function SignView({ ctx, id, item }: { ctx: Ctx; id: string; item: Local 
     });
   }, [draft, update]);
 
-  if (!draft) return (<><TopBar title="Semnătură" onBack={ctx.back} /><div className="iPad"><p className="iEmpty">Se încarcă…</p></div></>);
+  if (!draft) return (<div className="sLoading"><p className="iEmpty">Se încarcă…</p></div>);
 
+  const base = `#/i/${encodeURIComponent(id)}`;
   const ro = draft.submitted || draft.submit;
-  const p = progress(draft.sheet_type, draft.answers);
+  const p = progress(draft.sheet_type, draft.answers, draft.form);
+  const req = missingRequired(draft.sheet_type, draft.answers, draft.form);
+  const rooms = roomsOf(draft.answers);
+  const roomsDone = rooms.filter((r) => r.floor?.length && r.walls?.length && r.condition).length;
   const required = photoCategories(draft.sheet_type).filter((c) => c.required);
   const photosOk = required.every((c) => photos.some((x) => x.category === c.k));
   const hasSig = !!draft.signature || !!detail?.sheet?.has_signature;
-  const checks: [boolean, string, string?][] = [
-    [p.done === p.total, `Fișa: ${p.done} din ${p.total} câmpuri`, `#/i/${encodeURIComponent(id)}/fisa`],
-    [photosOk, `${photos.length} ${photos.length === 1 ? "fotografie" : "fotografii"}${photosOk ? "" : " · lipsește fotografia exterioară"}`, `#/i/${encodeURIComponent(id)}/foto`],
-    [!!draft.present_person.trim(), "Persoana prezentă"],
-    [hasSig, "Semnătura"],
-    [draft.lat != null, draft.lat != null ? `Locația (±${draft.accuracy_m ?? "?"} m)` : gps === "wait" ? "Locația: se caută…" : "Locația nu este disponibilă (opțional)"],
+  // The contact of the visit, offered as the person present (one tap), or someone else.
+  const contact = i?.contact_name?.trim() || "";
+  const isContact = !!contact && !other && draft.present_person.trim() === contact;
+
+  const rows: [boolean | null, string, string, string?][] = [
+    [p.done === p.total, "Fișa", `${p.done}/${p.total}`, `${base}/fisa`],
+    ...(req.length ? [[false, "Obligatorii necompletate", req.slice(0, 2).map((f) => f.label).join(", ") + (req.length > 2 ? "…" : ""), `${base}/fisa`] as [boolean, string, string, string]] : []),
+    ...(hasRooms(draft.sheet_type) ? [[rooms.length > 0 && roomsDone === rooms.length, "Încăperi", rooms.length ? `${roomsDone}/${rooms.length}` : "nicio încăpere", `${base}/incaperi`] as [boolean, string, string, string]] : []),
+    [photosOk, "Fotografii", photosOk ? String(photos.length) : "lipsește exteriorul", `${base}/foto`],
+    [draft.lat != null ? true : null, "Locația", draft.lat != null ? `±${draft.accuracy_m ?? "?"} m` : gps === "wait" ? "se caută…" : "indisponibilă (opțional)"],
   ];
 
   const send = async () => {
     setMsg("");
+    if (req.length) return setMsg(`Completează întrebările obligatorii: ${req.slice(0, 4).map((f) => f.label).join(", ")}.`);
     if (!photosOk) return setMsg("Adaugă cel puțin o fotografie exterioară.");
-    if (!draft.present_person.trim()) return setMsg("Completează numele persoanei prezente.");
+    if (!draft.present_person.trim()) return setMsg("Alege sau completează persoana prezentă.");
     if (!hasSig) return setMsg("Lipsește semnătura persoanei prezente.");
-    if (p.done < p.total && !confirm(`Fișa are ${p.total - p.done} câmpuri necompletate. Trimiți așa?`)) return;
+    if (p.done < p.total && !confirm(`Fișa are ${p.total - p.done} întrebări fără răspuns. Trimiți așa?`)) return;
     update({ submit: true });
     if (navigator.onLine) setTimeout(() => ctx.sync(), 300);
   };
 
   return (
     <>
-      <TopBar title="Prezență și semnătură" sub={item?.address} onBack={() => ctx.go(`#/i/${encodeURIComponent(id)}/foto`)} />
-      <div className="iPad withCta">
+      <header className="sHead">
+        <div className="sHeadRow">
+          <button type="button" className="iIconBtn" onClick={() => ctx.go(`${base}/fisa`)} aria-label="Înapoi la fișă"><Icon.back /></button>
+          <span className="sHeadText"><b>Încheie inspecția</b><small>Verifică, semnează, trimite</small></span>
+        </div>
+      </header>
+      <div className="sBody">
         {draft.submitted && <p className="iNote ok">Fișa a fost trimisă. Mulțumim!</p>}
         {draft.submit && !draft.submitted && <p className="iNote warn">{ctx.online ? "Se trimite…" : "Fișa e salvată pe telefon și se trimite automat când revine semnalul."}</p>}
         {draft.error && <p className="iNote err">{draft.error}</p>}
 
-        <section className="iBox">
-          <h3>Verificare</h3>
-          <ul className="iChecks">
-            {checks.map(([ok, t, href]) => (
-              <li key={t} className={ok ? "ok" : ""}>
-                <span className="iCheckDot">{ok ? <Icon.check /> : null}</span>
-                {href && !ok && !ro ? <a href={href}>{t} →</a> : <span>{t}</span>}
-              </li>
-            ))}
-          </ul>
-        </section>
+        <div className="gSum">
+          {rows.map(([ok, t, v, href]) => {
+            const val = <b className={ok === true ? "ok" : ok === false ? "warn" : ""}>{ok === true ? "✓ " : ""}{v}</b>;
+            return href && ok === false && !ro
+              ? <a key={t} href={href}><span>{t}</span>{val}</a>
+              : <span key={t}><span>{t}</span>{val}</span>;
+          })}
+        </div>
 
-        <section className="iBox">
-          <h3>Persoana prezentă la inspecție</h3>
-          <label className="iField">Nume și prenume
-            <input value={draft.present_person} readOnly={ro} onChange={(e) => update({ present_person: e.target.value })} autoComplete="off" />
-          </label>
-          <div className="iField">Calitatea
-            <div className="iChips">
-              {PRESENT_ROLES.map(([k, l]) => (
-                <button key={k} type="button" disabled={ro} className={`iChip${draft.present_role === k ? " on" : ""}`} aria-pressed={draft.present_role === k}
-                  onClick={() => update({ present_role: draft.present_role === k ? "" : k })}>{l}</button>
-              ))}
-            </div>
+        <div className="iQ">
+          <span className="iQLabel">Cine a fost prezent</span>
+          <div className="iChips">
+            {contact && (
+              <button type="button" disabled={ro} className={`iChip${isContact ? " on" : ""}`} aria-pressed={isContact}
+                onClick={() => { setOther(false); update({ present_person: contact, present_phone: i?.contact_phone ?? "", present_role: ROLE_OF[i?.contact_kind ?? ""] ?? draft.present_role }); }}>
+                {contact}{i?.contact_kind && PRESENT_ROLES.find(([k]) => k === ROLE_OF[i.contact_kind!]) ? ` · ${PRESENT_ROLES.find(([k]) => k === ROLE_OF[i.contact_kind!])![1].toLowerCase()}` : ""}
+              </button>
+            )}
+            <button type="button" disabled={ro} className={`iChip${!isContact ? " on" : ""}`} aria-pressed={!isContact}
+              onClick={() => { setOther(true); if (isContact) update({ present_person: "", present_phone: "", present_role: "" }); }}>{contact ? "Altcineva" : "Persoana prezentă"}</button>
           </div>
-          <label className="iField">Telefon
-            <input type="tel" inputMode="tel" value={draft.present_phone} readOnly={ro} onChange={(e) => update({ present_phone: e.target.value })} />
-          </label>
-        </section>
+        </div>
+        {!isContact && (
+          <div className="gWho">
+            <label className="iField">Nume și prenume
+              <input value={draft.present_person} readOnly={ro} onChange={(e) => update({ present_person: e.target.value })} autoComplete="off" />
+            </label>
+            <div className="iField">Calitatea
+              <div className="iChips">
+                {PRESENT_ROLES.map(([k, l]) => (
+                  <button key={k} type="button" disabled={ro} className={`iChip${draft.present_role === k ? " on" : ""}`} aria-pressed={draft.present_role === k}
+                    onClick={() => update({ present_role: draft.present_role === k ? "" : k })}>{l}</button>
+                ))}
+              </div>
+            </div>
+            <label className="iField">Telefon (opțional)
+              <input type="tel" inputMode="tel" value={draft.present_phone} readOnly={ro} onChange={(e) => update({ present_phone: e.target.value })} />
+            </label>
+          </div>
+        )}
 
-        <section className="iBox">
-          <h3>Semnătura</h3>
+        <div className="iQ">
+          <span className="iQLabel">Semnătura persoanei prezente</span>
+          {hasSig && !draft.signature ? <p className="iNote ok">Semnătura a fost deja trimisă.</p> : <Pad disabled={ro} onDone={(png) => { update({ signature: png }); setSignedAt(png ? new Date() : null); }} />}
+          {(signedAt || draft.lat != null) && (
+            <small className="hint">{signedAt ? `Semnat la ${signedAt.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" })}` : ""}{signedAt && draft.lat != null ? " · " : ""}{draft.lat != null ? `locație GPS ±${draft.accuracy_m ?? "?"} m` : ""}</small>
+          )}
           <p className="hint">Prin semnare, persoana prezentă confirmă că inspecția proprietății a avut loc la data de azi.</p>
-          {hasSig && !draft.signature ? <p className="iNote ok">Semnătura a fost deja trimisă.</p> : <Pad disabled={ro} onDone={(png) => update({ signature: png })} />}
-        </section>
+        </div>
+
+        <div className="gInfo">
+          <b>După trimitere</b>
+          <span>Fișa ajunge în CRM-ul VALUEFY, la raport: răspunsurile, încăperile, fotografiile pe încăperi și caracteristicile proprietății. Evaluatorul o descarcă în PDF, ca anexă la raport.</span>
+        </div>
         {msg && <p role="alert" className="iNote err">{msg}</p>}
       </div>
-      <div className="iCta">
+      <div className="sFoot">
         {draft.submitted ? (
-          <a className="iBtn big ghost" href="#/">Înapoi la inspecții</a>
+          <a className="sNext" href="#/">Înapoi la inspecții</a>
         ) : draft.submit ? (
-          <button type="button" className="iBtn big ghost" onClick={() => ctx.sync()} disabled={ctx.syncing}>{ctx.syncing ? "Se trimite…" : "Încearcă acum"}</button>
+          <button type="button" className="sNext" onClick={() => ctx.sync()} disabled={ctx.syncing}>{ctx.syncing ? "Se trimite…" : "Încearcă acum"}</button>
         ) : (
-          <button type="button" className="iBtn big acc" onClick={send}>Trimite fișa</button>
+          <>
+            <button type="button" className="sNext" onClick={send}>Finalizează și trimite</button>
+            <small className="sFootNote">Fără semnal? Se trimite singură când revine rețeaua.</small>
+          </>
         )}
       </div>
     </>

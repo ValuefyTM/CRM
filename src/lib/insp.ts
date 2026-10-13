@@ -7,8 +7,11 @@ import { err } from "./api";
 import type { User } from "./users";
 import { assetDocs } from "./insp-docs";
 import {
-  ACC_FIELDS, FEATURE_COLUMNS, FORM_VERSION, FORMS, PRESENT_ROLES, accKey, featureColumns, guessSheetType, isAccessoryType, type Answers, type SheetType,
+  ACC_FIELDS, FEATURE_COLUMNS, FORM_VERSION, FORMS, PRESENT_ROLES, accKey, featureColumns, guessSheetType, isAccessoryType, missingRequired,
+  type Answers, type Section, type SheetType,
 } from "./insp-forms";
+import { cleanForm } from "./insp-templates";
+import { currentForms } from "./insp-templates-db";
 
 /** A signed-in inspector or evaluator. */
 export async function inspApi(): Promise<{ db: D1Database; user: User } | { res: NextResponse }> {
@@ -174,6 +177,8 @@ export async function myInspection(db: D1Database, user: User, id: string): Prom
 export type Sheet = {
   id: string; status: "draft" | "submitted"; sheet_type: SheetType; answers: Answers; present_person: string | null; present_role: string | null;
   present_phone: string | null; has_signature: boolean; submitted_at: string | null; updated_at: string | null;
+  /** The form the sheet was started with (the firm's template at that time); null for sheets older than templates. */
+  form: Section[] | null;
 };
 export type Photo = { id: string; category: string; caption: string | null; url: string; taken_at: string | null; width: number | null; height: number | null };
 
@@ -186,9 +191,9 @@ export async function sheetOf(db: D1Database, inspectionId: string): Promise<She
     .bind(sheetId(inspectionId))
     .first<{ id: string; status: Sheet["status"]; sheet_type: SheetType; details: string | null; present_person: string | null; present_role: string | null; present_phone: string | null; signature_url: string | null; submitted_at: string | null; updated_at: string | null }>();
   if (!s) return null;
-  let answers: Answers = {};
-  try { answers = (JSON.parse(s.details ?? "{}").answers ?? {}) as Answers; } catch { /* keep empty */ }
-  return { ...s, answers, has_signature: !!s.signature_url };
+  let answers: Answers = {}, form: Section[] | null = null;
+  try { const d = JSON.parse(s.details ?? "{}"); answers = (d.answers ?? {}) as Answers; form = cleanForm(d.form); } catch { /* keep empty */ }
+  return { ...s, answers, form, has_signature: !!s.signature_url };
 }
 
 export async function photosOf(db: D1Database, inspectionId: string): Promise<Photo[]> {
@@ -255,6 +260,8 @@ export async function saveSheet(db: D1Database, user: User, ins: Insp, b: Record
   const phone = str(b.present_phone, 40) || null;
   const lat = numOrNull(b.lat), lng = numOrNull(b.lng), acc = numOrNull(b.accuracy_m);
   const id = sheetId(ins.id);
+  // The form: the one the sheet was started with on the phone, else the firm's current template.
+  const form = cleanForm(b.form) ?? current?.form ?? (await currentForms(db))[type];
 
   // Signature: PNG data URL from the phone → R2.
   let signature: string | null = null;
@@ -274,11 +281,13 @@ export async function saveSheet(db: D1Database, user: User, ins: Insp, b: Record
     if (type === "accesoriu" ? !photos.results.length : !photos.results.some((p) => p.category === "exterior"))
       return { ok: false as const, error: type === "accesoriu" ? "Adaugă cel puțin o fotografie a accesoriului." : "Adaugă cel puțin o fotografie exterioară.", status: 400 };
     if (!person) return { ok: false as const, error: "Completează numele persoanei prezente.", status: 400 };
+    const missing = missingRequired(type, answers, form);
+    if (missing.length) return { ok: false as const, error: `Completează întrebările obligatorii: ${missing.slice(0, 4).map((f) => f.label).join(", ")}${missing.length > 4 ? "…" : ""}.`, status: 400 };
     if (!signature && !current?.has_signature) return { ok: false as const, error: "Lipsește semnătura persoanei prezente.", status: 400 };
   }
 
   const t = now();
-  const details = JSON.stringify({ v: FORM_VERSION, answers });
+  const details = JSON.stringify({ v: FORM_VERSION, answers, form });
   const location = lat != null && lng != null ? `${lat.toFixed(6)}, ${lng.toFixed(6)}` : null;
   const firstExterior = await db
     .prepare("SELECT r2_key FROM inspection_photos WHERE inspection_id = ? AND category = 'exterior' AND deleted_at IS NULL ORDER BY sort, created_at LIMIT 1")
@@ -304,7 +313,7 @@ export async function saveSheet(db: D1Database, user: User, ins: Insp, b: Record
   ];
 
   if (submit) {
-    const cols = featureColumns(type, answers);
+    const cols = featureColumns(type, answers, form);
     const names = FEATURE_COLUMNS;
     const propertyId = assetId ? (await db.prepare("SELECT property_id FROM assets WHERE id = ?").bind(assetId).first<{ property_id: string }>())?.property_id ?? null : null;
     stmts.push(

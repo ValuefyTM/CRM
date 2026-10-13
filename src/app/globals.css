@@ -1524,3 +1524,52 @@ div.dbKpi::after { content: none; }
 .fsPhotos img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; border: 1px solid #ddd; }
 .fsPhotos figcaption { font-size: 8.5pt; padding-top: 3px; color: #333; }
 @media print { .fsPhotosPage { break-before: page; } }
+
+/* ---------- Setări · Fișe de inspecție (sheet templates) ---------- */
+.tplList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.tplList a { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: #fff; color: var(--ink); }
+.tplList a:hover { border-color: var(--ink); }
+.tplShort { width: 52px; height: 40px; flex-shrink: 0; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 800; letter-spacing: 0.04em; background: #fdf0d6; color: #8a5300; }
+.tplShort.t-casa { background: #e5ecf2; color: #24435e; }
+.tplShort.t-teren { background: #eaf2e6; color: #2e5a1f; }
+.tplShort.t-comercial { background: #f9dfd3; color: #8c3a12; }
+.tplShort.t-accesoriu { background: #ede7f5; color: #4b2e7a; }
+.tplName { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.tplName small { color: var(--muted-2); font-size: 12.5px; }
+.tplChev { font-size: 22px; color: var(--muted-2); }
+.tplWrap { display: grid; grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr); gap: 18px; align-items: start; }
+.tplSide { position: sticky; top: 16px; }
+.tplHow { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.55; color: var(--muted); }
+.tplGroups { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.tplGroup { border: 1px solid var(--line); border-radius: 14px; background: #fff; overflow: hidden; }
+.tplGroup.open { border-color: var(--ink); }
+.tplGroup.off { opacity: 0.6; }
+.tplGroupHead { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 6px; flex-wrap: wrap; }
+.tplGroupToggle { flex: 1 1 220px; min-width: 0; display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 8px; text-align: left; font: inherit; color: var(--ink); cursor: pointer; }
+.tplGroupToggle b { font-size: 14px; }
+.tplGroupToggle small { color: var(--muted-2); font-size: 12px; }
+.tplN { width: 26px; height: 26px; flex-shrink: 0; border-radius: 8px; background: var(--cream-2); font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.tplTools { display: flex; gap: 4px; flex-wrap: wrap; }
+.tplQs { list-style: none; margin: 0; padding: 0 10px 10px; display: flex; flex-direction: column; gap: 6px; }
+.tplQs li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--divider); background: #fff; flex-wrap: wrap; }
+.tplQs li.mine { background: #fffbf2; border-color: #f0ddb6; }
+.tplQs li.off { background: #faf8f3; }
+.tplQs li.off .tplQLabel b { color: var(--muted-2); text-decoration: line-through; }
+.tplQs li.on { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.tplQs li.tplAdd { border: 1px dashed var(--line); background: none; }
+.tplQText { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.tplQLabel { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13.5px; }
+.tplQText small { color: var(--muted-2); font-size: 12px; line-height: 1.45; }
+.tplEdit { display: flex; flex-direction: column; gap: 14px; }
+.tplKinds { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.tplOptHead { display: flex; justify-content: space-between; }
+.tplOptHead small { font-weight: 500; color: var(--muted-2); }
+.tplOpts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tplOpts li { display: flex; align-items: center; gap: 6px; padding: 6px 6px 6px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font-weight: 600; color: var(--ink); font-size: 13px; }
+.tplOpts li > span { flex: 1; min-width: 0; }
+.tplStar { width: 32px; height: 32px; border-radius: 8px; border: 0; background: var(--cream-2); color: #b5a98f; font-size: 15px; cursor: pointer; }
+.tplStar.on { background: var(--acc); color: var(--ink); }
+.tplOptAdd { display: flex; gap: 6px; }
+.tplOptAdd input { flex: 1; min-width: 0; }
+.tplChecks { display: flex; flex-direction: column; gap: 10px; }
+@media (max-width: 900px) { .tplWrap { grid-template-columns: minmax(0, 1fr); } .tplSide { position: static; } }
