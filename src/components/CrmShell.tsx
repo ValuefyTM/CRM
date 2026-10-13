@@ -4,6 +4,7 @@ import { roleLabel, type User } from "@/lib/users";
 import { Shell } from "./Shell";
 import { GlobalSearch } from "./GlobalSearch";
 import { Heartbeat } from "./Heartbeat";
+import { TableLabels } from "./TableLabels";
 import { photoUrl } from "@/lib/presence";
 import { countNewInquiries } from "@/lib/listings";
 
@@ -62,6 +63,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
       actions={props.actions}
     >
       <Heartbeat url="/api/crm/presence" />
+      <TableLabels />
       {props.children}
     </Shell>
   );
