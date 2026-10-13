@@ -3,7 +3,8 @@
 import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
 import { useRef, useState } from "react";
 
-const STATUSES: [string, string][] = [["draft", "Draft"], ["in_progress", "În lucru"], ["suspended", "Suspendat"], ["done", "Finalizat"], ["cancelled", "Anulat"]];
+// "Draft" is shown as "În lucru" (a report being worked on): one choice, not two that look the same.
+const STATUSES: [string, string][] = [["in_progress", "În lucru"], ["suspended", "Suspendat"], ["done", "Finalizat"], ["cancelled", "Anulat"]];
 
 async function send(url: string, init: RequestInit) {
   const r = await fetch(url, init).catch(() => null);
@@ -15,7 +16,7 @@ const patch = (id: string, body: object) => send(`/api/crm/reports/${id}`, { met
 /** "Schimbă status" in the report header: a small panel with the status and, for suspended, the reason. */
 export function StatusButton({ id, status, reason }: { id: string; status: string; reason: string | null }) {
   const [open, setOpen] = useState(false);
-  const [s, setS] = useState(status);
+  const [s, setS] = useState(status === "draft" ? "in_progress" : status);
   const [why, setWhy] = useState(reason ?? "");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
