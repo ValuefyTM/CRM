@@ -4,7 +4,7 @@ import { fmtDate, staffPage } from "@/lib/guard";
 import { now } from "@/lib/db";
 import { audit } from "@/lib/auth";
 import { history } from "@/lib/history";
-import { getOrder, orderCode, orderDocuments, orderPlace, orderWhat, SOURCE_LABEL } from "@/lib/orders";
+import { getOrder, orderCode, orderLinks, orderDocuments, orderPlace, orderWhat, SOURCE_LABEL } from "@/lib/orders";
 import { reportsForOrder } from "@/lib/reports";
 import { getLead, leadStatus } from "@/lib/leads";
 import { CrmShell } from "@/components/CrmShell";
@@ -82,8 +82,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
       subtitle={`${SOURCE_LABEL[o.source]} · ${orderWhat(o)}${o.address ? ` · ${orderPlace(o)}` : ""} · ${o.glide_id ? `din ${fmtDate(o.ordered_on ?? o.created_at)}` : `primită ${fmtDate(o.created_at, true)}`}`}
       actions={<>
         <a href={backTo} className="btn btnGhost btnSm">← Comenzi</a>
-        {isAdmin(user) && <DeleteOrder id={o.id} label={orderCode(o)} back={backTo}
-          blocked={reports.length ? "Comanda are deja raport creat: anulează sau șterge întâi raportul." : offer?.status === "accepted" ? "Clientul a acceptat oferta: comanda nu se mai poate șterge, doar anula." : o.statement_id ? "Comanda este pe un borderou." : null} />}
+        {isAdmin(user) && <DeleteOrder id={o.id} label={orderCode(o)} back={backTo} links={await orderLinks(db, o.id)} />}
       </>}
     >
       {o.glide_id && <div className="note">Comandă importată din Glide.</div>}

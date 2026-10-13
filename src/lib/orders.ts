@@ -212,29 +212,55 @@ export const fmtSize = (b: number) => (b < 1024 * 1024 ? `${Math.max(1, Math.rou
  * Deletes an order that has not become work yet: no report opened from it, no accepted offer, not on a statement.
  * Its documents (and their files), offers and links go with it; bank emails and inspections only lose the link.
  */
-export async function deleteOrder(db: D1Database, actor: string, id: string) {
-  const o = await db.prepare(`SELECT o.id, o.seq, o.source, o.client_name, o.bank_ref, o.statement_id,
-      (SELECT COUNT(*) FROM reports r WHERE r.order_id = o.id) AS reports,
-      (SELECT COUNT(*) FROM offers f WHERE f.order_id = o.id AND f.status = 'accepted') AS accepted
-    FROM orders o WHERE o.id = ?`).bind(id)
-    .first<{ id: string; seq: number | null; source: string; client_name: string | null; bank_ref: string | null; statement_id: string | null; reports: number; accepted: number }>();
-  if (!o) return { ok: false as const, error: "Comanda nu există." };
-  if (o.reports) return { ok: false as const, error: "Comanda are deja raport creat. Anulează sau șterge întâi raportul (sau marchează comanda ca anulată)." };
-  if (o.accepted) return { ok: false as const, error: "Clientul a acceptat oferta acestei comenzi: nu se mai poate șterge, doar anula." };
-  if (o.statement_id) return { ok: false as const, error: "Comanda este pe un borderou și nu se poate șterge." };
-  const files = (await db.prepare("SELECT r2_key FROM order_documents WHERE order_id = ? AND r2_key IS NOT NULL").bind(id).all<{ r2_key: string }>()).results;
-  await db.batch([
-    db.prepare("UPDATE bank_emails SET order_id = NULL WHERE order_id = ?").bind(id),
-    db.prepare("UPDATE inspections SET order_id = NULL WHERE order_id = ?").bind(id),
-    db.prepare("DELETE FROM order_leads WHERE order_id = ?").bind(id),
-    db.prepare("DELETE FROM offers WHERE order_id = ?").bind(id),
-    db.prepare("DELETE FROM order_documents WHERE order_id = ?").bind(id),
-    db.prepare("DELETE FROM orders WHERE id = ?").bind(id),
+/** What deleting an order also deletes: its offers, reports (with their assets, inspections, sheets, photos, documents) and classic contract. */
+export async function orderLinks(db: D1Database, id: string) {
+  const [offers, reports, contracts, insp, docs, invoiced] = await Promise.all([
+    db.prepare("SELECT status FROM offers WHERE order_id = ?").bind(id).all<{ status: string }>(),
+    db.prepare("SELECT id, number, label FROM reports WHERE order_id = ? ORDER BY created_at").bind(id).all<{ id: string; number: string | null; label: string | null }>(),
+    db.prepare(`SELECT DISTINCT c.number FROM contracts c JOIN reports r ON r.contract_id = c.id WHERE r.order_id = ? AND c.kind = 'classic'
+      AND NOT EXISTS (SELECT 1 FROM reports x WHERE x.contract_id = c.id AND (x.order_id IS NULL OR x.order_id <> ?))`).bind(id, id).all<{ number: string | null }>(),
+    db.prepare("SELECT COUNT(*) AS n FROM inspections WHERE order_id = ? OR report_id IN (SELECT id FROM reports WHERE order_id = ?)").bind(id, id).first<{ n: number }>(),
+    db.prepare("SELECT (SELECT COUNT(*) FROM order_documents WHERE order_id = ?1) + (SELECT COUNT(*) FROM report_documents WHERE report_id IN (SELECT id FROM reports WHERE order_id = ?1)) AS n").bind(id).first<{ n: number }>(),
+    db.prepare("SELECT COUNT(*) AS n FROM reports WHERE order_id = ? AND invoice_id IS NOT NULL").bind(id).first<{ n: number }>(),
   ]);
-  const r2 = files.length ? await bucket() : null;
-  if (r2) await r2.delete(files.map((f) => f.r2_key)).catch(() => {});
+  return {
+    offers: offers.results.length, accepted: offers.results.some((o) => o.status === "accepted"),
+    reports: reports.results.map((r) => r.number ?? r.label ?? r.id.slice(0, 8)),
+    contracts: contracts.results.map((c) => c.number ?? "fără număr"),
+    inspections: insp?.n ?? 0, documents: docs?.n ?? 0, invoiced: invoiced?.n ?? 0,
+  };
+}
+export type OrderLinks = Awaited<ReturnType<typeof orderLinks>>;
+export const hasLinks = (l: OrderLinks) => l.offers > 0 || l.reports.length > 0 || l.contracts.length > 0 || l.inspections > 0;
+
+/**
+ * Deletes an order and everything made from it: offers, reports (assets, inspections, sheets, photos, documents,
+ * team) and the classic contract used only by its reports. Clients, properties and framework contracts stay.
+ * An order with offers / reports / contract needs `confirm`; one with an invoiced report cannot be deleted.
+ */
+export async function deleteOrder(db: D1Database, actor: string, id: string, confirm = false) {
+  const o = await db.prepare("SELECT id, seq, source, client_name, bank_ref FROM orders WHERE id = ?").bind(id)
+    .first<{ id: string; seq: number | null; source: string; client_name: string | null; bank_ref: string | null }>();
+  if (!o) return { ok: false as const, error: "Comanda nu există." };
+  const links = await orderLinks(db, id);
+  if (links.invoiced) return { ok: false as const, error: "Un raport al comenzii are factură emisă: comanda nu se poate șterge (stornează întâi factura)." };
+  if (hasLinks(links) && !confirm) return { ok: false as const, error: "Comanda are oferte, contract sau rapoarte legate: confirmă ștergerea lor.", links };
+  const { cascadeRun } = await import("./cascade");
+  const done = await cascadeRun(db, {
+    seeds: [
+      { table: "orders", where: "id = ?", binds: [id] },
+      { table: "reports", where: "order_id = ?", binds: [id] },
+      { table: "contracts", where: "kind = 'classic' AND id IN (SELECT contract_id FROM reports WHERE order_id = ?)", binds: [id] },
+      { table: "inspections", where: "order_id = ?", binds: [id] },
+    ],
+    hard: new Set(["offers.order_id", "assets.report_id", "inspections.report_id", "inspections.order_id", "report_documents.report_id",
+      "inspection_sheets.inspection_id", "property_features.inspection_id", "property_features.sheet_id", "inspection_photos.sheet_id"]),
+    keep: new Set(["users", "partners", "entities", "crm_properties"]),
+    protect: new Set(["entities", "contracts", "crm_properties", "statements", "collaborations"]),
+  });
   const ref = o.seq ? `CO-${o.seq}` : o.bank_ref ?? id.slice(0, 8);
+  const what = [links.reports.length && `rapoarte ${links.reports.join(", ")}`, links.contracts.length && `contract ${links.contracts.join(", ")}`, links.offers && `${links.offers} oferte`].filter(Boolean).join(", ");
   await db.prepare("INSERT INTO audit_log (actor, action, entity, entity_id, details) VALUES (?, 'order.delete', 'order', ?, ?)")
-    .bind(actor, id, `${ref}${o.client_name ? ` · ${o.client_name}` : ""} · ${o.source}`).run().catch(() => null);
-  return { ok: true as const, source: o.source };
+    .bind(actor, id, `${ref}${o.client_name ? ` · ${o.client_name}` : ""} · ${o.source}${what ? ` · cu ${what}` : ""}`).run().catch(() => null);
+  return { ok: true as const, source: o.source, deleted: done };
 }
