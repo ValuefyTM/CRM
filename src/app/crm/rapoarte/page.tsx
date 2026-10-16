@@ -102,7 +102,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                         <a className="repCell rowLink" href={`${base}/rapoarte/${r.id}`} title={r.issuer_name ?? undefined}>
                           {logo ? <SafeImg src={logo} className="repLogo" fallback={<i className="repLogo" aria-hidden>{short}</i>} /> : <i className={`repLogo${own ? " own" : ""}`} aria-hidden>{short}</i>}
                           <span className="repText">
-                            <small className={`repKind${kind === "Raport" ? "" : " note"}`}>{kind}</small>
+                            <small className={`repKind${kind === "Raport" ? "" : " isNote"}`}>{kind}</small>
                             {r.number ? <b className="mono">{r.number}</b> : <b className="muted">fără număr</b>}
                           </span>
                         </a>
