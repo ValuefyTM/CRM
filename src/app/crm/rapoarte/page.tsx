@@ -87,7 +87,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                   const d = daysOf(r, today);
                   return (
                     <ClickRow key={r.id} href={`${base}/rapoarte/${r.id}`}>
-                      <td style={{ borderLeft: `4px solid ${issuerColor(r.issuer_name, r.issuer_color)}` }}>
+                      <td style={{ borderLeft: `4px solid ${issuerColor(r.issuer_name, r.issuer_color)}`, "--stripe": issuerColor(r.issuer_name, r.issuer_color) } as React.CSSProperties}>
                         <a className="repCell rowLink" href={`${base}/rapoarte/${r.id}`} title={r.issuer_name ?? undefined}>
                           {logo ? <SafeImg src={logo} className="repLogo" fallback={<i className="repLogo" aria-hidden>{short}</i>} /> : <i className={`repLogo${own ? " own" : ""}`} aria-hidden>{short}</i>}
                           <span className="repText">
