@@ -1,15 +1,23 @@
 import { can, type WithPerms } from "@/lib/perms";
 
+const tabsOf = (user: WithPerms): [string, string, string, boolean][] => [
+  ["firma", "Date firmă", "", can(user, "settings")],
+  ["permisiuni", "Permisiuni", "/permisiuni", can(user, "users")],
+  ["fise", "Fișe de inspecție", "/fise", can(user, "templates")],
+  ["facturare", "Facturare · Oblio", "/facturare", can(user, "billing")],
+  ["claude", "Conexiuni Claude", "/claude", can(user, "settings")],
+  ["import", "Import Glide", "/import", user.role === "owner"],
+];
+
+/** The first tab of Setări the user may open (the menu item leads there), or null: no Setări for them. */
+export function settingsHome(base: string, user: WithPerms) {
+  const t = tabsOf(user).find(([, , , ok]) => ok);
+  return t ? `${base}/setari${t[2]}` : null;
+}
+
 /** Tabs of Setări (one item in the menu): each one only for those who may open it. */
 export function SettingsTabs({ base, active, user }: { base: string; active: "firma" | "facturare" | "claude" | "fise" | "permisiuni" | "import"; user: WithPerms }) {
-  const tabs: [string, string, string, boolean][] = [
-    ["firma", "Date firmă", "", true],
-    ["permisiuni", "Permisiuni", "/permisiuni", can(user, "users")],
-    ["fise", "Fișe de inspecție", "/fise", can(user, "templates")],
-    ["facturare", "Facturare · Oblio", "/facturare", can(user, "billing")],
-    ["claude", "Conexiuni Claude", "/claude", can(user, "settings")],
-    ["import", "Import Glide", "/import", user.role === "owner"],
-  ];
+  const tabs = tabsOf(user);
   return (
     <nav className="tabs" aria-label="Setări">
       {tabs.filter(([, , , ok]) => ok).map(([k, l, path]) => (

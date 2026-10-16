@@ -2,6 +2,7 @@ import { getDb } from "@/lib/db";
 import { initials } from "@/lib/guard";
 import { isAdmin, roleLabel, type User } from "@/lib/users";
 import { can, type Perm } from "@/lib/perms";
+import { settingsHome } from "@/app/crm/setari/SettingsTabs";
 import { mySql } from "@/lib/perms-db";
 import { ViewAs } from "./ViewAs";
 import { Shell, type NavEntry, type NavItem } from "./Shell";
@@ -37,10 +38,13 @@ export async function CrmShell(props: { user: User; base: string; active: string
   const myOpen = !allReports && db
     ? await db.prepare(`SELECT COUNT(*) AS n FROM reports r WHERE r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL AND ${mySql(u)}`).bind(u.id).first<{ n: number }>().then((r) => r?.n ?? 0).catch(() => 0)
     : open;
+  // With the personal dashboard (Permisiuni → Tablou de bord: personal) the menu is one flat list, without groups.
+  const flat = !may("dashboard.all");
   const group = (g: string, key: string, items: (NavItem | false)[]): NavEntry[] => {
     const list = items.filter(Boolean) as NavItem[];
-    return list.length ? [{ group: g, key, items: list }] : [];
+    return !list.length ? [] : flat ? list : [{ group: g, key, items: list }];
   };
+  const settings = settingsHome(b, u);
   return (
     <Shell
       // "Vezi ca…" is picked on the dashboard only; elsewhere the banner just says whose CRM it is and leads back.
@@ -69,7 +73,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
         ...group("Administrare", "g-admin", [
           may("users") && { key: "users", label: "Utilizatori", href: `${b}/utilizatori` },
           // Date firmă, permisiuni, fișe de inspecție, facturare, Claude, import: tabs of Setări.
-          { key: "settings", label: "Setări", href: `${b}/setari` },
+          !!settings && { key: "settings", label: "Setări", href: settings },
         ]),
       ]}
       active={props.active}

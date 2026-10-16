@@ -6,7 +6,8 @@ import { FIRM_FIELDS, getFirmWithImages } from "@/lib/settings";
 import { CrmShell } from "@/components/CrmShell";
 import { History } from "@/components/History";
 import { FirmForm, FirmImage } from "./FirmForm";
-import { SettingsTabs } from "./SettingsTabs";
+import { settingsHome, SettingsTabs } from "./SettingsTabs";
+import { redirect } from "next/navigation";
 import { IssuerColors } from "./IssuerColors";
 import { issuerColor } from "@/lib/issuer-color";
 import { niceName } from "@/lib/labels";
@@ -18,6 +19,8 @@ export const dynamic = "force-dynamic";
 /** Firm settings: VALUEFY's details, stamp and signature as they appear on contracts. */
 export default async function SettingsPage() {
   const { db, user, base } = await staffPage();
+  // "Setări firmă" off in Permisiuni: straight to the first tab the user may open, or no access.
+  if (!can(user, "settings")) redirect(settingsHome(base, user) ?? `${base}/?fara-acces=1`);
   const [firm, log, issuers] = await Promise.all([
     getFirmWithImages(db), history(db, ["firm"]),
     db.prepare(`SELECT e.id, e.name, e.color, e.logo_url, (SELECT COUNT(*) FROM reports r WHERE r.issuer_id = e.id) AS reports FROM entities e WHERE e.kind = 'valuation_firm' ORDER BY reports DESC, e.name`)
