@@ -1,5 +1,6 @@
 "use client";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   BUILTIN_ROLES, FEE_VIEWS, MODULES, RIGHTS, TEAM_RIGHTS, TEAM_ROLES,
   type Cell, type FeeView, type ModKey, type PermConfig, type Right, type TeamRight, type TeamRole,
@@ -36,6 +37,7 @@ function CellView({ m, c }: { m: Mod; c: Cell }) {
 export function PermMatrix(props: { initial: PermConfig; defaults: PermConfig; counts: Record<string, number>; owners: number; edit: boolean }) {
   const [cfg, setCfg] = useState<PermConfig>(props.initial);
   const [pick, setPick] = useState<{ role: string; mod: ModKey }>({ role: props.initial.roles.find((r) => r.id === "evaluator")?.id ?? props.initial.roles[0]?.id, mod: "reports" });
+  const [open, setOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [copyFrom, setCopyFrom] = useState("evaluator");
   const [busy, setBusy] = useState(false);
@@ -56,6 +58,7 @@ export function PermMatrix(props: { initial: PermConfig; defaults: PermConfig; c
   const removeRole = () => {
     setCfg((x) => ({ ...x, roles: x.roles.filter((r) => r.id !== role.id) }));
     setPick({ role: "evaluator", mod: pick.mod });
+    setOpen(false);
   };
   const addRole = (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,7 +69,14 @@ export function PermMatrix(props: { initial: PermConfig; defaults: PermConfig; c
     setCfg((x) => ({ ...x, roles: [...x.roles, { id, name: name.slice(0, 60), cells: structuredClone(from.cells) }] }));
     setPick({ role: id, mod: pick.mod });
     setNewName("");
+    setOpen(true);
   };
+  useEffect(() => {
+    if (!open) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("keydown", esc);
+    return () => document.removeEventListener("keydown", esc);
+  }, [open]);
   const setTeam = (t: TeamRole, patch: { r?: TeamRight[]; fee?: FeeView }) => { setMsg(null); setCfg((x) => ({ ...x, team: { ...x.team, [t]: { ...x.team[t], ...patch } } })); };
 
   const save = async () => {
@@ -82,11 +92,10 @@ export function PermMatrix(props: { initial: PermConfig; defaults: PermConfig; c
     <>
       <section className="card pmCard">
         <div className="cardHead">
-          <div><h2>Roluri × module</h2><p className="hint" style={{ margin: "2px 0 0" }}>Apasă pe o celulă ca să setezi ce face rolul în acel modul. Un modul oprit nu apare în meniu.</p></div>
+          <div><h2>Roluri × module</h2><p className="hint" style={{ margin: "2px 0 0" }}>Apasă pe o celulă ca să setezi ce face rolul în acel modul{props.edit ? "" : " (doar vizualizare)"}. Un modul oprit nu apare în meniu.</p></div>
           <span className="pmLegend"><span><i>V</i> vede</span><span><i>A</i> adaugă</span><span><i>E</i> editează</span><span><i>Ș</i> șterge</span><span><b>ale lui</b> doar înregistrările lui</span><span>+n acțiuni speciale</span></span>
         </div>
-        <div className="pmArea">
-          <div className="pmScroll">
+        <div className="pmScroll">
             <table className="pmTable">
               <thead>
                 <tr className="pmGroups"><th className="pmRole" rowSpan={2}>Rol</th>{GROUPS.map(([g, ms]) => <th key={g} colSpan={ms.length}>{g}</th>)}</tr>
@@ -104,10 +113,10 @@ export function PermMatrix(props: { initial: PermConfig; defaults: PermConfig; c
                       <small>{props.counts[r.id] ?? 0} {(props.counts[r.id] ?? 0) === 1 ? "cont" : "conturi"}{BUILTIN_ROLES.includes(r.id) ? "" : " · rol nou"}</small>
                     </th>
                     {MODULES.map((m) => {
-                      const sel = pick.role === r.id && pick.mod === m.k;
+                      const sel = open && pick.role === r.id && pick.mod === m.k;
                       return (
                         <td key={m.k}>
-                          <button type="button" className={`pmCell${sel ? " sel" : ""}`} onClick={() => setPick({ role: r.id, mod: m.k })} aria-pressed={sel} aria-label={`${r.name} · ${m.l}`}>
+                          <button type="button" className={`pmCell${sel ? " sel" : ""}`} onClick={() => { setPick({ role: r.id, mod: m.k }); setOpen(true); }} aria-pressed={sel && open} aria-haspopup="dialog" aria-label={`${r.name} · ${m.l}`}>
                             <CellView m={m} c={r.cells[m.k] ?? OFF} />
                           </button>
                         </td>
@@ -128,14 +137,19 @@ export function PermMatrix(props: { initial: PermConfig; defaults: PermConfig; c
                 <button type="submit" className="btn btnGhost btnSm" disabled={!newName.trim()}>Adaugă rolul</button>
               </form>
             )}
-          </div>
+        </div>
+      </section>
 
-          {role && (
-            <aside className="pmEditor" aria-live="polite">
-              <div>
-                <h3>{mod.l}</h3>
+      {open && role && createPortal(
+        <div className="vfModal sheet" role="dialog" aria-modal="true" aria-labelledby="pmTitle" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
+          <div className="vfModalBox pmEditor">
+              <div className="cardHead" style={{ alignItems: "flex-start" }}>
+                <div>
+                <h2 id="pmTitle">{mod.l}</h2>
                 <span className="hint">pentru rolul <b>{role.name}</b></span>
                 {hintOf(mod) && <p className="hint" style={{ margin: "6px 0 0" }}>{hintOf(mod)}</p>}
+                </div>
+                <button type="button" className="btn btnGhost btnSm" onClick={() => setOpen(false)} aria-label="Închide">×</button>
               </div>
               <label className="pmSwitch">
                 <span>Modul activ <small>(apare în meniu)</small></span>
@@ -179,10 +193,13 @@ export function PermMatrix(props: { initial: PermConfig; defaults: PermConfig; c
                   )}
                 </div>
               )}
-            </aside>
-          )}
-        </div>
-      </section>
+              <div className="actions" style={{ justifyContent: "flex-end" }}>
+                <button type="button" className="btn btnNavy btnSm" onClick={() => setOpen(false)}>{props.edit ? "Gata" : "Închide"}</button>
+              </div>
+          </div>
+        </div>,
+        document.body,
+      )}
 
       <section className="card">
         <div className="cardHead">

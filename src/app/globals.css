@@ -1684,7 +1684,6 @@ div.dbKpi::after { content: none; }
 .rgRange input { width: 64px; height: 26px; border: 1px solid var(--line); border-radius: 7px; padding: 0 6px; font: inherit; font-size: 12.5px; background: #fff; }
 
 /* Setări → Permisiuni: roles × modules, cell editor beside the grid, report-team grid. */
-.pmArea { display: grid; grid-template-columns: minmax(0, 1fr) 300px; }
 .pmScroll { overflow-x: auto; min-width: 0; }
 .pmTable, .pmTeam { border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; }
 .pmTable th, .pmTable td { border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); padding: 0; }
@@ -1710,8 +1709,9 @@ thead .pmRole { background: var(--cream) !important; z-index: 3; }
 .pmAdd { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 12px; background: var(--cream); border-top: 1px solid var(--line); }
 .pmAdd .input { max-width: 220px; height: 34px; }
 .pmAdd .select { width: auto; height: 34px; }
-.pmEditor { border-left: 1px solid var(--line); padding: 16px; display: flex; flex-direction: column; gap: 14px; background: var(--cream); min-width: 0; }
-.pmEditor h3 { margin: 0; font-size: 16px; }
+.vfModalBox.pmEditor { width: min(460px, 100%); }
+.pmEditor .cardHead { padding: 0; border: 0; flex-wrap: nowrap; }
+.pmEditor .cardHead > div { flex: 1 1 auto; min-width: 0; }
 .pmSwitch { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 10px; background: #fff; border: 1px solid var(--line); font-weight: 700; }
 .pmSwitch input { width: 18px; height: 18px; accent-color: var(--ink); }
 .pmFields { border: 0; padding: 0; margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
@@ -1727,7 +1727,7 @@ thead .pmRole { background: var(--cream) !important; z-index: 3; }
 .pmSave > span { flex: 1 1 200px; }
 .pmSave .btnGhost { color: #fff; border-color: rgba(255, 255, 255, .35); background: transparent; }
 .pmSave .btnNavy { background: var(--acc); color: #141414; border-color: var(--acc); }
-@media (max-width: 900px) { .pmArea { grid-template-columns: 1fr; } .pmEditor { border-left: 0; border-top: 1px solid var(--line); } }
+
 
 /* A number box with its unit (%, lei) on the right. */
 .inputUnit { display: flex; align-items: center; gap: 8px; }
