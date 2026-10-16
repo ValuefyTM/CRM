@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 /** Billing settings: the Oblio connection, series, VAT and product, the flow for direct clients, and per framework contract / collaboration when invoices are issued. */
 export default async function BillingSettingsPage() {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("billing");
   const [settings, rules, log] = await Promise.all([getBilling(db), billingRules(db), history(db, ["billing"])]);
   const c = oblioCredentials();
   return (

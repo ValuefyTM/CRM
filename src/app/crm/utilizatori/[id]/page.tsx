@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
+import { redirect } from "next/navigation";
+import { can } from "@/lib/perms";
 import { listPartners } from "@/lib/partners";
 import { history } from "@/lib/history";
 import { canManageUser, displayName, getUser, isAdmin, KIND_LABEL, roleLabel, teamLabel } from "@/lib/users";
@@ -25,6 +27,8 @@ const NEW_MSG: Record<string, string> = {
 export default async function UserPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ nou?: string }> }) {
   const { db, user: me, base } = await staffPage();
   const { id } = await params;
+  // Everyone sees their own profile; the other accounts need "admin" (Utilizatori).
+  if (id !== me.id && !can(me, "admin")) redirect(`${base}/?fara-acces=1`);
   const u = await getUser(db, id);
   if (!u) notFound();
   const self = u.id === me.id;

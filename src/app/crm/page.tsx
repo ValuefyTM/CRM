@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { staffPage } from "@/lib/guard";
-import { isAdmin } from "@/lib/users";
+import { can } from "@/lib/perms";
+import { MyHome } from "./acasa/MyHome";
 import { dashboard, type Alert } from "@/lib/dashboard";
 import { STAGE_LABEL } from "@/lib/dossier";
 import { niceName } from "@/lib/labels";
@@ -75,10 +76,15 @@ function Donut({ parts }: { parts: { label: string; n: number; color: string }[]
   );
 }
 
-export default async function CrmHome() {
+export default async function CrmHome({ searchParams }: { searchParams: Promise<{ "fara-acces"?: string }> }) {
   const { db, user, base } = await staffPage();
+  const denied = !!(await searchParams)["fara-acces"];
+  // Without the firm's dashboard: the user's own reports and inspections.
+  if (!can(user, "dashboard")) {
+    return <CrmShell user={user} base={base} active="home" title="Acasă" subtitle="Tabloul meu"><MyHome db={db} user={user} base={base} denied={denied} /></CrmShell>;
+  }
   const d = await dashboard(db, base);
-  const money = isAdmin(user);
+  const money = can(user, "fees");
   const first = user.name ? user.name.split(" ")[0] : "";
   const hour = Number(new Date().toLocaleString("en-GB", { hour: "2-digit", hour12: false, timeZone: "Europe/Bucharest" }));
   const hello = hour < 11 ? "Bună dimineața" : hour < 18 ? "Bună ziua" : "Bună seara";
@@ -92,16 +98,19 @@ export default async function CrmHome() {
   const year = d.today.slice(0, 4);
   const sources = d.sources.map((s, i) => ({ label: SOURCE[s.k] ?? s.k, n: s.n, color: DONUT[i % DONUT.length] }));
   const quick: [string, string, React.ReactNode, string?][] = [
-    ["Lucrare nouă", `${base}/comenzi/noua`, I.plus, "bancă sau colaborare"],
-    ["Email bancă", `${base}/comenzi?tab=banci`, I.mail, "lipește comanda"],
-    ["Comenzi", `${base}/comenzi`, I.inbox, d.newOrders.n ? `${d.newOrders.n} luna aceasta` : undefined],
+    ...(can(user, "orders") ? [
+      ["Lucrare nouă", `${base}/comenzi/noua`, I.plus, "bancă sau colaborare"],
+      ["Email bancă", `${base}/comenzi?tab=banci`, I.mail, "lipește comanda"],
+      ["Comenzi", `${base}/comenzi`, I.inbox, d.newOrders.n ? `${d.newOrders.n} luna aceasta` : undefined],
+    ] as [string, string, React.ReactNode, string?][] : []),
     ["Rapoarte în lucru", `${base}/rapoarte?status=deschise`, I.doc, `${d.openCount} deschise`],
-    ["Client nou", `${base}/clienti/nou`, I.user],
-    ["Echipa", `${base}/utilizatori`, I.team],
+    ...(can(user, "clients") ? [["Client nou", `${base}/clienti/nou`, I.user] as [string, string, React.ReactNode]] : []),
+    ...(can(user, "admin") ? [["Echipa", `${base}/utilizatori`, I.team] as [string, string, React.ReactNode]] : []),
   ];
 
   return (
     <CrmShell user={user} base={base} active="home" title="Acasă" subtitle={`Tablou de bord · ${dateLabel}`}>
+      {denied && <div className="note">Nu ai acces la pagina aceea. Ce vezi în CRM stabilește administratorul, în Setări → Permisiuni.</div>}
       <section className="dbHello">
         <div className="dbHelloText">
           <span className="eyebrow">{dateLabel}</span>

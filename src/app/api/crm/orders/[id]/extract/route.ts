@@ -12,7 +12,7 @@ const TYPES = /^image\/(png|jpeg|webp|gif)$/;
  * documents, then read with Claude to pre-fill the processing form.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi();
+  const a = await staffApi("orders", true);
   if ("res" in a) return a.res;
   const { id } = await params;
   const o = await getOrder(a.db, id);

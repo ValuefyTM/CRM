@@ -3,7 +3,7 @@ import { ingestBankEmail } from "@/lib/bank-mail";
 
 /** A bank notice pasted in the CRM (subject + text of the email): creates the bank order, like the intake address. */
 export async function POST(req: Request) {
-  const a = await staffApi();
+  const a = await staffApi("orders", true);
   if ("res" in a) return a.res;
   const b = await json(req);
   const text = typeof b.text === "string" ? b.text.slice(0, 20000) : "";

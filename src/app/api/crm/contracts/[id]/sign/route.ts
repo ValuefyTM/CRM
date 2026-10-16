@@ -3,7 +3,7 @@ import { sendForSignature } from "@/lib/contract-sign";
 
 /** Sends the contract to the client for online signing (or sends the link again). */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi();
+  const a = await staffApi("clients", true);
   if ("res" in a) return a.res;
   const { id } = await params;
   const b = await json(req);

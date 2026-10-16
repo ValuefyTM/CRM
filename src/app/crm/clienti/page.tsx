@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 type SP = { q?: string; kind?: string; portal?: string; page?: string };
 
 export default async function ClientsPage({ searchParams }: { searchParams: Promise<SP> }) {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("clients");
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page) || 1);
   const [data, counts] = await Promise.all([listClients(db, { ...sp, page }), clientCounts(db)]);

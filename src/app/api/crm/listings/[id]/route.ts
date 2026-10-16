@@ -6,7 +6,7 @@ import { withAutoEnglish } from "@/lib/translate-listing";
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function PUT(req: Request, { params }: Ctx) {
-  const a = await staffApi();
+  const a = await staffApi("listings", true);
   if ("res" in a) return a.res;
   const { id } = await params;
   if (!(await getById(a.db, id))) return err("Anunțul nu există.", 404);
@@ -19,7 +19,7 @@ export async function PUT(req: Request, { params }: Ctx) {
 
 /** Quick publish / unpublish from the list. */
 export async function PATCH(req: Request, { params }: Ctx) {
-  const a = await staffApi();
+  const a = await staffApi("listings", true);
   if ("res" in a) return a.res;
   const b = await json(req);
   await setPublished(a.db, (await params).id, b.published === true);
@@ -28,7 +28,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
 
 /** Deleting a listing and its photos: owner or administrator only. */
 export async function DELETE(_req: Request, { params }: Ctx) {
-  const a = await staffApi("admin");
+  const a = await staffApi("delete", true);
   if ("res" in a) return a.res;
   await deleteListing(a.db, (await params).id);
   return NextResponse.json({ ok: true });

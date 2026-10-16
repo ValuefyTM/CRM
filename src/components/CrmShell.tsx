@@ -1,7 +1,10 @@
 import { getDb } from "@/lib/db";
 import { initials } from "@/lib/guard";
-import { roleLabel, type User } from "@/lib/users";
-import { Shell } from "./Shell";
+import { isAdmin, roleLabel, type User } from "@/lib/users";
+import { can, type Perm } from "@/lib/perms";
+import { MY_REPORTS_SQL } from "@/lib/perms-db";
+import { ViewAs } from "./ViewAs";
+import { Shell, type NavEntry, type NavItem } from "./Shell";
 import { GlobalSearch } from "./GlobalSearch";
 import { Heartbeat } from "./Heartbeat";
 import { TableLabels } from "./TableLabels";
@@ -15,50 +18,69 @@ export async function CrmShell(props: { user: User; base: string; active: string
   const [unread, open, inquiries] = db
     ? await Promise.all([
         // Sales offered on the website are not shown for now: only unopened orders count.
-        db.prepare("SELECT COUNT(*) AS n FROM orders WHERE viewed_at IS NULL").first<{ n: number }>().then((r) => r?.n ?? 0).catch(() => 0),
+        can(props.user, "orders") ? db.prepare("SELECT COUNT(*) AS n FROM orders WHERE viewed_at IS NULL").first<{ n: number }>().then((r) => r?.n ?? 0).catch(() => 0) : 0,
         db.prepare("SELECT COUNT(*) AS n FROM reports WHERE status IN ('draft', 'in_progress') AND delivered_at IS NULL").first<{ n: number }>().then((r) => r?.n ?? 0).catch(() => 0),
         // Viewing / report requests from the listings on valuefy.ro not handled yet.
-        countNewInquiries(db),
+        can(props.user, "listings") ? countNewInquiries(db) : 0,
       ])
     : [0, 0, 0];
-  const owner = props.user.role === "owner";
+  const u = props.user;
+  const owner = u.role === "owner";
+  const may = (p: Perm) => can(u, p);
+  const allReports = may("reports.all");
+  // "Vezi ca…": owners and administrators (also while looking as someone else) pick the next person from the list.
+  const realRole = u.impersonator?.role ?? u.role;
+  const viewAs = db && (u.impersonator || isAdmin(u))
+    ? (await db.prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role FROM users WHERE kind = 'internal' AND status = 'active' AND role <> 'inspector'
+        AND id <> ? ${realRole === "owner" ? "" : "AND role <> 'owner'"} ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'operator' THEN 2 ELSE 3 END, name`)
+        .bind(u.impersonator?.id ?? u.id).all<{ id: string; name: string; role: string }>()).results.map((x) => ({ ...x, role: roleLabel("internal", x.role) }))
+    : null;
+  const myOpen = !allReports && db
+    ? await db.prepare(`SELECT COUNT(*) AS n FROM reports r WHERE r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL AND ${MY_REPORTS_SQL}`).bind(u.id).first<{ n: number }>().then((r) => r?.n ?? 0).catch(() => 0)
+    : open;
+  const group = (g: string, key: string, items: (NavItem | false)[]): NavEntry[] => {
+    const list = items.filter(Boolean) as NavItem[];
+    return list.length ? [{ group: g, key, items: list }] : [];
+  };
   return (
     <Shell
-      search={<GlobalSearch base={b} />}
+      search={<>{viewAs && !u.impersonator && <ViewAs users={viewAs} realName={u.name || u.email} />}<GlobalSearch base={b} /></>}
+      banner={viewAs && u.impersonator ? <ViewAs users={viewAs} as={{ id: u.id, name: u.name || u.email, role: roleLabel("internal", u.role) }} realName={u.impersonator.name} /> : undefined}
       app="crm"
       label="Evaluări ANEVAR · Cluj"
       nav={[
         { key: "home", label: "Dashboard", href: b || "/" },
-        { group: "CRM", key: "g-crm", items: [
-          { key: "clients", label: "Clienți / Entități", href: `${b}/clienti` },
-          { key: "contracts", label: "Contracte", href: `${b}/contracte` },
-          { key: "collabs", label: "Colaborări", soon: true },
-          { key: "orders", label: "Comenzi", href: `${b}/comenzi`, badge: unread, hot: true },
-          { key: "tenders", label: "Licitații SEAP", href: `${b}/licitatii` },
-          { key: "followups", label: "Follow-up-uri", soon: true },
-          { key: "listings", label: "Anunțuri imobiliare", href: `${b}/anunturi`, badge: inquiries, hot: true },
-        ] },
-        { group: "Operațional", key: "g-ops", items: [
-          { key: "reports", label: "Rapoarte", href: `${b}/rapoarte`, badge: open },
-          { key: "inspections", label: "Inspecții", href: `${b}/agenda-inspectii` },
-          { key: "properties", label: "Proprietăți", href: `${b}/proprietati` },
-        ] },
-        { group: "Financiar", key: "g-fin", items: [
-          { key: "statements", label: "Borderouri", soon: true },
-          { key: "invoicing", label: "Facturare", href: `${b}/facturare` },
-        ] },
-        { group: "Administrare", key: "g-admin", items: [
-          { key: "users", label: "Utilizatori", href: `${b}/utilizatori` },
-          { key: "templates", label: "Fișe de inspecție", href: `${b}/setari/fise` },
-          ...(owner ? [{ key: "import", label: "Import Glide", href: `${b}/setari/import` }] : []),
-        ] },
-        { group: "Personal", key: "g-me", items: [
+        ...group("CRM", "g-crm", [
+          may("clients") && { key: "clients", label: "Clienți / Entități", href: `${b}/clienti` },
+          may("clients") && { key: "contracts", label: "Contracte", href: `${b}/contracte` },
+          may("clients") && { key: "collabs", label: "Colaborări", soon: true },
+          may("orders") && { key: "orders", label: "Comenzi", href: `${b}/comenzi`, badge: unread, hot: true },
+          may("tenders") && { key: "tenders", label: "Licitații SEAP", href: `${b}/licitatii` },
+          may("orders") && { key: "followups", label: "Follow-up-uri", soon: true },
+          may("listings") && { key: "listings", label: "Anunțuri imobiliare", href: `${b}/anunturi`, badge: inquiries, hot: true },
+        ]),
+        ...group("Operațional", "g-ops", [
+          { key: "reports", label: allReports ? "Rapoarte" : "Rapoartele mele", href: `${b}/rapoarte`, badge: myOpen },
+          { key: "inspections", label: may("inspections.all") ? "Inspecții" : "Inspecțiile mele", href: `${b}/agenda-inspectii` },
+          may("properties") && { key: "properties", label: may("reports.all") ? "Proprietăți" : "Proprietăți / comparabile", href: `${b}/proprietati` },
+        ]),
+        ...group("Financiar", "g-fin", [
+          may("fees") && { key: "statements", label: "Borderouri", soon: true },
+          may("billing") && { key: "invoicing", label: "Facturare", href: `${b}/facturare` },
+        ]),
+        ...group("Administrare", "g-admin", [
+          may("admin") && { key: "users", label: "Utilizatori", href: `${b}/utilizatori` },
+          may("admin") && { key: "templates", label: "Fișe de inspecție", href: `${b}/setari/fise` },
+          may("admin") && { key: "perms", label: "Permisiuni", href: `${b}/setari/permisiuni` },
+          owner && { key: "import", label: "Import Glide", href: `${b}/setari/import` },
+        ]),
+        ...group("Personal", "g-me", [
           { key: "notes", label: "Notițe", soon: true },
           { key: "settings", label: "Setări", href: `${b}/setari` },
-        ] },
+        ]),
       ]}
       active={props.active}
-      me={{ id: props.user.id, photo: photoUrl(props.user.id, props.user.avatar_at), initials: initials(props.user.name, props.user.email), name: props.user.name || props.user.email, sub: roleLabel("internal", props.user.role) }}
+      me={{ id: props.user.id, photo: photoUrl(props.user.id, props.user.avatar_at), initials: initials(props.user.name, props.user.email), name: props.user.name || props.user.email, sub: roleLabel("internal", props.user.role), profile: `${b}/utilizatori/${props.user.id}` }}
       title={props.title}
       subtitle={props.subtitle}
       actions={props.actions}

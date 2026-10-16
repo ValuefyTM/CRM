@@ -1,13 +1,13 @@
 import { audit } from "@/lib/auth";
 import { now } from "@/lib/db";
-import { err, json, staffApi } from "@/lib/api";
+import { err, json, reportApi } from "@/lib/api";
 import { ROLE_LABEL } from "@/lib/reports";
 
 /** Adds a team member to the report: `{ user, role }`. */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi();
-  if ("res" in a) return a.res;
   const { id } = await params;
+  const a = await reportApi(id, "lead", true);
+  if ("res" in a) return a.res;
   const b = await json(req);
   const role = typeof b.role === "string" && ROLE_LABEL[b.role] ? b.role : null;
   if (!role) return err("Alege rolul.");
@@ -21,9 +21,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi();
-  if ("res" in a) return a.res;
   const { id } = await params;
+  const a = await reportApi(id, "lead", true);
+  if ("res" in a) return a.res;
   const q = new URL(req.url).searchParams;
   const user = q.get("user") ?? "", role = q.get("role") ?? "";
   const u = await a.db.prepare("SELECT COALESCE(NULLIF(name, ''), email) AS name FROM users WHERE id = ?").bind(user).first<{ name: string }>();

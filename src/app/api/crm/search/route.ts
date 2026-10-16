@@ -5,5 +5,5 @@ import { globalSearch } from "@/lib/search";
 export async function GET(req: Request) {
   const a = await staffApi();
   if ("res" in a) return a.res;
-  return Response.json({ results: await globalSearch(a.db, new URL(req.url).searchParams.get("q") ?? "") });
+  return Response.json({ results: await globalSearch(a.db, new URL(req.url).searchParams.get("q") ?? "", a.user) });
 }

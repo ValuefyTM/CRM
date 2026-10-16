@@ -4,7 +4,7 @@ import { bucharestDay } from "@/lib/db";
 
 /** { action: "paid", type, document, date } · { action: "cancel" } · { action: "pdf" } (fetch the PDF copy again). */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi("admin");
+  const a = await staffApi("billing", true);
   if ("res" in a) return a.res;
   const { id } = await params;
   const b = await json(req);

@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 const num = (n: number | null, unit: string) => (n ? `${n.toLocaleString("ro-RO")} ${unit}` : null);
 
 export default async function LeadPage({ params }: { params: Promise<{ id: string }> }) {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("orders");
   const { id } = await params;
   const l = await getLead(db, id);
   if (!l) notFound();

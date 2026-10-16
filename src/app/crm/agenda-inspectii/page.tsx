@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { staffPage } from "@/lib/guard";
 import { BOARD_PERIODS, BOARD_STATES, inspectionBoard, type BoardFilters } from "@/lib/inspections-board";
 import { CrmShell } from "@/components/CrmShell";
+import { can } from "@/lib/perms";
 import { InspectionBoard } from "./InspectionBoard";
 
 export const metadata: Metadata = { title: "Inspecții | CRM VALUEFY" };
@@ -9,8 +10,12 @@ export const dynamic = "force-dynamic";
 
 export default async function InspectionsPage({ searchParams }: { searchParams: Promise<BoardFilters & { vezi?: string }> }) {
   const { db, user, base } = await staffPage();
-  const sp = await searchParams;
+  const raw = await searchParams;
+  // Without "inspections.all": only the user's own inspections.
+  const all = can(user, "inspections.all");
+  const sp = all ? raw : { ...raw, inspector: user.id };
   const d = await inspectionBoard(db, sp);
+  if (!all) d.people = d.people.filter((p) => p.id === user.id);
   const k = d.counts;
   const link = (change: Record<string, string | undefined>) => {
     const next: Record<string, string | undefined> = { ...sp, ...change };
@@ -25,7 +30,7 @@ export default async function InspectionsPage({ searchParams }: { searchParams: 
     ["Realizate luna aceasta", k.doneMonth, "var(--ok)", link({ stare: "realizate", perioada: "luna" })],
   ];
   return (
-    <CrmShell user={user} base={base} active="inspections" title="Inspecții" subtitle="Toate inspecțiile echipei: de programat, programate, realizate · listă, calendar și hartă">
+    <CrmShell user={user} base={base} active="inspections" title={all ? "Inspecții" : "Inspecțiile mele"} subtitle={all ? "Toate inspecțiile echipei: de programat, programate, realizate · listă, calendar și hartă" : "Inspecțiile tale: de programat, programate, realizate · listă, calendar și hartă"}>
       <div className="dbKpis ibKpis">
         {cards.map(([l, n, c, h]) => (
           <a key={l} className="dbKpi" href={h}>

@@ -11,7 +11,7 @@ const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0
  * and creates its report at once — evaluator, verifier, deadline. The inspections are given afterwards, on the report.
  */
 export async function POST(req: Request) {
-  const a = await staffApi();
+  const a = await staffApi("orders", true);
   if ("res" in a) return a.res;
   const b = await json(req);
   const evaluator = id_(b.evaluator_id);

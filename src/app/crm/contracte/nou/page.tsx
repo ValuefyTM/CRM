@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  * offer first. Framework: the agreement signed with a bank. `?contract=` adds another report under a classic contract.
  */
 export default async function NewContract({ searchParams }: { searchParams: Promise<{ tip?: string; contract?: string; client?: string }> }) {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("clients");
   const sp = await searchParams;
   const [evaluators, banks, next] = await Promise.all([evaluatorChoices(db), bankChoices(db), nextContractNumber(db)]);
   const existing = sp.contract

@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { staffPage } from "@/lib/guard";
 import { AREA, comparables, RADII, YEARS, type CompFilters } from "@/lib/comparables";
 import { geolocateEnabled } from "@/lib/geolocate";
+import { can } from "@/lib/perms";
+import { MY_REPORTS_SQL } from "@/lib/perms-db";
 import { CrmShell } from "@/components/CrmShell";
 import { LocateOne } from "../../LocateActions";
 import { CompView } from "./CompView";
@@ -14,11 +16,22 @@ const cap = (s: string | null) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : 
 const n0 = (v: number | null | undefined) => (v == null ? "—" : Math.round(v).toLocaleString("ro-RO"));
 
 export default async function ComparablesPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<CompFilters & { raport?: string }> }) {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("properties");
   const { id } = await params;
   const sp = await searchParams;
   const d = await comparables(db, id, sp);
   if (!d) notFound();
+  // The reports behind the comparables open only for their team (or with "reports.all").
+  if (!can(user, "reports.all")) {
+    const ids = [...new Set(d.rows.map((r) => r.report_id).filter(Boolean))] as string[];
+    const ok = new Set<string>();
+    for (let i = 0; i < ids.length; i += 90) {
+      const part = ids.slice(i, i + 90);
+      const { results } = await db.prepare(`SELECT r.id FROM reports r WHERE r.id IN (${part.map(() => "?").join(",")}) AND ${MY_REPORTS_SQL}`).bind(...part, user.id).all<{ id: string }>();
+      results.forEach((x) => ok.add(x.id));
+    }
+    d.rows.forEach((r) => { r.open = !r.report_id || ok.has(r.report_id); });
+  }
   const { subject: s, settings: st, stats } = d;
   const link = (change: Partial<CompFilters>) => {
     const next: Record<string, string | undefined> = { ...sp, ...change };

@@ -9,7 +9,7 @@ const amount = (v: unknown) => {
 
 /** Edits a contract's details: number, date, fee, report type, purpose, notes. */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi();
+  const a = await staffApi("clients", true);
   if ("res" in a) return a.res;
   const { id } = await params;
   const k = await a.db.prepare("SELECT id, kind FROM contracts WHERE id = ?").bind(id).first<{ id: string; kind: string }>();

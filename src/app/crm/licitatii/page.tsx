@@ -13,7 +13,7 @@ const lei = (n: number | null) => (n == null ? null : `${Math.round(n).toLocaleS
 
 /** Calls for bids on SEAP for valuations (town halls and other institutions), read every morning. */
 export default async function TendersPage({ searchParams }: { searchParams: Promise<{ s?: string }> }) {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("tenders");
   const sp = await searchParams;
   const tab = TABS.some(([k]) => k === sp.s) ? sp.s! : "open";
   const [{ rows, counts }, rules, run] = await Promise.all([listTenders(db, tab), getRules(db), lastRun(db)]);

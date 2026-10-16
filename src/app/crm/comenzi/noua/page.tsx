@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 /** Work under a framework contract (bank) or a collaboration: order (statement line) and report file in one step. */
 export default async function NewContractOrder({ searchParams }: { searchParams: Promise<{ tip?: string; contract?: string }> }) {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("orders");
   const [{ contracts, collabs }, evaluators, inspectors] = await Promise.all([contractChoices(db), evaluatorChoices(db), inspectorChoices(db, user.id)]);
   const sp = await searchParams;
   const kind = sp.tip === "colaborare" ? "collab" : "bank";

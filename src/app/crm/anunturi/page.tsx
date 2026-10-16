@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 /** Properties for sale on valuefy.ro/imobiliare, and the viewing / report requests sent from their pages. */
 export default async function ListingsPage() {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("listings");
   const [listings, inquiries] = await Promise.all([listAll(db), listInquiries(db)]);
   const fresh = inquiries.filter((i) => i.status === "NEW").length;
 

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { can } from "@/lib/perms";
 import { notFound } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { now } from "@/lib/db";
@@ -19,7 +20,6 @@ import { DossierOpen } from "./DossierOpen";
 import { DeleteOrder } from "./DeleteOrder";
 import { Messages } from "@/components/Messages";
 import { messagesOf } from "@/lib/messages";
-import { isAdmin } from "@/lib/users";
 import { photoUrl, presenceOf } from "@/lib/presence";
 import { orderProgress } from "@/lib/delivery";
 import { IssueInvoice, InvoiceList } from "@/components/Invoices";
@@ -31,14 +31,14 @@ export const dynamic = "force-dynamic";
 const lei = (n: number | null) => (n == null ? "—" : `${n.toLocaleString("ro-RO")} lei`);
 
 export default async function CrmOrderPage({ params }: { params: Promise<{ id: string }> }) {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("orders");
   const { id } = await params;
   const o = await getOrder(db, id);
   if (!o) notFound();
   const messages = await messagesOf(db, "order", o.id, user.id);
   // The first time someone in the team opens the order it stops being "new".
   if (!o.viewed_at) {
-    await db.prepare("UPDATE orders SET viewed_at = ?, viewed_by = ? WHERE id = ? AND viewed_at IS NULL").bind(now(), user.id, id).run();
+    if (!user.impersonator) await db.prepare("UPDATE orders SET viewed_at = ?, viewed_by = ? WHERE id = ? AND viewed_at IS NULL").bind(now(), user.id, id).run();
     await audit(db, `user:${user.id}`, "order.view", "order", id);
   }
   const [docs, log, reports] = await Promise.all([orderDocuments(db, id), history(db, [id]), reportsForOrder(db, id)]);
@@ -58,7 +58,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
   // e.g. accepted by phone); bank and collaboration orders are processed straight away under their contract.
   const dossier = reports[0] ?? null;
   // Per-order billing (e.g. BRD): the button appears once the order's report is finished; its invoices are listed here.
-  const billable = isAdmin(user) && (o.source === "bank" || o.source === "collab") && dossier
+  const billable = can(user, "billing") && (o.source === "bank" || o.source === "collab") && dossier
     ? await Promise.all(reports.map(async (rep) => ({ id: rep.id, d: await draftForReport(db, rep.id) })))
     : [];
   const toBill = billable.find((x) => !("error" in x.d))?.id ?? null;
@@ -85,7 +85,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
       subtitle={`${SOURCE_LABEL[o.source]} · ${orderWhat(o)}${o.address ? ` · ${orderPlace(o)}` : ""} · ${o.glide_id ? `din ${fmtDate(o.ordered_on ?? o.created_at)}` : `primită ${fmtDate(o.created_at, true)}`}`}
       actions={<>
         <a href={backTo} className="btn btnGhost btnSm">← Comenzi</a>
-        {isAdmin(user) && <DeleteOrder id={o.id} label={orderCode(o)} back={backTo} links={await orderLinks(db, o.id)} />}
+        {can(user, "delete") && <DeleteOrder id={o.id} label={orderCode(o)} back={backTo} links={await orderLinks(db, o.id)} />}
       </>}
     >
       {o.glide_id && <div className="note">Comandă importată din Glide.</div>}
@@ -167,7 +167,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
                     {toBill && <IssueInvoice report={toBill} label="Emite factura" />}
                   </div>
                   {billable.length > 0 && !toBill && why && !orderInvoices.length && <p className="hint" style={{ margin: 0 }}>Facturare: {why}</p>}
-                  {orderInvoices.length > 0 && <><div className="section">Facturi</div><InvoiceList rows={orderInvoices} admin={isAdmin(user)} /></>}
+                  {orderInvoices.length > 0 && <><div className="section">Facturi</div><InvoiceList rows={orderInvoices} admin={can(user, "billing")} /></>}
                 </>
               ) : (
                 <div className="actions">

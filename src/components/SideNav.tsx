@@ -54,7 +54,7 @@ const DENSITY_KEY = "vf-nav-density";
 const applyDensity = (d: Density) => { document.documentElement.dataset.navDensity = d; };
 
 /** The signed-in user at the bottom of the sidebar, with a menu (menu density, sign out). */
-export function MeMenu({ children, app }: { children: React.ReactNode; app: "crm" | "portal" }) {
+export function MeMenu({ children, app, profile }: { children: React.ReactNode; app: "crm" | "portal"; profile?: string }) {
   const [open, setOpen] = useState(false);
   const [density, setDensity] = useState<Density>("normal");
   useEffect(() => {
@@ -95,6 +95,7 @@ export function MeMenu({ children, app }: { children: React.ReactNode; app: "crm
               ))}
             </div>
           </div>
+          {profile && <a role="menuitem" href={profile}>Profilul meu</a>}
           <button type="button" role="menuitem" onClick={logout}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></svg>
             Ieși din cont

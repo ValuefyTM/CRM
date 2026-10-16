@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Fișă de inspecție | CRM VALUEFY" 
 export const dynamic = "force-dynamic";
 
 export default async function SheetTemplatePage({ params }: { params: Promise<{ tip: string }> }) {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("admin");
   const { tip } = await params;
   const label = SHEET_TYPES.find(([t]) => t === tip)?.[1];
   if (!label) notFound();

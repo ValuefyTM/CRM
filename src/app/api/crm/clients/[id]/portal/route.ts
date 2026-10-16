@@ -5,7 +5,7 @@ import { err, json, staffApi } from "@/lib/api";
 
 /** Portal access for a client (or one of a company's contact people): creates the account and emails the invitation. */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi();
+  const a = await staffApi("clients", true);
   if ("res" in a) return a.res;
   const { id } = await params;
   const client = await getClient(a.db, id);

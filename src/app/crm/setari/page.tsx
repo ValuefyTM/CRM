@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { staffPage } from "@/lib/guard";
-import { isAdmin } from "@/lib/users";
+import { can } from "@/lib/perms";
 import { history } from "@/lib/history";
 import { FIRM_FIELDS, getFirmWithImages } from "@/lib/settings";
 import { CrmShell } from "@/components/CrmShell";
@@ -15,11 +15,11 @@ export const dynamic = "force-dynamic";
 export default async function SettingsPage() {
   const { db, user, base } = await staffPage();
   const [firm, log] = await Promise.all([getFirmWithImages(db), history(db, ["firm"])]);
-  const edit = isAdmin(user);
+  const edit = can(user, "admin");
   const values = Object.fromEntries(FIRM_FIELDS.map(([k]) => [k, firm[k]])) as Record<string, string>;
   return (
     <CrmShell user={user} base={base} active="settings" title="Setări" subtitle="Datele VALUEFY de pe contracte: firmă, reprezentant, cont bancar, ștampilă și semnătură">
-      <SettingsTabs base={base} active="firma" />
+      <SettingsTabs base={base} active="firma" admin={can(user, "admin")} />
       {!edit && <div className="note">Doar proprietarul și administratorii pot modifica aceste date.</div>}
       <div className="cols">
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>

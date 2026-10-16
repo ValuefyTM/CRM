@@ -4,7 +4,7 @@ import { runTenders } from "@/lib/tenders";
 
 /** "Verifică acum": reads SEAP for the last days right away (owner / admins). `{ days }`, at most 14. */
 export async function POST(req: Request) {
-  const a = await staffApi("admin");
+  const a = await staffApi("admin", true);
   if ("res" in a) return a.res;
   const days = Math.min(14, Math.max(1, Number((await json(req)).days) || 3));
   const r = await runTenders(a.db, days, true);

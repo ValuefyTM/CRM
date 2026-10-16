@@ -9,7 +9,7 @@ const id_ = (v: unknown) => (typeof v === "string" && /^[\w-]{1,80}$/.test(v) ? 
  * afterwards, on the report (it opens with the allocation window).
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi();
+  const a = await staffApi("orders", true);
   if ("res" in a) return a.res;
   const { id } = await params;
   const order = await getOrder(a.db, id);

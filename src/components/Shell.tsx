@@ -10,12 +10,14 @@ export function Shell(props: {
   nav: NavEntry[];
   active: string;
   cta?: { label: string; href?: string };
-  me: { id?: string; initials: string; name: string; sub: string; photo?: string | null };
+  me: { id?: string; initials: string; name: string; sub: string; photo?: string | null; profile?: string };
   title: string;
   subtitle?: string;
   actions?: React.ReactNode;
   /** Shown in the top bar between the page title and its actions (the CRM's general search). */
   search?: React.ReactNode;
+  /** A strip above the top bar (the CRM's "Vezi ca…" banner). */
+  banner?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const flat: NavItem[] = props.nav.flatMap((e) => ("group" in e ? (e as NavGroup).items : [e as NavItem]));
@@ -35,7 +37,7 @@ export function Shell(props: {
           ))}
         <SideNav nav={props.nav} active={props.active} />
         <div className="me">
-          <MeMenu app={props.app}>
+          <MeMenu app={props.app} profile={props.me.profile}>
             {props.me.photo
               ? <Avatar id={props.me.id ?? props.me.name} name={props.me.name} size={32} photo={props.me.photo} />
               : <span className="meAv" aria-hidden="true">{props.me.initials}</span>}
@@ -44,6 +46,7 @@ export function Shell(props: {
         </div>
       </aside>
       <div className="main">
+        {props.banner}
         <header className="top">
           <div>
             <h1>{props.title}</h1>

@@ -5,7 +5,7 @@ import { geolocateEnabled, locate, locateBatch, locateCounts, locatorCheck, Loca
 
 /** How many properties are still to place on the map from their cadastral number. */
 export async function GET(req: Request) {
-  const a = await staffApi();
+  const a = await staffApi("properties");
   if ("res" in a) return a.res;
   // ?check=1: test the whole link with the Tools locator and say where it stops.
   if (new URL(req.url).searchParams.get("check")) return NextResponse.json(await locatorCheck(a.db));
@@ -17,7 +17,7 @@ export async function GET(req: Request) {
  * was tried); `{ limit, retry }` the next batch (administrators), the page calls it until nothing is left.
  */
 export async function POST(req: Request) {
-  const a = await staffApi();
+  const a = await staffApi("properties", true);
   if ("res" in a) return a.res;
   if (!geolocateEnabled()) return err("Localizarea din cadastru nu este configurată (LOCATOR_API_TOKEN).", 503);
   const b = await json(req);

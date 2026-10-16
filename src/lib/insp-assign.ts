@@ -4,14 +4,15 @@ import { now, uuid } from "./db";
 import { appUrl, INSP_ROLES } from "./site";
 import { audit } from "./auth";
 import { esc, layout, sendEmail } from "./email";
-import { dutiesOf, isAdmin, type User } from "./users";
+import { dutiesOf, type User } from "./users";
+import { can } from "./perms";
 import { FORMS, guessSheetType, sheetTypeLabel, type SheetType } from "./insp-forms";
 import { photoUrl, presenceOf } from "./presence";
 import { missingDocs, missingText, type DocType } from "./insp-docs";
 
 /** Main evaluator of the report, owners and administrators. */
 export async function canAssign(db: D1Database, user: User, reportId: string) {
-  if (isAdmin(user)) return true;
+  if (can(user, "team")) return true;
   const m = await db.prepare("SELECT 1 AS ok FROM report_members WHERE report_id = ? AND user_id = ? AND role = 'evaluator'").bind(reportId, user.id).first<{ ok: number }>();
   return !!m;
 }

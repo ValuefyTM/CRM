@@ -24,7 +24,7 @@ const NEW_MSG: Record<string, [string, string]> = {
 };
 
 export default async function ClientPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ nou?: string }> }) {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("clients");
   const { id } = await params;
   const c = await getClient(db, id);
   if (!c) notFound();

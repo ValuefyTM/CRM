@@ -18,7 +18,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
 /** New photo: multipart `file` (an image, already cropped to a square by the page). */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi();
+  const a = await staffApi("any", true);
   if ("res" in a) return a.res;
   const u = await getUser(a.db, (await params).id);
   if (!u || u.status === "deleted") return err("Utilizatorul nu există.", 404);
@@ -37,7 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi();
+  const a = await staffApi("any", true);
   if ("res" in a) return a.res;
   const u = await getUser(a.db, (await params).id);
   if (!u) return err("Utilizatorul nu există.", 404);

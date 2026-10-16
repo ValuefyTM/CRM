@@ -4,10 +4,11 @@ import { getPartner } from "@/lib/partners";
 import { canManageUser, deleteUser, getUser, isAdmin, updateUser, validateUser } from "@/lib/users";
 import { bucket } from "@/lib/orders";
 import { err, json, staffApi } from "@/lib/api";
+import { can } from "@/lib/perms";
 
 /** Edit an account, (re)send the invitation, disable or re-enable it. */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi();
+  const a = await staffApi("any", true);
   if ("res" in a) return a.res;
   const { id } = await params;
   const u = await getUser(a.db, id);
@@ -16,6 +17,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   // Team accounts are managed by administrators (anyone may edit their own details); owners only by owners.
   if (u.kind === "internal" && !self && (!isAdmin(a.user) || (u.role === "owner" && a.user.role !== "owner")))
     return err("Nu ai drepturi pentru acest cont.", 403);
+  if (!self && !can(a.user, "admin") && !(u.kind === "client" && can(a.user, "clients"))) return err("Nu ai drepturi pentru acest cont.", 403);
   const b = await json(req);
   const actor = `user:${a.user.id}`;
 
@@ -61,7 +63,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 /** Deletes an account (for good when it has no work behind it, else hidden and its email freed). */
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi();
+  const a = await staffApi("any", true);
   if ("res" in a) return a.res;
   const { id } = await params;
   const u = await getUser(a.db, id);

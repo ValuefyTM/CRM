@@ -6,17 +6,22 @@ import { STAGE_LABEL } from "@/lib/dossier";
 import { ReportFilters } from "./ReportFilters";
 import { CrmShell } from "@/components/CrmShell";
 import { ClickRow } from "@/components/ClickRow";
+import { can } from "@/lib/perms";
 
 export const metadata: Metadata = { title: "Rapoarte | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
 
-type SP = { q?: string; status?: string; year?: string; bank?: string; issuer?: string; evaluator?: string; sort?: string; page?: string; etapa?: string; termen?: string };
+type SP = { q?: string; status?: string; year?: string; bank?: string; issuer?: string; evaluator?: string; sort?: string; page?: string; etapa?: string; termen?: string; ale?: string; "fara-acces"?: string };
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const { db, user, base } = await staffPage();
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page) || 1);
-  const [data, facets, counts] = await Promise.all([listReports(db, { ...sp, page }), reportFacets(db), reportTabCounts(db, { ...sp, page })]);
+  // Without "reports.all": only the reports of the user's team work. With it, "Ale mele" narrows the list the same way.
+  const all = can(user, "reports.all"), fees = can(user, "fees");
+  const mine = !all || sp.ale === "1" ? user.id : undefined;
+  const f = { ...sp, page, mine };
+  const [data, facets, counts] = await Promise.all([listReports(db, f), reportFacets(db, mine), reportTabCounts(db, f)]);
   const tab = sp.status === "draft" ? "in_progress" : sp.status ?? "";
   const pages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
   const link = (change: Partial<SP>) => {
@@ -27,7 +32,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
 
   return (
-    <CrmShell user={user} base={base} active="reports" title="Rapoarte" subtitle={`Toate rapoartele: VALUEFY și firmele partenere${data.fees ? ` · onorarii finalizate ${lei(Math.round(data.fees))}` : ""}`}>
+    <CrmShell user={user} base={base} active="reports" title={mine ? "Rapoartele mele" : "Rapoarte"}
+      subtitle={mine ? "Rapoartele la care ești în echipă (cele finalizate: ca evaluator principal sau verificator)" : `Toate rapoartele: VALUEFY și firmele partenere${fees && data.fees ? ` · onorarii finalizate ${lei(Math.round(data.fees))}` : ""}`}
+      actions={all ? <a className={`btn btnSm ${mine ? "btnGold" : "btnGhost"}`} href={link({ ale: mine ? undefined : "1" })}>{mine ? "Toate rapoartele" : "Rapoartele mele"}</a> : undefined}>
+      {sp["fara-acces"] && <div className="note">Nu ai acces la acel raport: rapoartele finalizate le văd evaluatorul principal și verificatorul.</div>}
       <section className="card">
         <ReportFilters
           base={base} total={data.total} current={{ q: sp.q, status: sp.status, year: sp.year, bank: sp.bank, issuer: sp.issuer, evaluator: sp.evaluator, sort: sp.sort }}
@@ -35,7 +43,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           banks={facets.banks.map((b) => [b.code, b.code, b.n])}
           issuers={facets.issuers.map((i) => [i.id, i.name, i.n])}
           evaluators={facets.evaluators.map((e) => [e.id, e.name, e.n])}
-          sorts={Object.entries(REPORT_SORTS).map(([k, [l]]) => [k, l])}
+          sorts={Object.entries(REPORT_SORTS).filter(([k]) => fees || k !== "fee").map(([k, [l]]) => [k, l])}
           tab={tab} tabs={REPORT_TABS.map(([k, label]) => [k, label, counts[k] ?? 0, link({ status: k || undefined })])}
         />
         {(STAGE_FILTERS[sp.etapa ?? ""] || DUE_FILTERS[sp.termen ?? ""] || sp.status === "deschise") && (
@@ -51,7 +59,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         ) : (
           <div className="tableWrap">
             <table className="table">
-              <thead><tr><th>Raport</th><th>Emis de · bancă</th><th>Client</th><th>Proprietate</th><th>Evaluator</th><th>Inspecție</th><th>Status raport</th><th style={{ textAlign: "right" }}>Valoare · onorariu</th></tr></thead>
+              <thead><tr><th>Raport</th><th>Emis de · bancă</th><th>Client</th><th>Proprietate</th><th>Evaluator</th><th>Inspecție</th><th>Status raport</th><th style={{ textAlign: "right" }}>{fees ? "Valoare · onorariu" : "Valoare"}</th></tr></thead>
               <tbody>
                 {data.rows.map((r) => {
                   const [label, cls] = REPORT_STATUS[r.status] ?? [r.status, ""];
@@ -67,7 +75,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                       <td>{r.evaluator ?? "—"}</td>
                       <td style={{ whiteSpace: "nowrap" }}>{inspCls ? <span className={`pill ${inspCls}`}><i />{insp}</span> : <span className="muted">{insp}</span>}{inspDate && <div className="muted">{fmtDate(inspDate)}</div>}</td>
                       <td><span className={`pill ${cls}`}><i />{label}</span></td>
-                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{lei(r.result_value)}<div className="muted">{r.fee ? lei(r.fee) : "—"}</div></td>
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{lei(r.result_value)}{fees && <div className="muted">{r.fee ? lei(r.fee) : "—"}</div>}</td>
                     </ClickRow>
                   );
                 })}

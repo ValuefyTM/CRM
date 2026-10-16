@@ -1,6 +1,6 @@
 import { niceName } from "@/lib/labels";
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { fmtDate, initials, staffPage } from "@/lib/guard";
 import {
   cap, getReport, INSPECTION_STATUS, lei, propertyHistory, REPORT_STATUS, reportAssets, reportDocuments, reportLog, reportOrderDocuments, reportTeam, ROLE_LABEL, teamCandidates,
@@ -24,7 +24,8 @@ import { AddMember, CollectedToggle, DeleteDoc, DocTypeSelect, DeliverButton, Fi
 import { dueOf, STAGE_LABEL, STAGE_ORDER, stageOf } from "@/lib/dossier";
 import { nextReportNumber, noticeTarget } from "@/lib/delivery";
 import { draftForReport, invoicesFor } from "@/lib/billing";
-import { isAdmin } from "@/lib/users";
+import { can, type Perm } from "@/lib/perms";
+import { reportAccess } from "@/lib/perms-db";
 import { IssueInvoice, InvoiceList } from "@/components/Invoices";
 
 export const metadata: Metadata = { title: "Raport | CRM VALUEFY" };
@@ -69,12 +70,17 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const tab: Tab = TABS.find(([k]) => k === wanted)?.[0] ?? "general";
   const r = await getReport(db, id);
   if (!r) notFound();
+  // Team members while it is worked on; once finished, the main evaluator and the verifier ("reports.all": every report).
+  const acc = await reportAccess(db, user, r);
+  if (!acc.view) redirect(`${base}/rapoarte?fara-acces=1`);
+  const fees = can(user, "fees"), lead = acc.lead, work = acc.work;
+  const link = (perm: Perm, path: string, cls: string, body: React.ReactNode) => (can(user, perm) ? <a className={cls} href={`${base}${path}`}>{body}</a> : <span>{body}</span>);
   const messages = await messagesOf(db, "report", r.id, user.id);
   const [team, assets, docs, orderDocs, people] = await Promise.all([
     reportTeam(db, id), reportAssets(db, id), reportDocuments(db, id), reportOrderDocuments(db, r.order_id), teamCandidates(db),
   ]);
   // Billing: the invoices of this report, and whether it can be invoiced per order now (framework / collaboration rule).
-  const [repInvoices, perOrder] = await Promise.all([invoicesFor(db, { report: id }), isAdmin(user) ? draftForReport(db, id) : Promise.resolve({ error: "" })]);
+  const [repInvoices, perOrder] = await Promise.all([invoicesFor(db, { report: id }), can(user, "billing") ? draftForReport(db, id) : Promise.resolve({ error: "" })]);
   const main = assets.find((a) => a.is_main) ?? assets[0];
   const [mayAssign, inspectors, inspDocs] = await Promise.all([canAssign(db, user, id), inspectorChoices(db, user.id), docsByAsset(db, id, assets.map((a) => a.id))]);
   const docState = (assetId: string) => ({ cf: !!inspDocs[assetId]?.cf.length, rlv: !!inspDocs[assetId]?.rlv.length });
@@ -106,6 +112,10 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const cur = r.currency === "EUR" ? "EUR" : "lei";
   const evaluator = team.find((m) => m.role === "evaluator");
   const verifier = team.find((m) => m.role === "verifier");
+  // Without "fees": only the user's own cut (as main evaluator or verifier).
+  const mine = team.find((m) => m.id === user.id && (m.role === "evaluator" || m.role === "verifier"));
+  const myPct = mine ? (mine.role === "evaluator" ? mine.share_evaluator : mine.share_verifier) : null;
+  const myShare = myPct != null ? `${myPct}%${r.fee != null ? ` · ${lei(Math.round(r.fee * myPct) / 100, "RON")}` : ""}` : null;
   const inspected = assets.filter((a) => a.inspection_status);
   const toSchedule = inspected.filter((a) => a.inspection_status === "to_schedule").length;
   const sources = docs.filter((d) => d.kind === "source");
@@ -154,19 +164,19 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
               {r.delivered_at && <span className="pill pillOk"><i />Predat</span>}
             </div>
             <div className="rChips">
-              {r.client_name && <a className="rChip" href={`${base}/clienti/${r.client_id}`}><span className="av">{initials(r.client_name, "c")}</span>{niceName(r.client_name)}</a>}
+              {r.client_name && (can(user, "clients") ? <a className="rChip" href={`${base}/clienti/${r.client_id}`}><span className="av">{initials(r.client_name, "c")}</span>{niceName(r.client_name)}</a> : <span className="rChip"><span className="av">{initials(r.client_name, "c")}</span>{niceName(r.client_name)}</span>)}
               {r.bank_name && <span className="rChip"><span className="av gold">{(r.bank_code ?? r.bank_name).slice(0, 3).toUpperCase()}</span>{niceName(r.bank_name)}</span>}
               {r.contract_number && <span className="rMeta">Contract <u>{r.contract_kind === "framework" ? "cadru " : ""}{r.contract_number}</u></span>}
-              {order && <a className="rMeta" href={`${base}/comenzi/${r.order_id}`}>Comandă <u>{order}</u></a>}
+              {order && (can(user, "orders") ? <a className="rMeta" href={`${base}/comenzi/${r.order_id}`}>Comandă <u>{order}</u></a> : <span className="rMeta">Comandă <u>{order}</u></span>)}
             </div>
             <div className="rChips">
-              {evaluator && <a className="rChip" href={`${base}/utilizatori/${evaluator.id}`} title={evaluator.seen}><Avatar id={evaluator.id} name={evaluator.name || evaluator.email} size={26} presence={evaluator.presence} photo={evaluator.photo} />{evaluator.name || evaluator.email}<small>· evaluator principal</small></a>}
+              {evaluator && <a className="rChip" href={can(user, "admin") ? `${base}/utilizatori/${evaluator.id}` : undefined} title={evaluator.seen}><Avatar id={evaluator.id} name={evaluator.name || evaluator.email} size={26} presence={evaluator.presence} photo={evaluator.photo} />{evaluator.name || evaluator.email}<small>· evaluator principal</small></a>}
               <span className="rMeta">actualizat {ago(r.updated_at ?? r.created_at)}</span>
             </div>
           </div>
           <div className="rHeroActions">
-            <StatusButton id={r.id} status={r.status} reason={r.suspend_reason} />
-            <a className="btn btnGold btnSm" href={href("documente")}>{final ? "Livrare raport" : "Încarcă raportul final"}</a>
+            {lead && <StatusButton id={r.id} status={r.status} reason={r.suspend_reason} />}
+            {work && <a className="btn btnGold btnSm" href={href("documente")}>{final ? "Livrare raport" : "Încarcă raportul final"}</a>}
           </div>
         </div>
         <dl className="rKpis">
@@ -189,7 +199,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
           <div className="stageInfo">
             <span className={late ? "pill pillErr" : due ? "pill pillInfo" : "pill"}><i />
               {due ? `${late ? "Termen depășit" : "Termen"}: ${fmtDate(due)}` : r.term_days ? `Termen: ${r.term_days} zile lucrătoare de la inspecție` : "Fără termen"}</span>
-            <StageActions id={r.id} stage={stage} hasVerifier={!!verifier} />
+            {work && <StageActions id={r.id} stage={stage} hasVerifier={!!verifier} />}
           </div>
         </section>
       )}
@@ -207,13 +217,13 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             <section className="card">
               <h2>Client și sursă</h2>
               <dl className="kv">
-                <Row k="Client">{r.client_name ? <a className="rowLink" href={`${base}/clienti/${r.client_id}`}>{niceName(r.client_name)}</a> : null}</Row>
+                <Row k="Client">{r.client_name ? link("clients", `/clienti/${r.client_id}`, "rowLink", niceName(r.client_name)) : null}</Row>
                 <Row k="Tip client">{r.client_kind ? KIND[r.client_kind] ?? r.client_kind : null}</Row>
                 <Row k="Utilizator / bancă">{niceName(r.bank_name) || null}</Row>
-                <Row k="Contract">{r.contract_number ? <a className="link" href={`${base}/contracte/${r.contract_id}`}>{r.contract_number} · {r.contract_kind === "framework" ? "cadru" : "clasic"}</a> : null}</Row>
-                <Row k="Comandă">{order ? <a className="link" href={`${base}/comenzi/${r.order_id}`}>{order}{r.order_source ? ` · ${SOURCE_LABEL[r.order_source]?.toLowerCase() ?? r.order_source}` : ""}</a> : null}</Row>
+                <Row k="Contract">{r.contract_number ? link("clients", `/contracte/${r.contract_id}`, "link", <>{r.contract_number} · {r.contract_kind === "framework" ? "cadru" : "clasic"}</>) : null}</Row>
+                <Row k="Comandă">{order ? link("orders", `/comenzi/${r.order_id}`, "link", <>{order}{r.order_source ? ` · ${SOURCE_LABEL[r.order_source]?.toLowerCase() ?? r.order_source}` : ""}</>) : null}</Row>
                 <Row k="Agenție bancară">{r.bank_branch}</Row>
-                <Row k="Referral">{r.referral_name ? <a className="link" href={`${base}/utilizatori/${r.referral_id}`}>{r.referral_name}</a> : null}</Row>
+                <Row k="Referral">{r.referral_name ? link("admin", `/utilizatori/${r.referral_id}`, "link", r.referral_name) : null}</Row>
               </dl>
             </section>
             <section className="card">
@@ -229,18 +239,19 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
               </dl>
             </section>
             <section className="card">
-              <div className="cardHead"><h2>Comercial și status</h2>{!("error" in perOrder) && <IssueInvoice report={r.id} label="Emite factura" />}</div>
+              <div className="cardHead"><h2>{fees ? "Comercial și status" : "Status"}</h2>{!("error" in perOrder) && <IssueInvoice report={r.id} label="Emite factura" />}</div>
               <dl className="kv">
-                <Row k="Tarif">{r.fee != null ? <span className="mono num">{lei(r.fee, "RON")}</span> : null}</Row>
-                <Row k="Încasare"><CollectedToggle id={r.id} collected={!!r.collected} at={r.collected_at} /></Row>
-                <Row k="Tarif colaborator">{r.collab_fee != null ? <span className="mono num">{lei(r.collab_fee, "RON")}</span> : null}</Row>
-                <Row k="Cotă evaluator">{evaluator?.share_evaluator != null ? `${evaluator.share_evaluator}%` : null}</Row>
+                {fees && <Row k="Tarif">{r.fee != null ? <span className="mono num">{lei(r.fee, "RON")}</span> : null}</Row>}
+                {fees && <Row k="Încasare">{lead ? <CollectedToggle id={r.id} collected={!!r.collected} at={r.collected_at} /> : r.collected ? "Încasat" : "Neîncasat"}</Row>}
+                {fees && <Row k="Tarif colaborator">{r.collab_fee != null ? <span className="mono num">{lei(r.collab_fee, "RON")}</span> : null}</Row>}
+                {fees && <Row k="Cotă evaluator">{evaluator?.share_evaluator != null ? `${evaluator.share_evaluator}%` : null}</Row>}
+                {!fees && myShare && <Row k="Cota ta">{myShare}</Row>}
                 <Row k="Borderou">{r.statement_number ? `B-${r.statement_number}` : <span className="muted">neinclus</span>}</Row>
                 <Row k="Status"><span className={`pill ${cls}`}><i />{label}</span></Row>
                 <Row k="Motiv suspendare">{r.suspend_reason}</Row>
                 <Row k="Intrat în lucru">{r.received_on ? fmtDate(r.received_on) : null}</Row>
               </dl>
-              {repInvoices.length > 0 && <><div className="section">Facturi</div><InvoiceList rows={repInvoices} admin={isAdmin(user)} /></>}
+              {fees && repInvoices.length > 0 && <><div className="section">Facturi</div><InvoiceList rows={repInvoices} admin={can(user, "billing")} /></>}
             </section>
           </div>
           <div className="cols">
@@ -321,7 +332,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
       {tab === "echipa" && (
         <div className="cols">
           <section className="card">
-            <div className="cardHead"><h2>Echipa raportului</h2><AddMember id={r.id} people={people.map((x) => ({ ...x, sub: ROLE_NAME[x.role] ?? x.role }))} /></div>
+            <div className="cardHead"><h2>Echipa raportului</h2>{lead && <AddMember id={r.id} people={people.map((x) => ({ ...x, sub: ROLE_NAME[x.role] ?? x.role }))} />}</div>
             {team.length === 0 ? <p className="hint">Nimeni alocat încă.</p> : (
               <ul className="people">
                 {team.map((m) => {
@@ -330,10 +341,10 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                   return (
                     <li key={m.role + m.id}>
                       <Avatar id={m.id} name={m.name || m.email} size={40} presence={m.presence} photo={m.photo} title={`${m.name || m.email} · ${m.seen}`} />
-                      <span className="who"><a className="rowLink" href={`${base}/utilizatori/${m.id}`}>{m.name || m.email}</a><span className="muted">{what}</span><span className={`pSeen ${m.presence}`}><i />{m.seen}</span></span>
+                      <span className="who">{link("admin", `/utilizatori/${m.id}`, "rowLink", m.name || m.email)}<span className="muted">{what}</span><span className={`pSeen ${m.presence}`}><i />{m.seen}</span></span>
                       <span className="pill"><i />{(ROLE_LABEL[m.role] ?? m.role).toUpperCase()}</span>
-                      <b className="mono share">{share != null ? `${share}%` : "—"}</b>
-                      <RemoveMember id={r.id} user={m.id} role={m.role} name={m.name || m.email} />
+                      <b className="mono share">{share != null && (fees || m.id === user.id) ? `${share}%` : "—"}</b>
+                      {lead && <RemoveMember id={r.id} user={m.id} role={m.role} name={m.name || m.email} />}
                     </li>
                   );
                 })}
@@ -361,7 +372,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                 <tbody>
                   {recipients.map((x) => (
                     <tr key={x.id + x.role}>
-                      <td>{x.link ? <a className="rowLink" href={`${base}/clienti/${x.id}`}>{x.name}</a> : <b>{x.name}</b>}</td>
+                      <td>{x.link && can(user, "clients") ? <a className="rowLink" href={`${base}/clienti/${x.id}`}>{x.name}</a> : <b>{x.name}</b>}</td>
                       <td><span className="pill"><i />{(x.kind ? KIND[x.kind] ?? x.kind : "—").toUpperCase()}</span></td>
                       <td>{x.role}</td>
                       <td className="muted">{x.contact || "—"}</td>
@@ -580,7 +591,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             </dl>
             {missing.length > 0 && <div className="note">{missing.length === 1 ? "Lipsește un document" : `Lipsesc ${missing.length} documente`} din lista de documente sursă.</div>}
             {r.client_notified_at && <p className="hint">Clientul a fost anunțat pe email la {fmtDate(r.client_notified_at, true)} și descarcă raportul din portal.</p>}
-            {!r.delivered_at && <DeliverButton id={r.id} ready={!!final} number={r.number} suggested={suggested} notifyTo={notifyTo} />}
+            {lead && !r.delivered_at && <DeliverButton id={r.id} ready={!!final} number={r.number} suggested={suggested} notifyTo={notifyTo} />}
           </section>
         </div>
         </>

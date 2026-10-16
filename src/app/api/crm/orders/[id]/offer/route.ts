@@ -10,7 +10,7 @@ import { offerLink, sendOfferEmail } from "@/lib/offer-emails";
  * `action: "send"` emails the saved offer to the client — only from the preview, so what is sent is what was seen.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi();
+  const a = await staffApi("orders", true);
   if ("res" in a) return a.res;
   const { id } = await params;
   const order = await getOrder(a.db, id);

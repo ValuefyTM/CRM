@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
  */
 const TAB_SOURCES: Record<string, string[]> = { site: ["site"], parteneri: ["partner"], banci: ["bank"], colaborari: ["collab"], directe: ["client", "direct"] };
 export default async function CrmOrdersPage({ searchParams }: { searchParams: Promise<{ f?: string; tab?: string }> }) {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("orders");
   const sp = await searchParams;
   const [orders, mails] = await Promise.all([
     allOrders(db),

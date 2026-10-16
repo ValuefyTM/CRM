@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 /** Bank / collaboration order with only a request id and a client name: screenshot → client → assets → file. */
 export default async function ProcessOrder({ params }: { params: Promise<{ id: string }> }) {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("orders");
   const { id } = await params;
   const o = await getOrder(db, id);
   if (!o) notFound();

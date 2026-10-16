@@ -4,7 +4,7 @@ import { MAX_SOCIAL_BYTES, getById, setSocialImage } from "@/lib/listings";
 
 /** Stores the 1200×630 share image generated in the browser (valuefy.ro serves it as the link preview). */
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi();
+  const a = await staffApi("listings", true);
   if ("res" in a) return a.res;
   const { id } = await params;
   if (!(await getById(a.db, id))) return err("Anunțul nu există.", 404);

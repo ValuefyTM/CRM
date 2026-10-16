@@ -14,7 +14,7 @@ const SHORT: Record<string, string> = { apartament: "AP", casa: "CASĂ", teren: 
 
 /** The inspection sheets the inspectors fill in on the phone, one per property type, as the firm adapts them. */
 export default async function SheetTemplatesPage() {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("admin");
   const list = await Promise.all(SHEET_TYPES.map(async ([t, label]) => ({ t, label, ...(await templateOf(db, t)) })));
   return (
     <CrmShell user={user} base={base} active="templates" title="Setări · Fișe de inspecție" subtitle="Ce completează inspectorii pe telefon, pe tipuri de proprietate">

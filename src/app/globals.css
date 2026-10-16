@@ -904,8 +904,8 @@ a.navItem[aria-current="page"] .navBadge { color: #111; background: rgba(17, 17,
 .meMore { margin-left: auto; flex-shrink: 0; width: 32px; height: 32px; border: 0; border-radius: 10px; background: transparent; color: #8a8a8a; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .meMore:hover, .meMore[aria-expanded="true"] { background: rgba(255, 255, 255, 0.08); color: #fff; }
 .meMenu { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); background: #1f1f1f; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; padding: 6px; box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.6); z-index: 30; }
-.meMenu button { width: 100%; display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; color: #e6e6e6; font: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer; }
-.meMenu button:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.meMenu button, .meMenu > a { width: 100%; display: flex; text-decoration: none; align-items: center; gap: 10px; height: 40px; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; color: #e6e6e6; font: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+.meMenu button:hover, .meMenu > a:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
 .side .sideCta { margin: 0 2px; }
 .side .me { position: sticky; bottom: -16px; margin-bottom: -16px; padding: 12px 0 16px; background: linear-gradient(180deg, rgba(11, 11, 11, 0) 0, #0b0b0b 14px); z-index: 2; }
 .table td a.rowLink.muted { white-space: nowrap; }
@@ -1662,3 +1662,28 @@ div.dbKpi::after { content: none; }
 .tdMeta { font-size: 12.5px; color: var(--muted); line-height: 1.5; overflow-wrap: anywhere; }
 .tdActs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .tdRaw { white-space: pre-wrap; word-break: break-all; font-size: 11px; background: var(--cream); padding: 10px; border-radius: 10px; max-height: 260px; overflow: auto; }
+
+/* ---------- "Vezi ca…" (owners and administrators look at the CRM as a team member) ---------- */
+.viewAs { margin-left: auto; flex: 0 0 auto; }
+.top:has(.viewAs) .gs { margin-left: 8px; }
+.viewAsSelect { height: 36px; max-width: 190px; padding: 0 28px 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--cream); font: inherit; font-size: 12.5px; color: var(--ink); cursor: pointer; }
+.viewAsBar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px clamp(16px, 2.4vw, 26px); background: #f6c445; color: #141414; font-size: 13px; position: sticky; top: 0; z-index: 30; }
+.viewAsBar > span { flex: 1 1 260px; }
+.viewAsBar .viewAsSelect { background: #fff; border-color: rgba(0, 0, 0, .2); height: 32px; max-width: 240px; }
+.viewAsBar .btn { background: #141414; color: #fff; border-color: #141414; }
+@media (max-width: 760px) {
+  .viewAs { display: none; }
+  .viewAsBar { font-size: 12px; gap: 6px; }
+  .viewAsBar .viewAsSelect { flex: 1 1 auto; max-width: none; }
+}
+
+/* Property finder: from – to boxes in the filter bar. */
+.fsel.rgRange { gap: 6px; padding-right: 10px; cursor: default; }
+.fsel.rgRange::after { content: none; }
+.fsel.rgRange > span.muted { font-size: 13px; letter-spacing: 0; }
+.rgRange input { width: 64px; height: 26px; border: 1px solid var(--line); border-radius: 7px; padding: 0 6px; font: inherit; font-size: 12.5px; background: #fff; }
+
+/* Setări → Permisiuni */
+.permTable th.c, .permTable td.c { text-align: center; width: 120px; }
+.permTable input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--ink); cursor: pointer; }
+.permTable td .muted { font-size: 12px; margin-top: 2px; }

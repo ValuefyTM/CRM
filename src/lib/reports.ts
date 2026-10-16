@@ -1,5 +1,6 @@
 // Server-only: valuation reports (imported from Glide, later produced in the CRM).
 import { withPresence } from "./presence";
+import { MY_REPORTS_SQL } from "./perms-db";
 
 export const REPORT_STATUS: Record<string, [string, string]> = {
   draft: ["În lucru", "pillInfo"], // drafts are reports being worked on
@@ -34,7 +35,9 @@ const ROW = `SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.r
      WHERE a.report_id = r.id ORDER BY a.is_main DESC LIMIT 1) AS asset
   FROM reports r LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id LEFT JOIN entities i ON i.id = r.issuer_id`;
 
-export type ReportFilters = { q?: string; status?: string; year?: string; bank?: string; issuer?: string; evaluator?: string; sort?: string; page?: number; etapa?: string; termen?: string };
+export type ReportFilters = { q?: string; status?: string; year?: string; bank?: string; issuer?: string; evaluator?: string; sort?: string; page?: number; etapa?: string; termen?: string;
+  /** Only the reports this user sees as a team member ("Rapoartele mele"). */
+  mine?: string };
 
 export const REPORT_SORTS: Record<string, [string, string]> = {
   "": ["Cele mai noi", "COALESCE(r.report_date, substr(r.created_at, 1, 10)) DESC, CAST(r.number AS INTEGER) DESC"],
@@ -77,6 +80,7 @@ function where(f: ReportFilters) {
   if (f.bank) { w.push("COALESCE(b.code, b.name) = ?"); p.push(f.bank); }
   if (f.issuer) { w.push("r.issuer_id = ?"); p.push(f.issuer); }
   if (f.evaluator) { w.push("EXISTS (SELECT 1 FROM report_members m WHERE m.report_id = r.id AND m.role = 'evaluator' AND m.user_id = ?)"); p.push(f.evaluator); }
+  if (f.mine) { w.push(MY_REPORTS_SQL); p.push(f.mine); }
   const q = f.q?.trim();
   if (q) {
     const like = `%${q.replace(/[%_]/g, "")}%`;
@@ -123,12 +127,16 @@ export function inspectionState(r: Pick<ReportRow, "insp_total" | "insp_done" | 
 }
 
 /** Values for the filter chips. */
-export async function reportFacets(db: D1Database) {
+export async function reportFacets(db: D1Database, mine?: string) {
+  const w = mine ? `WHERE ${MY_REPORTS_SQL}` : "";
+  const and = mine ? `AND ${MY_REPORTS_SQL}` : "";
+  const b = (q: D1PreparedStatement) => (mine ? q.bind(mine) : q);
   const [years, banks, issuers, evaluators] = await Promise.all([
-    db.prepare(`SELECT COALESCE(reporting_year, CAST(substr(report_date, 1, 4) AS INTEGER)) AS y, COUNT(*) AS n FROM reports GROUP BY y HAVING y IS NOT NULL ORDER BY y DESC`).all<{ y: number; n: number }>(),
-    db.prepare(`SELECT COALESCE(b.code, b.name) AS code, COUNT(*) AS n FROM reports r JOIN entities b ON b.id = r.recipient_id GROUP BY code ORDER BY n DESC`).all<{ code: string; n: number }>(),
-    db.prepare(`SELECT i.id, i.name, COUNT(*) AS n FROM reports r JOIN entities i ON i.id = r.issuer_id GROUP BY i.id ORDER BY n DESC`).all<{ id: string; name: string; n: number }>(),
-    db.prepare(`SELECT u.id, COALESCE(NULLIF(u.name, ''), u.email) AS name, COUNT(*) AS n FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.role = 'evaluator' GROUP BY u.id ORDER BY n DESC`).all<{ id: string; name: string; n: number }>(),
+    b(db.prepare(`SELECT COALESCE(r.reporting_year, CAST(substr(r.report_date, 1, 4) AS INTEGER)) AS y, COUNT(*) AS n FROM reports r ${w} GROUP BY y HAVING y IS NOT NULL ORDER BY y DESC`)).all<{ y: number; n: number }>(),
+    b(db.prepare(`SELECT COALESCE(b.code, b.name) AS code, COUNT(*) AS n FROM reports r JOIN entities b ON b.id = r.recipient_id ${w} GROUP BY code ORDER BY n DESC`)).all<{ code: string; n: number }>(),
+    b(db.prepare(`SELECT i.id, i.name, COUNT(*) AS n FROM reports r JOIN entities i ON i.id = r.issuer_id ${w} GROUP BY i.id ORDER BY n DESC`)).all<{ id: string; name: string; n: number }>(),
+    b(db.prepare(`SELECT u.id, COALESCE(NULLIF(u.name, ''), u.email) AS name, COUNT(*) AS n FROM report_members em JOIN users u ON u.id = em.user_id JOIN reports r ON r.id = em.report_id
+      WHERE em.role = 'evaluator' ${and} GROUP BY u.id ORDER BY n DESC`)).all<{ id: string; name: string; n: number }>(),
   ]);
   return { years: years.results, banks: banks.results, issuers: issuers.results, evaluators: evaluators.results };
 }

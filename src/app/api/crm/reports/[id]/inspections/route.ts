@@ -1,4 +1,4 @@
-import { err, json, staffApi } from "@/lib/api";
+import { err, json, reportApi } from "@/lib/api";
 import { assignInspection, canAssign, cancelInspection, markNoInspection } from "@/lib/insp-assign";
 
 /**
@@ -7,9 +7,9 @@ import { assignInspection, canAssign, cancelInspection, markNoInspection } from 
  * `{ asset, none: "<reason>" }` marks the asset as valued without an inspection; `{ asset, none: null }` undoes it.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi();
-  if ("res" in a) return a.res;
   const { id } = await params;
+  const a = await reportApi(id, "work", true);
+  if ("res" in a) return a.res;
   if (!(await canAssign(a.db, a.user, id))) return err("Doar evaluatorul principal al raportului poate aloca inspecția.", 403);
   const b = await json(req);
   if ("none" in b) {
@@ -24,9 +24,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
 /** Cancels an inspection task that is not done yet: `?inspection=<id>`. */
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi();
-  if ("res" in a) return a.res;
   const { id } = await params;
+  const a = await reportApi(id, "work", true);
+  if ("res" in a) return a.res;
   if (!(await canAssign(a.db, a.user, id))) return err("Doar evaluatorul principal al raportului poate anula inspecția.", 403);
   const r = await cancelInspection(a.db, a.user, id, new URL(req.url).searchParams.get("inspection") ?? "");
   if (!r.ok) return err(r.error);

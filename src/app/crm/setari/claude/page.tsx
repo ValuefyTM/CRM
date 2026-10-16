@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 /** The Claude connector (MCP): its address, how to add it, the active connections and what Claude can read. */
 export default async function ClaudePage() {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("admin");
   const allowed = mcpAllowed(user);
   const [grants, o] = await Promise.all([allowed ? listGrants(db, user.id) : Promise.resolve([]), origin()]);
   const url = `${o}/api/mcp`;

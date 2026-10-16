@@ -10,7 +10,7 @@ export const AREA: [string, string][] = [["25", "±25%"], ["50", "±50%"], ["0",
 
 export type Comparable = {
   id: string; type: string | null; category: string | null; full_address: string | null; city: string | null; usable_area: number | null; year_built: number | null;
-  value: number; sqm: number | null; last_date: string | null; report_id: string | null; report_number: string | null; lat: number; lng: number; km: number; photo: string | null;
+  value: number; sqm: number | null; last_date: string | null; report_id: string | null; report_number: string | null; open?: boolean; lat: number; lng: number; km: number; photo: string | null;
 };
 
 const LAT = "CAST(trim(substr(p.geo, 1, instr(p.geo, ',') - 1)) AS REAL)";

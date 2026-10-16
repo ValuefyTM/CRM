@@ -27,6 +27,9 @@ export default {
     if (url.pathname.startsWith("/api/") && !SAFE.has(req.method)) {
       const origin = req.headers.get("origin");
       if (origin && origin !== "null" && new URL(origin).host !== url.host) return new Response("Cerere respinsă (origine străină).", { status: 403 });
+      // "Vezi ca…" (an administrator looking at the CRM as a team member) is read-only; only leaving it is a write.
+      if (/(?:^|;\s*)vf_as=[^;]/.test(req.headers.get("cookie") ?? "") && /^\/api\/(crm|insp|mcp)\//.test(url.pathname) && url.pathname !== "/api/crm/impersonate")
+        return Response.json({ error: "Vezi CRM-ul ca alt utilizator: doar citire. Revino la contul tău ca să faci modificări." }, { status: 403 });
     }
     // Links in emails are built from the request host: only Cloudflare's Host counts, never client-sent forwarding
     // headers (which OpenNext would otherwise trust), so nobody can make a sign-in email point to another domain.

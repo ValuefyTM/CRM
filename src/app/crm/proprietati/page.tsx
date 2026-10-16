@@ -3,6 +3,7 @@ import { staffPage } from "@/lib/guard";
 import { registry, registryFacets, REGISTRY_PAGE, REGISTRY_SORTS } from "@/lib/registry";
 import { CrmShell } from "@/components/CrmShell";
 import { isAdmin } from "@/lib/users";
+import { can } from "@/lib/perms";
 import { geolocateEnabled, locateCounts } from "@/lib/geolocate";
 import { LocateAll } from "./LocateActions";
 import { RegistryView, type RegistryQuery } from "./RegistryView";
@@ -14,17 +15,21 @@ export const dynamic = "force-dynamic";
 const num = (v: number | null) => (v == null ? "—" : Math.round(v).toLocaleString("ro-RO"));
 
 export default async function PropertiesPage({ searchParams }: { searchParams: Promise<RegistryQuery & { page?: string }> }) {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("properties");
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page) || 1);
   const admin = isAdmin(user);
-  const [data, facets, locCounts] = await Promise.all([registry(db, { ...sp, page }), registryFacets(db, sp.county), admin ? locateCounts(db) : Promise.resolve(null)]);
+  const all = can(user, "reports.all");
+  const [data, facets, locCounts] = await Promise.all([
+    registry(db, { ...sp, page }, { id: user.id, all }), registryFacets(db, sp.county, sp.cat), admin ? locateCounts(db) : Promise.resolve(null),
+  ]);
   const s = data.stats;
   const pages = Math.max(1, Math.ceil(s.n / REGISTRY_PAGE));
   const geoPct = s.n ? Math.round((s.geo / s.n) * 100) : 0;
 
   return (
-    <CrmShell user={user} base={base} active="properties" title="Proprietăți" subtitle="Registrul proprietăților evaluate: istoric, valori și localizare pe hartă">
+    <CrmShell user={user} base={base} active="properties" title={all ? "Proprietăți" : "Proprietăți / comparabile"}
+      subtitle={all ? "Registrul proprietăților evaluate: istoric, valori și localizare pe hartă" : "Caută comparabile în proprietățile evaluate: tip, zonă, suprafață, an, perioadă · valoare și lei/m²"}>
       <div className="dbKpis">
         <div className="dbKpi static">
           <span className="dbKpiLabel"><i style={{ background: "var(--ink)" }} />Proprietăți evaluate</span>
@@ -53,6 +58,7 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
       <RegistryView
         base={base} current={sp} rows={data.rows} points={data.points} total={s.n} page={data.page} pages={pages}
         cats={facets.cats.map((x) => [x.k, CAT_LABEL[x.k] ?? x.k, x.n])}
+        types={facets.types.map((x) => [x.k, x.k.charAt(0) + x.k.slice(1).toLowerCase(), x.n])}
         counties={facets.counties.map((x) => [x.k, x.k, x.n])}
         cities={facets.cities.map((x) => [x.k, x.k, x.n])}
         years={facets.years.map((x) => [x.k, x.k, x.n])}

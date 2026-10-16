@@ -6,7 +6,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 /** A listing photo, for the CRM pages (same origin, so the share card can be drawn from it). */
 export async function GET(_req: Request, { params }: Ctx) {
-  const a = await staffApi();
+  const a = await staffApi("listings");
   if ("res" in a) return a.res;
   const { id } = await params;
   const photo = /^[0-9a-f-]{36}$/.test(id) ? await getPhoto(a.db, id) : null;
@@ -16,7 +16,7 @@ export async function GET(_req: Request, { params }: Ctx) {
 }
 
 export async function DELETE(_req: Request, { params }: Ctx) {
-  const a = await staffApi();
+  const a = await staffApi("listings", true);
   if ("res" in a) return a.res;
   await deletePhoto(a.db, (await params).id);
   return NextResponse.json({ ok: true });

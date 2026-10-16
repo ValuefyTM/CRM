@@ -3,7 +3,7 @@ import { draftForContract, draftForReport, issue } from "@/lib/billing";
 
 /** Issues in Oblio what the preview showed: { contract, kind } for a classic contract, { report } per order. */
 export async function POST(req: Request) {
-  const a = await staffApi("admin");
+  const a = await staffApi("billing", true);
   if ("res" in a) return a.res;
   const b = await json(req);
   const d = typeof b.report === "string" ? await draftForReport(a.db, b.report) : await draftForContract(a.db, typeof b.contract === "string" ? b.contract : "", b.kind === "proforma" ? "proforma" : "invoice");

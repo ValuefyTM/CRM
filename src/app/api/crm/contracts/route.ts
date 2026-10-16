@@ -16,7 +16,7 @@ const amount = (v: unknown) => {
  * signed with a bank (its orders are added afterwards, from the contract's page).
  */
 export async function POST(req: Request) {
-  const a = await staffApi();
+  const a = await staffApi("clients", true);
   if ("res" in a) return a.res;
   const b = await json(req);
   if (b.kind === "framework") {

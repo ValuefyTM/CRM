@@ -4,7 +4,7 @@ import { fileHeaders } from "@/lib/file-response";
 
 /** The invoice PDF: our copy, else (not copied yet) the Oblio link. */
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi();
+  const a = await staffApi("billing");
   if ("res" in a) return a.res;
   const inv = await a.db.prepare("SELECT kind, series, number, r2_key, oblio_link FROM invoices WHERE id = ?").bind((await params).id)
     .first<{ kind: string; series: string; number: string; r2_key: string | null; oblio_link: string | null }>();

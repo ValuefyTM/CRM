@@ -4,7 +4,9 @@ import { APP, APP_NAME, appOf, appUrl, INSP_ROLES, type App, type Kind } from ".
 import { now, uuid } from "./db";
 import { normEmail, randomCode, randomToken, safeEqual, sha256 } from "./crypto";
 import { esc, layout, sendEmail } from "./email";
-import { canSignIn, dutiesOf, findUser, getUser, type User } from "./users";
+import { canSignIn, dutiesOf, findUser, getUser, isAdmin, type User } from "./users";
+import { getMatrix } from "./perms-db";
+import { permsFor } from "./perms";
 
 const CODE_MINUTES = 15;
 const INVITE_DAYS = 7;
@@ -232,9 +234,17 @@ export async function createSession(db: D1Database, kind: Kind, userId: string, 
   return { name: app.cookie, value: token, httpOnly: true, secure: true, sameSite: "lax" as const, path: "/", expires };
 }
 
-/** The signed-in, active user of an app, or null. */
+/** Cookie of "Vezi ca…": the id of the team member an owner or administrator looks at the CRM as. */
+export const AS_COOKIE = "vf_as";
+
+/** Who an owner or administrator may look at the CRM as: active team members who use the CRM, never an owner (unless they are one). */
+export const canImpersonate = (me: User, u: User) =>
+  me.id !== u.id && isAdmin(me) && u.kind === "internal" && u.status === "active" && u.role !== "inspector" && (u.role !== "owner" || me.role === "owner");
+
+/** The signed-in, active user of an app, or null. In the CRM: with the permissions of the role, or the user looked at with "Vezi ca…". */
 export async function currentUser(db: D1Database, app: App): Promise<User | null> {
-  const token = (await cookies()).get(APP[app].cookie)?.value;
+  const jar = await cookies();
+  const token = jar.get(APP[app].cookie)?.value;
   if (!token) return null;
   const row = await db
     .prepare(`SELECT user_id FROM sessions WHERE token_hash = ? AND audience IN (${kindsSql(app)}) AND expires_at > ?`)
@@ -248,7 +258,14 @@ export async function currentUser(db: D1Database, app: App): Promise<User | null
     await db.prepare("UPDATE users SET last_seen_at = ? WHERE id = ?").bind(t, u.id).run().catch(() => {});
     u.last_seen_at = t;
   }
-  return u;
+  if (app !== "crm") return u;
+  const matrix = await getMatrix(db);
+  const as = jar.get(AS_COOKIE)?.value;
+  const target = as && isAdmin(u) ? await getUser(db, as) : null;
+  if (target && canImpersonate(u, target)) {
+    return { ...target, perms: permsFor(matrix, target.role), impersonator: { id: u.id, name: u.name || u.email, role: u.role } };
+  }
+  return { ...u, perms: permsFor(matrix, u.role) };
 }
 
 export async function endSession(db: D1Database, app: App) {

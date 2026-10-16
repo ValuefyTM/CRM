@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
  * exactly what was signed (the snapshot), with both signatures.
  */
 export default async function ContractDocument({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ semnatura?: string }> }) {
-  const { db, base } = await staffPage();
+  const { db, base } = await staffPage("clients");
   const { id } = await params;
   const snap = await signedSnapshot(db, id);
   const [d, firm] = snap ? [snap.doc, snap.firm] : await Promise.all([contractDoc(db, id), getFirmWithImages(db)]);

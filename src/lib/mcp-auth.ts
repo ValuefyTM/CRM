@@ -12,7 +12,8 @@ const iso = (ms: number) => new Date(Date.now() + ms).toISOString();
 const now = () => new Date().toISOString();
 
 /** Who may connect Claude to the CRM (v1: owner and administrators). */
-export const mcpAllowed = (u: User | null): u is User => !!u && u.kind === "internal" && u.status === "active" && isAdmin(u);
+// Never while looking at the CRM as someone else ("Vezi ca…").
+export const mcpAllowed = (u: User | null): u is User => !!u && u.kind === "internal" && u.status === "active" && isAdmin(u) && !u.impersonator;
 
 /** Apps may only send the user back to Claude (web, desktop) or to a local address (Claude Code); MCP_REDIRECT_HOSTS adds more. */
 export function redirectAllowed(uri: string) {

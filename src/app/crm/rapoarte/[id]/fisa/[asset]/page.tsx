@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
+import { reportAccess } from "@/lib/perms-db";
 import { inspectionSheetDoc } from "@/lib/insp-sheet-doc";
 import { ROOM_FIELDS } from "@/lib/insp-forms";
 import { SheetToolbar } from "./SheetToolbar";
@@ -12,8 +13,10 @@ const cap = (s: string | null) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : 
 
 /** The inspection sheet of an asset, printable / saved as PDF from the browser, to attach to the valuation report. */
 export default async function InspectionSheetDocument({ params }: { params: Promise<{ id: string; asset: string }> }) {
-  const { db, base } = await staffPage();
+  const { db, base, user } = await staffPage();
   const { id, asset } = await params;
+  const rep = await db.prepare("SELECT id, status, delivered_at FROM reports WHERE id = ?").bind(id).first<{ id: string; status: string; delivered_at: string | null }>();
+  if (!rep || !(await reportAccess(db, user, rep)).view) notFound();
   const d = await inspectionSheetDoc(db, id, asset);
   if (!d) notFound();
   const kv = (k: string, v: string | number | null | undefined) => (v || v === 0 ? <><dt>{k}</dt><dd>{v}</dd></> : null);

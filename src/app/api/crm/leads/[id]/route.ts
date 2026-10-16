@@ -5,7 +5,7 @@ import { err, json, staffApi } from "@/lib/api";
 
 /** Status and internal notes of a website request (shared with the website's admin panel). */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi();
+  const a = await staffApi("orders", true);
   if ("res" in a) return a.res;
   const { id } = await params;
   if (!(await getLead(a.db, id))) return err("Cererea nu există.", 404);

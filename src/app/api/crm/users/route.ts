@@ -3,15 +3,17 @@ import { audit, sendInvite } from "@/lib/auth";
 import { getPartner } from "@/lib/partners";
 import { createUser, isAdmin, roleLabel, validateUser } from "@/lib/users";
 import { err, json, staffApi } from "@/lib/api";
+import { can } from "@/lib/perms";
 
 /** New account of any kind, by default with an invitation email. Team accounts are created by administrators only. */
 export async function POST(req: Request) {
-  const a = await staffApi();
+  const a = await staffApi("any", true);
   if ("res" in a) return a.res;
   const b = await json(req);
   const kind = b.kind;
   if (kind !== "internal" && kind !== "partner" && kind !== "client") return err("Tip de utilizator necunoscut.");
   if (kind === "internal" && !isAdmin(a.user)) return err("Doar administratorii pot adăuga utilizatori interni.", 403);
+  if (!can(a.user, kind === "client" ? "clients" : "admin")) return err("Nu ai drepturi pentru această acțiune.", 403);
   const v = validateUser(kind, b, undefined, a.user.role === "owner");
   if (!v.ok) return err(v.error);
   if (kind === "partner" && !(await getPartner(a.db, v.value.partner_id!))) return err("Firma aleasă nu există.");

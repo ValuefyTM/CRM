@@ -15,7 +15,7 @@ const KINDS: [string, Kind, string, string][] = [
 ];
 
 export default async function NewUserPage({ searchParams }: { searchParams: Promise<{ tip?: string; firma?: string }> }) {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("admin");
   const sp = await searchParams;
   const options = KINDS.filter(([, k]) => k !== "internal" || isAdmin(user));
   const [tip, kind] = options.find(([t]) => t === sp.tip) ?? options[0];

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { can } from "@/lib/perms";
 import { staffPage } from "@/lib/guard";
 import { isAdmin } from "@/lib/users";
 import { bucharestDay } from "@/lib/db";
@@ -16,7 +17,7 @@ const day = (d: string | null) => (d ? d.slice(0, 10).split("-").reverse().join(
 
 /** Every invoice and proforma issued from the CRM (Oblio), with what is still to be collected. */
 export default async function BillingPage({ searchParams }: { searchParams: Promise<{ stare?: string; q?: string }> }) {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("billing");
   const sp = await searchParams;
   const stare = STATES.some(([k]) => k === sp.stare) ? sp.stare ?? "" : "";
   const [rows, all] = await Promise.all([

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
+import { reportAccess } from "@/lib/perms-db";
 import { catKey, parseGeo, registryProperty } from "@/lib/registry";
 import { REPORT_STATUS } from "@/lib/reports";
 import { niceName } from "@/lib/labels";
@@ -22,12 +23,16 @@ function Row({ k, children }: { k: string; children: React.ReactNode }) {
 }
 
 export default async function PropertyPage({ params }: { params: Promise<{ id: string }> }) {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("properties");
   const d = await registryProperty(db, (await params).id);
   if (!d) notFound();
   const p = d.property;
   const ll = parseGeo(p.geo);
-  const vals = d.valuations.map((v) => ({ ...v, val: v.value ?? (v.assets === 1 ? v.result_value : null) }));
+  // Client, bank and the report itself only for its team (or "reports.all"); the value is there for everyone (comparables).
+  const vals = await Promise.all(d.valuations.map(async (v) => ({
+    ...v, val: v.value ?? (v.assets === 1 ? v.result_value : null),
+    open: !v.report_id || (await reportAccess(db, user, { id: v.report_id, status: v.status ?? "", delivered_at: v.delivered_at })).view,
+  })));
   const series = vals.filter((v) => v.val && v.date).reverse();
   const first = series[0]?.val, last = series[series.length - 1]?.val;
   const change = first && last && series.length > 1 ? Math.round(((last - first) / first) * 100) : null;
@@ -92,10 +97,10 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
                 const [label, cls] = REPORT_STATUS[v.status ?? ""] ?? [v.status ?? "—", ""];
                 return (
                   <tr key={v.id}>
-                    <td>{v.report_id ? <a className="ref rowLink" href={`${base}/rapoarte/${v.report_id}`}>{v.number ?? "fără nr."}</a> : "—"}{v.assets > 1 && <div className="muted">{v.assets} bunuri</div>}</td>
+                    <td>{v.report_id ? (v.open ? <a className="ref rowLink" href={`${base}/rapoarte/${v.report_id}`}>{v.number ?? "fără nr."}</a> : <span className="ref muted" title="Raportul îl vede doar echipa lui">{v.number ?? "fără nr."}</span>) : "—"}{v.assets > 1 && <div className="muted">{v.assets} bunuri</div>}</td>
                     <td>{fmtDate(v.date)}</td>
-                    <td>{niceName(v.client) || "—"}{v.purpose && <div className="muted">{v.purpose}</div>}</td>
-                    <td>{niceName(v.bank) || "—"}</td>
+                    <td>{v.open ? niceName(v.client) || "—" : <span className="muted">confidențial</span>}{v.purpose && <div className="muted">{v.purpose}</div>}</td>
+                    <td>{v.open ? niceName(v.bank) || "—" : <span className="muted">—</span>}</td>
                     <td>{v.evaluator ?? "—"}</td>
                     <td>{v.approach ? APPROACH[v.approach] ?? v.approach : "—"}</td>
                     <td className="r">{lei(v.val)}</td>

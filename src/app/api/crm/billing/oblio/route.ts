@@ -4,7 +4,7 @@ import { oblioCompanies, oblioCredentials, OblioError, oblioSeries, oblioVatRate
 
 /** Connection check for the billing settings: credentials found, the companies of the account, their series and VAT rates. */
 export async function GET(req: Request) {
-  const a = await staffApi("admin");
+  const a = await staffApi("billing");
   if ("res" in a) return a.res;
   const c = oblioCredentials();
   const creds = { email: c.email?.name ?? null, secret: c.secret?.name ?? null };

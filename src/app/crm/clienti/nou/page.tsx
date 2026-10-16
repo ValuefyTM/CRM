@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "Client nou | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
 
 export default async function NewClientPage({ searchParams }: { searchParams: Promise<{ tip?: string }> }) {
-  const { user, base } = await staffPage();
+  const { user, base } = await staffPage("clients");
   const pj = (await searchParams).tip === "pj";
   return (
     <CrmShell user={user} base={base} active="clients" title="Client nou" subtitle="Obligatorii: nume, telefon și email. La firme, datele se pot prelua de la ANAF după CUI.">

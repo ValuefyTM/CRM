@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 /** The offer exactly as the client sees it, without counting as opened by the client. */
 export default async function OfferPreview({ params }: { params: Promise<{ id: string }> }) {
-  const { db, base } = await staffPage();
+  const { db, base } = await staffPage("orders");
   const { id } = await params;
   const [order, offer] = await Promise.all([getOrder(db, id), offerForOrder(db, id)]);
   if (!order || !offer) notFound();

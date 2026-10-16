@@ -7,7 +7,7 @@ const words = (v: unknown, max = 40) => (Array.isArray(v) ? v : typeof v === "st
 
 /** The criteria of the SEAP alerts (owner / admins). */
 export async function PUT(req: Request) {
-  const a = await staffApi("admin");
+  const a = await staffApi("admin", true);
   if ("res" in a) return a.res;
   const b = await json(req);
   const emails = words(b.emails, 10).filter((e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e));

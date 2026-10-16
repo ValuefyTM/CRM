@@ -4,14 +4,17 @@ import { getDb } from "./db";
 import { currentUser } from "./auth";
 import { basePath } from "./site";
 import { syncSiteOrders } from "./site-orders";
+import { can, type Perm } from "./perms";
 
-export async function staffPage() {
+/** A CRM page; with `perm`, only for the users whose role has it (the others go to their dashboard). */
+export async function staffPage(perm?: Perm) {
   const base = await basePath("crm");
   const db = await getDb();
   if (!db) throw new Error("Baza de date nu este disponibilă.");
   const user = await currentUser(db, "crm");
   if (!user) redirect(`${base}/login`);
-  await syncSiteOrders(db); // website valuation requests → orders
+  if (perm && !can(user, perm)) redirect(`${base}/?fara-acces=1`);
+  if (!user.impersonator) await syncSiteOrders(db); // website valuation requests → orders
   return { db, user, base };
 }
 

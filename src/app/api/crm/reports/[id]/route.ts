@@ -1,6 +1,6 @@
 import { audit } from "@/lib/auth";
 import { now } from "@/lib/db";
-import { err, json, staffApi } from "@/lib/api";
+import { err, json, reportApi } from "@/lib/api";
 import { REPORT_STATUS } from "@/lib/reports";
 import { deliverReport } from "@/lib/delivery";
 import { STAGE_LABEL } from "@/lib/dossier";
@@ -9,13 +9,15 @@ import { appUrl } from "@/lib/site";
 
 /** Report changes from its page: `{ status, suspend_reason? }`, `{ stage }`, `{ notes }` or `{ delivered: true, number, report_date, notify }`. */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi();
-  if ("res" in a) return a.res;
   const { id } = await params;
+  const a = await reportApi(id, "work", true);
+  if ("res" in a) return a.res;
   const r = await a.db.prepare("SELECT id, status FROM reports WHERE id = ?").bind(id).first<{ id: string; status: string }>();
   if (!r) return err("Raportul nu există.", 404);
   const b = await json(req);
   const actor = `user:${a.user.id}`;
+  if ((typeof b.status === "string" || typeof b.collected === "boolean" || b.delivered === true) && !a.access.lead)
+    return err("Statusul și predarea raportului le schimbă evaluatorul principal (sau cine alocă echipa).", 403);
 
   if (typeof b.status === "string") {
     if (!REPORT_STATUS[b.status]) return err("Status necunoscut.");

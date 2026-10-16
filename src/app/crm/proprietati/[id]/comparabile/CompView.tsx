@@ -42,7 +42,7 @@ export function CompView({ rows, subject, base, median, p25, p75 }: {
                   <small>{r.full_address ?? r.city ?? "—"}{r.year_built ? ` · ${r.year_built}` : ""}</small>
                 </td>
                 <td className="r">{r.usable_area ? `${r.usable_area.toLocaleString("ro-RO")} m²` : "—"}</td>
-                <td>{r.report_id ? <a className="ref" href={`${base}/rapoarte/${r.report_id}`}>{r.report_number ?? "raport"}</a> : null}<small className="block muted">{r.last_date?.split("-").reverse().join(".")}</small></td>
+                <td>{r.report_id ? (r.open === false ? <span className="ref muted" title="Raportul îl vede doar echipa lui">{r.report_number ?? "raport"}</span> : <a className="ref" href={`${base}/rapoarte/${r.report_id}`}>{r.report_number ?? "raport"}</a>) : null}<small className="block muted">{r.last_date?.split("-").reverse().join(".")}</small></td>
                 <td className="r mono">{n0(r.value)}</td>
                 <td className="cpSqm">
                   <span className="cpBar"><i style={{ width: `${((r.sqm ?? 0) / maxSqm) * 100}%`, background: tone(r.sqm) }} />{median != null && <em style={{ left: `${(median / maxSqm) * 100}%` }} title="mediana" />}</span>

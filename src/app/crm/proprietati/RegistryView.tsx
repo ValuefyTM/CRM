@@ -7,7 +7,28 @@ import type { RegistryPoint, RegistryRow } from "@/lib/registry";
 import { RegistryMap } from "./RegistryMap";
 import { CAT_COLOR, CAT_LABEL } from "@/lib/registry-labels";
 
-export type RegistryQuery = { q?: string; cat?: string; county?: string; city?: string; year?: string; geo?: string; sort?: string; vezi?: string };
+export type RegistryQuery = {
+  q?: string; cat?: string; county?: string; city?: string; year?: string; geo?: string; sort?: string; vezi?: string;
+  tip?: string; smin?: string; smax?: string; amin?: string; amax?: string; luni?: string;
+};
+const PERIODS: [string, string][] = [["6", "Ultimele 6 luni"], ["12", "Ultimele 12 luni"], ["24", "Ultimii 2 ani"], ["36", "Ultimii 3 ani"]];
+
+/** Two number boxes (from – to), applied on Enter or when leaving the box. */
+function Range({ label, unit, min, max, onChange }: { label: string; unit: string; min?: string; max?: string; onChange: (min?: string, max?: string) => void }) {
+  const [a, setA] = useState(min ?? "");
+  const [b, setB] = useState(max ?? "");
+  const apply = () => { if ((a || undefined) !== min || (b || undefined) !== max) onChange(a.trim() || undefined, b.trim() || undefined); };
+  const key = (e: React.KeyboardEvent) => { if (e.key === "Enter") { e.preventDefault(); apply(); } };
+  return (
+    <span className="fsel rgRange" title={unit ? `${label} (${unit})` : label} data-on={min || max ? "" : undefined}>
+      <span>{label}</span>
+      <input inputMode="numeric" value={a} placeholder="de la" onChange={(e) => setA(e.target.value.replace(/[^\d]/g, ""))} onBlur={apply} onKeyDown={key} aria-label={`${label} de la`} />
+      <span className="muted">–</span>
+      <input inputMode="numeric" value={b} placeholder="până la" onChange={(e) => setB(e.target.value.replace(/[^\d]/g, ""))} onBlur={apply} onKeyDown={key} aria-label={`${label} până la`} />
+      {unit && <small className="muted">{unit}</small>}
+    </span>
+  );
+}
 type Facet = [string, string, number?][];
 
 const cap = (s: string | null) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : "");
@@ -29,7 +50,7 @@ function Thumb({ photo, color }: { photo: string | null; color: string }) {
 
 export function RegistryView(p: {
   base: string; current: RegistryQuery; rows: RegistryRow[]; points: RegistryPoint[]; total: number; page: number; pages: number;
-  cats: Facet; counties: Facet; cities: Facet; years: Facet; sorts: Facet;
+  cats: Facet; types: Facet; counties: Facet; cities: Facet; years: Facet; sorts: Facet;
 }) {
   const router = useRouter();
   const c = p.current;
@@ -66,7 +87,7 @@ export function RegistryView(p: {
     return `${p.base}/proprietati${qs ? `?${qs}` : ""}`;
   };
   const go = (change: Partial<RegistryQuery>) => router.push(href(change), { scroll: false });
-  const active = [c.q, c.cat, c.county, c.city, c.year, c.geo].filter(Boolean).length;
+  const active = [c.q, c.cat, c.county, c.city, c.year, c.geo, c.tip, c.smin || c.smax, c.amin || c.amax, c.luni].filter(Boolean).length;
   const withGeo = new Set(p.points.map((x) => x.id));
 
   // Brings a row into view inside the list (not the page), centred when it is outside.
@@ -99,10 +120,14 @@ export function RegistryView(p: {
     <>
       <form className="filterBar" onSubmit={(e) => { e.preventDefault(); go({ q: q.trim() || undefined }); }}>
         <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută adresă, localitate, CF, nr. cadastral, nr. raport… ↵" aria-label="Caută" />
-        <FilterSelect label="Categorie" value={c.cat ?? ""} options={p.cats} onChange={(v) => go({ cat: v || undefined })} />
+        <FilterSelect label="Categorie" value={c.cat ?? ""} options={p.cats} onChange={(v) => go({ cat: v || undefined, tip: undefined })} />
+        <FilterSelect label="Tip" value={c.tip ?? ""} options={p.types} onChange={(v) => go({ tip: v || undefined })} />
         <FilterSelect label="Județ" value={c.county ?? ""} options={p.counties} onChange={(v) => go({ county: v || undefined, city: undefined })} all="Toate" />
         <FilterSelect label="Localitate" value={c.city ?? ""} options={p.cities} onChange={(v) => go({ city: v || undefined })} />
-        <FilterSelect label="Evaluat în" value={c.year ?? ""} options={p.years} onChange={(v) => go({ year: v || undefined })} all="Orice an" />
+        <FilterSelect label="Evaluat în" value={c.year ?? ""} options={p.years} onChange={(v) => go({ year: v || undefined, luni: undefined })} all="Orice an" />
+        <FilterSelect label="Perioada" value={c.luni ?? ""} options={PERIODS} onChange={(v) => go({ luni: v || undefined, year: undefined })} all="Oricând" />
+        <Range label="Suprafață" unit="m²" min={c.smin} max={c.smax} onChange={(smin, smax) => go({ smin, smax })} />
+        <Range label="An construcție" unit="" min={c.amin} max={c.amax} onChange={(amin, amax) => go({ amin, amax })} />
         <label className={`fsel toggle${c.geo ? " on" : ""}`} data-on={c.geo ? "" : undefined}>
           <input type="checkbox" checked={!!c.geo} onChange={(e) => go({ geo: e.target.checked ? "1" : undefined })} />
           <span>Doar cu localizare</span>
@@ -169,7 +194,7 @@ export function RegistryView(p: {
                 <span>{r.cf_number ? `CF ${r.cf_number}` : "—"}</span>{r.cad_building && <span className="muted">cad. {r.cad_building}</span>}
               </td>
               <td className="r">{r.usable_area ? `${r.usable_area.toLocaleString("ro-RO")} m²` : "—"}</td>
-              <td>{r.report_id ? <a className="ref" href={`${p.base}/rapoarte/${r.report_id}`}>{r.report_number ?? "raport"}</a> : null}<div className="muted">{date(r.last_date)}</div></td>
+              <td>{r.report_id ? (r.can_open === 0 ? <span className="ref muted" title="Raportul îl vede doar echipa lui">{r.report_number ?? "raport"}</span> : <a className="ref" href={`${p.base}/rapoarte/${r.report_id}`}>{r.report_number ?? "raport"}</a>) : null}<div className="muted">{date(r.last_date)}</div></td>
               <td className="r">{lei(r.value)}</td>
               <td className="r">{r.sqm ? Math.round(r.sqm).toLocaleString("ro-RO") : "—"}</td>
               <td className="r"><span className="dbNum">{r.valuations ?? 0}</span></td>

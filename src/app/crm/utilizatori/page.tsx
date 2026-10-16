@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Utilizatori | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
 
 export default async function UsersPage({ searchParams }: { searchParams: Promise<{ tab?: string; vezi?: string }> }) {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("admin");
   const [users, partners] = await Promise.all([listUsers(db), listPartners(db)]);
   const sp = await searchParams;
   const tab: Tab = sp.tab === "colaboratori" || sp.tab === "clienti" ? sp.tab : "interni";

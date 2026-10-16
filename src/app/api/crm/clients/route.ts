@@ -8,7 +8,7 @@ import { err, json, staffApi } from "@/lib/api";
  * `portal: true` and `portalContact` = index of the contact person (companies) whose email gets the invitation.
  */
 export async function POST(req: Request) {
-  const a = await staffApi();
+  const a = await staffApi("clients", true);
   if ("res" in a) return a.res;
   const b = await json(req);
   const v = validateClient(b);
