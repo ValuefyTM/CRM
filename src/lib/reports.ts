@@ -53,6 +53,8 @@ const ROW = `SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.r
   FROM reports r LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id LEFT JOIN entities i ON i.id = r.issuer_id LEFT JOIN orders o ON o.id = r.order_id`;
 
 export type ReportFilters = { q?: string; status?: string; year?: string; bank?: string; issuer?: string; evaluator?: string; sort?: string; page?: number; etapa?: string; termen?: string;
+  /** "fara": only the reports with no asset at all (left so by the import, or started without one). */
+  bunuri?: string;
   /** Only the reports this user sees as a team member ("Rapoartele mele"): their id and the condition (perms-db mySql). */
   mine?: { id: string; sql: string } };
 
@@ -96,6 +98,7 @@ function where(f: ReportFilters) {
   if (f.issuer) { w.push("r.issuer_id = ?"); p.push(f.issuer); }
   if (f.evaluator) { w.push("EXISTS (SELECT 1 FROM report_members m WHERE m.report_id = r.id AND m.role = 'evaluator' AND m.user_id = ?)"); p.push(f.evaluator); }
   if (f.mine) { w.push(f.mine.sql); p.push(f.mine.id); }
+  if (f.bunuri === "fara") w.push("NOT EXISTS (SELECT 1 FROM assets a WHERE a.report_id = r.id)");
   const q = f.q?.trim();
   if (q) {
     const like = `%${q.replace(/[%_]/g, "")}%`;

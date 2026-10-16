@@ -20,7 +20,7 @@ import { mySql } from "@/lib/perms-db";
 export const metadata: Metadata = { title: "Rapoarte | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
 
-type SP = { q?: string; status?: string; year?: string; bank?: string; issuer?: string; evaluator?: string; sort?: string; page?: string; etapa?: string; termen?: string; ale?: string; "fara-acces"?: string };
+type SP = { q?: string; status?: string; year?: string; bank?: string; issuer?: string; evaluator?: string; sort?: string; page?: string; bunuri?: string; etapa?: string; termen?: string; ale?: string; "fara-acces"?: string };
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const { db, user, base } = await staffPage("reports");
@@ -48,7 +48,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       {sp["fara-acces"] && <div className="note">Nu ai acces la acel raport: rapoartele finalizate le văd evaluatorul principal și verificatorul.</div>}
       <section className="card">
         <ReportFilters
-          base={base} total={data.total} current={{ q: sp.q, status: sp.status, year: sp.year, bank: sp.bank, issuer: sp.issuer, evaluator: sp.evaluator, sort: sp.sort }}
+          base={base} total={data.total} current={{ q: sp.q, status: sp.status, year: sp.year, bank: sp.bank, issuer: sp.issuer, evaluator: sp.evaluator, sort: sp.sort, bunuri: sp.bunuri }}
           years={facets.years.map((y) => [String(y.y), String(y.y), y.n])}
           banks={facets.banks.map((b) => [b.code, b.code, b.n])}
           issuers={facets.issuers.map((i) => [i.id, i.name, i.n])}

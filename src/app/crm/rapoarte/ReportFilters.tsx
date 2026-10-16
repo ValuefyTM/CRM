@@ -5,7 +5,7 @@ import { useState } from "react";
 import { FilterSelect } from "@/components/FilterSelect";
 
 type Facet = [string, string, number?][];
-export type ReportQuery = { q?: string; status?: string; year?: string; bank?: string; issuer?: string; evaluator?: string; sort?: string };
+export type ReportQuery = { q?: string; status?: string; year?: string; bank?: string; issuer?: string; evaluator?: string; sort?: string; bunuri?: string };
 
 /** Search + dropdown filters for the reports list; every change reloads the list (filters live in the URL). */
 export function ReportFilters(props: {
@@ -23,7 +23,7 @@ export function ReportFilters(props: {
   };
   const c = props.current;
   // Status is chosen with the tabs: not counted (nor cleared) here.
-  const active = [c.q, c.year, c.bank, c.issuer, c.evaluator].filter(Boolean).length;
+  const active = [c.q, c.year, c.bank, c.issuer, c.evaluator, c.bunuri].filter(Boolean).length;
 
   return (
     <>
@@ -40,6 +40,10 @@ export function ReportFilters(props: {
         <FilterSelect label="Bancă" value={c.bank ?? ""} options={props.banks} onChange={(v) => go({ bank: v || undefined })} />
         <FilterSelect label="Evaluator" value={c.evaluator ?? ""} options={props.evaluators} onChange={(v) => go({ evaluator: v || undefined })} all="Toți" />
         {props.issuers.length > 1 && <FilterSelect label="Emis de" value={c.issuer ?? ""} options={props.issuers} onChange={(v) => go({ issuer: v || undefined })} all="Toți" />}
+        <label className={`fsel toggle${c.bunuri === "fara" ? " on" : ""}`} data-on={c.bunuri === "fara" ? "" : undefined} title="Rapoartele care nu au niciun bun înregistrat">
+          <input type="checkbox" checked={c.bunuri === "fara"} onChange={(e) => go({ bunuri: e.target.checked ? "fara" : undefined })} />
+          <span>Fără bun</span>
+        </label>
       </div>
       <div className="resultLine">
         <span>
