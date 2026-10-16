@@ -638,7 +638,7 @@ a.rMeta:hover u { color: var(--acc-light); }
 .pPickNone { color: var(--muted); font-size: 13px; cursor: default; }
 .pStack { display: inline-flex; align-items: center; }
 .pStack .pAvatar { box-shadow: 0 0 0 2px #fff; }
-.pStack .pAvatar + .pAvatar { margin-left: -8px; }
+.pStack .pAvatar + .pAvatar { margin-left: -5px; }
 .pMore { margin-left: 4px; font-size: 12px; font-weight: 700; color: var(--muted); }
 .pSeen { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
 .pSeen i { width: 8px; height: 8px; border-radius: 50%; background: #b8b6c4; }
@@ -1737,3 +1737,9 @@ thead .pmRole { background: var(--cream) !important; z-index: 3; }
 .inputUnit .input { flex: 1 1 auto; min-width: 0; }
 .inputUnit .select { flex: 0 0 auto; width: auto; }
 .inputUnit small { color: var(--muted); font-weight: 700; }
+
+/* Reports list: issuer with logo, the team as a stack of avatars. */
+.issuer { display: inline-flex; align-items: center; gap: 7px; }
+.issuer img, .issuer i { width: 26px; height: 26px; border-radius: 7px; object-fit: contain; background: #fff; border: 1px solid var(--line); flex-shrink: 0; }
+.issuer i { display: inline-flex; align-items: center; justify-content: center; font: 700 10px "IBM Plex Mono", ui-monospace, monospace; font-style: normal; color: var(--muted-2); }
+.pMore { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; margin-left: -8px; border-radius: 50%; background: var(--cream-2, #eee8dc); font: 700 10px "IBM Plex Mono", ui-monospace, monospace; font-style: normal; color: var(--muted-2); box-shadow: 0 0 0 2px #fff; }

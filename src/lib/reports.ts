@@ -1,5 +1,5 @@
 // Server-only: valuation reports (imported from Glide, later produced in the CRM).
-import { withPresence } from "./presence";
+import { photoUrl, withPresence } from "./presence";
 
 
 export const REPORT_STATUS: Record<string, [string, string]> = {
@@ -21,10 +21,24 @@ export type ReportRow = {
   id: string; number: string | null; label: string | null; report_date: string | null; status: string; fee: number | null; result_value: number | null;
   report_type: string | null; client_name: string | null; bank_code: string | null; issuer_name: string | null; evaluator: string | null; asset: string | null;
   issuer_short: string | null; insp_total: number; insp_done: number; insp_next: string | null; insp_last: string | null; no_insp: number;
+  issuer_logo: string | null; bank_name: string | null;
+  /** The team, one per line: id, name, role, avatar_at (see rowMembers). */
+  members: string | null;
 };
+export type RowMember = { id: string; name: string; role: string; photo: string | null };
+const US = "\u001f";
+/** The team of a list row (main evaluator first, then verifier, inspector, assistant). */
+export const rowMembers = (r: Pick<ReportRow, "members">): RowMember[] =>
+  (r.members ?? "").split("\n").filter(Boolean).map((l) => {
+    const [id, name, role, avatarAt] = l.split(US);
+    return { id, name, role, photo: photoUrl(id, avatarAt || null) };
+  });
 
 const ROW = `SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.result_value, r.report_type,
-  c.name AS client_name, COALESCE(b.code, b.name) AS bank_code, i.name AS issuer_name, COALESCE(NULLIF(i.code, ''), i.name) AS issuer_short,
+  c.name AS client_name, COALESCE(b.code, b.name) AS bank_code, b.name AS bank_name, i.name AS issuer_name, COALESCE(NULLIF(i.code, ''), i.name) AS issuer_short, i.logo_url AS issuer_logo,
+  (SELECT group_concat(line, char(10)) FROM (SELECT m.user_id || char(31) || COALESCE(NULLIF(u.name, ''), u.email) || char(31) || m.role || char(31) || COALESCE(u.avatar_at, '') AS line
+     FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = r.id
+     ORDER BY CASE m.role WHEN 'evaluator' THEN 1 WHEN 'verifier' THEN 2 WHEN 'inspector' THEN 3 ELSE 4 END, u.name)) AS members,
   (SELECT COUNT(*) FROM inspections x WHERE x.report_id = r.id AND x.status <> 'cancelled') AS insp_total,
   (SELECT COUNT(*) FROM inspections x WHERE x.report_id = r.id AND x.status <> 'cancelled' AND (x.done_at IS NOT NULL OR x.status = 'done')) AS insp_done,
   (SELECT MIN(x.scheduled_at) FROM inspections x WHERE x.report_id = r.id AND x.status = 'scheduled' AND x.done_at IS NULL) AS insp_next,
@@ -42,7 +56,6 @@ export type ReportFilters = { q?: string; status?: string; year?: string; bank?:
 export const REPORT_SORTS: Record<string, [string, string]> = {
   "": ["Cele mai noi", "COALESCE(r.report_date, substr(r.created_at, 1, 10)) DESC, CAST(r.number AS INTEGER) DESC"],
   old: ["Cele mai vechi", "COALESCE(r.report_date, substr(r.created_at, 1, 10)) ASC"],
-  fee: ["Onorariu mare", "r.fee DESC NULLS LAST"],
   value: ["Valoare mare", "r.result_value DESC NULLS LAST"],
 };
 export const PAGE_SIZE = 50;

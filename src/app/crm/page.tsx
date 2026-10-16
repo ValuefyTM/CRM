@@ -135,7 +135,7 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
           <span className="dbKpiFoot"><Delta cur={d.delivered.n} prev={d.delivered.pn} label="față de luna trecută" /><Spark values={spark("n")} /></span>
         </a>
         {money ? (
-          <a className="dbKpi" href={`${base}/rapoarte?status=done&year=${year}&sort=fee`}>
+          <a className="dbKpi" href={`${base}/rapoarte?status=done&year=${year}`}>
             <span className="dbKpiLabel"><i style={{ background: "var(--acc)" }} />Onorarii predate · {monthLabel}</span>
             <b>{lei(d.delivered.fees)} <small>lei</small></b>
             <span className="dbKpiFoot"><Delta cur={d.delivered.fees} prev={d.delivered.pfees} label="față de luna trecută" /><Spark values={spark("fees")} /></span>

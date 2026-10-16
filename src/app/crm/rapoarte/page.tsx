@@ -1,7 +1,10 @@
 import { niceName } from "@/lib/labels";
 import type { Metadata } from "next";
 import { fmtDate, staffPage } from "@/lib/guard";
-import { cap, DUE_FILTERS, inspectionState, lei, listReports, PAGE_SIZE, REPORT_SORTS, REPORT_STATUS, REPORT_TABS, reportFacets, reportTabCounts, STAGE_FILTERS } from "@/lib/reports";
+import { cap, DUE_FILTERS, inspectionState, lei, listReports, PAGE_SIZE, REPORT_SORTS, REPORT_STATUS, REPORT_TABS, reportFacets, reportTabCounts, ROLE_LABEL, rowMembers, STAGE_FILTERS } from "@/lib/reports";
+import { Avatar } from "@/components/Avatar";
+import { fileSrc } from "@/lib/files";
+import { SafeImg } from "./[id]/ReportActions";
 import { STAGE_LABEL } from "@/lib/dossier";
 import { ReportFilters } from "./ReportFilters";
 import { CrmShell } from "@/components/CrmShell";
@@ -19,7 +22,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page) || 1);
   // Without "reports.all": only the reports of the user's team work. With it, "Ale mele" narrows the list the same way.
-  const all = can(user, "reports.all"), fees = can(user, "fees.all");
+  const all = can(user, "reports.all");
   const mine = !all || sp.ale === "1" ? { id: user.id, sql: mySql(user) } : undefined;
   const f = { ...sp, page, mine };
   const [data, facets, counts] = await Promise.all([listReports(db, f), reportFacets(db, mine), reportTabCounts(db, f)]);
@@ -34,7 +37,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
   return (
     <CrmShell user={user} base={base} active="reports" title={mine ? "Rapoartele mele" : "Rapoarte"}
-      subtitle={mine ? "Rapoartele la care ești în echipă (cele finalizate: ca evaluator principal sau verificator)" : `Toate rapoartele: VALUEFY și firmele partenere${fees && data.fees ? ` · onorarii finalizate ${lei(Math.round(data.fees))}` : ""}`}
+      subtitle={mine ? "Rapoartele la care ești în echipă (cele finalizate: ca evaluator principal sau verificator)" : "Toate rapoartele: VALUEFY și firmele partenere"}
       actions={all ? <a className={`btn btnSm ${mine ? "btnGold" : "btnGhost"}`} href={link({ ale: mine ? undefined : "1" })}>{mine ? "Toate rapoartele" : "Rapoartele mele"}</a> : undefined}>
       {sp["fara-acces"] && <div className="note">Nu ai acces la acel raport: rapoartele finalizate le văd evaluatorul principal și verificatorul.</div>}
       <section className="card">
@@ -44,7 +47,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           banks={facets.banks.map((b) => [b.code, b.code, b.n])}
           issuers={facets.issuers.map((i) => [i.id, i.name, i.n])}
           evaluators={facets.evaluators.map((e) => [e.id, e.name, e.n])}
-          sorts={Object.entries(REPORT_SORTS).filter(([k]) => fees || k !== "fee").map(([k, [l]]) => [k, l])}
+          sorts={Object.entries(REPORT_SORTS).map(([k, [l]]) => [k, l])}
           tab={tab} tabs={REPORT_TABS.map(([k, label]) => [k, label, counts[k] ?? 0, link({ status: k || undefined })])}
         />
         {(STAGE_FILTERS[sp.etapa ?? ""] || DUE_FILTERS[sp.termen ?? ""] || sp.status === "deschise") && (
@@ -60,23 +63,41 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         ) : (
           <div className="tableWrap">
             <table className="table">
-              <thead><tr><th>Raport</th><th>Emis de · bancă</th><th>Client</th><th>Proprietate</th><th>Evaluator</th><th>Inspecție</th><th>Status raport</th><th style={{ textAlign: "right" }}>{fees ? "Valoare · onorariu" : "Valoare"}</th></tr></thead>
+              <thead><tr><th>Raport</th><th>Emis de</th><th>Client · utilizator</th><th>Proprietate</th><th>Echipa</th><th>Inspecție</th><th>Status raport</th><th style={{ textAlign: "right" }}>Valoare</th></tr></thead>
               <tbody>
                 {data.rows.map((r) => {
                   const [label, cls] = REPORT_STATUS[r.status] ?? [r.status, ""];
                   const [type, address] = (r.asset ?? "|").split("|");
                   const [insp, inspCls, inspDate] = inspectionState(r);
                   const own = /valuefy/i.test(r.issuer_name ?? "");
+                  const logo = fileSrc(r.issuer_logo);
+                  const team = rowMembers(r);
+                  const lead = team.find((m) => m.role === "evaluator");
                   return (
                     <ClickRow key={r.id} href={`${base}/rapoarte/${r.id}`}>
-                      <td>{r.number ? <a className="ref rowLink" href={`${base}/rapoarte/${r.id}`}>{r.number}</a> : <a className="rowLink muted" href={`${base}/rapoarte/${r.id}`}>fără număr</a>}<div className="muted">{fmtDate(r.report_date)}</div></td>
-                      <td>{r.issuer_name ? <span className={`pill ${own ? "" : "pillWarn"}`} title={r.issuer_name}>{niceName(r.issuer_short ?? r.issuer_name)}</span> : <span className="muted">—</span>}<div className="muted">{r.bank_code ?? "fără bancă"}</div></td>
-                      <td><a className="rowLink" href={`${base}/rapoarte/${r.id}`}>{niceName(r.client_name) || "—"}</a><div className="muted">{r.report_type}</div></td>
-                      <td style={{ minWidth: 200 }}>{cap(type) || "—"}<div className="muted">{address}</div></td>
-                      <td>{r.evaluator ?? "—"}</td>
-                      <td style={{ whiteSpace: "nowrap" }}>{inspCls ? <span className={`pill ${inspCls}`}><i />{insp}</span> : <span className="muted">{insp}</span>}{inspDate && <div className="muted">{fmtDate(inspDate)}</div>}</td>
-                      <td><span className={`pill ${cls}`}><i />{label}</span></td>
-                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{lei(r.result_value)}{fees && <div className="muted">{r.fee ? lei(r.fee) : "—"}</div>}</td>
+                      <td>{r.number ? <a className="ref rowLink" href={`${base}/rapoarte/${r.id}`}>{r.number}</a> : <a className="rowLink muted" href={`${base}/rapoarte/${r.id}`}>fără număr</a>}{r.report_type && !/^raport de evaluare$/i.test(r.report_type) && <div className="muted">{r.report_type}</div>}</td>
+                      <td>
+                        {r.issuer_name ? (
+                          <span className="issuer" title={r.issuer_name}>
+                            {logo ? <SafeImg src={logo} fallback={<i aria-hidden>{(r.issuer_short ?? r.issuer_name).slice(0, 2).toUpperCase()}</i>} /> : <i aria-hidden>{(r.issuer_short ?? r.issuer_name).slice(0, 2).toUpperCase()}</i>}
+                            <span className={`pill ${own ? "" : "pillWarn"}`}>{niceName(r.issuer_short ?? r.issuer_name)}</span>
+                          </span>
+                        ) : <span className="muted">—</span>}
+                      </td>
+                      <td><a className="rowLink" href={`${base}/rapoarte/${r.id}`}>{niceName(r.client_name) || "—"}</a><div className="muted">{niceName(r.bank_name) || "fără utilizator desemnat"}</div></td>
+                      <td style={{ minWidth: 170 }}>{cap(type) || "—"}<div className="muted">{address}</div></td>
+                      <td>
+                        {team.length === 0 ? <span className="muted">—</span> : (
+                          <span className="pStack" aria-label={team.map((m) => `${m.name} (${ROLE_LABEL[m.role] ?? m.role})`).join(", ")}>
+                            {team.slice(0, 5).map((m) => <Avatar key={m.id + m.role} id={m.id} name={m.name} size={26} photo={m.photo} title={`${m.name} · ${(ROLE_LABEL[m.role] ?? m.role).toLowerCase()}`} />)}
+                            {team.length > 5 && <i className="pMore">+{team.length - 5}</i>}
+                          </span>
+                        )}
+                        {lead && <div className="muted">{lead.name.split(" ").slice(0, 2).join(" ")}</div>}
+                      </td>
+                      <td>{inspCls ? <span className={`pill ${inspCls}`}><i />{insp}</span> : <span className="muted">{insp}</span>}{inspDate && <div className="muted">{fmtDate(inspDate, insp === "Programată")}</div>}</td>
+                      <td><span className={`pill ${cls}`}><i />{label}</span>{r.status === "done" && r.report_date && <div className="muted">{fmtDate(r.report_date)}</div>}</td>
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{lei(r.result_value)}</td>
                     </ClickRow>
                   );
                 })}
