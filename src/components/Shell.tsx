@@ -49,10 +49,13 @@ export async function Shell(props: {
       <div className="main">
         {props.banner}
         {!props.bare && <header className={props.app === "crm" ? "top topDark" : "top"}>
-          <div>
-            <h1>{props.title}</h1>
-            {props.subtitle && <p>{props.subtitle}</p>}
-          </div>
+          {/* No title on the dashboards: their own greeting says it. */}
+          {props.title && (
+            <div>
+              <h1>{props.title}</h1>
+              {props.subtitle && <p>{props.subtitle}</p>}
+            </div>
+          )}
           {props.search}
           {props.actions && <div className="actions">{props.actions}</div>}
         </header>}

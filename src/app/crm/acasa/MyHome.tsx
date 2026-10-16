@@ -42,7 +42,7 @@ export async function MyHome({ user, base, denied }: { user: User; base: string;
       {denied && <div className="note">Nu ai acces la pagina aceea. Ce vezi în CRM stabilește administratorul, în Setări → Permisiuni.</div>}
       <section className="dbHello">
         <div className="dbHelloText">
-          <span className="eyebrow">Tabloul meu</span>
+          <span className="eyebrow">{new Date().toLocaleDateString("ro-RO", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Bucharest" })}</span>
           <h2>{hello}{first ? `, ${first}` : ""}.</h2>
           <p>
             Ai <a href={`${base}/rapoarte?status=deschise`}><b>{counts?.open ?? 0}</b> rapoarte deschise</a>

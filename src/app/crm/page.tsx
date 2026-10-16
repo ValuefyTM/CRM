@@ -81,7 +81,7 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
   const denied = !!(await searchParams)["fara-acces"];
   // Without the firm's dashboard: the user's own reports and inspections.
   if (!can(user, "dashboard.all")) {
-    return <CrmShell user={user} base={base} active="home" title="Acasă" subtitle="Tabloul meu"><MyHome user={user} base={base} denied={denied} /></CrmShell>;
+    return <CrmShell user={user} base={base} active="home" title=""><MyHome user={user} base={base} denied={denied} /></CrmShell>;
   }
   const d = await dashboard(db, base);
   const money = can(user, "fees.all");
@@ -109,7 +109,7 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
   ];
 
   return (
-    <CrmShell user={user} base={base} active="home" title="Acasă" subtitle={`Tablou de bord · ${dateLabel}`}>
+    <CrmShell user={user} base={base} active="home" title="">
       {denied && <div className="note">Nu ai acces la pagina aceea. Ce vezi în CRM stabilește administratorul, în Setări → Permisiuni.</div>}
       <section className="dbHello">
         <div className="dbHelloText">

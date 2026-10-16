@@ -7,6 +7,7 @@ import { mySql } from "@/lib/perms-db";
 import { ViewAs } from "./ViewAs";
 import { Shell, type NavEntry, type NavItem } from "./Shell";
 import { GlobalSearch } from "./GlobalSearch";
+import { Bell } from "./Bell";
 import { Heartbeat } from "./Heartbeat";
 import { TableLabels } from "./TableLabels";
 import { photoUrl } from "@/lib/presence";
@@ -48,7 +49,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
   return (
     <Shell
       // "Vezi ca…" is picked on the dashboard only; elsewhere the banner just says whose CRM it is and leads back.
-      search={<>{viewAs && !u.impersonator && props.active === "home" && <ViewAs users={viewAs} realName={u.name || u.email} />}<GlobalSearch base={b} /></>}
+      search={<>{viewAs && !u.impersonator && props.active === "home" && <ViewAs users={viewAs} realName={u.name || u.email} />}<GlobalSearch base={b} /><Bell /></>}
       banner={viewAs && u.impersonator ? <ViewAs users={props.active === "home" ? viewAs : null} as={{ id: u.id, name: u.name || u.email, role: roleLabel("internal", u.role) }} realName={u.impersonator.name} /> : undefined}
       bare={props.bare}
       app="crm"
