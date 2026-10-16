@@ -35,7 +35,7 @@ export function ReportFilters(props: {
         </span>
         <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută client, nr. raport, adresă, CF, telefon… ↵" aria-label="Caută" />
       </form>
-      <div className="filterBar">
+      <div className="filterBar repTools">
         <FilterSelect label="An" value={c.year ?? ""} options={props.years} onChange={(v) => go({ year: v || undefined })} all="Toți" />
         <FilterSelect label="Bancă" value={c.bank ?? ""} options={props.banks} onChange={(v) => go({ bank: v || undefined })} />
         <FilterSelect label="Evaluator" value={c.evaluator ?? ""} options={props.evaluators} onChange={(v) => go({ evaluator: v || undefined })} all="Toți" />
@@ -44,13 +44,13 @@ export function ReportFilters(props: {
           <input type="checkbox" checked={c.bunuri === "fara"} onChange={(e) => go({ bunuri: e.target.checked ? "fara" : undefined })} />
           <span>Fără bun</span>
         </label>
-      </div>
-      <div className="resultLine">
-        <span>
-          <b style={{ color: "var(--ink)" }}>{props.total.toLocaleString("ro-RO")}</b> rapoarte
-          {active > 0 && <> · <button type="button" className="resetLink" style={{ height: "auto", padding: 0 }} onClick={() => { setQ(""); router.push(`${props.base}/rapoarte${c.status ? `?status=${c.status}` : ""}`); }}>✕ Resetează filtrele ({active})</button></>}
+        <span className="resultLine repCount">
+          <span>
+            <b style={{ color: "var(--ink)" }}>{props.total.toLocaleString("ro-RO")}</b> rapoarte
+            {active > 0 && <> · <button type="button" className="resetLink" style={{ height: "auto", padding: 0 }} onClick={() => { setQ(""); router.push(`${props.base}/rapoarte${c.status ? `?status=${c.status}` : ""}`); }}>✕ Resetează ({active})</button></>}
+          </span>
+          <FilterSelect label="Ordine" value={c.sort ?? ""} options={props.sorts.filter(([v]) => v)} onChange={(v) => go({ sort: v || undefined })} all="Cele mai noi" />
         </span>
-        <FilterSelect label="Ordine" value={c.sort ?? ""} options={props.sorts.filter(([v]) => v)} onChange={(v) => go({ sort: v || undefined })} all="Cele mai noi" />
       </div>
     </>
   );

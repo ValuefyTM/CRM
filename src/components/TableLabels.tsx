@@ -23,10 +23,16 @@ export function TableLabels() {
       }
     };
     label();
+    // Height of the sticky top bar, for table headers that stay under it while the page scrolls.
+    const top = document.querySelector<HTMLElement>(".top");
+    const measure = () => { if (top) document.documentElement.style.setProperty("--topH", `${top.offsetHeight}px`); };
+    measure();
+    const ro = top ? new ResizeObserver(measure) : null;
+    if (top && ro) ro.observe(top);
     let t: ReturnType<typeof setTimeout> | null = null;
     const obs = new MutationObserver(() => { if (t) clearTimeout(t); t = setTimeout(label, 100); });
     obs.observe(document.body, { childList: true, subtree: true });
-    return () => { obs.disconnect(); if (t) clearTimeout(t); };
+    return () => { obs.disconnect(); ro?.disconnect(); if (t) clearTimeout(t); };
   }, []);
   return null;
 }

@@ -1816,3 +1816,41 @@ thead .pmRole { background: var(--cream) !important; z-index: 3; }
 .issuerLogo b { font: 700 11px "IBM Plex Mono", ui-monospace, monospace; color: var(--muted-2); }
 .issuerActs { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
 .issuerActs .linkBtn { font-size: 12px; }
+
+/* ---------- Reports page: compact filters, a rounded table card with a header that stays under the top bar ---------- */
+.repFilters { gap: 8px; padding: 10px 12px; border-radius: 16px; }
+.repFilters .filterBar { gap: 6px; }
+.repFilters .filterBar + .filterBar { margin-top: 0; }
+.repFilters .segment a { height: 30px; padding: 0 10px; font-size: 12.5px; }
+.repFilters .segment { padding: 3px; border-radius: 11px; }
+.repFilters .search { height: 36px; font-size: 13px; border-radius: 10px; }
+.repFilters .fsel { height: 32px; border-radius: 9px; padding: 0 26px 0 10px; }
+.repFilters .fsel > span { font-size: 10px; }
+.repFilters .fsel select { font-size: 12.5px; }
+.repFilters .fsel.toggle { padding-right: 10px; }
+.repFilters .fsel.toggle > span { font-size: 12px; text-transform: none; letter-spacing: 0; font-weight: 600; }
+.repCount { margin-left: auto; font-size: 12px; gap: 8px; }
+.repCount .fsel { height: 32px; }
+.repCard { padding: 0; gap: 0; overflow: visible; border-radius: 16px; }
+.repCard .tableWrap { margin: 0; overflow: visible; }
+.repCard .table { min-width: 0; }
+.repCard .table thead th { position: sticky; top: var(--topH, 56px); z-index: 5; background: #fff; border-top: 0; border-bottom: 1px solid var(--line); font-size: 11px; letter-spacing: .07em; color: var(--muted-2); padding: 13px 14px; box-shadow: 0 1px 0 var(--line); }
+.repCard .table thead th:first-child { border-top-left-radius: 16px; padding-left: 18px; }
+.repCard .table thead th:last-child { border-top-right-radius: 16px; }
+.repCard .table td { padding: 13px 14px; }
+.repCard .table td:first-child { padding-left: 14px; }
+.repCard .table tbody tr:last-child td { border-bottom: 0; }
+.repCard .table tbody tr:last-child td:first-child { border-bottom-left-radius: 16px; }
+.repCard .table tbody tr:last-child td:last-child { border-bottom-right-radius: 16px; }
+.repCard .table tbody tr:hover > td:first-child { box-shadow: none; }
+.repCard .empty { margin: 14px; }
+.repPager { padding: 10px 14px; border-top: 1px solid var(--line); }
+.repTable .nowrap b { white-space: nowrap; }
+.repTable .pillInfo { background: var(--info-bg); color: var(--info-text); }
+.repTable .pillInfo i { background: var(--acc); }
+@media (max-width: 760px) {
+  .repCard .tableWrap { overflow: visible; }
+  .repCard .table thead { display: none; }
+  .repCard .table tbody tr:last-child td:first-child, .repCard .table tbody tr:last-child td:last-child { border-radius: 0; }
+  .repCount { margin-left: 0; width: 100%; justify-content: space-between; }
+}

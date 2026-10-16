@@ -52,7 +52,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       actions={all ? <a className={`btn btnSm ${mine ? "btnGold" : "btnGhost"}`} href={link({ ale: mine ? undefined : "1" })}>{mine ? "Toate rapoartele" : "Rapoartele mele"}</a> : undefined}>
       {openNoAsset > 0 && <CancelNoAsset count={openNoAsset} />}
       {sp["fara-acces"] && <div className="note">Nu ai acces la acel raport: rapoartele finalizate le văd evaluatorul principal și verificatorul.</div>}
-      <section className="card">
+      <section className="card repFilters">
         <ReportFilters
           base={base} total={data.total} current={{ q: sp.q, status: sp.status, year: sp.year, bank: sp.bank, issuer: sp.issuer, evaluator: sp.evaluator, sort: sp.sort, bunuri: sp.bunuri }}
           years={facets.years.map((y) => [String(y.y), String(y.y), y.n])}
@@ -70,6 +70,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             {DUE_FILTERS[sp.termen ?? ""] && <a className="chipX" href={link({ termen: undefined })}>{DUE_FILTERS[sp.termen!]} <b aria-hidden>×</b></a>}
           </div>
         )}
+      </section>
+      <section className="card repCard">
         {data.rows.length === 0 ? (
           <div className="empty">{data.total === 0 && !sp.q ? "Nu există încă rapoarte. Proprietarul le poate aduce din Glide, din meniul Import Glide." : "Niciun raport pentru filtrele alese."}</div>
         ) : (
@@ -112,7 +114,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                         </span>
                       </td>
                       <td style={{ minWidth: 160 }}><div className="two"><b>{cap(type) || "—"}</b><small>{address}</small></div></td>
-                      <td><div className="two"><b>{r.purpose || "—"}</b><small>{r.value_type || ""}</small></div></td>
+                      <td><div className="two nowrap"><b>{r.purpose || "—"}</b><small>{r.value_type || ""}</small></div></td>
                       <td>
                         {team.length === 0 ? <span className="muted">—</span> : (
                           <span className="pStack" aria-label={team.map((m) => `${m.name} (${ROLE_LABEL[m.role] ?? m.role})`).join(", ")}>
@@ -142,7 +144,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           </div>
         )}
         {pages > 1 && (
-          <div className="actions" style={{ justifyContent: "space-between" }}>
+          <div className="actions repPager" style={{ justifyContent: "space-between" }}>
             <span className="muted">Pagina {page} din {pages}</span>
             <span className="actions">
               {page > 1 && <a className="btn btnGhost btnSm" href={link({ page: String(page - 1) })}>← Înapoi</a>}
