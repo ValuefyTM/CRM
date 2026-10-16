@@ -1,13 +1,12 @@
 // The dashboard of a team member without the firm's dashboard (Permisiuni): their reports and inspections only.
 import { fmtDate } from "@/lib/guard";
 import { getDb } from "@/lib/db";
-import { cap, inspectionState, lei, listReports, REPORT_STATUS } from "@/lib/reports";
+import { cap, listReports } from "@/lib/reports";
+import { ReportTable } from "../rapoarte/ReportTable";
 import { DUE_SQL } from "@/lib/reports";
 import { mySql } from "@/lib/perms-db";
 import { can } from "@/lib/perms";
-import { niceName } from "@/lib/labels";
 import type { User } from "@/lib/users";
-import { ClickRow } from "@/components/ClickRow";
 
 const today = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
 
@@ -61,42 +60,20 @@ export async function MyHome({ user, base, denied }: { user: User; base: string;
         <a className="dbKpi" href={`${base}/rapoarte?status=done`}><span className="dbKpiLabel"><i style={{ background: "var(--ok)" }} />Finalizate luna aceasta</span><b>{counts?.done_month ?? 0}</b></a>
         <a className="dbKpi" href={`${base}/agenda-inspectii`}><span className="dbKpiLabel"><i style={{ background: "var(--ink)" }} />Inspecții de făcut</span><b>{visits.results.length}</b></a>
       </div>
-      <div className="cols">
-        <section className="card">
-          <div className="cardHead"><h2>Rapoartele mele în lucru</h2><a className="link" href={`${base}/rapoarte`}>Toate →</a></div>
-          {open.rows.length === 0 ? <p className="hint">Niciun raport deschis.</p> : (
-            <div className="tableWrap">
-              <table className="table">
-                <thead><tr><th>Raport</th><th>Client</th><th>Proprietate</th><th>Inspecție</th><th>Status</th><th style={{ textAlign: "right" }}>Valoare</th></tr></thead>
-                <tbody>
-                  {open.rows.slice(0, 12).map((r) => {
-                    const [label, cls] = REPORT_STATUS[r.status] ?? [r.status, ""];
-                    const [type, address] = (r.asset ?? "|").split("|");
-                    const [insp, inspCls] = inspectionState(r);
-                    return (
-                      <ClickRow key={r.id} href={`${base}/rapoarte/${r.id}`}>
-                        <td><a className="ref rowLink" href={`${base}/rapoarte/${r.id}`}>{r.number ?? "fără număr"}</a><div className="muted">{fmtDate(r.report_date)}</div></td>
-                        <td>{niceName(r.client_name) || "—"}<div className="muted">{r.bank_code ?? ""}</div></td>
-                        <td>{cap(type) || "—"}<div className="muted">{address}</div></td>
-                        <td>{inspCls ? <span className={`pill ${inspCls}`}><i />{insp}</span> : <span className="muted">{insp}</span>}</td>
-                        <td><span className={`pill ${cls}`}><i />{label}</span></td>
-                        <td style={{ textAlign: "right" }}>{lei(r.result_value)}</td>
-                      </ClickRow>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+      <div className="cols myCols">
+        <section className="card repCard">
+          <div className="cardHead repCardHead"><h2>Rapoartele mele în lucru</h2><a className="link" href={`${base}/rapoarte`}>Toate →</a></div>
+          {open.rows.length === 0 ? <p className="hint pad">Niciun raport deschis.</p> : <ReportTable rows={open.rows.slice(0, 12)} base={base} today={t} scope={false} />}
         </section>
-        <section className="card">
+        <section className="card myVisits">
           <div className="cardHead"><h2>Inspecțiile mele</h2><a className="link" href={`${base}/agenda-inspectii`}>Agenda →</a></div>
           {visits.results.length === 0 ? <p className="hint">Nicio inspecție de făcut.</p> : (
             <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
               {visits.results.map((v) => (
-                <li key={v.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--line)" }}>
-                  <b>{v.scheduled_at ? fmtDate(v.scheduled_at, true) : "De programat"}</b> · {cap(v.type) || "Proprietate"}
-                  <div className="muted">{v.address}{v.report_id && <> · <a className="link" href={`${base}/rapoarte/${v.report_id}?tab=inspectii`}>raport {v.number ?? ""}</a></>}</div>
+                <li key={v.id} className="myVisit">
+                  <b>{v.scheduled_at ? fmtDate(v.scheduled_at, true) : "De programat"}</b>
+                  <span>{cap(v.type) || "Proprietate"}{v.report_id && <> · <a className="link" href={`${base}/rapoarte/${v.report_id}?tab=inspectii`}>{v.number ? `raport ${v.number}` : "raport"}</a></>}</span>
+                  <small className="muted">{v.address}</small>
                 </li>
               ))}
             </ul>

@@ -1871,3 +1871,21 @@ thead .pmRole { background: var(--cream) !important; z-index: 3; }
 .thSort.on { color: var(--ink); }
 .thSort.on i { opacity: 1; color: var(--acc-text, #8a5600); }
 .repCard .table thead th:last-child .thSort { justify-content: flex-end; width: 100%; }
+/* Evaluator's dashboard: the reports take most of the width, the inspections a narrow column. */
+.myCols { grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); }
+.repCardHead { padding: 14px 16px 0; }
+.repCard .repCardHead + .tableWrap .table thead th:first-child, .repCard .repCardHead + .tableWrap .table thead th:last-child { border-radius: 0; }
+.repTable.noScope .pStack .pAvatar { width: 24px !important; height: 24px !important; }
+.myVisits { padding: 14px 16px; gap: 0; }
+.myVisit { display: flex; flex-direction: column; gap: 1px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 12.5px; line-height: 1.35; }
+.myVisit:last-child { border-bottom: 0; }
+.myVisit b { font-size: 12.5px; }
+.myVisit small { font-size: 11.5px; }
+@media (max-width: 1100px) { .myCols { grid-template-columns: 1fr; } }
+/* The short table (no Scop column): tighter cells so it fits beside the inspections. */
+.repCard .table.noScope td { padding: 10px 9px; }
+.repCard .table.noScope thead th { padding: 11px 9px; }
+.repTable.noScope .steps i { width: 14px; }
+.repTable.noScope .days small { white-space: normal; text-align: right; }
+.repTable.noScope .two small { font-size: 11px; }
+.myCols { grid-template-columns: minmax(0, 1fr) minmax(220px, 270px); }
