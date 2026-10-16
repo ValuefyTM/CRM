@@ -89,6 +89,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                   const short = (r.issuer_short ?? r.issuer_name ?? "?").slice(0, 2).toUpperCase();
                   const kind = !r.report_type || /^raport de evaluare$/i.test(r.report_type) ? "Raport" : r.report_type;
                   const team = rowMembers(r);
+                  // The designated user (the bank): its logo, else its code; without one, the client's initials.
+                  const bankLogo = fileSrc(r.bank_logo);
+                  const bankShort = r.bank_name ? (r.bank_code ?? r.bank_name).slice(0, 3).toUpperCase() : (r.client_name ?? "—").split(/\s+/).slice(0, 2).map((w) => w[0] ?? "").join("").toUpperCase() || "—";
                   const { seg, caption } = segmentsOf(r, today);
                   const d = daysOf(r, today);
                   return (
@@ -102,7 +105,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                           </span>
                         </a>
                       </td>
-                      <td><div className="two"><b>{niceName(r.client_name) || "—"}</b><small>{niceName(r.bank_name) || "fără utilizator desemnat"}</small></div></td>
+                      <td>
+                        <span className="repCell">
+                          {bankLogo ? <SafeImg src={bankLogo} className="repLogo" fallback={<i className="repLogo" aria-hidden>{bankShort}</i>} /> : <i className="repLogo" aria-hidden>{bankShort}</i>}
+                          <span className="two"><b>{niceName(r.client_name) || "—"}</b><small>{niceName(r.bank_name) || "fără utilizator desemnat"}</small></span>
+                        </span>
+                      </td>
                       <td style={{ minWidth: 160 }}><div className="two"><b>{cap(type) || "—"}</b><small>{address}</small></div></td>
                       <td><div className="two"><b>{r.purpose || "—"}</b><small>{r.value_type || ""}</small></div></td>
                       <td>

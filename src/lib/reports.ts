@@ -21,7 +21,7 @@ export type ReportRow = {
   id: string; number: string | null; label: string | null; report_date: string | null; status: string; fee: number | null; result_value: number | null;
   report_type: string | null; client_name: string | null; bank_code: string | null; issuer_name: string | null; evaluator: string | null; asset: string | null;
   issuer_short: string | null; insp_total: number; insp_done: number; insp_next: string | null; insp_last: string | null; no_insp: number;
-  issuer_logo: string | null; issuer_color: string | null; bank_name: string | null; purpose: string | null; value_type: string | null;
+  issuer_logo: string | null; issuer_color: string | null; bank_name: string | null; bank_logo: string | null; purpose: string | null; value_type: string | null;
   stage: string | null; delivered_at: string | null; verified_at: string | null; invoiced: number; ordered_at: string | null; received_on: string | null; created_at: string; term_days: number | null;
   /** The team, one per line: id, name, role, avatar_at (see rowMembers). */
   members: string | null;
@@ -38,7 +38,7 @@ export const rowMembers = (r: Pick<ReportRow, "members">): RowMember[] =>
 const ROW = `SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.result_value, r.report_type, r.purpose, r.value_type,
   r.stage, r.delivered_at, r.verified_at, r.received_on, r.created_at, r.term_days, o.created_at AS ordered_at, i.color AS issuer_color,
   EXISTS (SELECT 1 FROM invoices v, json_each(v.report_ids) j WHERE j.value = r.id AND v.kind = 'invoice' AND v.status <> 'cancelled') AS invoiced,
-  c.name AS client_name, COALESCE(b.code, b.name) AS bank_code, b.name AS bank_name, i.name AS issuer_name, COALESCE(NULLIF(i.code, ''), i.name) AS issuer_short, i.logo_url AS issuer_logo,
+  c.name AS client_name, COALESCE(b.code, b.name) AS bank_code, b.name AS bank_name, b.logo_url AS bank_logo, i.name AS issuer_name, COALESCE(NULLIF(i.code, ''), i.name) AS issuer_short, i.logo_url AS issuer_logo,
   (SELECT group_concat(line, char(10)) FROM (SELECT m.user_id || char(31) || COALESCE(NULLIF(u.name, ''), u.email) || char(31) || m.role || char(31) || COALESCE(u.avatar_at, '') AS line
      FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = r.id
      ORDER BY CASE m.role WHEN 'evaluator' THEN 1 WHEN 'verifier' THEN 2 WHEN 'inspector' THEN 3 ELSE 4 END, u.name)) AS members,
