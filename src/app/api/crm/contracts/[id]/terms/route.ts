@@ -1,4 +1,5 @@
 import { err, json, staffApi } from "@/lib/api";
+import { inScope } from "@/lib/scope";
 import { audit } from "@/lib/auth";
 import { now, parseJson } from "@/lib/db";
 import { cleanTerms, PAYMENT_FIELDS, REPORT_FIELDS } from "@/lib/contract-terms";
@@ -8,6 +9,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const a = await staffApi("contracts.E", true);
   if ("res" in a) return a.res;
   const { id } = await params;
+  if (!(await inScope(a.db, a.user, "contracts", id))) return err("Nu există.", 404);
   if (!(await a.db.prepare("SELECT 1 AS x FROM contracts WHERE id = ?").bind(id).first())) return err("Contractul nu există.", 404);
   // A signed contract is changed only by an addendum.
   if (await a.db.prepare("SELECT 1 AS x FROM contracts WHERE id = ? AND signed_at IS NOT NULL").bind(id).first()) return err("Contractul este semnat de client: modificările se fac prin act adițional.", 409);

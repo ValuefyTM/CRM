@@ -53,7 +53,9 @@ export async function reportAccess(db: D1Database, u: Viewer, r: { id: string; s
     for (const k of row.r) right[k] = true;
     if (FEE_RANK[row.fee] > FEE_RANK[fee]) fee = row.fee;
   }
-  const all = can(u, "reports.all");
+  // "Rapoarte: unde e evaluator / verificator": the module's rights on the reports the user leads or verifies.
+  const leads = roles.includes("evaluator") || roles.includes("verifier");
+  const all = can(u, "reports.all") || (can(u, "reports.lead") && leads);
   if (all) {
     view = true;
     const edit = can(u, "reports.E");
@@ -66,7 +68,7 @@ export async function reportAccess(db: D1Database, u: Viewer, r: { id: string; s
     right.messages = true;
   }
   // The Onorarii module decides for everyone: all the amounts, or at most the user's own share.
-  if (can(u, "fees.all")) fee = "all";
+  if (can(u, "fees.all") || (can(u, "fees.lead") && leads)) fee = "all";
   else if (fee === "all") fee = "share";
   if (!can(u, "fees") && !roles.length) fee = "none";
   if (!view) for (const k of Object.keys(right)) right[k] = false;

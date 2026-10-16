@@ -1,4 +1,5 @@
 // Server-only: valuation orders and their documents.
+import type { ScopeFilter } from "./scope";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { now, uuid } from "./db";
 import { validEmail } from "./crypto";
@@ -140,10 +141,10 @@ export async function ordersFor(db: D1Database, user: User) {
   return results;
 }
 
-/** `createdBy`: only the orders this user created (Permisiuni: Comenzi, „Create de el”). */
-export async function allOrders(db: D1Database, createdBy?: string) {
-  const { results } = await (createdBy
-    ? db.prepare(`${SELECT} WHERE o.created_by = ? ORDER BY o.created_at DESC LIMIT 10000`).bind(createdBy)
+/** `scope`: only the orders the user works on (Permisiuni: Comenzi, „Pe ce date”; see scope.ts). */
+export async function allOrders(db: D1Database, scope?: ScopeFilter) {
+  const { results } = await (scope
+    ? db.prepare(`${SELECT} WHERE ${scope.sql} ORDER BY o.created_at DESC LIMIT 10000`).bind(...scope.binds)
     : db.prepare(`${SELECT} ORDER BY o.created_at DESC LIMIT 10000`)).all<Order>();
   return results;
 }

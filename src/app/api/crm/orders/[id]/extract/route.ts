@@ -1,6 +1,7 @@
 import { audit } from "@/lib/auth";
 import { uuid } from "@/lib/db";
 import { err, staffApi } from "@/lib/api";
+import { inScope } from "@/lib/scope";
 import { bucket, getOrder } from "@/lib/orders";
 import { extractEnabled, extractFromScreens } from "@/lib/extract";
 
@@ -15,6 +16,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const a = await staffApi("orders.E", true);
   if ("res" in a) return a.res;
   const { id } = await params;
+  if (!(await inScope(a.db, a.user, "orders", id))) return err("Nu există.", 404);
   const o = await getOrder(a.db, id);
   if (!o) return err("Comanda nu există.", 404);
   const form = await req.formData().catch(() => null);

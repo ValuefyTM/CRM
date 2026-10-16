@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { staffPage } from "@/lib/guard";
+import { inScope } from "@/lib/scope";
 import { contractDoc, signedSnapshot } from "@/lib/contract-doc";
 import { getFirmWithImages } from "@/lib/settings";
 import { ContractDocView } from "@/components/ContractDoc";
@@ -14,11 +15,11 @@ export const dynamic = "force-dynamic";
  * exactly what was signed (the snapshot), with both signatures.
  */
 export default async function ContractDocument({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ semnatura?: string }> }) {
-  const { db, base } = await staffPage("clients");
+  const { db, user, base } = await staffPage("contracts");
   const { id } = await params;
   const snap = await signedSnapshot(db, id);
   const [d, firm] = snap ? [snap.doc, snap.firm] : await Promise.all([contractDoc(db, id), getFirmWithImages(db)]);
-  if (!d) notFound();
+  if (!d || !(await inScope(db, user, "contracts", id))) notFound();
   const sealed = snap ? true : (await searchParams).semnatura !== "0";
   return (
     <div className="cdWrap">

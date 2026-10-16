@@ -1718,7 +1718,10 @@ thead .pmRole { background: var(--cream) !important; z-index: 3; }
 .pmFields:disabled { opacity: .5; }
 .pmBlock { display: flex; flex-direction: column; gap: 6px; }
 .pmBlock > b { font: 600 10.5px "IBM Plex Mono", ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--muted-2); }
-.pmBlock .segment { width: 100%; }
+.pmScope { display: flex; flex-direction: column; gap: 6px; }
+.pmScopeOpt { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; cursor: pointer; font-weight: 600; font-size: 13.5px; }
+.pmScopeOpt.on { border-color: var(--ink); background: var(--acc-soft); }
+.pmScopeOpt input { accent-color: var(--ink); margin: 0; }
 .pmTeam th, .pmTeam td { border-bottom: 1px solid var(--line); padding: 9px 10px; text-align: center; }
 .pmTeam thead th { min-width: 88px; vertical-align: bottom; }
 .pmTeam input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--ink); }

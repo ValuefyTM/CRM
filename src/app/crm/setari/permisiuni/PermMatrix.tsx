@@ -3,13 +3,15 @@ import { Fragment, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   BUILTIN_ROLES, FEE_VIEWS, MODULES, RIGHTS, TEAM_RIGHTS, TEAM_ROLES,
-  type Cell, type FeeView, type ModKey, type PermConfig, type Right, type TeamRight, type TeamRole,
+  type Cell, type FeeView, type Scope, type ModKey, type PermConfig, type Right, type TeamRight, type TeamRole,
 } from "@/lib/perms";
 
 type Mod = (typeof MODULES)[number];
 const GROUPS = [...new Set(MODULES.map((m) => m.group))].map((g) => [g, MODULES.filter((m) => m.group === g)] as const);
 const OFF: Cell = { on: false, r: [], sp: [] };
-const scopeOf = (m: Mod) => ("scope" in m ? m.scope : null);
+const scopeOf = (m: Mod): readonly (readonly [Scope, string])[] | null => ("scope" in m ? m.scope : null);
+/** Short label in a cell for a restricted scope. */
+const SCOPE_SHORT: Record<Scope, string> = { all: "", own: "ale lui", lead: "ca evaluator" };
 const spOf = (m: Mod): readonly (readonly [string, string])[] => ("sp" in m ? m.sp : []);
 const hintOf = (m: Mod) => ("hint" in m ? m.hint : "");
 
@@ -17,7 +19,8 @@ const hintOf = (m: Mod) => ("hint" in m ? m.hint : "");
 function CellView({ m, c }: { m: Mod; c: Cell }) {
   if (!c.on) return <span className="pmOff">—</span>;
   const scope = scopeOf(m);
-  const meta = [c.own && scope ? <b key="s">{scope[1].toLowerCase()}</b> : null, c.sp.length ? `+${c.sp.length}` : null].filter(Boolean);
+  const sc = c.scope ?? "all";
+  const meta = [scope && sc !== "all" ? <b key="s">{m.k === "dashboard" ? "personal" : m.k === "fees" && sc === "own" ? "doar cota" : SCOPE_SHORT[sc]}</b> : null, c.sp.length ? `+${c.sp.length}` : null].filter(Boolean);
   return (
     <>
       <span className="pmLetters">
@@ -166,9 +169,12 @@ export function PermMatrix(props: { initial: PermConfig; defaults: PermConfig; c
                 {scopeOf(mod) && (
                   <div className="pmBlock">
                     <b>Pe ce date</b>
-                    <div className="segment" role="group" aria-label="Pe ce date">
-                      {scopeOf(mod)!.map((l, i) => (
-                        <button key={l} type="button" aria-pressed={!!cell.own === (i === 1)} onClick={() => setCell({ own: i === 1 })}>{l}</button>
+                    <div className="pmScope" role="radiogroup" aria-label="Pe ce date">
+                      {scopeOf(mod)!.map(([v, l]) => (
+                        <label key={v} className={`pmScopeOpt${(cell.scope ?? "all") === v ? " on" : ""}`}>
+                          <input type="radio" name="pm-scope" checked={(cell.scope ?? "all") === v} onChange={() => setCell({ scope: v })} />
+                          {l}
+                        </label>
                       ))}
                     </div>
                   </div>

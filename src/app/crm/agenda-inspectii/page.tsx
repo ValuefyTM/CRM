@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { staffPage } from "@/lib/guard";
 import { BOARD_PERIODS, BOARD_STATES, inspectionBoard, type BoardFilters } from "@/lib/inspections-board";
 import { CrmShell } from "@/components/CrmShell";
-import { can } from "@/lib/perms";
+import { scopeOf } from "@/lib/perms";
 import { InspectionBoard } from "./InspectionBoard";
 
 export const metadata: Metadata = { title: "Inspecții | CRM VALUEFY" };
@@ -12,10 +12,12 @@ export default async function InspectionsPage({ searchParams }: { searchParams: 
   const { db, user, base } = await staffPage("inspections");
   const raw = await searchParams;
   // Without "inspections.all": only the user's own inspections.
-  const all = can(user, "inspections.all");
-  const sp = all ? raw : { ...raw, inspector: user.id };
+  // „Alocate lui”: only the user's inspections; „…și din rapoartele unde e evaluator / verificator”: plus those.
+  const scope = scopeOf(user, "inspections");
+  const all = scope === "all";
+  const sp = all ? raw : scope === "lead" ? { ...raw, lead: user.id } : { ...raw, inspector: user.id };
   const d = await inspectionBoard(db, sp);
-  if (!all) d.people = d.people.filter((p) => p.id === user.id);
+  if (scope === "own") d.people = d.people.filter((p) => p.id === user.id);
   const k = d.counts;
   const link = (change: Record<string, string | undefined>) => {
     const next: Record<string, string | undefined> = { ...sp, ...change };

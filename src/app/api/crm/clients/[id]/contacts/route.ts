@@ -3,6 +3,7 @@ import { audit } from "@/lib/auth";
 import { addContact, getClient } from "@/lib/clients";
 import { normEmail, validEmail } from "@/lib/crypto";
 import { err, json, staffApi } from "@/lib/api";
+import { inScope } from "@/lib/scope";
 
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
@@ -11,6 +12,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const a = await staffApi("clients.E", true);
   if ("res" in a) return a.res;
   const { id } = await params;
+  if (!(await inScope(a.db, a.user, "clients", id))) return err("Nu există.", 404);
   if (!(await getClient(a.db, id))) return err("Clientul nu există.", 404);
   const b = await json(req);
   const name = str(b.name, 120);
@@ -26,6 +28,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const a = await staffApi("clients.E", true);
   if ("res" in a) return a.res;
   const { id } = await params;
+  if (!(await inScope(a.db, a.user, "clients", id))) return err("Nu există.", 404);
   const contact = new URL(req.url).searchParams.get("contact") ?? "";
   await a.db.batch([
     a.db.prepare("UPDATE entity_contacts SET is_primary = 0 WHERE entity_id = ?").bind(id),
@@ -38,6 +41,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   const a = await staffApi("clients.E", true);
   if ("res" in a) return a.res;
   const { id } = await params;
+  if (!(await inScope(a.db, a.user, "clients", id))) return err("Nu există.", 404);
   const contact = new URL(req.url).searchParams.get("contact") ?? "";
   await a.db.prepare("DELETE FROM entity_contacts WHERE entity_id = ? AND id = ?").bind(id, contact).run();
   await audit(a.db, `user:${a.user.id}`, "client.contact_remove", "client", id);

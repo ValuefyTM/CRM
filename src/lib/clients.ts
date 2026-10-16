@@ -1,4 +1,5 @@
 // Server-only: clients (people and companies, table "entities"), their contact people and portal access.
+import type { ScopeFilter } from "./scope";
 import { now, uuid } from "./db";
 import { normEmail, validEmail } from "./crypto";
 import { createUser, getUser, type UserInput } from "./users";
@@ -79,15 +80,15 @@ export async function findDuplicate(db: D1Database, v: ClientInput, exceptId?: s
 
 // ---------- read ----------
 
-/** `createdBy`: only the clients this user added (Permisiuni: Clienți, „Adăugați de el”). */
-export type ClientFilters = { q?: string; kind?: string; portal?: string; page?: number; createdBy?: string };
+/** `scope`: only the clients the user works on (Permisiuni: Clienți, „Pe ce date”; see scope.ts). */
+export type ClientFilters = { q?: string; kind?: string; portal?: string; page?: number; scope?: ScopeFilter };
 export const CLIENT_PAGE = 50;
 
 export async function listClients(db: D1Database, f: ClientFilters) {
   const w = ["e.kind <> 'valuation_firm'"];
   const p: (string | number)[] = [];
   if (f.kind && CLIENT_KINDS.some(([k]) => k === f.kind)) { w.push("e.kind = ?"); p.push(f.kind); }
-  if (f.createdBy) { w.push("e.created_by = ?"); p.push(f.createdBy); }
+  if (f.scope) { w.push(f.scope.sql); p.push(...f.scope.binds); }
   if (f.portal === "yes") w.push("EXISTS (SELECT 1 FROM users u WHERE u.entity_id = e.id AND u.kind = 'client')");
   if (f.portal === "no") w.push("NOT EXISTS (SELECT 1 FROM users u WHERE u.entity_id = e.id AND u.kind = 'client')");
   const q = f.q?.trim();

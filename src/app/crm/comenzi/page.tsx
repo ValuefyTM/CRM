@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { can } from "@/lib/perms";
+import { scopeFilter } from "@/lib/scope";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { allOrders, orderCode, orderPlace, orderStatus, orderWhat } from "@/lib/orders";
 import { CrmShell } from "@/components/CrmShell";
@@ -20,7 +20,7 @@ export default async function CrmOrdersPage({ searchParams }: { searchParams: Pr
   const { db, user, base } = await staffPage("orders");
   const sp = await searchParams;
   const [orders, mails] = await Promise.all([
-    allOrders(db, can(user, "orders.all") ? undefined : user.id),
+    allOrders(db, scopeFilter(user, "orders", "o") ?? undefined),
     sp.tab === "banci"
       ? db.prepare("SELECT id, received_at, via, mail_from, subject, bank, bank_ref, client_name, status, order_id FROM bank_emails ORDER BY received_at DESC LIMIT 8")
         .all<{ id: string; received_at: string; via: string; mail_from: string | null; subject: string | null; bank: string | null; bank_ref: string | null; client_name: string | null; status: string; order_id: string | null }>().then((r) => r.results)

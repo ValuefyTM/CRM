@@ -1,8 +1,10 @@
 // Server-only: all the team's inspections for the CRM (list, week calendar, map), with filters and counts.
 import { photoUrl, presenceOf, type Presence } from "./presence";
 import { parseGeo } from "./registry";
+import { leadSql } from "./perms";
 
-export type BoardFilters = { stare?: string; inspector?: string; perioada?: string; q?: string; saptamana?: string };
+/** `lead`: the user id of someone who sees their own inspections plus those of the reports they lead or verify. */
+export type BoardFilters = { stare?: string; inspector?: string; perioada?: string; q?: string; saptamana?: string; lead?: string };
 export type BoardRow = {
   id: string; status: string; scheduled_at: string | null; done_at: string | null; due_on: string | null; duration_min: number | null;
   report_id: string | null; report_number: string | null; report_label: string | null; type: string | null; category: string | null;
@@ -56,6 +58,7 @@ function where(f: BoardFilters, t: string) {
     default: w.push(ACTIVE);
   }
   if (f.inspector) { w.push("i.inspector_id = ?"); a.push(f.inspector); }
+  if (f.lead) { w.push(`(i.inspector_id = ? OR ${leadSql("i.report_id")})`); a.push(f.lead, f.lead); }
   const day = "substr(COALESCE(i.done_at, i.scheduled_at, i.due_on), 1, 10)";
   if (f.perioada === "azi") { w.push(`${day} = ?`); a.push(t); }
   if (f.perioada === "maine") { w.push(`${day} = ?`); a.push(addDays(t, 1)); }
@@ -79,12 +82,13 @@ export async function inspectionBoard(db: D1Database, f: BoardFilters) {
     db.prepare(`${SELECT} ${sql} ORDER BY i.status = 'done', COALESCE(i.scheduled_at, i.due_on, '9999') ASC, i.done_at DESC LIMIT 300`).bind(...args).all<Raw>(),
     // The calendar shows the chosen week, whatever the state filter (only the inspector filter applies).
     db.prepare(`${SELECT} WHERE i.status IN ('scheduled', 'done') AND substr(COALESCE(i.scheduled_at, i.done_at), 1, 10) BETWEEN ? AND ? ${f.inspector ? "AND i.inspector_id = ?" : ""}
-      ORDER BY COALESCE(i.scheduled_at, i.done_at)`).bind(wk, addDays(wk, 6), ...(f.inspector ? [f.inspector] : [])).all<Raw>(),
+      ${f.lead ? `AND (i.inspector_id = ? OR ${leadSql("i.report_id")})` : ""}
+      ORDER BY COALESCE(i.scheduled_at, i.done_at)`).bind(wk, addDays(wk, 6), ...(f.inspector ? [f.inspector] : []), ...(f.lead ? [f.lead, f.lead] : [])).all<Raw>(),
     db.prepare(`SELECT SUM(${ACTIVE} AND i.status = 'to_schedule') AS to_schedule, SUM(${ACTIVE} AND i.status = 'scheduled') AS scheduled,
         SUM(${ACTIVE} AND i.status = 'scheduled' AND substr(i.scheduled_at, 1, 10) = ?1) AS today, SUM(${ACTIVE} AND (i.due_on < ?1 OR (i.status = 'scheduled' AND substr(i.scheduled_at, 1, 10) < ?1))) AS late,
         SUM(i.status = 'done' AND substr(i.done_at, 1, 7) = substr(?1, 1, 7)) AS done_month
-      FROM inspections i LEFT JOIN reports r ON r.id = i.report_id ${f.inspector ? "WHERE i.inspector_id = ?2" : ""}`)
-      .bind(t, ...(f.inspector ? [f.inspector] : []))
+      FROM inspections i LEFT JOIN reports r ON r.id = i.report_id ${f.inspector ? "WHERE i.inspector_id = ?2" : f.lead ? `WHERE (i.inspector_id = ?2 OR ${leadSql("i.report_id").replace("lm.user_id = ?", "lm.user_id = ?2")})` : ""}`)
+      .bind(t, ...(f.inspector ? [f.inspector] : f.lead ? [f.lead] : []))
       .first<{ to_schedule: number | null; scheduled: number | null; today: number | null; late: number | null; done_month: number | null }>(),
     db.prepare(`SELECT u.id, COALESCE(NULLIF(u.name, ''), u.email) AS name, u.last_seen_at, u.avatar_at,
         (SELECT COUNT(*) FROM inspections i LEFT JOIN reports r ON r.id = i.report_id WHERE i.inspector_id = u.id AND ${ACTIVE}) AS active

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { can } from "@/lib/perms";
 import { notFound } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
+import { inScope } from "@/lib/scope";
 import { niceName } from "@/lib/labels";
 import { history } from "@/lib/history";
 import { cap, lei, REPORT_STATUS } from "@/lib/reports";
@@ -24,10 +25,10 @@ export const dynamic = "force-dynamic";
 const KIND: Record<string, string> = { person: "Persoană fizică", company: "Persoană juridică", bank: "Bancă", ifn: "IFN" };
 
 export default async function ContractPage({ params }: { params: Promise<{ id: string }> }) {
-  const { db, user, base } = await staffPage("clients");
+  const { db, user, base } = await staffPage("contracts");
   const { id } = await params;
   const d = await getContract(db, id);
-  if (!d) notFound();
+  if (!d || !(await inScope(db, user, "contracts", id))) notFound();
   const k = d.contract;
   const framework = k.kind === "framework";
   const [log, doc, sign, invoices] = await Promise.all([history(db, [id]), framework ? null : contractDoc(db, id), framework ? null : signContractById(db, id), invoicesFor(db, { contract: id })]);

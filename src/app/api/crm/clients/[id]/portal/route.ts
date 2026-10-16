@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { audit, sendInvite } from "@/lib/auth";
 import { clientContacts, enablePortal, getClient } from "@/lib/clients";
 import { err, json, staffApi } from "@/lib/api";
+import { inScope } from "@/lib/scope";
 
 /** Portal access for a client (or one of a company's contact people): creates the account and emails the invitation. */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const a = await staffApi("clients.E", true);
   if ("res" in a) return a.res;
   const { id } = await params;
+  if (!(await inScope(a.db, a.user, "clients", id))) return err("Nu există.", 404);
   const client = await getClient(a.db, id);
   if (!client) return err("Clientul nu există.", 404);
   const b = await json(req);

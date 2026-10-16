@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { audit } from "@/lib/auth";
 import { findDuplicate, getClient, updateClient, validateClient } from "@/lib/clients";
 import { err, json, staffApi } from "@/lib/api";
+import { inScope } from "@/lib/scope";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const a = await staffApi("clients.E", true);
   if ("res" in a) return a.res;
   const { id } = await params;
+  if (!(await inScope(a.db, a.user, "clients", id))) return err("Nu există.", 404);
   if (!(await getClient(a.db, id))) return err("Clientul nu există.", 404);
   const b = await json(req);
   const v = validateClient(b);

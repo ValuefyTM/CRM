@@ -1,6 +1,7 @@
 import { audit } from "@/lib/auth";
 import { now } from "@/lib/db";
 import { err, json, staffApi } from "@/lib/api";
+import { inScope } from "@/lib/scope";
 import { getOrder } from "@/lib/orders";
 import { offerForOrder, saveOffer, validateOffer } from "@/lib/offers";
 import { offerLink, sendOfferEmail } from "@/lib/offer-emails";
@@ -13,6 +14,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const a = await staffApi("orders:offer", true);
   if ("res" in a) return a.res;
   const { id } = await params;
+  if (!(await inScope(a.db, a.user, "orders", id))) return err("Nu există.", 404);
   const order = await getOrder(a.db, id);
   if (!order) return err("Comanda nu există.", 404);
   const b = await json(req);

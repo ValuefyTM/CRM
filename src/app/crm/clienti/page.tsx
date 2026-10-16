@@ -1,6 +1,6 @@
 import { niceName } from "@/lib/labels";
 import type { Metadata } from "next";
-import { can } from "@/lib/perms";
+import { scopeFilter } from "@/lib/scope";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { CLIENT_KINDS, CLIENT_PAGE, clientCounts, kindName, listClients } from "@/lib/clients";
 import { STATUS_LABEL } from "@/lib/labels";
@@ -17,7 +17,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   const { db, user, base } = await staffPage("clients");
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page) || 1);
-  const [data, counts] = await Promise.all([listClients(db, { ...sp, page, createdBy: can(user, "clients.all") ? undefined : user.id }), clientCounts(db)]);
+  const [data, counts] = await Promise.all([listClients(db, { ...sp, page, scope: scopeFilter(user, "clients", "e") ?? undefined }), clientCounts(db)]);
   const pages = Math.max(1, Math.ceil(data.total / CLIENT_PAGE));
   const link = (p: number) => `${base}/clienti?${Object.entries({ ...sp, page: String(p) }).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v as string)}`).join("&")}`;
 

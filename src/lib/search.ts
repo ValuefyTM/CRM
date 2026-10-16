@@ -1,6 +1,7 @@
 import { niceName } from "./labels";
 import { can, type WithPerms } from "./perms";
 import { mySql } from "./perms-db";
+import { scopeFilter } from "./scope";
 
 // Server-only: the search box in the CRM's top bar — one query over reports, orders, clients, contracts and
 // properties (number, name, CUI, phone, email, CF / cadastral number, address), a few hits of each.
@@ -21,6 +22,14 @@ export async function globalSearch(db: D1Database, raw: string, viewer?: WithPer
   const may = (p: Parameters<typeof can>[1]) => !viewer || can(viewer, p);
   const none = { results: [] as never[] };
   const mine = may("reports.all") ? "" : `AND ${mySql(viewer!).replace("m.user_id = ?", "m.user_id = ?3")}`;
+  // „Pe ce date” of Clienți / Comenzi / Contracte: the condition with its parameters numbered after the query's own (?n).
+  const sc = (mod: "clients" | "orders" | "contracts", alias: string, from: number) => {
+    const f = viewer ? scopeFilter(viewer, mod, alias) : null;
+    if (!f) return { sql: "", binds: [] as string[] };
+    let n = from;
+    return { sql: `AND ${f.sql.replace(/\?/g, () => `?${n++}`)}`, binds: f.binds };
+  };
+  const so = sc("orders", "o", 5), sl = sc("clients", "e", 4), sk = sc("contracts", "k", 3);
   const [reports, orders, clients, contracts, props] = await Promise.all([
     db.prepare(`SELECT r.id, r.number, r.label, r.status, COALESCE(r.report_date, substr(r.created_at, 1, 10)) AS d, c.name AS client, b.name AS bank
       FROM reports r LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id
@@ -29,16 +38,16 @@ export async function globalSearch(db: D1Database, raw: string, viewer?: WithPer
       ORDER BY r.number = ?1 DESC, r.created_at DESC LIMIT ${PER}`).bind(q, like, ...(mine ? [viewer!.id] : []))
       .all<{ id: string; number: string | null; label: string | null; status: string; d: string | null; client: string | null; bank: string | null }>(),
     !may("orders") ? none : db.prepare(`SELECT o.id, o.seq, o.source, o.bank, o.bank_ref, o.client_name, o.city, o.address, substr(o.created_at, 1, 10) AS d FROM orders o
-      WHERE (?3 IS NOT NULL AND o.seq = CAST(?3 AS INTEGER)) OR o.bank_ref LIKE ?2 OR o.client_name LIKE ?2 OR o.address LIKE ?2 OR o.client_email LIKE ?2
-        OR (?4 IS NOT NULL AND ${cleanPhone("o.client_phone")} LIKE ?4)
-      ORDER BY (?3 IS NOT NULL AND o.seq = CAST(?3 AS INTEGER)) DESC, o.bank_ref = ?1 DESC, o.created_at DESC LIMIT ${PER}`).bind(q, like, seq, phone)
+      WHERE ((?3 IS NOT NULL AND o.seq = CAST(?3 AS INTEGER)) OR o.bank_ref LIKE ?2 OR o.client_name LIKE ?2 OR o.address LIKE ?2 OR o.client_email LIKE ?2
+        OR (?4 IS NOT NULL AND ${cleanPhone("o.client_phone")} LIKE ?4)) ${so.sql}
+      ORDER BY (?3 IS NOT NULL AND o.seq = CAST(?3 AS INTEGER)) DESC, o.bank_ref = ?1 DESC, o.created_at DESC LIMIT ${PER}`).bind(q, like, seq, phone, ...so.binds)
       .all<{ id: string; seq: number | null; source: string; bank: string | null; bank_ref: string | null; client_name: string | null; city: string | null; address: string | null; d: string }>(),
     !may("clients") ? none : db.prepare(`SELECT e.id, e.kind, e.name, e.cui, e.phone, e.email, e.city FROM entities e
-      WHERE e.kind <> 'valuation_firm' AND (e.name LIKE ?1 OR e.cui LIKE ?1 OR e.email LIKE ?1 OR (?2 IS NOT NULL AND ${cleanPhone("e.phone")} LIKE ?2))
-      ORDER BY e.name LIKE ?3 DESC, (SELECT COUNT(*) FROM reports r WHERE r.client_id = e.id) DESC LIMIT ${PER}`).bind(like, phone, `${q.replace(/[%_]/g, "")}%`)
+      WHERE e.kind <> 'valuation_firm' AND (e.name LIKE ?1 OR e.cui LIKE ?1 OR e.email LIKE ?1 OR (?2 IS NOT NULL AND ${cleanPhone("e.phone")} LIKE ?2)) ${sl.sql}
+      ORDER BY e.name LIKE ?3 DESC, (SELECT COUNT(*) FROM reports r WHERE r.client_id = e.id) DESC LIMIT ${PER}`).bind(like, phone, `${q.replace(/[%_]/g, "")}%`, ...sl.binds)
       .all<{ id: string; kind: string; name: string; cui: string | null; phone: string | null; email: string | null; city: string | null }>(),
     !may("contracts") ? none : db.prepare(`SELECT k.id, k.kind, k.number, k.signed_on, e.name AS client FROM contracts k LEFT JOIN entities e ON e.id = k.client_id
-      WHERE k.number = ?1 OR e.name LIKE ?2 ORDER BY k.number = ?1 DESC, k.signed_on DESC LIMIT ${PER}`).bind(q, like)
+      WHERE (k.number = ?1 OR e.name LIKE ?2) ${sk.sql} ORDER BY k.number = ?1 DESC, k.signed_on DESC LIMIT ${PER}`).bind(q, like, ...sk.binds)
       .all<{ id: string; kind: string; number: string | null; signed_on: string | null; client: string | null }>(),
     !may("properties") ? none : db.prepare(`SELECT p.id, p.type, p.full_address, p.city, p.cf_number, p.cad_building FROM crm_properties p
       WHERE p.cf_number LIKE ?1 OR p.cad_building LIKE ?1 OR p.cad_land LIKE ?1 OR p.full_address LIKE ?1

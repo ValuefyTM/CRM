@@ -1,4 +1,5 @@
 import { err, json, staffApi } from "@/lib/api";
+import { inScope } from "@/lib/scope";
 import { updateContract } from "@/lib/contracts";
 
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -12,6 +13,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const a = await staffApi("contracts.E", true);
   if ("res" in a) return a.res;
   const { id } = await params;
+  if (!(await inScope(a.db, a.user, "contracts", id))) return err("Nu există.", 404);
   const k = await a.db.prepare("SELECT id, kind FROM contracts WHERE id = ?").bind(id).first<{ id: string; kind: string }>();
   if (!k) return err("Contractul nu există.", 404);
   // A signed contract is changed only by an addendum.

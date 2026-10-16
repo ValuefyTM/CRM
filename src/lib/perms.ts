@@ -1,31 +1,36 @@
 // What each team role may see and do in the CRM (Setări → Permisiuni): roles on the rows, modules on the columns.
 // For each role × module: on or off (off = not in the menu), the rights (see, add, edit, delete), on which records
-// (all, or only the user's own) and the module's special actions. The owner always has everything and only the owner
+// (all; only the user's own; or only where the user is main evaluator / verifier of the report) and the module's
+// special actions. The owner always has everything and only the owner
 // changes the matrix. Inside a report, what someone may do follows their role in the report's team (TEAM_*).
 // No server code here: the labels and `can` are also used by client components.
 
 export type Right = "A" | "E" | "D";
 export const RIGHTS: [Right | "V", string][] = [["V", "Vede"], ["A", "Adaugă"], ["E", "Editează"], ["D", "Șterge"]];
 
-type ModDef = { k: string; l: string; group: string; rights: Right[]; scope?: [string, string]; sp?: [string, string][]; hint?: string };
+/** On which records a role works in a module: all, the user's own (created / team / assigned), or where the user is
+ * main evaluator or verifier of the report they belong to (managers who answer only for their reports). */
+export type Scope = "all" | "own" | "lead";
+type ModDef = { k: string; l: string; group: string; rights: Right[]; scope?: readonly (readonly [Scope, string])[]; sp?: [string, string][]; hint?: string };
+const LEAD = ["lead", "Unde e evaluator / verificator"] as const;
 
 export const MODULES = [
-  { k: "clients", l: "Clienți / Entități", group: "CRM", rights: ["A", "E", "D"], scope: ["Toți", "Adăugați de el"] },
+  { k: "clients", l: "Clienți / Entități", group: "CRM", rights: ["A", "E", "D"], scope: [["all", "Toți"], ["own", "Adăugați de el"], LEAD] },
   { k: "partners", l: "Parteneri", group: "CRM", rights: ["A", "E", "D"], hint: "Firmele partenere și conturile lor din portal." },
-  { k: "contracts", l: "Contracte", group: "CRM", rights: ["A", "E", "D"], sp: [["sign", "Marchează semnat"]] },
-  { k: "orders", l: "Comenzi", group: "CRM", rights: ["A", "E", "D"], scope: ["Toate", "Create de el"],
+  { k: "contracts", l: "Contracte", group: "CRM", rights: ["A", "E", "D"], scope: [["all", "Toate"], LEAD], sp: [["sign", "Marchează semnat"]] },
+  { k: "orders", l: "Comenzi", group: "CRM", rights: ["A", "E", "D"], scope: [["all", "Toate"], ["own", "Create de el"], LEAD],
     sp: [["process", "Procesează comanda"], ["offer", "Trimite oferta"]], hint: "Comenzile, cererile de pe site, ofertele." },
   { k: "tenders", l: "Licitații SEAP", group: "CRM", rights: ["E"], sp: [["rules", "Schimbă criteriile"]] },
   { k: "listings", l: "Anunțuri imobiliare", group: "CRM", rights: ["A", "E", "D"] },
-  { k: "reports", l: "Rapoarte", group: "Operațional", rights: ["A", "E", "D"], scope: ["Toate", "Din echipa lui"],
+  { k: "reports", l: "Rapoarte", group: "Operațional", rights: ["A", "E", "D"], scope: [["all", "Toate"], ["own", "Din echipa lui"], LEAD],
     sp: [["status", "Schimbă statusul"], ["deliver", "Predă raportul"], ["team", "Alocă echipa"]],
-    hint: "Pe rapoartele din echipa lui contează și drepturile din echipa raportului (mai jos)." },
-  { k: "inspections", l: "Inspecții", group: "Operațional", rights: ["E"], scope: ["Toate", "Alocate lui"], sp: [["assign", "Alocă inspectorul"]] },
+    hint: "„Din echipa lui”: drepturile din echipa raportului (mai jos). „Unde e evaluator / verificator”: drepturile de aici, pe rapoartele unde e evaluator principal sau verificator." },
+  { k: "inspections", l: "Inspecții", group: "Operațional", rights: ["E"], scope: [["all", "Toate"], ["own", "Alocate lui"], ["lead", "Alocate lui și din rapoartele unde e evaluator / verificator"]], sp: [["assign", "Alocă inspectorul"]] },
   { k: "properties", l: "Proprietăți / comparabile", group: "Operațional", rights: ["E"], hint: "Raportul unei proprietăți se deschide doar dacă îl vede." },
-  { k: "fees", l: "Onorarii și sume", group: "Financiar", rights: [], scope: ["Toate sumele", "Doar cota lui"] },
+  { k: "fees", l: "Onorarii și sume", group: "Financiar", rights: [], scope: [["all", "Toate sumele"], ["own", "Doar cota lui"], ["lead", "Toate sumele unde e evaluator / verificator"]] },
   { k: "billing", l: "Facturare", group: "Financiar", rights: ["A", "E", "D"], sp: [["issue", "Emite factura"]] },
-  { k: "statements", l: "Borderouri", group: "Financiar", rights: ["A", "E", "D"], scope: ["Toate", "Doar al lui"] },
-  { k: "dashboard", l: "Tablou de bord", group: "Administrare", rights: [], scope: ["Al firmei", "Personal"] },
+  { k: "statements", l: "Borderouri", group: "Financiar", rights: ["A", "E", "D"], scope: [["all", "Toate"], ["own", "Doar al lui"]] },
+  { k: "dashboard", l: "Tablou de bord", group: "Administrare", rights: [], scope: [["all", "Al firmei"], ["own", "Personal"]] },
   { k: "users", l: "Utilizatori", group: "Administrare", rights: ["A", "E", "D"] },
   { k: "settings", l: "Setări firmă", group: "Administrare", rights: ["E"], hint: "Datele firmei, facturare, conexiuni Claude." },
   { k: "templates", l: "Fișe de inspecție", group: "Administrare", rights: ["E"] },
@@ -33,10 +38,10 @@ export const MODULES = [
 
 export type ModKey = (typeof MODULES)[number]["k"];
 type SpOf<M> = M extends { k: infer K extends string; sp: readonly (readonly [infer S extends string, string])[] } ? `${K}:${S}` : never;
-/** A permission: a module (sees it), a right on it, "all" records, or a special action. */
-export type Perm = ModKey | `${ModKey}.${Right}` | `${ModKey}.all` | SpOf<(typeof MODULES)[number]>;
+/** A permission: a module (sees it), a right on it, "all" or "lead" records, or a special action. */
+export type Perm = ModKey | `${ModKey}.${Right}` | `${ModKey}.all` | `${ModKey}.lead` | SpOf<(typeof MODULES)[number]>;
 
-export type Cell = { on: boolean; r: Right[]; own?: boolean; sp: string[] };
+export type Cell = { on: boolean; r: Right[]; scope?: Scope; sp: string[] };
 export type Role = { id: string; name: string; cells: Partial<Record<ModKey, Cell>> };
 
 // ---------- the report team ----------
@@ -63,7 +68,7 @@ export type PermConfig = { roles: Role[]; team: TeamMatrix };
 
 // ---------- defaults ----------
 
-const cell = (r: Right[] = [], o: { own?: boolean; sp?: string[] } = {}): Cell => ({ on: true, r, own: o.own, sp: o.sp ?? [] });
+const cell = (r: Right[] = [], o: { scope?: Scope; sp?: string[] } = {}): Cell => ({ on: true, r, scope: o.scope, sp: o.sp ?? [] });
 const fullCell = (m: (typeof MODULES)[number]): Cell => ({ on: true, r: [...m.rights], sp: "sp" in m ? m.sp.map(([s]) => s) : [] });
 
 export const DEFAULT_CONFIG: PermConfig = {
@@ -76,8 +81,8 @@ export const DEFAULT_CONFIG: PermConfig = {
       dashboard: cell(), settings: cell(),
     } },
     { id: "evaluator", name: "Evaluator", cells: {
-      tenders: cell(), reports: cell([], { own: true }), inspections: cell(["E"], { own: true }), properties: cell(),
-      fees: cell([], { own: true }), dashboard: cell([], { own: true }),
+      tenders: cell(), reports: cell([], { scope: "own" }), inspections: cell(["E"], { scope: "own" }), properties: cell(),
+      fees: cell([], { scope: "own" }), dashboard: cell([], { scope: "own" }),
     } },
   ],
   team: {
@@ -104,7 +109,7 @@ export function cleanConfig(raw: unknown): PermConfig {
     const name = String(r?.name ?? "").trim().slice(0, 60);
     if (!id || !name || id === "owner" || seen.has(id)) continue;
     seen.add(id);
-    const cellsIn = (r.cells && typeof r.cells === "object" ? r.cells : {}) as Record<string, Partial<Cell>>;
+    const cellsIn = (r.cells && typeof r.cells === "object" ? r.cells : {}) as Record<string, Partial<Cell> & { own?: boolean }>;
     const cells: Role["cells"] = {};
     for (const m of MODULES) {
       const c = cellsIn[m.k];
@@ -112,7 +117,9 @@ export function cleanConfig(raw: unknown): PermConfig {
       const sps = "sp" in m ? m.sp.map(([s]) => s as string) : [];
       cells[m.k] = {
         on: true, r: (m.rights as readonly Right[]).filter((x) => c.r?.includes(x)),
-        own: "scope" in m ? !!c.own : undefined, sp: sps.filter((s) => c.sp?.includes(s)),
+        // Saved before "lead" existed: own = true.
+        scope: "scope" in m ? (m.scope.some(([v]) => v === (c.scope ?? (c.own ? "own" : "all"))) ? (c.scope ?? (c.own ? "own" : "all")) : "all") : undefined,
+        sp: sps.filter((s) => c.sp?.includes(s)),
       };
     }
     roles.push({ id, name, cells });
@@ -129,14 +136,16 @@ export function cleanConfig(raw: unknown): PermConfig {
   return { roles, team };
 }
 
-/** The flat list of permissions of a role ("orders", "orders.E", "orders.all", "orders:process"…). */
+/** The flat list of permissions of a role ("orders", "orders.E", "orders.all" / "orders.lead", "orders:process"…). */
 export function permsFor(cfg: PermConfig, role: string): string[] {
   const out: string[] = [];
   for (const m of MODULES) {
     const c: Cell | undefined = role === "owner" ? fullCell(m) : cfg.roles.find((r) => r.id === role)?.cells[m.k];
     if (!c?.on) continue;
     out.push(m.k, ...c.r.map((x) => `${m.k}.${x}`), ...c.sp.map((s) => `${m.k}:${s}`));
-    if (!c.own) out.push(`${m.k}.all`);
+    const scope = c.scope ?? "all";
+    if (scope === "all") out.push(`${m.k}.all`);
+    if (scope === "lead") out.push(`${m.k}.lead`);
   }
   return out;
 }
@@ -151,3 +160,11 @@ export const roleNames = (cfg: PermConfig) => Object.fromEntries(cfg.roles.map((
 /** Name of a role (built-in or added by the owner). */
 export const roleName = (cfg: PermConfig | null | undefined, role: string) =>
   role === "owner" ? "Proprietar" : cfg?.roles.find((r) => r.id === role)?.name ?? (role === "inspector" ? "Inspector" : role);
+
+/** On which records the user works in a module (owner: all). */
+export const scopeOf = (u: WithPerms | null | undefined, m: ModKey): Scope =>
+  !u ? "own" : u.role === "owner" || u.perms?.includes(`${m}.all`) ? "all" : u.perms?.includes(`${m}.lead`) ? "lead" : "own";
+
+/** SQL (binds the user id once): the report `col` has the user as main evaluator or verifier. */
+export const leadSql = (col: string) =>
+  `EXISTS (SELECT 1 FROM report_members lm WHERE lm.report_id = ${col} AND lm.user_id = ? AND lm.role IN ('evaluator', 'verifier'))`;

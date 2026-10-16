@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { can } from "@/lib/perms";
+import { inScope } from "@/lib/scope";
 import { notFound } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { now } from "@/lib/db";
@@ -36,7 +37,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
   const o = await getOrder(db, id);
   if (!o) notFound();
   // „Create de el”: only the orders the user created.
-  if (!can(user, "orders.all") && o.created_by !== user.id) notFound();
+  if (!(await inScope(db, user, "orders", id))) notFound();
   const messages = await messagesOf(db, "order", o.id, user.id);
   // The first time someone in the team opens the order it stops being "new".
   if (!o.viewed_at) {

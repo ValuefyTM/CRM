@@ -1,6 +1,7 @@
 // Server-only: the contracts of VALUEFY. Classic: one client, one piece of work (the report, sometimes several) — made
 // automatically when a report opens from an order of the portal, the website or direct work. Framework: an agreement
 // with a bank and its standard fees; the bank's orders are worked under it and invoiced on the monthly statement.
+import type { ScopeFilter } from "./scope";
 import { bucharestDay, now, uuid } from "./db";
 import { audit } from "./auth";
 import { fileSrc } from "./files";
@@ -14,7 +15,8 @@ export type ContractRow = Contract & {
   client: string | null; client_kind: string | null; reports: number; open: number; done: number; report_id: string | null; report_number: string | null;
   report_status: string | null; report_label: string | null; month: number;
 };
-export type ContractFilters = { tip?: string; an?: string; stare?: string; q?: string; page?: number };
+/** `scope`: only the contracts the user works on (Permisiuni: Contracte, „Pe ce date”; see scope.ts). */
+export type ContractFilters = { tip?: string; an?: string; stare?: string; q?: string; page?: number; scope?: ScopeFilter };
 
 export const CONTRACT_PAGE = 50;
 export const CONTRACT_KINDS: [string, string][] = [["", "Toate"], ["clasic", "Clasice"], ["cadru", "Cadru"]];
@@ -74,6 +76,7 @@ export async function updateContract(db: D1Database, actor: string, id: string, 
 function where(f: ContractFilters) {
   const w: string[] = [];
   const a: (string | number)[] = [];
+  if (f.scope) { w.push(f.scope.sql); a.push(...f.scope.binds); }
   if (f.tip === "clasic") w.push("k.kind = 'classic'");
   if (f.tip === "cadru") w.push("k.kind = 'framework'");
   if (f.an && /^\d{4}$/.test(f.an)) { w.push("substr(k.signed_on, 1, 4) = ?"); a.push(f.an); }
