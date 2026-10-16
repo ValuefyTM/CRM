@@ -47,7 +47,7 @@ export function SideBrand({ href, label, mini: start }: { href: string; label: s
         <img className="brandFull" src="/valuefy-logo-white.png" alt="VALUEFY" width={600} height={123} />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="brandMark" src="/valuefy-mark.png" alt="" width={152} height={121} />
-        <span className="brandLabel">{label}</span>
+        {label && <span className="brandLabel">{label}</span>}
       </a>
       <button type="button" className="sideFold" aria-label={mini ? "Deschide meniul" : "Închide meniul"} title={mini ? "Deschide meniul" : "Închide meniul"} aria-expanded={!mini} onClick={() => set(!mini)}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3" /><path d="M9 3v18" /><path d={mini ? "m14 9 3 3-3 3" : "m16 15-3-3 3-3"} /></svg>

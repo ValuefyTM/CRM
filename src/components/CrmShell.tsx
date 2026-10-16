@@ -48,7 +48,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
       banner={viewAs && u.impersonator ? <ViewAs users={props.active === "home" ? viewAs : null} as={{ id: u.id, name: u.name || u.email, role: roleLabel("internal", u.role) }} realName={u.impersonator.name} /> : undefined}
       bare={props.bare}
       app="crm"
-      label="Evaluări ANEVAR · Cluj"
+      label=""
       nav={[
         { key: "home", label: "Dashboard", href: b || "/" },
         ...group("CRM", "g-crm", [
