@@ -19,7 +19,7 @@ export default async function BillingSettingsPage() {
   const c = oblioCredentials();
   return (
     <CrmShell user={user} base={base} active="settings" title="Setări · Facturare" subtitle="Oblio: conexiune, serii, TVA, reguli de facturare pe tip de client">
-      <SettingsTabs base={base} active="facturare" />
+      <SettingsTabs base={base} active="facturare" user={user} />
       {!can(user, "billing.E") && <div className="note">Doar proprietarul și administratorii pot modifica setările de facturare.</div>}
       <div className="cols">
         <div style={{ minWidth: 0 }}>

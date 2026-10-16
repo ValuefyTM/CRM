@@ -17,8 +17,8 @@ export default async function SheetTemplatesPage() {
   const { db, user, base } = await staffPage("templates");
   const list = await Promise.all(SHEET_TYPES.map(async ([t, label]) => ({ t, label, ...(await templateOf(db, t)) })));
   return (
-    <CrmShell user={user} base={base} active="templates" title="Setări · Fișe de inspecție" subtitle="Ce completează inspectorii pe telefon, pe tipuri de proprietate">
-      <SettingsTabs base={base} active="fise" />
+    <CrmShell user={user} base={base} active="settings" title="Setări · Fișe de inspecție" subtitle="Ce completează inspectorii pe telefon, pe tipuri de proprietate">
+      <SettingsTabs base={base} active="fise" user={user} />
       <section className="card">
         <p className="hint">
           Fiecare fișă pornește de la modelul VALUEFY. Poți redenumi și reordona grupurile, ascunde întrebări și adăuga întrebări proprii, cu

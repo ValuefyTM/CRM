@@ -1,15 +1,20 @@
-/** Tabs of the settings area (the others than "Date firmă" only for "admin"). */
-export function SettingsTabs({ base, active, admin = true }: { base: string; active: "firma" | "facturare" | "claude" | "fise" | "permisiuni"; admin?: boolean }) {
+import { can, type WithPerms } from "@/lib/perms";
+
+/** Tabs of Setări (one item in the menu): each one only for those who may open it. */
+export function SettingsTabs({ base, active, user }: { base: string; active: "firma" | "facturare" | "claude" | "fise" | "permisiuni" | "import"; user: WithPerms }) {
+  const tabs: [string, string, string, boolean][] = [
+    ["firma", "Date firmă", "", true],
+    ["permisiuni", "Permisiuni", "/permisiuni", can(user, "users")],
+    ["fise", "Fișe de inspecție", "/fise", can(user, "templates")],
+    ["facturare", "Facturare · Oblio", "/facturare", can(user, "billing")],
+    ["claude", "Conexiuni Claude", "/claude", can(user, "settings")],
+    ["import", "Import Glide", "/import", user.role === "owner"],
+  ];
   return (
     <nav className="tabs" aria-label="Setări">
-      <a href={`${base}/setari`} aria-current={active === "firma" ? "page" : undefined}>Date firmă</a>
-      {admin && <>
-        <a href={`${base}/setari/permisiuni`} aria-current={active === "permisiuni" ? "page" : undefined}>Permisiuni</a>
-        <a href={`${base}/setari/facturare`} aria-current={active === "facturare" ? "page" : undefined}>Facturare · Oblio</a>
-        <a href={`${base}/setari/fise`} aria-current={active === "fise" ? "page" : undefined}>Fișe de inspecție</a>
-        <a href={`${base}/setari/import`}>Import Glide</a>
-        <a href={`${base}/setari/claude`} aria-current={active === "claude" ? "page" : undefined}>Conexiuni Claude</a>
-      </>}
+      {tabs.filter(([, , , ok]) => ok).map(([k, l, path]) => (
+        <a key={k} href={`${base}/setari${path}`} aria-current={active === k ? "page" : undefined}>{l}</a>
+      ))}
     </nav>
   );
 }

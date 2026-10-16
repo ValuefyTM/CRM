@@ -25,7 +25,6 @@ export async function CrmShell(props: { user: User; base: string; active: string
       ])
     : [0, 0, 0];
   const u = props.user;
-  const owner = u.role === "owner";
   const may = (p: Perm) => can(u, p);
   const allReports = may("reports.all");
   // "Vezi ca…": owners and administrators (also while looking as someone else) pick the next person from the list.
@@ -53,10 +52,8 @@ export async function CrmShell(props: { user: User; base: string; active: string
         ...group("CRM", "g-crm", [
           may("clients") && { key: "clients", label: "Clienți / Entități", href: `${b}/clienti` },
           may("contracts") && { key: "contracts", label: "Contracte", href: `${b}/contracte` },
-          may("partners") && { key: "collabs", label: "Colaborări", soon: true },
           may("orders") && { key: "orders", label: "Comenzi", href: `${b}/comenzi`, badge: unread, hot: true },
           may("tenders") && { key: "tenders", label: "Licitații SEAP", href: `${b}/licitatii` },
-          may("orders") && { key: "followups", label: "Follow-up-uri", soon: true },
           may("listings") && { key: "listings", label: "Anunțuri imobiliare", href: `${b}/anunturi`, badge: inquiries, hot: true },
         ]),
         ...group("Operațional", "g-ops", [
@@ -65,17 +62,11 @@ export async function CrmShell(props: { user: User; base: string; active: string
           may("properties") && { key: "properties", label: may("reports.all") ? "Proprietăți" : "Proprietăți / comparabile", href: `${b}/proprietati` },
         ]),
         ...group("Financiar", "g-fin", [
-          may("statements") && { key: "statements", label: "Borderouri", soon: true },
           may("billing") && { key: "invoicing", label: "Facturare", href: `${b}/facturare` },
         ]),
         ...group("Administrare", "g-admin", [
           may("users") && { key: "users", label: "Utilizatori", href: `${b}/utilizatori` },
-          may("templates") && { key: "templates", label: "Fișe de inspecție", href: `${b}/setari/fise` },
-          may("users") && { key: "perms", label: "Permisiuni", href: `${b}/setari/permisiuni` },
-          owner && { key: "import", label: "Import Glide", href: `${b}/setari/import` },
-        ]),
-        ...group("Personal", "g-me", [
-          { key: "notes", label: "Notițe", soon: true },
+          // Date firmă, permisiuni, fișe de inspecție, facturare, Claude, import: tabs of Setări.
           { key: "settings", label: "Setări", href: `${b}/setari` },
         ]),
       ]}

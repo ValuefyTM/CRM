@@ -20,8 +20,8 @@ export default async function SheetTemplatePage({ params }: { params: Promise<{ 
   const t = tip as SheetType;
   const cur = await templateOf(db, t);
   return (
-    <CrmShell user={user} base={base} active="templates" title={`Fișa · ${label}`} subtitle="Grupurile și întrebările fișei de inspecție">
-      <SettingsTabs base={base} active="fise" />
+    <CrmShell user={user} base={base} active="settings" title={`Fișa · ${label}`} subtitle="Grupurile și întrebările fișei de inspecție">
+      <SettingsTabs base={base} active="fise" user={user} />
       <TemplateEditor type={t} label={label} back={`${base}/setari/fise`} initial={cur.tpl} model={baseTemplate(t)} custom={cur.custom} edit={can(user, "templates.E")} />
     </CrmShell>
   );

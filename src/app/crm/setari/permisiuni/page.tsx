@@ -19,8 +19,8 @@ export default async function PermsPage() {
   const count = Object.fromEntries(people.results.map((r) => [r.role, r.n])) as Record<string, number>;
   const owner = user.role === "owner";
   return (
-    <CrmShell user={user} base={base} active="perms" title="Permisiuni" subtitle="Rolurile pe rânduri, modulele pe coloane · proprietarul are mereu acces complet">
-      <SettingsTabs base={base} active="permisiuni" />
+    <CrmShell user={user} base={base} active="settings" title="Permisiuni" subtitle="Rolurile pe rânduri, modulele pe coloane · proprietarul are mereu acces complet">
+      <SettingsTabs base={base} active="permisiuni" user={user} />
       {!owner && <div className="note">Doar proprietarul modifică permisiunile. Le poți vedea aici.</div>}
       <PermMatrix initial={cfg} defaults={DEFAULT_CONFIG} counts={count} owners={count.owner ?? 1} edit={owner} />
     </CrmShell>

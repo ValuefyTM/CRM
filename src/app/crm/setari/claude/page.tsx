@@ -18,7 +18,7 @@ export default async function ClaudePage() {
   const url = `${o}/api/mcp`;
   return (
     <CrmShell user={user} base={base} active="settings" title="Setări" subtitle="Conectorul Claude: întrebi în Claude despre comenzi, rapoarte, clienți și facturi">
-      <SettingsTabs base={base} active="claude" />
+      <SettingsTabs base={base} active="claude" user={user} />
       {!allowed ? <div className="note">Conectarea Claude la CRM este disponibilă deocamdată doar proprietarului și administratorilor.</div> : (
         <div className="cols">
           <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
