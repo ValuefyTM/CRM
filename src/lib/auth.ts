@@ -236,7 +236,7 @@ export const AS_COOKIE = "vf_as";
 
 /** Who an owner or administrator may look at the CRM as: active team members who use the CRM, never an owner (unless they are one). */
 export const canImpersonate = (me: User, u: User) =>
-  me.id !== u.id && isAdmin(me) && u.kind === "internal" && u.status === "active" && u.role !== "inspector" && (u.role !== "owner" || me.role === "owner");
+  me.id !== u.id && isAdmin(me) && u.kind === "internal" && (u.status === "active" || u.status === "invited") && u.role !== "inspector" && (u.role !== "owner" || me.role === "owner");
 
 /** The signed-in, active user of an app, or null. In the CRM: with the permissions of the role, or the user looked at with "Vezi ca…". */
 export async function currentUser(db: D1Database, app: App): Promise<User | null> {

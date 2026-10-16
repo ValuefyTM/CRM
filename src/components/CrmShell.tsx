@@ -30,9 +30,9 @@ export async function CrmShell(props: { user: User; base: string; active: string
   // "Vezi ca…": owners and administrators (also while looking as someone else) pick the next person from the list.
   const realRole = u.impersonator?.role ?? u.role;
   const viewAs = db && (u.impersonator || isAdmin(u))
-    ? (await db.prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role FROM users WHERE kind = 'internal' AND status = 'active' AND role <> 'inspector'
+    ? (await db.prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role, status FROM users WHERE kind = 'internal' AND status IN ('active', 'invited') AND role <> 'inspector'
         AND id <> ? ${realRole === "owner" ? "" : "AND role <> 'owner'"} ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'operator' THEN 2 ELSE 3 END, name`)
-        .bind(u.impersonator?.id ?? u.id).all<{ id: string; name: string; role: string }>()).results.map((x) => ({ ...x, role: roleLabel("internal", x.role) }))
+        .bind(u.impersonator?.id ?? u.id).all<{ id: string; name: string; role: string; status: string }>()).results.map((x) => ({ id: x.id, name: x.name, role: `${roleLabel("internal", x.role)}${x.status === "invited" ? " · nu s-a logat încă" : ""}` }))
     : null;
   const myOpen = !allReports && db
     ? await db.prepare(`SELECT COUNT(*) AS n FROM reports r WHERE r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL AND ${mySql(u)}`).bind(u.id).first<{ n: number }>().then((r) => r?.n ?? 0).catch(() => 0)

@@ -2036,4 +2036,4 @@ a.navItem[aria-current="page"] .navIcon { opacity: 1; }
 }
 @media (max-width: 979px) { .sideFold { display: none; } }
 /* Bara strânsă: conținutul (tabelele) umple toată lățimea paginii. */
-@media (min-width: 980px) { .shell[data-mini] .content { max-width: none; } }
+.content { max-width: none; }
