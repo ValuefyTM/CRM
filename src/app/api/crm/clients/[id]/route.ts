@@ -4,7 +4,7 @@ import { findDuplicate, getClient, updateClient, validateClient } from "@/lib/cl
 import { err, json, staffApi } from "@/lib/api";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi("clients", true);
+  const a = await staffApi("clients.E", true);
   if ("res" in a) return a.res;
   const { id } = await params;
   if (!(await getClient(a.db, id))) return err("Clientul nu există.", 404);

@@ -7,10 +7,9 @@ export const INTERNAL_ROLES = [
   ["owner", "Proprietar"],
   ["admin", "Administrator"],
   ["evaluator", "Evaluator"],
-  ["inspector", "Inspector"],
-  ["operator", "Operator"],
+  ["operator", "Secretariat"],
 ] as const;
-/** Work a team member does, whatever their role in the CRM (several can be ticked). */
+/** Before Permisiuni v2: work a team member did besides the role (kept for old accounts; not edited any more). Work, whatever their role in the CRM (several can be ticked). */
 export const DUTIES = [
   ["evaluator", "Evaluator"],
   ["inspector", "Inspector"],
@@ -40,14 +39,11 @@ export const CLIENT_TYPES = [
 
 const find = (list: readonly (readonly [string, string])[], v: string | null | undefined) => list.find(([k]) => k === v)?.[1];
 
-/** Role, plus the duties that are not already the role: "Proprietar · evaluator, inspector". */
-export const teamLabel = (u: { role: string; duties?: string | null }) => {
-  const extra = dutiesOf(u).filter((d) => d !== u.role).map((d) => find(DUTIES, d)?.toLowerCase() ?? d);
-  return `${find(INTERNAL_ROLES, u.role) ?? u.role}${extra.length ? ` · ${extra.join(", ")}` : ""}`;
-};
+/** Role of a team member; `names` adds the roles the owner created in Setări → Permisiuni. */
+export const teamLabel = (u: { role: string }, names?: Record<string, string>) => names?.[u.role] ?? find(INTERNAL_ROLES, u.role) ?? (u.role === "inspector" ? "Inspector" : u.role);
 
-export const roleLabel = (kind: string, role: string) =>
-  kind === "internal" ? find(INTERNAL_ROLES, role) ?? role : kind === "partner" ? find(PARTNER_ROLES, role) ?? role : "Client";
+export const roleLabel = (kind: string, role: string, names?: Record<string, string>) =>
+  kind === "internal" ? teamLabel({ role }, names) : kind === "partner" ? find(PARTNER_ROLES, role) ?? role : "Client";
 export const engagementLabel = (v: string | null) => find(ENGAGEMENTS, v) ?? "—";
 export const clientTypeLabel = (v: string | null) => find(CLIENT_TYPES, v) ?? "—";
 

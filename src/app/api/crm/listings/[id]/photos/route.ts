@@ -6,7 +6,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 /** Photos already resized in the browser (max 1600 px JPEG), so each fits in a database row. */
 export async function POST(req: Request, { params }: Ctx) {
-  const a = await staffApi("listings", true);
+  const a = await staffApi("listings.E", true);
   if ("res" in a) return a.res;
   const { id } = await params;
   if (!(await getById(a.db, id))) return err("Anunțul nu există.", 404);
@@ -24,7 +24,7 @@ export async function POST(req: Request, { params }: Ctx) {
 
 /** New order of the photos (the first one is the cover). */
 export async function PUT(req: Request, { params }: Ctx) {
-  const a = await staffApi("listings", true);
+  const a = await staffApi("listings.E", true);
   if ("res" in a) return a.res;
   const { order } = await json(req);
   if (!Array.isArray(order)) return err("Ordine invalidă.");

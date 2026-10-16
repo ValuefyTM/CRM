@@ -5,7 +5,7 @@ import { cleanTerms, PAYMENT_FIELDS, REPORT_FIELDS } from "@/lib/contract-terms"
 
 /** Saves the terms of reference / payment terms of a contract (empty fields fall back to the defaults). */
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi("clients", true);
+  const a = await staffApi("contracts.E", true);
   if ("res" in a) return a.res;
   const { id } = await params;
   if (!(await a.db.prepare("SELECT 1 AS x FROM contracts WHERE id = ?").bind(id).first())) return err("Contractul nu există.", 404);

@@ -5,7 +5,7 @@ import { withAutoEnglish } from "@/lib/translate-listing";
 
 /** New listing (a draft until it is published). */
 export async function POST(req: Request) {
-  const a = await staffApi("listings", true);
+  const a = await staffApi("listings.A", true);
   if ("res" in a) return a.res;
   const v = validateInput(await json(req));
   if (!v.ok) return err(v.error);

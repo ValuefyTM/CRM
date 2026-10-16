@@ -8,7 +8,7 @@ import { assignInspection, canAssign, cancelInspection, markNoInspection } from 
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const a = await reportApi(id, "work", true);
+  const a = await reportApi(id, "view", true);
   if ("res" in a) return a.res;
   if (!(await canAssign(a.db, a.user, id))) return err("Doar evaluatorul principal al raportului poate aloca inspecția.", 403);
   const b = await json(req);
@@ -25,7 +25,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 /** Cancels an inspection task that is not done yet: `?inspection=<id>`. */
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const a = await reportApi(id, "work", true);
+  const a = await reportApi(id, "view", true);
   if ("res" in a) return a.res;
   if (!(await canAssign(a.db, a.user, id))) return err("Doar evaluatorul principal al raportului poate anula inspecția.", 403);
   const r = await cancelInspection(a.db, a.user, id, new URL(req.url).searchParams.get("inspection") ?? "");

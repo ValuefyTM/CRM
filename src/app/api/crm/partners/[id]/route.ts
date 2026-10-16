@@ -6,7 +6,7 @@ import { err, json, staffApi } from "@/lib/api";
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function PUT(req: Request, { params }: Ctx) {
-  const a = await staffApi("admin", true);
+  const a = await staffApi("partners.E", true);
   if ("res" in a) return a.res;
   const { id } = await params;
   if (!(await getPartner(a.db, id))) return err("Colaboratorul nu există.", 404);
@@ -19,7 +19,7 @@ export async function PUT(req: Request, { params }: Ctx) {
 
 /** Suspend / reactivate a partner (suspended partners cannot sign in). */
 export async function PATCH(req: Request, { params }: Ctx) {
-  const a = await staffApi("admin", true);
+  const a = await staffApi("partners.E", true);
   if ("res" in a) return a.res;
   const { id } = await params;
   const status = (await json(req)).status === "suspended" ? "suspended" : "active";

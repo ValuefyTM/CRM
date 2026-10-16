@@ -10,7 +10,7 @@ const typeOf = async (p: P) => { const { type } = await p.params; return SHEET_T
 
 /** Saves the firm's template of one sheet type (owner / admins). Applies to the sheets started from now on. */
 export async function PUT(req: Request, p: P) {
-  const a = await staffApi("admin", true);
+  const a = await staffApi("templates.E", true);
   if ("res" in a) return a.res;
   const t = await typeOf(p);
   if (!t) return err("Fișă necunoscută.", 404);
@@ -23,7 +23,7 @@ export async function PUT(req: Request, p: P) {
 
 /** Back to the built-in form ("Modelul VALUEFY"). */
 export async function DELETE(_req: Request, p: P) {
-  const a = await staffApi("admin", true);
+  const a = await staffApi("templates.E", true);
   if ("res" in a) return a.res;
   const t = await typeOf(p);
   if (!t) return err("Fișă necunoscută.", 404);

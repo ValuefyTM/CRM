@@ -1,6 +1,6 @@
 import { niceName } from "./labels";
 import { can, type WithPerms } from "./perms";
-import { MY_REPORTS_SQL } from "./perms-db";
+import { mySql } from "./perms-db";
 
 // Server-only: the search box in the CRM's top bar — one query over reports, orders, clients, contracts and
 // properties (number, name, CUI, phone, email, CF / cadastral number, address), a few hits of each.
@@ -9,7 +9,7 @@ export type SearchHit = { kind: "report" | "order" | "client" | "contract" | "pr
 const PER = 6;
 
 /** Only what the user may open: their reports without "reports.all", no orders / clients / properties without those permissions. */
-export async function globalSearch(db: D1Database, raw: string, viewer?: WithPerms & { id: string }): Promise<SearchHit[]> {
+export async function globalSearch(db: D1Database, raw: string, viewer?: WithPerms & { id: string; team?: import("./perms").TeamMatrix }): Promise<SearchHit[]> {
   const q = raw.trim().slice(0, 80);
   if (q.length < 2) return [];
   const like = `%${q.replace(/[%_]/g, "")}%`;
@@ -20,7 +20,7 @@ export async function globalSearch(db: D1Database, raw: string, viewer?: WithPer
 
   const may = (p: Parameters<typeof can>[1]) => !viewer || can(viewer, p);
   const none = { results: [] as never[] };
-  const mine = may("reports.all") ? "" : `AND ${MY_REPORTS_SQL.replace("m.user_id = ?", "m.user_id = ?3")}`;
+  const mine = may("reports.all") ? "" : `AND ${mySql(viewer!).replace("m.user_id = ?", "m.user_id = ?3")}`;
   const [reports, orders, clients, contracts, props] = await Promise.all([
     db.prepare(`SELECT r.id, r.number, r.label, r.status, COALESCE(r.report_date, substr(r.created_at, 1, 10)) AS d, c.name AS client, b.name AS bank
       FROM reports r LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id
@@ -37,7 +37,7 @@ export async function globalSearch(db: D1Database, raw: string, viewer?: WithPer
       WHERE e.kind <> 'valuation_firm' AND (e.name LIKE ?1 OR e.cui LIKE ?1 OR e.email LIKE ?1 OR (?2 IS NOT NULL AND ${cleanPhone("e.phone")} LIKE ?2))
       ORDER BY e.name LIKE ?3 DESC, (SELECT COUNT(*) FROM reports r WHERE r.client_id = e.id) DESC LIMIT ${PER}`).bind(like, phone, `${q.replace(/[%_]/g, "")}%`)
       .all<{ id: string; kind: string; name: string; cui: string | null; phone: string | null; email: string | null; city: string | null }>(),
-    !may("clients") ? none : db.prepare(`SELECT k.id, k.kind, k.number, k.signed_on, e.name AS client FROM contracts k LEFT JOIN entities e ON e.id = k.client_id
+    !may("contracts") ? none : db.prepare(`SELECT k.id, k.kind, k.number, k.signed_on, e.name AS client FROM contracts k LEFT JOIN entities e ON e.id = k.client_id
       WHERE k.number = ?1 OR e.name LIKE ?2 ORDER BY k.number = ?1 DESC, k.signed_on DESC LIMIT ${PER}`).bind(q, like)
       .all<{ id: string; kind: string; number: string | null; signed_on: string | null; client: string | null }>(),
     !may("properties") ? none : db.prepare(`SELECT p.id, p.type, p.full_address, p.city, p.cf_number, p.cad_building FROM crm_properties p

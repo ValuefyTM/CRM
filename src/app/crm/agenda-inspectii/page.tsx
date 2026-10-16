@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Inspecții | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
 
 export default async function InspectionsPage({ searchParams }: { searchParams: Promise<BoardFilters & { vezi?: string }> }) {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("inspections");
   const raw = await searchParams;
   // Without "inspections.all": only the user's own inspections.
   const all = can(user, "inspections.all");

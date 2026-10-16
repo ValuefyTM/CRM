@@ -12,7 +12,7 @@ export default async function NewListingPage() {
   return (
     <CrmShell user={user} base={base} active="listings" title="Anunț nou" subtitle="Se creează ca ciornă; îl publici după ce adaugi fotografiile.">
       <a className="linkBtn" href={`${base}/anunturi`}>← Anunțuri imobiliare</a>
-      <ListingEditor base={base} canDelete={can(user, "delete")} />
+      <ListingEditor base={base} canDelete={can(user, "listings.D")} />
     </CrmShell>
   );
 }

@@ -80,11 +80,11 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
   const { db, user, base } = await staffPage();
   const denied = !!(await searchParams)["fara-acces"];
   // Without the firm's dashboard: the user's own reports and inspections.
-  if (!can(user, "dashboard")) {
-    return <CrmShell user={user} base={base} active="home" title="Acasă" subtitle="Tabloul meu"><MyHome db={db} user={user} base={base} denied={denied} /></CrmShell>;
+  if (!can(user, "dashboard.all")) {
+    return <CrmShell user={user} base={base} active="home" title="Acasă" subtitle="Tabloul meu"><MyHome user={user} base={base} denied={denied} /></CrmShell>;
   }
   const d = await dashboard(db, base);
-  const money = can(user, "fees");
+  const money = can(user, "fees.all");
   const first = user.name ? user.name.split(" ")[0] : "";
   const hour = Number(new Date().toLocaleString("en-GB", { hour: "2-digit", hour12: false, timeZone: "Europe/Bucharest" }));
   const hello = hour < 11 ? "Bună dimineața" : hour < 18 ? "Bună ziua" : "Bună seara";
@@ -105,7 +105,7 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
     ] as [string, string, React.ReactNode, string?][] : []),
     ["Rapoarte în lucru", `${base}/rapoarte?status=deschise`, I.doc, `${d.openCount} deschise`],
     ...(can(user, "clients") ? [["Client nou", `${base}/clienti/nou`, I.user] as [string, string, React.ReactNode]] : []),
-    ...(can(user, "admin") ? [["Echipa", `${base}/utilizatori`, I.team] as [string, string, React.ReactNode]] : []),
+    ...(can(user, "users") ? [["Echipa", `${base}/utilizatori`, I.team] as [string, string, React.ReactNode]] : []),
   ];
 
   return (

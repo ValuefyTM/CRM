@@ -1,8 +1,9 @@
 // The dashboard of a team member without the firm's dashboard (Permisiuni): their reports and inspections only.
 import { fmtDate } from "@/lib/guard";
+import { getDb } from "@/lib/db";
 import { cap, inspectionState, lei, listReports, REPORT_STATUS } from "@/lib/reports";
 import { DUE_SQL } from "@/lib/reports";
-import { MY_REPORTS_SQL } from "@/lib/perms-db";
+import { mySql } from "@/lib/perms-db";
 import { can } from "@/lib/perms";
 import { niceName } from "@/lib/labels";
 import type { User } from "@/lib/users";
@@ -10,14 +11,16 @@ import { ClickRow } from "@/components/ClickRow";
 
 const today = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
 
-export async function MyHome({ db, user, base, denied }: { db: D1Database; user: User; base: string; denied: boolean }) {
+export async function MyHome({ user, base, denied }: { user: User; base: string; denied: boolean }) {
+  // The database comes from getDb, not as a prop: a binding cannot be passed between components.
+  const db = (await getDb())!;
   const t = today();
   const [open, counts, visits] = await Promise.all([
-    listReports(db, { status: "deschise", mine: user.id }),
+    listReports(db, { status: "deschise", mine: { id: user.id, sql: mySql(user) } }),
     db.prepare(`SELECT SUM(r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL) AS open,
         SUM(r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL AND (${DUE_SQL}) < ?) AS late,
         SUM(r.status = 'done' AND substr(COALESCE(r.report_date, r.delivered_at), 1, 7) = substr(?, 1, 7)) AS done_month
-      FROM reports r WHERE ${MY_REPORTS_SQL}`).bind(t, t, user.id).first<{ open: number | null; late: number | null; done_month: number | null }>(),
+      FROM reports r WHERE ${mySql(user)}`).bind(t, t, user.id).first<{ open: number | null; late: number | null; done_month: number | null }>(),
     db.prepare(`SELECT i.id, i.status, i.scheduled_at, i.report_id, r.number, p.type, COALESCE(NULLIF(i.address, ''), p.full_address, p.city) AS address
       FROM inspections i JOIN assets a ON a.id = i.asset_id JOIN crm_properties p ON p.id = a.property_id LEFT JOIN reports r ON r.id = i.report_id
       WHERE i.inspector_id = ? AND i.status IN ('to_schedule', 'scheduled') AND (r.id IS NULL OR (r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL))

@@ -14,7 +14,7 @@ const OK = /\.(pdf|jpe?g|png|heic|heif|webp|docx?|xlsx?|zip)$/i;
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const a = await reportApi(id, "work", true);
+  const a = await reportApi(id, "docs", true);
   if ("res" in a) return a.res;
   const r = await a.db.prepare("SELECT id FROM reports WHERE id = ?").bind(id).first();
   if (!r) return err("Raportul nu există.", 404);
@@ -78,7 +78,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 /** Marks a source document as the CF extract / floor survey (or neither): `{ doc, doc_type: cf | rlv | other, asset }`. */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const a = await reportApi(id, "work", true);
+  const a = await reportApi(id, "docs", true);
   if ("res" in a) return a.res;
   const b = await json(req);
   const d = await a.db.prepare("SELECT id, filename FROM report_documents WHERE id = ? AND report_id = ? AND kind = 'source'").bind(String(b.doc ?? ""), id).first<{ id: string; filename: string }>();
@@ -92,7 +92,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const a = await reportApi(id, "work", true);
+  const a = await reportApi(id, "docsDelete", true);
   if ("res" in a) return a.res;
   const docId = new URL(req.url).searchParams.get("doc") ?? "";
   const d = await a.db.prepare("SELECT id, filename, r2_key FROM report_documents WHERE id = ? AND report_id = ?").bind(docId, id).first<{ id: string; filename: string; r2_key: string | null }>();

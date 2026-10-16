@@ -27,8 +27,7 @@ const FILTERS: Record<Tab, [string, string, (r: Row) => boolean][]> = {
   interni: [
     ["all", "Toți", () => true],
     ["online", "Online acum", (r) => r.presence === "online"],
-    ["evaluator", "Evaluatori", (r) => r.duties.includes("evaluator") && r.status !== "disabled"],
-    ["inspector", "Inspectori", (r) => r.duties.includes("inspector") && r.status !== "disabled"],
+    ["evaluator", "Evaluatori", (r) => r.role === "evaluator" && r.status !== "disabled"],
     ["admin", "Administrare", (r) => (r.role === "owner" || r.role === "admin") && r.status !== "disabled"],
     ["operator", "Operatori", (r) => r.role === "operator" && r.status !== "disabled"],
     ["contractor", "Colaboratori externi", (r) => r.engagement === "contractor" && r.status !== "disabled"],
@@ -161,9 +160,9 @@ export function UsersBrowser(props: { rows: Row[]; firms: FirmRow[]; base: strin
                       </td>
                       {tab === "interni" && (
                         <>
-                          <td><span className={`pill ${r.duties.includes("evaluator") ? "pillInfo" : ""}`}>{r.roleLabel}</span></td>
+                          <td><span className={`pill ${r.role === "evaluator" ? "pillInfo" : ""}`}>{r.roleLabel}</span></td>
                           <td>{r.engagement === "contractor" ? "Extern" : "Intern"}</td>
-                          <td>{r.duties.includes("evaluator") ? <>{r.anevar ? <span className="mono">{r.anevar}</span> : <span className="muted">—</span>}{r.specs && <div className="muted">{r.specs.replace(/,/g, " · ")}</div>}</> : <span className="muted">—</span>}</td>
+                          <td>{r.anevar || r.specs ? <>{r.anevar ? <span className="mono">{r.anevar}</span> : <span className="muted">—</span>}{r.specs && <div className="muted">{r.specs.replace(/,/g, " · ")}</div>}</> : <span className="muted">—</span>}</td>
                         </>
                       )}
                       {tab === "colaboratori" && (

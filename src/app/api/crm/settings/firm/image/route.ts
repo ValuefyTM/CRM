@@ -3,7 +3,7 @@ import { saveFirmImage } from "@/lib/settings";
 
 /** Replaces the stamp or the signature (multipart: `which`, `file`); DELETE ?which= goes back to the model's image. */
 export async function POST(req: Request) {
-  const a = await staffApi("admin", true);
+  const a = await staffApi("settings.E", true);
   if ("res" in a) return a.res;
   const form = await req.formData().catch(() => null);
   const which = form?.get("which");
@@ -16,7 +16,7 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const a = await staffApi("admin", true);
+  const a = await staffApi("settings.E", true);
   if ("res" in a) return a.res;
   const which = new URL(req.url).searchParams.get("which");
   if (which !== "stamp" && which !== "signature") return err("Alege ștampila sau semnătura.");

@@ -3,7 +3,7 @@ import { saveFirm } from "@/lib/settings";
 
 /** Saves VALUEFY's details used on contracts (owner and administrators). */
 export async function PUT(req: Request) {
-  const a = await staffApi("admin", true);
+  const a = await staffApi("settings.E", true);
   if ("res" in a) return a.res;
   const r = await saveFirm(a.db, a.user.id, await json(req));
   if (!r.ok) return err(r.error);

@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { staffPage } from "@/lib/guard";
 import { registry, registryFacets, REGISTRY_PAGE, REGISTRY_SORTS } from "@/lib/registry";
 import { CrmShell } from "@/components/CrmShell";
-import { isAdmin } from "@/lib/users";
 import { can } from "@/lib/perms";
 import { geolocateEnabled, locateCounts } from "@/lib/geolocate";
 import { LocateAll } from "./LocateActions";
@@ -18,10 +17,10 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
   const { db, user, base } = await staffPage("properties");
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page) || 1);
-  const admin = isAdmin(user);
+  const admin = can(user, "properties.E");
   const all = can(user, "reports.all");
   const [data, facets, locCounts] = await Promise.all([
-    registry(db, { ...sp, page }, { id: user.id, all }), registryFacets(db, sp.county, sp.cat), admin ? locateCounts(db) : Promise.resolve(null),
+    registry(db, { ...sp, page }, { id: user.id, all, team: user.team }), registryFacets(db, sp.county, sp.cat), admin ? locateCounts(db) : Promise.resolve(null),
   ]);
   const s = data.stats;
   const pages = Math.max(1, Math.ceil(s.n / REGISTRY_PAGE));

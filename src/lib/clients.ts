@@ -79,13 +79,15 @@ export async function findDuplicate(db: D1Database, v: ClientInput, exceptId?: s
 
 // ---------- read ----------
 
-export type ClientFilters = { q?: string; kind?: string; portal?: string; page?: number };
+/** `createdBy`: only the clients this user added (Permisiuni: Clienți, „Adăugați de el”). */
+export type ClientFilters = { q?: string; kind?: string; portal?: string; page?: number; createdBy?: string };
 export const CLIENT_PAGE = 50;
 
 export async function listClients(db: D1Database, f: ClientFilters) {
   const w = ["e.kind <> 'valuation_firm'"];
   const p: (string | number)[] = [];
   if (f.kind && CLIENT_KINDS.some(([k]) => k === f.kind)) { w.push("e.kind = ?"); p.push(f.kind); }
+  if (f.createdBy) { w.push("e.created_by = ?"); p.push(f.createdBy); }
   if (f.portal === "yes") w.push("EXISTS (SELECT 1 FROM users u WHERE u.entity_id = e.id AND u.kind = 'client')");
   if (f.portal === "no") w.push("NOT EXISTS (SELECT 1 FROM users u WHERE u.entity_id = e.id AND u.kind = 'client')");
   const q = f.q?.trim();

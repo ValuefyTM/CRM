@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { can } from "@/lib/perms";
 import { notFound } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { history } from "@/lib/history";
@@ -28,6 +29,8 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const { id } = await params;
   const c = await getClient(db, id);
   if (!c) notFound();
+  // „Adăugați de el”: only the clients the user added.
+  if (!can(user, "clients.all") && (c as { created_by?: string | null }).created_by !== user.id) notFound();
   const [contacts, portalUsers, reports, orders, totals, log] = await Promise.all([
     clientContacts(db, id),
     clientPortalUsers(db, id),

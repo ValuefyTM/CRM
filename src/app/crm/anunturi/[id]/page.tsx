@@ -16,7 +16,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   return (
     <CrmShell user={user} base={base} active="listings" title={listing.title} subtitle={listing.published ? "Publicat pe valuefy.ro" : "Ciornă — nu este vizibil pe site"}>
       <a className="linkBtn" href={`${base}/anunturi`}>← Anunțuri imobiliare</a>
-      <ListingEditor base={base} listing={listing} canDelete={can(user, "delete")} />
+      <ListingEditor base={base} listing={listing} canDelete={can(user, "listings.D")} />
     </CrmShell>
   );
 }

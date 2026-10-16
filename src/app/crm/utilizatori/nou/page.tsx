@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { staffPage } from "@/lib/guard";
 import { listPartners } from "@/lib/partners";
-import { isAdmin, type Kind } from "@/lib/users";
+import { type Kind } from "@/lib/users";
+import { can } from "@/lib/perms";
 import { CrmShell } from "@/components/CrmShell";
+import { getConfig } from "@/lib/perms-db";
 import { UserForm } from "../UserForm";
 
 export const metadata: Metadata = { title: "Utilizator nou | CRM VALUEFY" };
@@ -15,9 +17,10 @@ const KINDS: [string, Kind, string, string][] = [
 ];
 
 export default async function NewUserPage({ searchParams }: { searchParams: Promise<{ tip?: string; firma?: string }> }) {
-  const { db, user, base } = await staffPage("admin");
+  const { db, user, base } = await staffPage("users");
+  const cfg = await getConfig(db);
   const sp = await searchParams;
-  const options = KINDS.filter(([, k]) => k !== "internal" || isAdmin(user));
+  const options = KINDS.filter(([, k]) => k !== "internal" || can(user, "users.A"));
   const [tip, kind] = options.find(([t]) => t === sp.tip) ?? options[0];
   const firms = kind === "partner" ? (await listPartners(db)).filter((p) => p.status === "active").map((p) => ({ id: p.id, name: p.name })) : [];
 
@@ -39,7 +42,8 @@ export default async function NewUserPage({ searchParams }: { searchParams: Prom
         ) : (
           <>
             {kind === "partner" && <p className="hint">Firma nu e în listă? <a className="rowLink" href={`${base}/utilizatori/firme/nou`}>Adaug-o întâi →</a></p>}
-            <UserForm key={kind} kind={kind} base={base} firms={firms} initial={{ partner_id: sp.firma ?? "" }} canMakeOwner={user.role === "owner"} />
+            <UserForm key={kind} kind={kind} base={base} firms={firms} initial={{ partner_id: sp.firma ?? "" }} canMakeOwner={user.role === "owner"}
+              roles={cfg.roles.map((r) => [r.id, r.name] as [string, string])} shares={user.role === "owner"} editShares={user.role === "owner"} />
           </>
         )}
       </div>

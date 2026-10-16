@@ -264,6 +264,40 @@ export function StageActions({ id, stage, hasVerifier }: { id: string; stage: st
   );
 }
 
+/** The verifier: finish the review, or send the report back to the main evaluator with what to fix. */
+export function VerifyActions({ id, verified }: { id: string; verified: string | null }) {
+  const [back, setBack] = useState(false);
+  const [comment, setComment] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const go = async (stage: "verified" | "back") => {
+    if (stage === "back" && !comment.trim()) return setMsg("Scrie ce trebuie corectat.");
+    setBusy(true);
+    const error = await patch(id, { stage, comment });
+    setBusy(false);
+    if (error) return setMsg(error);
+    location.reload();
+  };
+  if (verified) return <span className="pill pillOk"><i />Verificat {verified}</span>;
+  if (back) {
+    return (
+      <form className="inlineForm" onSubmit={(e) => { e.preventDefault(); go("back"); }}>
+        <textarea className="textarea" rows={2} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Ce trebuie corectat (îl primește evaluatorul principal)" aria-label="Comentariu pentru evaluator" style={{ minWidth: 260 }} />
+        <button type="submit" className="btn btnNavy btnSm" disabled={busy}>Întoarce la evaluator</button>
+        <button type="button" className="btn btnGhost btnSm" onClick={() => { setBack(false); setMsg(""); }}>Renunță</button>
+        {msg && <span role="alert" className="error inlineErr">{msg}</span>}
+      </form>
+    );
+  }
+  return (
+    <span className="actions" style={{ gap: 8 }}>
+      <button type="button" className="btn btnNavy btnSm" disabled={busy} onClick={() => go("verified")}>Finalizează verificarea</button>
+      <button type="button" className="btn btnGhost btnSm" disabled={busy} onClick={() => setBack(true)}>Întoarce cu comentariu</button>
+      {msg && <span role="alert" className="error inlineErr">{msg}</span>}
+    </span>
+  );
+}
+
 const ROLES: [string, string][] = [["evaluator", "Evaluator"], ["inspector", "Inspector"], ["verifier", "Verificator"], ["assistant", "Asistent"]];
 
 export function AddMember({ id, people }: { id: string; people: PickPerson[] }) {

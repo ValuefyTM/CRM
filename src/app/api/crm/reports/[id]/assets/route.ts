@@ -6,7 +6,7 @@ const report = async (db: D1Database, id: string) => db.prepare("SELECT id FROM 
 /** Adds an asset to the report: a new property, or one already in the CRM (`property_id`). */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const a = await reportApi(id, "work", true);
+  const a = await reportApi(id, "assets", true);
   if ("res" in a) return a.res;
   if (!(await report(a.db, id))) return err("Raportul nu există.", 404);
   const v = validateAsset(await json(req));
@@ -18,7 +18,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 /** Edits an asset (`?asset=`): its property data, value, approach and whether it is the main one. */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const a = await reportApi(id, "work", true);
+  const a = await reportApi(id, "assets", true);
   if ("res" in a) return a.res;
   const v = validateAsset(await json(req));
   if (!v.ok) return err(v.error);
@@ -29,7 +29,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 /** Takes an asset out of the report (`?asset=`), while it has no inspection done. */
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const a = await reportApi(id, "work", true);
+  const a = await reportApi(id, "assets", true);
   if ("res" in a) return a.res;
   const r = await removeAsset(a.db, a.user.id, id, new URL(req.url).searchParams.get("asset") ?? "");
   return r.ok ? Response.json(r) : err(r.error);

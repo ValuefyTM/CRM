@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { audit, endAllSessions, sendInvite } from "@/lib/auth";
 import { getPartner } from "@/lib/partners";
-import { canManageUser, deleteUser, getUser, isAdmin, updateUser, validateUser } from "@/lib/users";
+import { canManageUser, deleteUser, getUser, isAdmin, roleLabel, saveShares, updateUser, validateShares, validateUser } from "@/lib/users";
+import { getConfig } from "@/lib/perms-db";
 import { bucket } from "@/lib/orders";
 import { err, json, staffApi } from "@/lib/api";
-import { can } from "@/lib/perms";
+import { can, roleNames } from "@/lib/perms";
 
 /** Edit an account, (re)send the invitation, disable or re-enable it. */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -15,17 +16,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!u) return err("Utilizatorul nu există.", 404);
   const self = u.id === a.user.id;
   // Team accounts are managed by administrators (anyone may edit their own details); owners only by owners.
-  if (u.kind === "internal" && !self && (!isAdmin(a.user) || (u.role === "owner" && a.user.role !== "owner")))
+  if (u.kind === "internal" && !self && (!can(a.user, "users.E") || (u.role === "owner" && a.user.role !== "owner")))
     return err("Nu ai drepturi pentru acest cont.", 403);
-  if (!self && !can(a.user, "admin") && !(u.kind === "client" && can(a.user, "clients"))) return err("Nu ai drepturi pentru acest cont.", 403);
+  if (!self && !can(a.user, "users.E") && !(u.kind === "client" && can(a.user, "clients.E"))) return err("Nu ai drepturi pentru acest cont.", 403);
   const b = await json(req);
   const actor = `user:${a.user.id}`;
 
   if (b.action === "update") {
-    const v = validateUser(u.kind, b, u.role, a.user.role === "owner");
+    const cfg = await getConfig(a.db);
+    const v = validateUser(u.kind, b, u.role, a.user.role === "owner", cfg.roles.map((r) => r.id));
     if (!v.ok) return err(v.error);
-    // Nobody changes their own role; administrators may still tick their own duties (e.g. an owner who also inspects).
-    if (self) Object.assign(v.value, { role: u.role, engagement: u.engagement, ...(isAdmin(a.user) ? {} : { duties: u.duties }) });
+    // Nobody changes their own role.
+    if (self) Object.assign(v.value, { role: u.role, engagement: u.engagement });
+    // Fee shares: only the owner sets them.
+    const shares = u.kind === "internal" && a.user.role === "owner" && "share_evaluator" in b ? validateShares(b) : null;
+    if (shares && !shares.ok) return err(shares.error);
     if (u.kind === "partner" && !(await getPartner(a.db, v.value.partner_id!))) return err("Firma aleasă nu există.");
     // A portal account's email (its sign-in) and firm (which orders it sees) are changed only by administrators:
     // otherwise any team member could take the account over.
@@ -33,7 +38,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return err("Doar un administrator poate schimba emailul sau firma unui cont din portal.", 403);
     const r = await updateUser(a.db, u, v.value);
     if (!r.ok) return err(r.error, 409);
-    const changed = [v.value.role !== u.role && `rol: ${v.value.role}`, (v.value.duties ?? "") !== (u.duties ?? "") && `atribuții: ${v.value.duties ?? "—"}`].filter(Boolean).join(" · ");
+    if (shares?.ok) await saveShares(a.db, u.id, shares.value);
+    const changed = [v.value.role !== u.role && `rol: ${roleLabel("internal", v.value.role, roleNames(cfg))}`, shares?.ok && `cote: ${shares.value.map((x) => x ?? "—").join(" / ")}`].filter(Boolean).join(" · ");
     await audit(a.db, actor, "user.update", "user", id, changed || undefined);
     return NextResponse.json({ ok: true });
   }

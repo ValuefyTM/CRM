@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "./db";
 import { currentUser } from "./auth";
 import { type Kind, type User } from "./users";
-import { can, type Perm } from "./perms";
+import { can, type Perm, type TeamRight } from "./perms";
 import { reportAccess } from "./perms-db";
 
 export const err = (error: string, status = 400) => NextResponse.json({ error }, { status });
@@ -41,17 +41,24 @@ export const appParam = (v: unknown) => (v === "insp" ? ("insp" as const) : unde
 /** Account kind sent by the sign-in forms. */
 export const kindParam = (v: unknown): Kind => (v === "internal" || v === "partner" || v === "client" ? v : "client");
 
+const NEED_MSG: Partial<Record<TeamRight, string>> = {
+  status: "Statusul și etapa le schimbă evaluatorul principal.",
+  deliver: "Raportul îl predă evaluatorul principal.",
+  members: "Echipa o alocă evaluatorul principal.",
+  verify: "Verificarea o finalizează verificatorul.",
+};
+
 /**
- * A report route: the user must see the report ("view"), work on it ("work": documents, assets, inspections) or
- * lead it ("lead": status, team, delivery). See reportAccess in perms-db.ts.
+ * A report route: the user must see the report ("view") or have one of the rights of the report team
+ * (Setări → Permisiuni, echipa raportului). See reportAccess in perms-db.ts.
  */
-export async function reportApi(id: string, need: "view" | "work" | "lead", write = false) {
+export async function reportApi(id: string, need: "view" | TeamRight, write = false) {
   const a = await staffApi("any", write);
   if ("res" in a) return a;
   const report = await a.db.prepare("SELECT id, status, delivered_at FROM reports WHERE id = ?").bind(id).first<{ id: string; status: string; delivered_at: string | null }>();
   if (!report) return { res: err("Raportul nu există.", 404) };
   const access = await reportAccess(a.db, a.user, report);
   if (!access.view) return { res: err("Raportul nu există.", 404) };
-  if (!access[need]) return { res: err(need === "lead" ? "Doar evaluatorul principal (sau cine alocă echipa) poate face asta." : "Nu ai drepturi pe acest raport.", 403) };
+  if (need !== "view" && !access.can[need]) return { res: err(NEED_MSG[need] ?? "Nu ai drepturi pentru asta pe acest raport.", 403) };
   return { ...a, report, access };
 }

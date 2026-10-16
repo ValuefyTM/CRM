@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
+import { can } from "@/lib/perms";
 import { staffPage } from "@/lib/guard";
-import { isAdmin } from "@/lib/users";
 import { SHEET_TYPES } from "@/lib/insp-forms";
 import { templateStats } from "@/lib/insp-templates";
 import { templateOf } from "@/lib/insp-templates-db";
@@ -14,7 +14,7 @@ const SHORT: Record<string, string> = { apartament: "AP", casa: "CASĂ", teren: 
 
 /** The inspection sheets the inspectors fill in on the phone, one per property type, as the firm adapts them. */
 export default async function SheetTemplatesPage() {
-  const { db, user, base } = await staffPage("admin");
+  const { db, user, base } = await staffPage("templates");
   const list = await Promise.all(SHEET_TYPES.map(async ([t, label]) => ({ t, label, ...(await templateOf(db, t)) })));
   return (
     <CrmShell user={user} base={base} active="templates" title="Setări · Fișe de inspecție" subtitle="Ce completează inspectorii pe telefon, pe tipuri de proprietate">
@@ -23,7 +23,7 @@ export default async function SheetTemplatesPage() {
         <p className="hint">
           Fiecare fișă pornește de la modelul VALUEFY. Poți redenumi și reordona grupurile, ascunde întrebări și adăuga întrebări proprii, cu
           răspunsurile pe care inspectorii le bifează pe teren. Schimbările se aplică fișelor începute de acum; fișele în lucru își păstrează forma.
-          {!isAdmin(user) && " Doar proprietarul și administratorii pot modifica fișele."}
+          {!can(user, "templates.E") && " Doar proprietarul și administratorii pot modifica fișele."}
         </p>
         <ul className="tplList">
           {list.map((x) => {

@@ -6,7 +6,7 @@ import { err, staffApi } from "@/lib/api";
 
 /** One batch of the Glide import (owner only). The page sends the tables in order, 100 rows at a time. */
 export async function POST(req: Request) {
-  const a = await staffApi("admin", true);
+  const a = await staffApi("settings.E", true);
   if ("res" in a) return a.res;
   if (a.user.role !== "owner") return err("Importul de date este disponibil doar proprietarului.", 403);
   const b = (await req.json().catch(() => null)) as { table?: string; rows?: Row[]; last?: boolean } | null;

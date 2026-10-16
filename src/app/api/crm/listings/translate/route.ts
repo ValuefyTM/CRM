@@ -6,7 +6,7 @@ const UNAVAILABLE = "Traducerea automată nu este disponibilă momentan. Complet
 
 /** Translates the Romanian texts from the listing form to English. */
 export async function POST(req: Request) {
-  const a = await staffApi("listings", true);
+  const a = await staffApi("listings.E", true);
   if ("res" in a) return a.res;
   const b = ((await req.json().catch(() => null)) ?? {}) as Record<string, unknown>;
   const title = typeof b.title === "string" ? b.title.trim().slice(0, 160) : "";

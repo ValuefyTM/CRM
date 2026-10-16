@@ -4,7 +4,7 @@ import { staffPage } from "@/lib/guard";
 import { AREA, comparables, RADII, YEARS, type CompFilters } from "@/lib/comparables";
 import { geolocateEnabled } from "@/lib/geolocate";
 import { can } from "@/lib/perms";
-import { MY_REPORTS_SQL } from "@/lib/perms-db";
+import { mySql } from "@/lib/perms-db";
 import { CrmShell } from "@/components/CrmShell";
 import { LocateOne } from "../../LocateActions";
 import { CompView } from "./CompView";
@@ -27,7 +27,7 @@ export default async function ComparablesPage({ params, searchParams }: { params
     const ok = new Set<string>();
     for (let i = 0; i < ids.length; i += 90) {
       const part = ids.slice(i, i + 90);
-      const { results } = await db.prepare(`SELECT r.id FROM reports r WHERE r.id IN (${part.map(() => "?").join(",")}) AND ${MY_REPORTS_SQL}`).bind(...part, user.id).all<{ id: string }>();
+      const { results } = await db.prepare(`SELECT r.id FROM reports r WHERE r.id IN (${part.map(() => "?").join(",")}) AND ${mySql(user)}`).bind(...part, user.id).all<{ id: string }>();
       results.forEach((x) => ok.add(x.id));
     }
     d.rows.forEach((r) => { r.open = !r.report_id || ok.has(r.report_id); });

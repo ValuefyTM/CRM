@@ -140,8 +140,11 @@ export async function ordersFor(db: D1Database, user: User) {
   return results;
 }
 
-export async function allOrders(db: D1Database) {
-  const { results } = await db.prepare(`${SELECT} ORDER BY o.created_at DESC LIMIT 10000`).all<Order>();
+/** `createdBy`: only the orders this user created (Permisiuni: Comenzi, „Create de el”). */
+export async function allOrders(db: D1Database, createdBy?: string) {
+  const { results } = await (createdBy
+    ? db.prepare(`${SELECT} WHERE o.created_by = ? ORDER BY o.created_at DESC LIMIT 10000`).bind(createdBy)
+    : db.prepare(`${SELECT} ORDER BY o.created_at DESC LIMIT 10000`)).all<Order>();
   return results;
 }
 

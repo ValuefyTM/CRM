@@ -1,31 +1,31 @@
 // Server-only: inspection tasks given from the CRM report page. The main evaluator of the report (or an owner /
 // administrator) gives the inspection of an asset to themselves or to a colleague; the inspector schedules it in the app.
 import { now, uuid } from "./db";
-import { appUrl, INSP_ROLES } from "./site";
+import { appUrl } from "./site";
 import { audit } from "./auth";
 import { esc, layout, sendEmail } from "./email";
-import { dutiesOf, type User } from "./users";
+import { type User } from "./users";
+import { reportAccess } from "./perms-db";
 import { can } from "./perms";
 import { FORMS, guessSheetType, sheetTypeLabel, type SheetType } from "./insp-forms";
 import { photoUrl, presenceOf } from "./presence";
 import { missingDocs, missingText, type DocType } from "./insp-docs";
 
-/** Main evaluator of the report, owners and administrators. */
+/** Who gives the inspector of a report: whoever allocates its team (the main evaluator), or "Inspecții: alocă inspectorul". */
 export async function canAssign(db: D1Database, user: User, reportId: string) {
-  if (can(user, "team")) return true;
-  const m = await db.prepare("SELECT 1 AS ok FROM report_members WHERE report_id = ? AND user_id = ? AND role = 'evaluator'").bind(reportId, user.id).first<{ ok: number }>();
-  return !!m;
+  if (can(user, "inspections:assign")) return true;
+  const r = await db.prepare("SELECT id, status, delivered_at FROM reports WHERE id = ?").bind(reportId).first<{ id: string; status: string; delivered_at: string | null }>();
+  return !!r && (await reportAccess(db, user, r)).can.members;
 }
 
-/** Who can receive an inspection: the one giving it, and colleagues who are inspectors or evaluators. */
+/** Who can receive an inspection: every active team member (evaluators also inspect). */
 export async function inspectorChoices(db: D1Database, me: string) {
   return (await db
-    .prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role, duties, coverage, last_seen_at, avatar_at FROM users
-      WHERE kind = 'internal' AND status NOT IN ('disabled', 'deleted') AND (id = ? OR role IN ('evaluator', 'inspector') OR ',' || COALESCE(duties, '') || ',' LIKE '%,evaluator,%'
-        OR ',' || COALESCE(duties, '') || ',' LIKE '%,inspector,%') ORDER BY name`)
+    .prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role, coverage, last_seen_at, avatar_at FROM users
+      WHERE kind = 'internal' AND status NOT IN ('disabled', 'deleted') ORDER BY id = ? DESC, name`)
     .bind(me)
-    .all<{ id: string; name: string; role: string; duties: string | null; coverage: string | null; last_seen_at: string | null; avatar_at: string | null }>()).results
-    .map((u) => ({ ...u, ...presenceOf(u.last_seen_at), photo: photoUrl(u.id, u.avatar_at), role: dutiesOf(u).includes("inspector") ? "inspector" : dutiesOf(u).includes("evaluator") ? "evaluator" : u.role }));
+    .all<{ id: string; name: string; role: string; coverage: string | null; last_seen_at: string | null; avatar_at: string | null }>()).results
+    .map((u) => ({ ...u, ...presenceOf(u.last_seen_at), photo: photoUrl(u.id, u.avatar_at) }));
 }
 
 /** The task in progress for an asset (made in the CRM, not yet done or cancelled). */
@@ -53,7 +53,7 @@ export async function assignInspection(db: D1Database, user: User, reportId: str
     .prepare(`SELECT id, email, COALESCE(NULLIF(name, ''), email) AS name, role, duties FROM users WHERE id = ? AND kind = 'internal' AND status NOT IN ('disabled', 'deleted')`)
     .bind(str(b.inspector, 80))
     .first<{ id: string; email: string; name: string; role: string; duties: string | null }>();
-  if (!inspector || (inspector.id !== user.id && !dutiesOf(inspector).some((d) => INSP_ROLES.includes(d)))) return { ok: false as const, error: "Alege-te pe tine sau un coleg inspector / evaluator." };
+  if (!inspector) return { ok: false as const, error: "Alege inspectorul: tu sau un coleg din echipă." };
   const type = (FORMS as Record<string, unknown>)[str(b.sheet_type, 20)] ? (str(b.sheet_type, 20) as SheetType) : guessSheetType(asset.category, asset.type, asset.order_type);
   const due = str(b.due_on, 10);
   if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) return { ok: false as const, error: "Termenul nu este o dată validă." };

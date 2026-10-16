@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { can } from "@/lib/perms";
 import { notFound } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { niceName } from "@/lib/labels";
@@ -16,7 +17,6 @@ import { contractDoc } from "@/lib/contract-doc";
 import { DELIVERABLES, VALUE_TYPES } from "@/lib/contract-terms";
 import { IssueInvoice, InvoiceList } from "@/components/Invoices";
 import { getBilling, invoicesFor } from "@/lib/billing";
-import { isAdmin } from "@/lib/users";
 
 export const metadata: Metadata = { title: "Contract | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -31,7 +31,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
   const k = d.contract;
   const framework = k.kind === "framework";
   const [log, doc, sign, invoices] = await Promise.all([history(db, [id]), framework ? null : contractDoc(db, id), framework ? null : signContractById(db, id), invoicesFor(db, { contract: id })]);
-  const admin = isAdmin(user);
+  const admin = can(user, "billing");
   const billing = framework ? null : await getBilling(db);
   const signed = !!sign?.signed_at;
   const link = sign?.sign_token ? await signLink(sign.sign_token) : null;

@@ -6,7 +6,7 @@ import type { Kind } from "./site";
 export type { Kind } from "./site";
 
 export * from "./labels";
-import { CLIENT_TYPES, DUTIES, ENGAGEMENTS, INTERNAL_ROLES, SPECIALIZATIONS } from "./labels";
+import { CLIENT_TYPES, ENGAGEMENTS, INTERNAL_ROLES, SPECIALIZATIONS } from "./labels";
 
 export type User = {
   id: string; kind: Kind; email: string; name: string; phone: string | null; role: string; status: "invited" | "active" | "disabled" | "deleted";
@@ -17,6 +17,8 @@ export type User = {
   last_seen_at?: string | null; avatar_at?: string | null;
   /** CRM only: the permissions of the role (see perms.ts). */
   perms?: string[];
+  /** CRM only: what each role in a report's team may do (Setări → Permisiuni). */
+  team?: import("./perms").TeamMatrix;
   /** CRM only: the owner or administrator looking at the CRM as this user (read-only). */
   impersonator?: { id: string; name: string; role: string };
 };
@@ -86,7 +88,7 @@ const oneOf = (list: readonly (readonly [string, string])[], v: unknown) => (lis
  * Checks the fields for a kind of account. `currentRole` is the role the account has today: an owner stays owner.
  * Only an owner can make someone else owner (`byOwner`); the first owners come from CRM_OWNER_EMAILS.
  */
-export function validateUser(kind: Kind, body: unknown, currentRole?: string, byOwner = false): { ok: true; value: UserInput } | { ok: false; error: string } {
+export function validateUser(kind: Kind, body: unknown, currentRole?: string, byOwner = false, roleIds?: string[]): { ok: true; value: UserInput } | { ok: false; error: string } {
   const b = (body ?? {}) as Record<string, unknown>;
   const email = str(b.email, 160);
   if (!validEmail(email)) return { ok: false, error: "Adresa de email nu pare validă." };
@@ -98,19 +100,19 @@ export function validateUser(kind: Kind, body: unknown, currentRole?: string, by
   if (kind === "internal") {
     if (currentRole === "owner") v.role = "owner";
     else {
-      const role = oneOf(INTERNAL_ROLES, b.role);
-      if (!role || (role === "owner" && !byOwner)) return { ok: false, error: "Alege rolul persoanei." };
+      // The roles of Setări → Permisiuni (built-in and added by the owner); "owner" only by an owner.
+      const ids = roleIds ?? INTERNAL_ROLES.map(([k]) => k as string);
+      const role = typeof b.role === "string" && (ids.includes(b.role) || b.role === "owner") ? b.role : null;
+      if (!role || (role === "owner" && !byOwner) || (role === currentRole ? false : role === "inspector")) return { ok: false, error: "Alege rolul persoanei." };
       v.role = role;
     }
     v.engagement = oneOf(ENGAGEMENTS, b.engagement) ?? "employee";
-    const duties = Array.isArray(b.duties) ? b.duties : String(b.duties ?? "").split(",");
-    v.duties = DUTIES.map(([k]) => k).filter((k) => duties.includes(k) || k === v.role).join(",") || null;
-    if (v.duties?.includes("evaluator")) {
-      v.anevar_no = opt(b.anevar_no, 40);
-      const specs = Array.isArray(b.specializations) ? b.specializations : String(b.specializations ?? "").split(",");
-      v.specializations = SPECIALIZATIONS.map(([k]) => k).filter((k) => specs.includes(k)).join(",") || null;
-    }
-    if (v.duties) v.coverage = opt(b.coverage, 200);
+    // No duties any more: evaluators also inspect; the role in a report's team says who does what.
+    v.duties = null;
+    v.anevar_no = opt(b.anevar_no, 40);
+    const specs = Array.isArray(b.specializations) ? b.specializations : String(b.specializations ?? "").split(",");
+    v.specializations = SPECIALIZATIONS.map(([k]) => k).filter((k) => specs.includes(k)).join(",") || null;
+    v.coverage = opt(b.coverage, 200);
   } else if (kind === "partner") {
     v.partner_id = str(b.partner_id, 60) || null;
     if (!v.partner_id) return { ok: false, error: "Alege firma colaboratorului." };
@@ -150,6 +152,21 @@ export async function createUser(db: D1Database, kind: Kind, v: UserInput, creat
     .bind(id, kind, v.email, v.name, v.phone, v.role, v.partner_id, v.engagement, v.anevar_no, v.specializations, v.coverage, v.duties, v.client_type, v.company, v.cui, v.city, v.notes, createdBy)
     .run();
   return { ok: true as const, id };
+}
+
+/** Fee shares of a team member (owner only): % as main evaluator / verifier, inspection fee fixed (lei) or %. */
+export function validateShares(body: unknown): { ok: true; value: [number | null, number | null, string | null, number | null] } | { ok: false; error: string } {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const num = (v: unknown) => { const t = String(v ?? "").trim().replace(",", "."); return t === "" ? null : Number(t); };
+  const se = num(b.share_evaluator), sv = num(b.share_verifier), fi = num(b.inspector_fee);
+  const kind = b.inspector_fee_kind === "pct" ? "pct" : "fixed";
+  for (const [x, l] of [[se, "evaluator principal"], [sv, "verificator"]] as const) if (x != null && (!Number.isFinite(x) || x < 0 || x > 100)) return { ok: false, error: `Cota ca ${l} trebuie să fie între 0 și 100%.` };
+  if (fi != null && (!Number.isFinite(fi) || fi < 0 || (kind === "pct" && fi > 100))) return { ok: false, error: kind === "pct" ? "Procentul de inspecție trebuie să fie între 0 și 100." : "Tariful de inspecție nu este valid." };
+  return { ok: true, value: [se, sv, fi == null ? null : kind, fi] };
+}
+
+export async function saveShares(db: D1Database, id: string, s: [number | null, number | null, string | null, number | null]) {
+  await db.prepare("UPDATE users SET share_evaluator = ?, share_verifier = ?, inspector_fee_kind = ?, inspector_fee = ?, updated_at = ? WHERE id = ?").bind(...s, now(), id).run();
 }
 
 export async function updateUser(db: D1Database, u: User, v: UserInput) {

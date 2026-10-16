@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
+import { can } from "@/lib/perms";
 import { staffPage } from "@/lib/guard";
-import { isAdmin } from "@/lib/users";
 import { history } from "@/lib/history";
 import { BILLING_MODES, billingRules, DIRECT_FLOWS, getBilling } from "@/lib/billing";
 import { oblioCredentials } from "@/lib/oblio";
@@ -20,10 +20,10 @@ export default async function BillingSettingsPage() {
   return (
     <CrmShell user={user} base={base} active="settings" title="Setări · Facturare" subtitle="Oblio: conexiune, serii, TVA, reguli de facturare pe tip de client">
       <SettingsTabs base={base} active="facturare" />
-      {!isAdmin(user) && <div className="note">Doar proprietarul și administratorii pot modifica setările de facturare.</div>}
+      {!can(user, "billing.E") && <div className="note">Doar proprietarul și administratorii pot modifica setările de facturare.</div>}
       <div className="cols">
         <div style={{ minWidth: 0 }}>
-          <BillingPanel edit={isAdmin(user)} initial={settings} creds={{ email: c.email?.name ?? null, secret: c.secret?.name ?? null }}
+          <BillingPanel edit={can(user, "billing.E")} initial={settings} creds={{ email: c.email?.name ?? null, secret: c.secret?.name ?? null }}
             rules={rules} modes={BILLING_MODES} flows={DIRECT_FLOWS} />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>

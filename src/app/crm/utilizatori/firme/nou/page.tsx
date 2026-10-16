@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "Firmă parteneră nouă | CRM VALUEF
 export const dynamic = "force-dynamic";
 
 export default async function NewPartnerPage() {
-  const { user, base } = await staffPage("admin");
+  const { user, base } = await staffPage("partners");
   return (
     <CrmShell user={user} base={base} active="users" title="Firmă parteneră nouă" subtitle="Datele firmei și, opțional, prima persoană care primește acces în portal">
       <div style={{ maxWidth: 860 }}><PartnerForm base={base} /></div>

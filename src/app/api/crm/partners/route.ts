@@ -6,7 +6,7 @@ import { err, json, staffApi } from "@/lib/api";
 
 /** New partner firm, optionally with its first portal user (and invitation). */
 export async function POST(req: Request) {
-  const a = await staffApi("admin", true);
+  const a = await staffApi("partners.A", true);
   if ("res" in a) return a.res;
   const b = await json(req);
   const p = validatePartner(b);

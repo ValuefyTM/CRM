@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   if (!body) return err("Scrie mesajul.");
   if (entity === "order" && !can(a.user, "orders")) return err("Nu ai drepturi pentru această acțiune.", 403);
   if (entity === "report") {
-    const r = await reportApi(b.id, "work", true);
+    const r = await reportApi(b.id, "messages", true);
     if ("res" in r) return r.res;
   }
   const r = await addMessage(a.db, entity, b.id, a.user, body);

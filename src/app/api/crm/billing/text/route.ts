@@ -14,7 +14,7 @@ export async function GET(req: Request) {
 }
 
 export async function PUT(req: Request) {
-  const a = await staffApi("billing", true);
+  const a = await staffApi("billing.E", true);
   if ("res" in a) return a.res;
   const b = await json(req);
   const r = await saveBillingText(a.db, a.user.id, kindOf(b.kind), typeof b.id === "string" ? b.id : "", b);

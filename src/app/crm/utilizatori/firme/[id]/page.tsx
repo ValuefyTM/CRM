@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: "Firmă parteneră | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
 
 export default async function PartnerPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ nou?: string }> }) {
-  const { db, user, base } = await staffPage("admin");
+  const { db, user, base } = await staffPage("partners");
   const { id } = await params;
   const p = await getPartner(db, id);
   if (!p) notFound();

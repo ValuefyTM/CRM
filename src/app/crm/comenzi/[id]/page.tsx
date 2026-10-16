@@ -35,6 +35,8 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   const o = await getOrder(db, id);
   if (!o) notFound();
+  // „Create de el”: only the orders the user created.
+  if (!can(user, "orders.all") && o.created_by !== user.id) notFound();
   const messages = await messagesOf(db, "order", o.id, user.id);
   // The first time someone in the team opens the order it stops being "new".
   if (!o.viewed_at) {
@@ -85,7 +87,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
       subtitle={`${SOURCE_LABEL[o.source]} · ${orderWhat(o)}${o.address ? ` · ${orderPlace(o)}` : ""} · ${o.glide_id ? `din ${fmtDate(o.ordered_on ?? o.created_at)}` : `primită ${fmtDate(o.created_at, true)}`}`}
       actions={<>
         <a href={backTo} className="btn btnGhost btnSm">← Comenzi</a>
-        {can(user, "delete") && <DeleteOrder id={o.id} label={orderCode(o)} back={backTo} links={await orderLinks(db, o.id)} />}
+        {can(user, "orders.D") && <DeleteOrder id={o.id} label={orderCode(o)} back={backTo} links={await orderLinks(db, o.id)} />}
       </>}
     >
       {o.glide_id && <div className="note">Comandă importată din Glide.</div>}

@@ -1,11 +1,11 @@
 // Server-only: email sign-in (6-digit code or one-time link), invitations and sessions.
 import { cookies } from "next/headers";
-import { APP, APP_NAME, appOf, appUrl, INSP_ROLES, type App, type Kind } from "./site";
+import { APP, APP_NAME, appOf, appUrl, type App, type Kind } from "./site";
 import { now, uuid } from "./db";
 import { normEmail, randomCode, randomToken, safeEqual, sha256 } from "./crypto";
 import { esc, layout, sendEmail } from "./email";
-import { canSignIn, dutiesOf, findUser, getUser, isAdmin, type User } from "./users";
-import { getMatrix } from "./perms-db";
+import { canSignIn, findUser, getUser, isAdmin, type User } from "./users";
+import { getConfig } from "./perms-db";
 import { permsFor } from "./perms";
 
 const CODE_MINUTES = 15;
@@ -39,16 +39,13 @@ export async function audit(db: D1Database, actor: string, action: string, entit
 }
 
 /**
- * The inspections app is for inspectors and evaluators, and for any team member who was given an inspection
- * (e.g. an administrator who is the main evaluator of a report). Inspectors use only that app, not the CRM.
+ * The inspections app is for every team member: evaluators also inspect, and anyone can be the inspector of a report
+ * (it shows only the inspections given to them). Inspectors from before (role "inspector") use only that app.
  */
-export async function allowedIn(db: D1Database, app: App, u: User) {
+export async function allowedIn(_db: D1Database, app: App, u: User) {
   if (app === "crm") return u.role !== "inspector";
   if (app !== "insp") return true;
-  if (u.kind !== "internal") return false;
-  if (INSP_ROLES.includes(u.role) || dutiesOf(u).some((d) => INSP_ROLES.includes(d))) return true;
-  const given = await db.prepare("SELECT 1 AS ok FROM inspections WHERE inspector_id = ? AND glide_id IS NULL AND status <> 'cancelled' LIMIT 1").bind(u.id).first<{ ok: number }>();
-  return !!given;
+  return u.kind === "internal";
 }
 
 const appName = (app: App, kind: Kind) => (app === "insp" ? "Inspecții VALUEFY" : APP_NAME[kind]);
@@ -259,13 +256,13 @@ export async function currentUser(db: D1Database, app: App): Promise<User | null
     u.last_seen_at = t;
   }
   if (app !== "crm") return u;
-  const matrix = await getMatrix(db);
+  const cfg = await getConfig(db);
   const as = jar.get(AS_COOKIE)?.value;
   const target = as && isAdmin(u) ? await getUser(db, as) : null;
   if (target && canImpersonate(u, target)) {
-    return { ...target, perms: permsFor(matrix, target.role), impersonator: { id: u.id, name: u.name || u.email, role: u.role } };
+    return { ...target, perms: permsFor(cfg, target.role), team: cfg.team, impersonator: { id: u.id, name: u.name || u.email, role: u.role } };
   }
-  return { ...u, perms: permsFor(matrix, u.role) };
+  return { ...u, perms: permsFor(cfg, u.role), team: cfg.team };
 }
 
 export async function endSession(db: D1Database, app: App) {

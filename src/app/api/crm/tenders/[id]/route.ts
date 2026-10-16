@@ -4,7 +4,7 @@ import { TENDER_STATUS } from "@/lib/tenders";
 
 /** Status of a notice (`new` | `analyze` | `bid` | `skip`) and / or notes. */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi("tenders", true);
+  const a = await staffApi("tenders.E", true);
   if ("res" in a) return a.res;
   const { id } = await params;
   const b = await json(req);

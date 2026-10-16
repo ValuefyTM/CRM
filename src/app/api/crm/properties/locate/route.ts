@@ -17,7 +17,7 @@ export async function GET(req: Request) {
  * was tried); `{ limit, retry }` the next batch (administrators), the page calls it until nothing is left.
  */
 export async function POST(req: Request) {
-  const a = await staffApi("properties", true);
+  const a = await staffApi("properties.E", true);
   if ("res" in a) return a.res;
   if (!geolocateEnabled()) return err("Localizarea din cadastru nu este configurată (LOCATOR_API_TOKEN).", 503);
   const b = await json(req);

@@ -8,7 +8,7 @@ const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice
 
 /** Add a contact person; PATCH ?contact= makes it the main one; DELETE ?contact= removes it. */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi("clients", true);
+  const a = await staffApi("clients.E", true);
   if ("res" in a) return a.res;
   const { id } = await params;
   if (!(await getClient(a.db, id))) return err("Clientul nu există.", 404);
@@ -23,7 +23,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi("clients", true);
+  const a = await staffApi("clients.E", true);
   if ("res" in a) return a.res;
   const { id } = await params;
   const contact = new URL(req.url).searchParams.get("contact") ?? "";
@@ -35,7 +35,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi("clients", true);
+  const a = await staffApi("clients.E", true);
   if ("res" in a) return a.res;
   const { id } = await params;
   const contact = new URL(req.url).searchParams.get("contact") ?? "";

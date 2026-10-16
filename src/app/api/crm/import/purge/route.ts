@@ -4,7 +4,7 @@ import { purgeGlide, purgePlan } from "@/lib/glide/purge";
 import { err, json, staffApi } from "@/lib/api";
 
 async function owner() {
-  const a = await staffApi("admin");
+  const a = await staffApi("settings.E");
   if ("res" in a) return a;
   if (a.user.role !== "owner") return { res: err("Doar proprietarul poate șterge datele din Glide.", 403) };
   return a;

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { can } from "@/lib/perms";
 import { staffPage } from "@/lib/guard";
-import { isAdmin } from "@/lib/users";
 import { bucharestDay } from "@/lib/db";
 import { niceName } from "@/lib/labels";
 import { invoicesFor } from "@/lib/billing";
@@ -32,7 +31,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
   const link = (k: string) => `${base}/facturare${k ? `?stare=${k}` : ""}`;
   return (
     <CrmShell user={user} base={base} active="invoicing" title="Facturare" subtitle="Facturi și proforme emise din CRM prin Oblio"
-      actions={isAdmin(user) ? <a href={`${base}/setari/facturare`} className="btn btnGhost btnSm">Setări facturare</a> : undefined}>
+      actions={can(user, "billing.E") ? <a href={`${base}/setari/facturare`} className="btn btnGhost btnSm">Setări facturare</a> : undefined}>
       <div className="dbKpis ibKpis">
         <a className="dbKpi" href={link("neincasate")}><span className="dbKpiLabel"><i style={{ background: "var(--acc)" }} />De încasat</span><b className="ctKpiMoney">{lei(sum(open))}</b><small className="ctKpiFoot">{open.length} facturi</small></a>
         <a className="dbKpi" href={link("scadente")}><span className="dbKpiLabel"><i style={{ background: "var(--err)" }} />Scadente</span><b className="ctKpiMoney">{lei(sum(overdue))}</b><small className="ctKpiFoot">{overdue.length} facturi</small></a>

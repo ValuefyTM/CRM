@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
+import { can } from "@/lib/perms";
 import { staffPage, fmtDate } from "@/lib/guard";
-import { isAdmin } from "@/lib/users";
 import { getRules, lastRun, listTenders, TENDER_STATUS } from "@/lib/tenders";
 import { CrmShell } from "@/components/CrmShell";
 import { RulesForm, RunNow, TenderStatus } from "./TenderClient";
@@ -54,20 +54,20 @@ export default async function TendersPage({ searchParams }: { searchParams: Prom
         </section>
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
           <section className="card">
-            <div className="cardHead"><h2>Verificare</h2>{isAdmin(user) && <RunNow />}</div>
+            <div className="cardHead"><h2>Verificare</h2>{can(user, "tenders:rules") && <RunNow />}</div>
             {run ? (
               <dl className="kv">
                 <div><dt>Ultima verificare</dt><dd>{fmtDate(run.at, true)}</dd></div>
                 <div><dt>Rezultat</dt><dd>{run.ok ? `${run.fetched} anunțuri citite · ${run.matched} potrivite · ${run.added} noi` : <span style={{ color: "var(--err)" }}>{run.error}</span>}</dd></div>
               </dl>
             ) : <p className="hint">Încă nu a rulat nicio verificare.</p>}
-            {run?.sample && isAdmin(user) && (
+            {run?.sample && can(user, "tenders:rules") && (
               <details><summary className="hint">Exemplu de rând SEAP (pentru verificare tehnică)</summary><pre className="tdRaw">{run.sample}</pre></details>
             )}
           </section>
           <section className="card">
             <h2>Criterii</h2>
-            <RulesForm initial={rules} edit={isAdmin(user)} />
+            <RulesForm initial={rules} edit={can(user, "tenders:rules")} />
           </section>
         </div>
       </div>

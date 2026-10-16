@@ -2,7 +2,7 @@ import { getDb } from "@/lib/db";
 import { initials } from "@/lib/guard";
 import { isAdmin, roleLabel, type User } from "@/lib/users";
 import { can, type Perm } from "@/lib/perms";
-import { MY_REPORTS_SQL } from "@/lib/perms-db";
+import { mySql } from "@/lib/perms-db";
 import { ViewAs } from "./ViewAs";
 import { Shell, type NavEntry, type NavItem } from "./Shell";
 import { GlobalSearch } from "./GlobalSearch";
@@ -36,7 +36,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
         .bind(u.impersonator?.id ?? u.id).all<{ id: string; name: string; role: string }>()).results.map((x) => ({ ...x, role: roleLabel("internal", x.role) }))
     : null;
   const myOpen = !allReports && db
-    ? await db.prepare(`SELECT COUNT(*) AS n FROM reports r WHERE r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL AND ${MY_REPORTS_SQL}`).bind(u.id).first<{ n: number }>().then((r) => r?.n ?? 0).catch(() => 0)
+    ? await db.prepare(`SELECT COUNT(*) AS n FROM reports r WHERE r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL AND ${mySql(u)}`).bind(u.id).first<{ n: number }>().then((r) => r?.n ?? 0).catch(() => 0)
     : open;
   const group = (g: string, key: string, items: (NavItem | false)[]): NavEntry[] => {
     const list = items.filter(Boolean) as NavItem[];
@@ -52,26 +52,26 @@ export async function CrmShell(props: { user: User; base: string; active: string
         { key: "home", label: "Dashboard", href: b || "/" },
         ...group("CRM", "g-crm", [
           may("clients") && { key: "clients", label: "Clienți / Entități", href: `${b}/clienti` },
-          may("clients") && { key: "contracts", label: "Contracte", href: `${b}/contracte` },
-          may("clients") && { key: "collabs", label: "Colaborări", soon: true },
+          may("contracts") && { key: "contracts", label: "Contracte", href: `${b}/contracte` },
+          may("partners") && { key: "collabs", label: "Colaborări", soon: true },
           may("orders") && { key: "orders", label: "Comenzi", href: `${b}/comenzi`, badge: unread, hot: true },
           may("tenders") && { key: "tenders", label: "Licitații SEAP", href: `${b}/licitatii` },
           may("orders") && { key: "followups", label: "Follow-up-uri", soon: true },
           may("listings") && { key: "listings", label: "Anunțuri imobiliare", href: `${b}/anunturi`, badge: inquiries, hot: true },
         ]),
         ...group("Operațional", "g-ops", [
-          { key: "reports", label: allReports ? "Rapoarte" : "Rapoartele mele", href: `${b}/rapoarte`, badge: myOpen },
-          { key: "inspections", label: may("inspections.all") ? "Inspecții" : "Inspecțiile mele", href: `${b}/agenda-inspectii` },
+          may("reports") && { key: "reports", label: allReports ? "Rapoarte" : "Rapoartele mele", href: `${b}/rapoarte`, badge: myOpen },
+          may("inspections") && { key: "inspections", label: may("inspections.all") ? "Inspecții" : "Inspecțiile mele", href: `${b}/agenda-inspectii` },
           may("properties") && { key: "properties", label: may("reports.all") ? "Proprietăți" : "Proprietăți / comparabile", href: `${b}/proprietati` },
         ]),
         ...group("Financiar", "g-fin", [
-          may("fees") && { key: "statements", label: "Borderouri", soon: true },
+          may("statements") && { key: "statements", label: "Borderouri", soon: true },
           may("billing") && { key: "invoicing", label: "Facturare", href: `${b}/facturare` },
         ]),
         ...group("Administrare", "g-admin", [
-          may("admin") && { key: "users", label: "Utilizatori", href: `${b}/utilizatori` },
-          may("admin") && { key: "templates", label: "Fișe de inspecție", href: `${b}/setari/fise` },
-          may("admin") && { key: "perms", label: "Permisiuni", href: `${b}/setari/permisiuni` },
+          may("users") && { key: "users", label: "Utilizatori", href: `${b}/utilizatori` },
+          may("templates") && { key: "templates", label: "Fișe de inspecție", href: `${b}/setari/fise` },
+          may("users") && { key: "perms", label: "Permisiuni", href: `${b}/setari/permisiuni` },
           owner && { key: "import", label: "Import Glide", href: `${b}/setari/import` },
         ]),
         ...group("Personal", "g-me", [

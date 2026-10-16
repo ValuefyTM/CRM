@@ -7,6 +7,7 @@ import { ReportFilters } from "./ReportFilters";
 import { CrmShell } from "@/components/CrmShell";
 import { ClickRow } from "@/components/ClickRow";
 import { can } from "@/lib/perms";
+import { mySql } from "@/lib/perms-db";
 
 export const metadata: Metadata = { title: "Rapoarte | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -14,12 +15,12 @@ export const dynamic = "force-dynamic";
 type SP = { q?: string; status?: string; year?: string; bank?: string; issuer?: string; evaluator?: string; sort?: string; page?: string; etapa?: string; termen?: string; ale?: string; "fara-acces"?: string };
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<SP> }) {
-  const { db, user, base } = await staffPage();
+  const { db, user, base } = await staffPage("reports");
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page) || 1);
   // Without "reports.all": only the reports of the user's team work. With it, "Ale mele" narrows the list the same way.
-  const all = can(user, "reports.all"), fees = can(user, "fees");
-  const mine = !all || sp.ale === "1" ? user.id : undefined;
+  const all = can(user, "reports.all"), fees = can(user, "fees.all");
+  const mine = !all || sp.ale === "1" ? { id: user.id, sql: mySql(user) } : undefined;
   const f = { ...sp, page, mine };
   const [data, facets, counts] = await Promise.all([listReports(db, f), reportFacets(db, mine), reportTabCounts(db, f)]);
   const tab = sp.status === "draft" ? "in_progress" : sp.status ?? "";

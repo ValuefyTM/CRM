@@ -16,7 +16,7 @@ export async function GET(_req: Request, { params }: Ctx) {
 }
 
 export async function DELETE(_req: Request, { params }: Ctx) {
-  const a = await staffApi("listings", true);
+  const a = await staffApi("listings.E", true);
   if ("res" in a) return a.res;
   await deletePhoto(a.db, (await params).id);
   return NextResponse.json({ ok: true });

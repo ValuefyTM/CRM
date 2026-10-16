@@ -15,11 +15,11 @@ export const dynamic = "force-dynamic";
 export default async function SettingsPage() {
   const { db, user, base } = await staffPage();
   const [firm, log] = await Promise.all([getFirmWithImages(db), history(db, ["firm"])]);
-  const edit = can(user, "admin");
+  const edit = can(user, "settings.E");
   const values = Object.fromEntries(FIRM_FIELDS.map(([k]) => [k, firm[k]])) as Record<string, string>;
   return (
     <CrmShell user={user} base={base} active="settings" title="Setări" subtitle="Datele VALUEFY de pe contracte: firmă, reprezentant, cont bancar, ștampilă și semnătură">
-      <SettingsTabs base={base} active="firma" admin={can(user, "admin")} />
+      <SettingsTabs base={base} active="firma" admin={can(user, "settings") || can(user, "templates") || can(user, "users")} />
       {!edit && <div className="note">Doar proprietarul și administratorii pot modifica aceste date.</div>}
       <div className="cols">
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
