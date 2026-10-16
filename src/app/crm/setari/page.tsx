@@ -7,6 +7,9 @@ import { CrmShell } from "@/components/CrmShell";
 import { History } from "@/components/History";
 import { FirmForm, FirmImage } from "./FirmForm";
 import { SettingsTabs } from "./SettingsTabs";
+import { IssuerColors } from "./IssuerColors";
+import { issuerColor } from "@/lib/issuer-color";
+import { niceName } from "@/lib/labels";
 
 export const metadata: Metadata = { title: "Setări | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -14,7 +17,11 @@ export const dynamic = "force-dynamic";
 /** Firm settings: VALUEFY's details, stamp and signature as they appear on contracts. */
 export default async function SettingsPage() {
   const { db, user, base } = await staffPage();
-  const [firm, log] = await Promise.all([getFirmWithImages(db), history(db, ["firm"])]);
+  const [firm, log, issuers] = await Promise.all([
+    getFirmWithImages(db), history(db, ["firm"]),
+    db.prepare(`SELECT e.id, e.name, e.color, (SELECT COUNT(*) FROM reports r WHERE r.issuer_id = e.id) AS reports FROM entities e WHERE e.kind = 'valuation_firm' ORDER BY reports DESC, e.name`)
+      .all<{ id: string; name: string; color: string | null; reports: number }>(),
+  ]);
   const edit = can(user, "settings.E");
   const values = Object.fromEntries(FIRM_FIELDS.map(([k]) => [k, firm[k]])) as Record<string, string>;
   return (
@@ -48,6 +55,11 @@ export default async function SettingsPage() {
               <span>Membru corporativ ANEVAR nr. {firm.anevar}</span>
               <span>Litigii: instanțele din {firm.court}</span>
             </div>
+          </section>
+          <section className="card">
+            <div className="cardHead"><h2>Firme emitente</h2><span className="muted">culoarea din lista de rapoarte</span></div>
+            <p className="hint">Fiecare raport are în listă o dungă în culoarea firmei care l-a emis. VALUEFY e galben; celelalte primesc o culoare implicită până o alegi.</p>
+            <IssuerColors edit={edit} firms={issuers.results.map((f) => ({ ...f, name: niceName(f.name), fallback: issuerColor(f.name, null) }))} />
           </section>
           <History log={log} />
         </div>

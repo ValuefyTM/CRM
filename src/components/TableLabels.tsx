@@ -10,7 +10,7 @@ export function TableLabels() {
   useEffect(() => {
     const label = () => {
       for (const t of document.querySelectorAll<HTMLTableElement>("table.table")) {
-        const heads = [...t.querySelectorAll("thead tr:last-child th")].flatMap((th) => Array(Number(th.getAttribute("colspan") || 1)).fill((th.textContent ?? "").trim()));
+        const heads = [...t.querySelectorAll("thead tr:last-child th")].flatMap((th) => Array(Number(th.getAttribute("colspan") || 1)).fill((th.getAttribute("data-label") ?? th.textContent ?? "").trim()));
         if (!heads.length) continue;
         for (const tr of t.querySelectorAll("tbody tr, tfoot tr")) {
           let i = 0;

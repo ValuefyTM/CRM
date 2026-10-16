@@ -1,10 +1,15 @@
 import { niceName } from "@/lib/labels";
 import type { Metadata } from "next";
 import { fmtDate, staffPage } from "@/lib/guard";
-import { cap, DUE_FILTERS, inspectionState, lei, listReports, PAGE_SIZE, REPORT_SORTS, REPORT_STATUS, REPORT_TABS, reportFacets, reportTabCounts, ROLE_LABEL, rowMembers, STAGE_FILTERS } from "@/lib/reports";
+import { cap, DUE_FILTERS, listReports, PAGE_SIZE, REPORT_SORTS, REPORT_STATUS, REPORT_TABS, reportFacets, reportTabCounts, ROLE_LABEL, rowMembers, STAGE_FILTERS } from "@/lib/reports";
 import { Avatar } from "@/components/Avatar";
 import { fileSrc } from "@/lib/files";
 import { SafeImg } from "./[id]/ReportActions";
+import { issuerColor } from "@/lib/issuer-color";
+import { daysOf, SEGMENTS, segmentsOf } from "@/lib/report-stage";
+import { StageHelp } from "./StageHelp";
+
+const SEG_LABEL = { done: "făcut", now: "în lucru", late: "întârziat", todo: "urmează" } as const;
 import { STAGE_LABEL } from "@/lib/dossier";
 import { ReportFilters } from "./ReportFilters";
 import { CrmShell } from "@/components/CrmShell";
@@ -21,6 +26,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const { db, user, base } = await staffPage("reports");
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page) || 1);
+  const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
   // Without "reports.all": only the reports of the user's team work. With it, "Ale mele" narrows the list the same way.
   const all = can(user, "reports.all");
   const mine = !all || sp.ale === "1" ? { id: user.id, sql: mySql(user) } : undefined;
@@ -62,33 +68,37 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <div className="empty">{data.total === 0 && !sp.q ? "Nu există încă rapoarte. Proprietarul le poate aduce din Glide, din meniul Import Glide." : "Niciun raport pentru filtrele alese."}</div>
         ) : (
           <div className="tableWrap">
-            <table className="table">
-              <thead><tr><th>Raport</th><th>Client · utilizator</th><th>Proprietate</th><th>Echipa</th><th>Inspecție</th><th>Status raport</th><th style={{ textAlign: "right" }}>Valoare</th></tr></thead>
+            <table className="table repTable">
+              <thead><tr>
+                <th>Raport</th><th>Client · utilizator</th><th>Proprietate</th><th>Scop · tip valoare</th><th>Echipa</th>
+                <th className="stageTh" data-label="Etapă">Etapă <StageHelp /></th>
+                <th>Status</th><th style={{ textAlign: "right" }}>Zile</th>
+              </tr></thead>
               <tbody>
                 {data.rows.map((r) => {
                   const [label, cls] = REPORT_STATUS[r.status] ?? [r.status, ""];
                   const [type, address] = (r.asset ?? "|").split("|");
-                  const [insp, inspCls, inspDate] = inspectionState(r);
                   const own = /valuefy/i.test(r.issuer_name ?? "");
                   const logo = fileSrc(r.issuer_logo);
                   const short = (r.issuer_short ?? r.issuer_name ?? "?").slice(0, 2).toUpperCase();
-                  // "Raport de evaluare" → "Raport"; the notes keep their name.
                   const kind = !r.report_type || /^raport de evaluare$/i.test(r.report_type) ? "Raport" : r.report_type;
                   const team = rowMembers(r);
-                  const lead = team.find((m) => m.role === "evaluator");
+                  const { seg, caption } = segmentsOf(r, today);
+                  const d = daysOf(r, today);
                   return (
                     <ClickRow key={r.id} href={`${base}/rapoarte/${r.id}`}>
-                      <td>
+                      <td style={{ borderLeft: `4px solid ${issuerColor(r.issuer_name, r.issuer_color)}` }}>
                         <a className="repCell rowLink" href={`${base}/rapoarte/${r.id}`} title={r.issuer_name ?? undefined}>
-                          {logo ? <SafeImg src={logo} className="repLogo" fallback={<i className="repLogo" aria-hidden>{short}</i>} /> : <i className="repLogo" aria-hidden>{short}</i>}
+                          {logo ? <SafeImg src={logo} className="repLogo" fallback={<i className="repLogo" aria-hidden>{short}</i>} /> : <i className={`repLogo${own ? " own" : ""}`} aria-hidden>{short}</i>}
                           <span className="repText">
-                            <b>{kind}{r.number ? <> <span className="ref">{r.number}</span></> : <small className="muted"> fără număr</small>}</b>
-                            <small className={own ? "muted" : "warn"}>{r.issuer_name ? niceName(r.issuer_short ?? r.issuer_name) : "emitent necunoscut"}</small>
+                            <small className={`repKind${kind === "Raport" ? "" : " note"}`}>{kind}</small>
+                            {r.number ? <b className="mono">{r.number}</b> : <b className="muted">fără număr</b>}
                           </span>
                         </a>
                       </td>
-                      <td><a className="rowLink" href={`${base}/rapoarte/${r.id}`}>{niceName(r.client_name) || "—"}</a><div className="muted">{niceName(r.bank_name) || "fără utilizator desemnat"}</div></td>
-                      <td style={{ minWidth: 170 }}>{cap(type) || "—"}<div className="muted">{address}</div></td>
+                      <td><div className="two"><b>{niceName(r.client_name) || "—"}</b><small>{niceName(r.bank_name) || "fără utilizator desemnat"}</small></div></td>
+                      <td style={{ minWidth: 160 }}><div className="two"><b>{cap(type) || "—"}</b><small>{address}</small></div></td>
+                      <td><div className="two"><b>{r.purpose || "—"}</b><small>{r.value_type || ""}</small></div></td>
                       <td>
                         {team.length === 0 ? <span className="muted">—</span> : (
                           <span className="pStack" aria-label={team.map((m) => `${m.name} (${ROLE_LABEL[m.role] ?? m.role})`).join(", ")}>
@@ -96,11 +106,20 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                             {team.length > 5 && <i className="pMore">+{team.length - 5}</i>}
                           </span>
                         )}
-                        {lead && <div className="muted">{lead.name.split(" ").slice(0, 2).join(" ")}</div>}
                       </td>
-                      <td>{inspCls ? <span className={`pill ${inspCls}`}><i />{insp}</span> : <span className="muted">{insp}</span>}{inspDate && <div className="muted">{fmtDate(inspDate, insp === "Programată")}</div>}</td>
-                      <td><span className={`pill ${cls}`}><i />{label}</span>{r.status === "done" && r.report_date && <div className="muted">{fmtDate(r.report_date)}</div>}</td>
-                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{lei(r.result_value)}</td>
+                      <td>
+                        <div className="two">
+                          <span className="steps" aria-label={seg.map((x, k) => `${SEGMENTS[k]}: ${SEG_LABEL[x]}`).join(", ")}>{seg.map((x, k) => <i key={k} className={x} />)}</span>
+                          <small>{caption}</small>
+                        </div>
+                      </td>
+                      <td><span className={`pill ${cls}`}><i />{label}</span></td>
+                      <td style={{ textAlign: "right" }}>
+                        <span className={`days${d.delivered ? " done" : d.late ? " late" : ""}`}>
+                          <b>{d.days}</b>
+                          <small>{d.delivered ? (d.late ? `predat cu +${d.over} ${d.over === 1 ? "zi" : "zile"}` : "predat în termen") : `din ${d.term} zile${d.late ? ` · +${d.over}` : ""}`}</small>
+                        </span>
+                      </td>
                     </ClickRow>
                   );
                 })}

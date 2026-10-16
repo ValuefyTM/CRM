@@ -21,7 +21,8 @@ export type ReportRow = {
   id: string; number: string | null; label: string | null; report_date: string | null; status: string; fee: number | null; result_value: number | null;
   report_type: string | null; client_name: string | null; bank_code: string | null; issuer_name: string | null; evaluator: string | null; asset: string | null;
   issuer_short: string | null; insp_total: number; insp_done: number; insp_next: string | null; insp_last: string | null; no_insp: number;
-  issuer_logo: string | null; bank_name: string | null;
+  issuer_logo: string | null; issuer_color: string | null; bank_name: string | null; purpose: string | null; value_type: string | null;
+  stage: string | null; delivered_at: string | null; verified_at: string | null; invoiced: number; ordered_at: string | null; received_on: string | null; created_at: string; term_days: number | null;
   /** The team, one per line: id, name, role, avatar_at (see rowMembers). */
   members: string | null;
 };
@@ -34,7 +35,9 @@ export const rowMembers = (r: Pick<ReportRow, "members">): RowMember[] =>
     return { id, name, role, photo: photoUrl(id, avatarAt || null) };
   });
 
-const ROW = `SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.result_value, r.report_type,
+const ROW = `SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.result_value, r.report_type, r.purpose, r.value_type,
+  r.stage, r.delivered_at, r.verified_at, r.received_on, r.created_at, r.term_days, o.created_at AS ordered_at, i.color AS issuer_color,
+  EXISTS (SELECT 1 FROM invoices v, json_each(v.report_ids) j WHERE j.value = r.id AND v.kind = 'invoice' AND v.status <> 'cancelled') AS invoiced,
   c.name AS client_name, COALESCE(b.code, b.name) AS bank_code, b.name AS bank_name, i.name AS issuer_name, COALESCE(NULLIF(i.code, ''), i.name) AS issuer_short, i.logo_url AS issuer_logo,
   (SELECT group_concat(line, char(10)) FROM (SELECT m.user_id || char(31) || COALESCE(NULLIF(u.name, ''), u.email) || char(31) || m.role || char(31) || COALESCE(u.avatar_at, '') AS line
      FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = r.id
@@ -47,7 +50,7 @@ const ROW = `SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.r
   (SELECT u.name FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = r.id AND m.role = 'evaluator' LIMIT 1) AS evaluator,
   (SELECT COALESCE(p.type, '') || '|' || COALESCE(p.full_address, p.city, '') FROM assets a JOIN crm_properties p ON p.id = a.property_id
      WHERE a.report_id = r.id ORDER BY a.is_main DESC LIMIT 1) AS asset
-  FROM reports r LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id LEFT JOIN entities i ON i.id = r.issuer_id`;
+  FROM reports r LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id LEFT JOIN entities i ON i.id = r.issuer_id LEFT JOIN orders o ON o.id = r.order_id`;
 
 export type ReportFilters = { q?: string; status?: string; year?: string; bank?: string; issuer?: string; evaluator?: string; sort?: string; page?: number; etapa?: string; termen?: string;
   /** Only the reports this user sees as a team member ("Rapoartele mele"): their id and the condition (perms-db mySql). */
@@ -56,7 +59,6 @@ export type ReportFilters = { q?: string; status?: string; year?: string; bank?:
 export const REPORT_SORTS: Record<string, [string, string]> = {
   "": ["Cele mai noi", "COALESCE(r.report_date, substr(r.created_at, 1, 10)) DESC, CAST(r.number AS INTEGER) DESC"],
   old: ["Cele mai vechi", "COALESCE(r.report_date, substr(r.created_at, 1, 10)) ASC"],
-  value: ["Valoare mare", "r.result_value DESC NULLS LAST"],
 };
 export const PAGE_SIZE = 50;
 
