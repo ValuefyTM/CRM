@@ -34,6 +34,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
           { key: "contracts", label: "Contracte", href: `${b}/contracte` },
           { key: "collabs", label: "Colaborări", soon: true },
           { key: "orders", label: "Comenzi", href: `${b}/comenzi`, badge: unread, hot: true },
+          { key: "tenders", label: "Licitații SEAP", href: `${b}/licitatii` },
           { key: "followups", label: "Follow-up-uri", soon: true },
           { key: "listings", label: "Anunțuri imobiliare", href: `${b}/anunturi`, badge: inquiries, hot: true },
         ] },

@@ -1652,3 +1652,13 @@ div.dbKpi::after { content: none; }
   .vfModal.sheet { align-items: flex-end; padding: 0; }
   .vfModal.sheet .vfModalBox { width: 100%; border-radius: 20px 20px 0 0; max-height: 88dvh; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
 }
+
+/* ---------- Licitații SEAP ---------- */
+.tdList { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.tdList li { border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 6px; background: #fff; min-width: 0; }
+.tdHead { display: flex; gap: 6px; flex-wrap: wrap; }
+.tdTitle { font-weight: 700; font-size: 14.5px; color: var(--ink); line-height: 1.4; overflow-wrap: anywhere; }
+.tdTitle:hover { color: var(--acc-text); }
+.tdMeta { font-size: 12.5px; color: var(--muted); line-height: 1.5; overflow-wrap: anywhere; }
+.tdActs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.tdRaw { white-space: pre-wrap; word-break: break-all; font-size: 11px; background: var(--cream); padding: 10px; border-radius: 10px; max-height: 260px; overflow: auto; }
