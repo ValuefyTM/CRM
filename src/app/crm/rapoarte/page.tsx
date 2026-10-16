@@ -8,6 +8,7 @@ import { SafeImg } from "./[id]/ReportActions";
 import { issuerColor } from "@/lib/issuer-color";
 import { daysOf, SEGMENTS, segmentsOf } from "@/lib/report-stage";
 import { StageHelp } from "./StageHelp";
+import { CancelNoAsset } from "./CancelNoAsset";
 
 const SEG_LABEL = { done: "făcut", now: "în lucru", late: "întârziat", todo: "urmează" } as const;
 import { STAGE_LABEL } from "@/lib/dossier";
@@ -32,6 +33,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const mine = !all || sp.ale === "1" ? { id: user.id, sql: mySql(user) } : undefined;
   const f = { ...sp, page, mine };
   const [data, facets, counts] = await Promise.all([listReports(db, f), reportFacets(db, mine), reportTabCounts(db, f)]);
+  // "Fără bun": the open ones can be cancelled in one go (by someone who sees all reports and changes statuses).
+  const openNoAsset = sp.bunuri === "fara" && all && can(user, "reports:status")
+    ? (await db.prepare("SELECT COUNT(*) AS n FROM reports r WHERE r.status NOT IN ('done', 'cancelled') AND NOT EXISTS (SELECT 1 FROM assets x WHERE x.report_id = r.id)").first<{ n: number }>())?.n ?? 0
+    : 0;
   const tab = sp.status === "draft" ? "in_progress" : sp.status ?? "";
   const pages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
   const link = (change: Partial<SP>) => {
@@ -45,6 +50,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     <CrmShell user={user} base={base} active="reports" title={mine ? "Rapoartele mele" : "Rapoarte"}
       subtitle={mine ? "Rapoartele la care ești în echipă (cele finalizate: ca evaluator principal sau verificator)" : "Toate rapoartele: VALUEFY și firmele partenere"}
       actions={all ? <a className={`btn btnSm ${mine ? "btnGold" : "btnGhost"}`} href={link({ ale: mine ? undefined : "1" })}>{mine ? "Toate rapoartele" : "Rapoartele mele"}</a> : undefined}>
+      {openNoAsset > 0 && <CancelNoAsset count={openNoAsset} />}
       {sp["fara-acces"] && <div className="note">Nu ai acces la acel raport: rapoartele finalizate le văd evaluatorul principal și verificatorul.</div>}
       <section className="card">
         <ReportFilters
