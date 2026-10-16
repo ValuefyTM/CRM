@@ -12,10 +12,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ro">
       <head>
-        {/* Sidebar typography: IBM Plex Sans (text) and IBM Plex Mono (counters); the system font stands in if they do not load. */}
+        {/* Typography: Plus Jakarta Sans (text) and IBM Plex Mono (counters); the system font stands in if they do not load. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400..700&display=swap" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400..800&display=swap" />
       </head>
       <body>{children}</body>
     </html>
