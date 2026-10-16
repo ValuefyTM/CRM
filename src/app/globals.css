@@ -674,7 +674,7 @@ a.rMeta:hover u { color: var(--acc-light); }
 .link:hover, .kv dd a:hover { color: var(--acc-text); }
 
 /* Listings (reports, clients, orders): header band, more air, hover marker, references as tags. */
-.table { font-size: 13px; }
+.table { font-size: 13.5px; }
 .table thead th { background: var(--cream); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font-size: 10.5px; letter-spacing: 0.08em; padding-top: 11px; padding-bottom: 11px; white-space: nowrap; }
 .card > .tableWrap:first-child .table thead th, .card > .cardHead + .tableWrap .table thead th { border-top: 0; }
 .table td { padding-top: 14px; padding-bottom: 14px; color: var(--ink); line-height: 1.45; }
@@ -682,7 +682,7 @@ a.rMeta:hover u { color: var(--acc-light); }
 .table tbody tr { transition: background 0.15s; }
 .table tbody tr:hover { background: #fdfbf7; }
 .table tbody tr:hover > td:first-child { box-shadow: inset 3px 0 0 var(--acc); }
-.table .rowLink { font-weight: 700; font-size: 13px; }
+.table .rowLink { font-weight: 700; font-size: 13.5px; }
 .table .rowLink:hover { color: var(--ink); }
 .table .ref, .table .ref.rowLink { display: inline-block; font-family: var(--mono); font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 7px; background: var(--cream-2); border: 1px solid var(--line); text-decoration: none; }
 .table .ref:hover { border-color: var(--acc); }
@@ -1743,12 +1743,12 @@ thead .pmRole { background: var(--cream) !important; z-index: 3; }
 .issuer img, .issuer i { width: 26px; height: 26px; border-radius: 7px; object-fit: contain; background: #fff; border: 1px solid var(--line); flex-shrink: 0; }
 .issuer i { display: inline-flex; align-items: center; justify-content: center; font: 700 10px "IBM Plex Mono", ui-monospace, monospace; font-style: normal; color: var(--muted-2); }
 .pMore { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; margin-left: -8px; border-radius: 50%; background: var(--cream-2, #eee8dc); font: 700 10px "IBM Plex Mono", ui-monospace, monospace; font-style: normal; color: var(--muted-2); box-shadow: 0 0 0 2px #fff; }
-.repCell { display: inline-flex; align-items: center; gap: 9px; min-width: 0; }
-.repLogo { width: 28px; height: 28px; border-radius: 7px; object-fit: contain; background: #fff; border: 1px solid var(--line); flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font: 700 10px "IBM Plex Mono", ui-monospace, monospace; font-style: normal; color: var(--muted-2); }
+.repCell { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.repLogo { width: 22px; height: 22px; border-radius: 6px; object-fit: contain; background: #fff; border: 1px solid var(--line); flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font: 700 8.5px "IBM Plex Mono", ui-monospace, monospace; font-style: normal; color: var(--muted-2); }
 .repLogo.own { background: var(--ink); color: var(--acc); border-color: var(--ink); }
-.repText { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
-.repText b { font-weight: 600; font-size: 13.5px; }
-.repKind { font: 600 10.5px "IBM Plex Mono", ui-monospace, monospace; letter-spacing: .04em; text-transform: uppercase; color: var(--muted-2); }
+.repText { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.repText b { font-weight: 600; font-size: 12.5px; }
+.repKind { font: 600 9px "IBM Plex Mono", ui-monospace, monospace; letter-spacing: .04em; text-transform: uppercase; color: var(--muted-2); }
 .repKind.note { color: var(--acc-text, #8a5600); }
 .repTable td { padding-top: 9px; padding-bottom: 9px; }
 .repTable .two { display: flex; flex-direction: column; line-height: 1.3; min-width: 0; }
@@ -1797,11 +1797,12 @@ thead .pmRole { background: var(--cream) !important; z-index: 3; }
   .repTable td:nth-child(6) { grid-area: stage; }
   .repTable td:nth-child(7) { grid-area: status; justify-self: end; }
   .repTable td:nth-child(8) { grid-area: days; justify-self: end; }
-  .repTable .repLogo { width: 24px; height: 24px; }
+  .repTable .repLogo { width: 20px; height: 20px; }
   .repTable .repText { flex-direction: row; align-items: baseline; gap: 6px; }
   .repTable .two { flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: 6px; }
   .repTable .two b { font-size: 13px; }
-  .repTable .two small, .repTable .repKind { font-size: 11px; }
+  .repTable .two small { font-size: 11px; }
+  .repTable .repKind { font-size: 9px; }
   .repTable td:nth-child(3) .two b { font-weight: 500; }
   .repTable td:nth-child(4) .two small { display: none; }
   .repTable .pStack .pAvatar { width: 22px !important; height: 22px !important; font-size: 8px !important; }
