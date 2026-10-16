@@ -1997,3 +1997,41 @@ img.rcLogo { padding: 2px; }
 .topDark .actions .btnNavy { background: var(--acc); border-color: var(--acc); color: var(--ink); }
 .topDark .actions .btnNavy:hover { filter: brightness(1.06); }
 .topDark .actions .linkBtn, .topDark .actions .link { color: var(--acc-light); }
+
+/* ===== Bara laterală: logo nedeformat, iconițe, pliere la iconițe (desktop) ===== */
+.brandRow { display: flex; align-items: flex-start; gap: 6px; }
+.brand { flex: 1; min-width: 0; align-items: flex-start; }
+.brand img { width: auto; max-width: 100%; object-fit: contain; }
+.brand img.brandFull { height: 24px; }
+.brand img.brandMark { display: none; height: 26px; }
+.sideFold { flex-shrink: 0; width: 30px; height: 30px; margin-top: -5px; border: 0; border-radius: 8px; background: transparent; color: #8a8a8a; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.sideFold:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.navItem { justify-content: flex-start; }
+.navIcon { flex-shrink: 0; opacity: 0.85; }
+.navLabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+a.navItem[aria-current="page"] .navIcon { opacity: 1; }
+.navGroupItems[hidden] { display: none; }
+.side { transition: width 0.18s ease, padding 0.18s ease; }
+@media (min-width: 980px) {
+  .shell[data-mini] .side { width: 68px; padding-inline: 10px; overflow-x: hidden; }
+  .shell[data-mini] .brandRow { flex-direction: column; align-items: center; gap: 10px; }
+  .shell[data-mini] .brand { align-items: center; padding: 0; flex: none; }
+  .shell[data-mini] .brand img.brandFull, .shell[data-mini] .brandLabel { display: none; }
+  .shell[data-mini] .brand img.brandMark { display: block; }
+  .shell[data-mini] .sideFold { margin: 0; }
+  .shell[data-mini] .navGroupHead { display: none; }
+  .shell[data-mini] .navGroupItems, .shell[data-mini] .navGroupItems[hidden] { display: flex; margin: 0; padding: 0; border: 0; }
+  .shell[data-mini] .navGroup { padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+  .shell[data-mini] .navItem { justify-content: center; padding: 0; height: 40px; }
+  .shell[data-mini] .navGroupItems .navItem { height: 40px; }
+  .shell[data-mini] .navLabel, .shell[data-mini] .navSoon { display: none; }
+  .shell[data-mini] .navIcon { width: 20px; height: 20px; }
+  .shell[data-mini] .navBadge { position: absolute; top: 4px; right: 4px; min-width: 0; height: 15px; padding: 0 4px; border-radius: 999px; font-size: 9.5px; line-height: 15px; text-align: center; background: #1c1c1c; }
+  .shell[data-mini] .navBadge:not(.hot) { display: none; }
+  .shell[data-mini] .navBadge.hot { background: var(--acc); color: #111; }
+  .shell[data-mini] .meCard { flex-direction: column; padding: 8px 4px; gap: 4px; align-items: center; }
+  .shell[data-mini] .meText { display: none; }
+  .shell[data-mini] .meMore { margin: 0; width: 28px; height: 24px; }
+  .shell[data-mini] .meMenu { position: fixed; left: 76px; right: auto; bottom: 14px; width: 230px; }
+}
+@media (max-width: 979px) { .sideFold { display: none; } }

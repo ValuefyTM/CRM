@@ -8,14 +8,61 @@ export type NavGroup = { group: string; key: string; items: NavItem[] };
 export type NavEntry = NavItem | NavGroup;
 
 const isGroup = (e: NavEntry): e is NavGroup => "group" in e;
+
+// One line icon per page (24×24, stroke), by menu key.
+const ICONS: Record<string, string> = {
+  home: "M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z",
+  clients: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
+  contracts: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h5",
+  orders: "M22 12h-6l-2 3h-4l-2-3H2M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z",
+  tenders: "m14 13-8.5 8.5a2.12 2.12 0 0 1-3-3L11 10M16 16l6-6M8 8l6-6M9 7l8 8M21 11l-8-8",
+  listings: "M3 11l18-8-8 18-2-8z",
+  reports: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M9 15l2 2 4-4",
+  inspections: "M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM12 14v4M10 16h4",
+  properties: "M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 10h.01M15 10h.01",
+  invoicing: "M4 2v20l3-2 3 2 3-2 3 2 3-2 1 .67V2l-1 .67L17 2l-3 2-3-2-3 2-3-2zM8 8h8M8 12h8M8 16h5",
+  users: "M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM20 21a8 8 0 0 0-16 0",
+  settings: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z",
+  account: "M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM20 21a8 8 0 0 0-16 0",
+};
+const DOT = "M12 12m-3 0a3 3 0 1 0 6 0 3 3 0 1 0-6 0";
+const Icon = ({ k }: { k: string }) => (
+  <svg className="navIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ICONS[k] ?? DOT} /></svg>
+);
+const MINI = "vf_side";
+
+/** Logo and the button that folds the sidebar to its icons; folded, the V mark opens it again. Kept in a cookie. */
+export function SideBrand({ href, label, mini: start }: { href: string; label: string; mini: boolean }) {
+  const [mini, setMini] = useState(start);
+  const set = (m: boolean) => {
+    setMini(m);
+    document.querySelector(".shell")?.toggleAttribute("data-mini", m);
+    document.cookie = `${MINI}=${m ? "mini" : ""}; path=/; max-age=${m ? 31536000 : 0}; samesite=lax`;
+  };
+  return (
+    <div className="brandRow">
+      <a className="brand" href={href} aria-label={mini ? "Deschide meniul" : "VALUEFY · acasă"} title={mini ? "Deschide meniul" : undefined}
+        onClick={(e) => { if (mini && window.matchMedia("(min-width: 980px)").matches) { e.preventDefault(); set(false); } }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className="brandFull" src="/valuefy-logo-white.png" alt="VALUEFY" width={600} height={123} />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className="brandMark" src="/valuefy-mark.png" alt="" width={152} height={121} />
+        <span className="brandLabel">{label}</span>
+      </a>
+      <button type="button" className="sideFold" aria-label={mini ? "Deschide meniul" : "Închide meniul"} title={mini ? "Deschide meniul" : "Închide meniul"} aria-expanded={!mini} onClick={() => set(!mini)}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3" /><path d="M9 3v18" /><path d={mini ? "m14 9 3 3-3 3" : "m16 15-3-3 3-3"} /></svg>
+      </button>
+    </div>
+  );
+}
 const STORE = "vf-nav-folded";
 
 function Item({ i, active }: { i: NavItem; active: string }) {
   const badge = !!i.badge && <span className={`navBadge${i.hot ? " hot" : ""}`}>{i.badge}</span>;
   if (!i.href || i.soon) {
-    return <span className="navItem soon" aria-disabled="true" title="Pagina vine în curând">{i.label}<span className="navSoon">în curând</span></span>;
+    return <span className="navItem soon" aria-disabled="true" title="Pagina vine în curând"><Icon k={i.key} /><span className="navLabel">{i.label}</span><span className="navSoon">în curând</span></span>;
   }
-  return <a className="navItem" href={i.href} aria-current={active === i.key ? "page" : undefined}>{i.label}{badge}</a>;
+  return <a className="navItem" href={i.href} title={i.label} aria-current={active === i.key ? "page" : undefined}><Icon k={i.key} /><span className="navLabel">{i.label}</span>{badge}</a>;
 }
 
 export function SideNav({ nav, active }: { nav: NavEntry[]; active: string }) {
@@ -41,7 +88,8 @@ export function SideNav({ nav, active }: { nav: NavEntry[]; active: string }) {
               {!open && sum > 0 && <span className="navBadge hot">{sum}</span>}
               <span className="navChev" aria-hidden="true">›</span>
             </button>
-            {open && <div className="navGroupItems">{e.items.map((i) => <Item key={i.key} i={i} active={active} />)}</div>}
+            {/* Folded groups stay in the page: with the sidebar folded to icons every page shows. */}
+            <div className="navGroupItems" hidden={!open}>{e.items.map((i) => <Item key={i.key} i={i} active={active} />)}</div>
           </div>
         );
       })}

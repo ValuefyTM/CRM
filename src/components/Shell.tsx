@@ -1,10 +1,11 @@
 import { Avatar } from "./Avatar";
-import { MeMenu, MobileMenu, SideNav, type NavEntry, type NavGroup, type NavItem } from "./SideNav";
+import { cookies } from "next/headers";
+import { MeMenu, MobileMenu, SideBrand, SideNav, type NavEntry, type NavGroup, type NavItem } from "./SideNav";
 
 export type { NavItem, NavGroup, NavEntry } from "./SideNav";
 
 /** Sidebar layout used by the CRM and the portal: white logo, grouped menu, the signed-in user at the bottom. */
-export function Shell(props: {
+export async function Shell(props: {
   app: "crm" | "portal";
   label: string;
   nav: NavEntry[];
@@ -23,14 +24,12 @@ export function Shell(props: {
   children: React.ReactNode;
 }) {
   const flat: NavItem[] = props.nav.flatMap((e) => ("group" in e ? (e as NavGroup).items : [e as NavItem]));
+  // The sidebar folded to its icons (desktop), remembered in a cookie so the page opens the same way.
+  const mini = (await cookies()).get("vf_side")?.value === "mini";
   return (
-    <div className="shell">
+    <div className="shell" data-mini={mini ? "" : undefined}>
       <aside className="side">
-        <a className="brand" href={flat[0]?.href ?? "/"} aria-label="VALUEFY · acasă">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/valuefy-logo-white.png" alt="VALUEFY" />
-          <span className="brandLabel">{props.label}</span>
-        </a>
+        <SideBrand href={flat[0]?.href ?? "/"} label={props.label} mini={mini} />
         {props.cta &&
           (props.cta.href ? (
             <a href={props.cta.href} className="sideCta">{props.cta.label}</a>
