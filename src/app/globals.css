@@ -1810,3 +1810,8 @@ thead .pmRole { background: var(--cream) !important; z-index: 3; }
   .repTable .pill { height: 20px; font-size: 11px; padding: 0 8px; }
   .repTable .steps i { width: 16px; height: 5px; }
 }
+.issuerLogo { width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--line); background: #fff; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+.issuerLogo img { width: 100%; height: 100%; object-fit: contain; }
+.issuerLogo b { font: 700 11px "IBM Plex Mono", ui-monospace, monospace; color: var(--muted-2); }
+.issuerActs { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
+.issuerActs .linkBtn { font-size: 12px; }

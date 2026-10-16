@@ -10,6 +10,7 @@ import { SettingsTabs } from "./SettingsTabs";
 import { IssuerColors } from "./IssuerColors";
 import { issuerColor } from "@/lib/issuer-color";
 import { niceName } from "@/lib/labels";
+import { fileSrc } from "@/lib/files";
 
 export const metadata: Metadata = { title: "Setări | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -19,8 +20,8 @@ export default async function SettingsPage() {
   const { db, user, base } = await staffPage();
   const [firm, log, issuers] = await Promise.all([
     getFirmWithImages(db), history(db, ["firm"]),
-    db.prepare(`SELECT e.id, e.name, e.color, (SELECT COUNT(*) FROM reports r WHERE r.issuer_id = e.id) AS reports FROM entities e WHERE e.kind = 'valuation_firm' ORDER BY reports DESC, e.name`)
-      .all<{ id: string; name: string; color: string | null; reports: number }>(),
+    db.prepare(`SELECT e.id, e.name, e.color, e.logo_url, (SELECT COUNT(*) FROM reports r WHERE r.issuer_id = e.id) AS reports FROM entities e WHERE e.kind = 'valuation_firm' ORDER BY reports DESC, e.name`)
+      .all<{ id: string; name: string; color: string | null; logo_url: string | null; reports: number }>(),
   ]);
   const edit = can(user, "settings.E");
   const values = Object.fromEntries(FIRM_FIELDS.map(([k]) => [k, firm[k]])) as Record<string, string>;
@@ -58,8 +59,8 @@ export default async function SettingsPage() {
           </section>
           <section className="card">
             <div className="cardHead"><h2>Firme emitente</h2><span className="muted">culoarea din lista de rapoarte</span></div>
-            <p className="hint">Fiecare raport are în listă o dungă în culoarea firmei care l-a emis. VALUEFY e galben; celelalte primesc o culoare implicită până o alegi.</p>
-            <IssuerColors edit={edit} firms={issuers.results.map((f) => ({ ...f, name: niceName(f.name), fallback: issuerColor(f.name, null) }))} />
+            <p className="hint">În lista de rapoarte, fiecare raport are logo-ul firmei care l-a emis și o dungă în culoarea ei. Fără logo apar inițialele; VALUEFY e galben, celelalte primesc o culoare implicită până o alegi. Logo: PNG, JPG, WebP sau SVG, cel mult 1 MB.</p>
+            <IssuerColors edit={edit} firms={issuers.results.map((f) => ({ ...f, name: niceName(f.name), fallback: issuerColor(f.name, null), logo: fileSrc(f.logo_url) }))} />
           </section>
           <History log={log} />
         </div>
