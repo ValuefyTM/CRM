@@ -2035,3 +2035,5 @@ a.navItem[aria-current="page"] .navIcon { opacity: 1; }
   .shell[data-mini] .meMenu { position: fixed; left: 76px; right: auto; bottom: 14px; width: 230px; }
 }
 @media (max-width: 979px) { .sideFold { display: none; } }
+/* Bara strânsă: conținutul (tabelele) umple toată lățimea paginii. */
+@media (min-width: 980px) { .shell[data-mini] .content { max-width: none; } }
