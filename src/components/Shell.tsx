@@ -19,6 +19,8 @@ export async function Shell(props: {
   search?: React.ReactNode;
   /** No top bar (title, search, actions): pages with their own header, like a report. */
   bare?: boolean;
+  /** The title as a small yellow line (the date on the dashboards). */
+  dateTitle?: boolean;
   /** A strip above the top bar (the CRM's "Vezi ca…" banner). */
   banner?: React.ReactNode;
   children: React.ReactNode;
@@ -52,7 +54,7 @@ export async function Shell(props: {
           {/* No title on the dashboards: their own greeting says it. */}
           {props.title && (
             <div>
-              <h1>{props.title}</h1>
+              <h1 className={props.dateTitle ? "topDate" : undefined}>{props.title}</h1>
               {props.subtitle && <p>{props.subtitle}</p>}
             </div>
           )}

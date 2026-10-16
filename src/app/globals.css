@@ -2068,3 +2068,7 @@ a.navItem[aria-current="page"] .navIcon { opacity: 1; }
 .dbHello p.dbHelloLine b { font-size: 1.12em; color: #fff; }
 .dbHello p.dbHelloLine a.hot, .dbHello p.dbHelloLine a.hot b { color: #ff6b5e; }
 .dbHello p.dbHelloLine a.hot { text-decoration-color: rgba(255, 107, 94, 0.6); }
+/* Înapoi la mărimea dinainte: rândul de sub salut și data (mică, galbenă) din bara neagră. */
+.dbHello p.dbHelloLine { font-size: 14px; line-height: 1.7; margin-top: 0; max-width: 520px; color: var(--on-navy); }
+.dbHello p.dbHelloLine b { font-size: inherit; }
+.topDark h1.topDate { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; color: var(--acc-light); }

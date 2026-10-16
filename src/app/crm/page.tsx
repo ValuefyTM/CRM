@@ -85,7 +85,7 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
   const dateTitle = new Date(`${today}T12:00:00Z`).toLocaleDateString("ro-RO", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
   // Without the firm's dashboard: the user's own reports and inspections.
   if (!can(user, "dashboard.all")) {
-    return <CrmShell user={user} base={base} active="home" title={dateTitle}><MyHome user={user} base={base} denied={denied} /></CrmShell>;
+    return <CrmShell user={user} base={base} active="home" title={dateTitle} dateTitle><MyHome user={user} base={base} denied={denied} /></CrmShell>;
   }
   const [d, firm] = await Promise.all([
     dashboard(db, base),
@@ -117,7 +117,7 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
   ];
 
   return (
-    <CrmShell user={user} base={base} active="home" title={dateTitle}>
+    <CrmShell user={user} base={base} active="home" title={dateTitle} dateTitle>
       {denied && <div className="note">Nu ai acces la pagina aceea. Ce vezi în CRM stabilește administratorul, în Setări → Permisiuni.</div>}
       <section className="dbHello">
         <div className="dbHelloText">

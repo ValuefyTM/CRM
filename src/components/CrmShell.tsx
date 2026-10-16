@@ -13,7 +13,7 @@ import { TableLabels } from "./TableLabels";
 import { photoUrl } from "@/lib/presence";
 import { countNewInquiries } from "@/lib/listings";
 
-export async function CrmShell(props: { user: User; base: string; active: string; title: string; subtitle?: string; actions?: React.ReactNode; bare?: boolean; children: React.ReactNode }) {
+export async function CrmShell(props: { user: User; base: string; active: string; title: string; subtitle?: string; actions?: React.ReactNode; bare?: boolean; dateTitle?: boolean; children: React.ReactNode }) {
   const b = props.base;
   // Badge on "Comenzi": orders nobody in the team has opened yet, plus new requests from the website.
   const db = await getDb();
@@ -52,6 +52,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
       search={<>{viewAs && !u.impersonator && props.active === "home" && <ViewAs users={viewAs} realName={u.name || u.email} />}<GlobalSearch base={b} /><Bell /></>}
       banner={viewAs && u.impersonator ? <ViewAs users={props.active === "home" ? viewAs : null} as={{ id: u.id, name: u.name || u.email, role: roleLabel("internal", u.role) }} realName={u.impersonator.name} /> : undefined}
       bare={props.bare}
+      dateTitle={props.dateTitle}
       app="crm"
       label=""
       nav={[
