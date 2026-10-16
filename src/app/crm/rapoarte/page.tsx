@@ -63,7 +63,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         ) : (
           <div className="tableWrap">
             <table className="table">
-              <thead><tr><th>Raport</th><th>Emis de</th><th>Client · utilizator</th><th>Proprietate</th><th>Echipa</th><th>Inspecție</th><th>Status raport</th><th style={{ textAlign: "right" }}>Valoare</th></tr></thead>
+              <thead><tr><th>Raport</th><th>Client · utilizator</th><th>Proprietate</th><th>Echipa</th><th>Inspecție</th><th>Status raport</th><th style={{ textAlign: "right" }}>Valoare</th></tr></thead>
               <tbody>
                 {data.rows.map((r) => {
                   const [label, cls] = REPORT_STATUS[r.status] ?? [r.status, ""];
@@ -71,18 +71,21 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                   const [insp, inspCls, inspDate] = inspectionState(r);
                   const own = /valuefy/i.test(r.issuer_name ?? "");
                   const logo = fileSrc(r.issuer_logo);
+                  const short = (r.issuer_short ?? r.issuer_name ?? "?").slice(0, 2).toUpperCase();
+                  // "Raport de evaluare" → "Raport"; the notes keep their name.
+                  const kind = !r.report_type || /^raport de evaluare$/i.test(r.report_type) ? "Raport" : r.report_type;
                   const team = rowMembers(r);
                   const lead = team.find((m) => m.role === "evaluator");
                   return (
                     <ClickRow key={r.id} href={`${base}/rapoarte/${r.id}`}>
-                      <td>{r.number ? <a className="ref rowLink" href={`${base}/rapoarte/${r.id}`}>{r.number}</a> : <a className="rowLink muted" href={`${base}/rapoarte/${r.id}`}>fără număr</a>}{r.report_type && !/^raport de evaluare$/i.test(r.report_type) && <div className="muted">{r.report_type}</div>}</td>
                       <td>
-                        {r.issuer_name ? (
-                          <span className="issuer" title={r.issuer_name}>
-                            {logo ? <SafeImg src={logo} fallback={<i aria-hidden>{(r.issuer_short ?? r.issuer_name).slice(0, 2).toUpperCase()}</i>} /> : <i aria-hidden>{(r.issuer_short ?? r.issuer_name).slice(0, 2).toUpperCase()}</i>}
-                            <span className={`pill ${own ? "" : "pillWarn"}`}>{niceName(r.issuer_short ?? r.issuer_name)}</span>
+                        <a className="repCell rowLink" href={`${base}/rapoarte/${r.id}`} title={r.issuer_name ?? undefined}>
+                          {logo ? <SafeImg src={logo} className="repLogo" fallback={<i className="repLogo" aria-hidden>{short}</i>} /> : <i className="repLogo" aria-hidden>{short}</i>}
+                          <span className="repText">
+                            <b>{kind}{r.number ? <> <span className="ref">{r.number}</span></> : <small className="muted"> fără număr</small>}</b>
+                            <small className={own ? "muted" : "warn"}>{r.issuer_name ? niceName(r.issuer_short ?? r.issuer_name) : "emitent necunoscut"}</small>
                           </span>
-                        ) : <span className="muted">—</span>}
+                        </a>
                       </td>
                       <td><a className="rowLink" href={`${base}/rapoarte/${r.id}`}>{niceName(r.client_name) || "—"}</a><div className="muted">{niceName(r.bank_name) || "fără utilizator desemnat"}</div></td>
                       <td style={{ minWidth: 170 }}>{cap(type) || "—"}<div className="muted">{address}</div></td>
