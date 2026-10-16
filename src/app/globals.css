@@ -1857,3 +1857,17 @@ thead .pmRole { background: var(--cream) !important; z-index: 3; }
 /* The type label above the report number: as small as the column headers, gold for the notes (overrides .table td small). */
 .repTable td small.repKind { font-size: 9px; color: var(--muted-2); }
 .repTable td small.repKind.isNote { color: var(--acc-text, #8a5600); }
+/* Status tabs in their colour; "Toate" on gold when chosen. Sortable column headers. */
+.repFilters .segment a.st-in_progress { color: var(--acc-text, #8a5600); }
+.repFilters .segment a.st-done { color: var(--ok-text); }
+.repFilters .segment a.st-suspended { color: #6d3fb0; }
+.repFilters .segment a.st-cancelled { color: var(--err); }
+.repFilters .segment a.st-all[aria-current="page"] { background: var(--acc); color: var(--ink); }
+.repFilters .segment a.st-all[aria-current="page"] small { background: rgba(0, 0, 0, .12); color: var(--ink); }
+.thSort { display: inline-flex; align-items: center; gap: 4px; color: inherit; text-decoration: none; font: inherit; letter-spacing: inherit; text-transform: inherit; }
+.thSort i { font-style: normal; font-size: 8px; opacity: 0; transition: opacity .15s; }
+.thSort:hover { color: var(--ink); }
+.thSort:hover i { opacity: .5; }
+.thSort.on { color: var(--ink); }
+.thSort.on i { opacity: 1; color: var(--acc-text, #8a5600); }
+.repCard .table thead th:last-child .thSort { justify-content: flex-end; width: 100%; }

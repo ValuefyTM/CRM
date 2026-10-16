@@ -46,6 +46,19 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   };
 
 
+  // A click on a column header sorts by it, first one way then the other (see COLUMN_SORTS).
+  const Th = ({ k, label, children }: { k: string; label: string; children?: React.ReactNode }) => {
+    const dir = sp.sort === k ? "desc" : sp.sort === `${k}-asc` ? "asc" : null;
+    return (
+      <th aria-sort={dir === "desc" ? "descending" : dir === "asc" ? "ascending" : "none"} data-label={label}>
+        <a className={`thSort${dir ? " on" : ""}`} href={link({ sort: dir === "desc" ? `${k}-asc` : dir === "asc" ? undefined : k })} title="Sortează după această coloană">
+          {label}<i aria-hidden>{dir === "asc" ? "▲" : "▼"}</i>
+        </a>
+        {children}
+      </th>
+    );
+  };
+
   return (
     <CrmShell user={user} base={base} active="reports" title={mine ? "Rapoartele mele" : "Rapoarte"}
       subtitle={mine ? "Rapoartele la care ești în echipă (cele finalizate: ca evaluator principal sau verificator)" : "Toate rapoartele: VALUEFY și firmele partenere"}
@@ -78,9 +91,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <div className="tableWrap">
             <table className="table repTable">
               <thead><tr>
-                <th>Raport</th><th>Client · utilizator</th><th>Proprietate</th><th>Scop · tip valoare</th><th>Echipa</th>
-                <th className="stageTh" data-label="Etapă">Etapă <StageHelp /></th>
-                <th>Status</th><th style={{ textAlign: "right" }}>Zile</th>
+                <Th k="nr" label="Raport" /><Th k="client" label="Client · utilizator" /><Th k="prop" label="Proprietate" /><Th k="scop" label="Scop · tip valoare" /><Th k="echipa" label="Echipa" />
+                <Th k="etapa" label="Etapă"><StageHelp /></Th>
+                <Th k="status" label="Status" /><Th k="zile" label="Zile" />
               </tr></thead>
               <tbody>
                 {data.rows.map((r) => {

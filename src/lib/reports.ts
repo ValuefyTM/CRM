@@ -64,6 +64,29 @@ export const REPORT_SORTS: Record<string, [string, string]> = {
 };
 export const PAGE_SIZE = 50;
 
+/** Sorting by a column of the list (a click on its header): key → [label, SQL]; "<key>-asc" is the other way. */
+export const COLUMN_SORTS: Record<string, string> = {
+  nr: "CAST(r.number AS INTEGER) DESC NULLS LAST, r.number DESC",
+  client: "c.name COLLATE NOCASE DESC NULLS LAST",
+  prop: "asset COLLATE NOCASE DESC NULLS LAST",
+  scop: "r.purpose COLLATE NOCASE DESC NULLS LAST, r.value_type COLLATE NOCASE DESC",
+  echipa: "evaluator COLLATE NOCASE DESC NULLS LAST",
+  status: "CASE r.status WHEN 'draft' THEN 1 WHEN 'in_progress' THEN 1 WHEN 'suspended' THEN 2 WHEN 'done' THEN 3 WHEN 'cancelled' THEN 4 ELSE 5 END DESC",
+  // Most days since the order first.
+  zile: "COALESCE(o.created_at, r.received_on, r.created_at) ASC",
+};
+const flip = (sql: string) => sql.replace(/\b(ASC|DESC)\b/g, (d) => (d === "ASC" ? "DESC" : "ASC")).replace(/NULLS LAST/g, "NULLS FIRST");
+export function sortSql(sort: string | undefined) {
+  if (!sort) return REPORT_SORTS[""][1];
+  if (REPORT_SORTS[sort]) return REPORT_SORTS[sort][1];
+  if (sort === "etapa" || sort === "etapa-asc") return `(${STAGE_ORDER_SQL}) ${sort === "etapa" ? "DESC" : "ASC"}, ${REPORT_SORTS[""][1]}`;
+  const asc = sort.endsWith("-asc");
+  const key = asc ? sort.slice(0, -4) : sort;
+  const col = COLUMN_SORTS[key];
+  if (!col) return REPORT_SORTS[""][1];
+  return `${asc ? flip(col) : col}, ${REPORT_SORTS[""][1]}`;
+}
+
 // Working stage and deadline in SQL (same rules as stageOf / dueOf in dossier.ts), for the dashboard links.
 const TASKS = "(SELECT COUNT(*) FROM inspections i WHERE i.report_id = r.id AND i.status <> 'cancelled')";
 const TASKS_DONE = "(SELECT COUNT(*) FROM inspections i WHERE i.report_id = r.id AND i.status = 'done')";
@@ -75,6 +98,7 @@ const INSPECTED = "(SELECT substr(MAX(i.done_at), 1, 10) FROM inspections i WHER
 const WD = `CAST(strftime('%w', ${INSPECTED}) AS INTEGER)`;
 export const DUE_SQL = `COALESCE(r.due_on, CASE WHEN r.term_days > 0 AND ${INSPECTED} IS NOT NULL THEN date(${INSPECTED},
   ((CASE ${WD} WHEN 6 THEN -1 WHEN 0 THEN -2 ELSE 0 END) + r.term_days + 2 * ((r.term_days + (CASE WHEN ${WD} IN (0, 6) THEN 5 ELSE ${WD} END) - 1) / 5)) || ' days') END)`;
+const STAGE_ORDER_SQL = `CASE (${STAGE_SQL}) WHEN 'inspection' THEN 1 WHEN 'drafting' THEN 2 WHEN 'review' THEN 3 ELSE 4 END`;
 export const STAGE_FILTERS: Record<string, string> = { inspectie: "inspection", redactare: "drafting", verificare: "review" };
 export const DUE_FILTERS: Record<string, string> = { depasit: "Termen depășit", curand: "Termen în 2 zile" };
 const bucharestToday = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
@@ -113,7 +137,7 @@ export async function listReports(db: D1Database, f: ReportFilters) {
   const { sql, params } = where(f);
   const from = `FROM reports r LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id`;
   const [rows, sum] = await Promise.all([
-    db.prepare(`${ROW} ${sql} ORDER BY ${(REPORT_SORTS[f.sort ?? ""] ?? REPORT_SORTS[""])[1]} LIMIT ${PAGE_SIZE} OFFSET ?`)
+    db.prepare(`${ROW} ${sql} ORDER BY ${sortSql(f.sort)} LIMIT ${PAGE_SIZE} OFFSET ?`)
       .bind(...params, ((f.page ?? 1) - 1) * PAGE_SIZE).all<ReportRow>(),
     db.prepare(`SELECT COUNT(*) AS n, SUM(CASE WHEN r.status = 'done' THEN r.fee END) AS fees, SUM(r.status = 'done') AS done,
       SUM(r.status IN ('draft', 'in_progress')) AS open, SUM(r.status = 'suspended') AS suspended ${from} ${sql}`)

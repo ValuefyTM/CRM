@@ -30,7 +30,7 @@ export function ReportFilters(props: {
       <form className="filterBar" onSubmit={(e) => { e.preventDefault(); go({ q: q.trim() || undefined }); }}>
         <span className="segment ibStates ordStates" role="group" aria-label="Status raport">
           {props.tabs.map(([k, label, n, href]) => (
-            <a key={k || "all"} href={href} aria-current={props.tab === k ? "page" : undefined}>{label} <small>{n.toLocaleString("ro-RO")}</small></a>
+            <a key={k || "all"} className={`st-${k || "all"}`} href={href} aria-current={props.tab === k ? "page" : undefined}>{label} <small>{n.toLocaleString("ro-RO")}</small></a>
           ))}
         </span>
         <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută client, nr. raport, adresă, CF, telefon… ↵" aria-label="Caută" />
