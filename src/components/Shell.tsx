@@ -49,7 +49,7 @@ export function Shell(props: {
       </aside>
       <div className="main">
         {props.banner}
-        {!props.bare && <header className="top">
+        {!props.bare && <header className={props.app === "crm" ? "top topDark" : "top"}>
           <div>
             <h1>{props.title}</h1>
             {props.subtitle && <p>{props.subtitle}</p>}

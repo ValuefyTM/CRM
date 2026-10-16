@@ -1980,3 +1980,20 @@ img.rcLogo { padding: 2px; }
 .msgCard .msgHead { font-size: 11.5px; } .msgCard .msgHead time { font-size: 10.5px; }
 .msgCard .msgList p { font-size: 13px; }
 .msgCard .msgEmpty { margin: 0; }
+/* CRM: bandă neagră sus, cu titlul paginii cu majuscule și căutarea în dreapta. */
+.top.topDark { background: var(--navy); border-bottom: 1px solid #000; color: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; padding-block: 12px; }
+.topDark h1 { text-transform: uppercase; font-size: 15px; font-weight: 800; letter-spacing: 0.08em; color: #fff; }
+.topDark p { color: var(--on-navy-2); font-size: 11.5px; margin-top: 3px; }
+.topDark .gsIcon { color: var(--on-navy-2); }
+.topDark .gsInput { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.16); color: #fff; }
+.topDark .gsInput::placeholder { color: var(--on-navy-2); }
+.topDark .gsInput:focus { background: rgba(255, 255, 255, 0.14); border-color: var(--acc); }
+.topDark .gsKbd { background: transparent; color: var(--on-navy-2); border-color: rgba(255, 255, 255, 0.2); }
+.topDark .gsPanel { color: var(--ink); }
+.topDark .actions .btn:not(.btnGold):not(.btnNavy) { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.2); color: #fff; }
+.topDark .actions .btn:not(.btnGold):not(.btnNavy):hover { background: rgba(255, 255, 255, 0.16); }
+.topDark .viewAsSelect { background-color: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.2); color: #fff; }
+.topDark .viewAsSelect option { color: var(--ink); background: #fff; }
+.topDark .actions .btnNavy { background: var(--acc); border-color: var(--acc); color: var(--ink); }
+.topDark .actions .btnNavy:hover { filter: brightness(1.06); }
+.topDark .actions .linkBtn, .topDark .actions .link { color: var(--acc-light); }
