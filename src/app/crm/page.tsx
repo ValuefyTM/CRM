@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { staffPage } from "@/lib/guard";
 import { can } from "@/lib/perms";
-import { HelloLine, MyHome } from "./acasa/MyHome";
+import { MyHome } from "./acasa/MyHome";
 import { dashboard, type Alert } from "@/lib/dashboard";
 import { OVER_TERM_SQL } from "@/lib/reports";
 import { STAGE_LABEL } from "@/lib/dossier";
@@ -95,9 +95,6 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
           AND r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL) AS insp`).bind(today).first<{ late: number; insp: number }>(),
   ]);
   const money = can(user, "fees.all");
-  const first = user.name ? user.name.split(" ")[0] : "";
-  const hour = Number(new Date().toLocaleString("en-GB", { hour: "2-digit", hour12: false, timeZone: "Europe/Bucharest" }));
-  const hello = hour < 11 ? "Bună dimineața" : hour < 18 ? "Bună ziua" : "Bună seara";
   const monthLabel = new Date(`${d.today}T12:00:00Z`).toLocaleDateString("ro-RO", { month: "long", timeZone: "UTC" });
   const alerts = d.alerts.filter((a) => a.count > 0);
   const urgent = alerts.filter((a) => a.tone === "err").reduce((s, a) => s + a.count, 0);
@@ -111,7 +108,7 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
       ["Email bancă", `${base}/comenzi?tab=banci`, I.mail, "lipește comanda"],
       ["Comenzi", `${base}/comenzi`, I.inbox, d.newOrders.n ? `${d.newOrders.n} luna aceasta` : undefined],
     ] as [string, string, React.ReactNode, string?][] : []),
-    ["Rapoarte în lucru", `${base}/rapoarte?status=deschise`, I.doc, `${d.openCount} deschise`],
+    ["Rapoarte în lucru", `${base}/rapoarte?status=deschise`, I.doc, `${d.openCount} în firmă`],
     ...(can(user, "clients") ? [["Client nou", `${base}/clienti/nou`, I.user] as [string, string, React.ReactNode]] : []),
     ...(can(user, "users") ? [["Echipa", `${base}/utilizatori`, I.team] as [string, string, React.ReactNode]] : []),
   ];
@@ -121,8 +118,18 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
       {denied && <div className="note">Nu ai acces la pagina aceea. Ce vezi în CRM stabilește administratorul, în Setări → Permisiuni.</div>}
       <section className="dbHello">
         <div className="dbHelloText">
-          <h2>{hello}{first ? `, ${first}` : ""}.</h2>
-          <HelloLine base={base} open={d.openCount} late={firm?.late ?? 0} visits={firm?.insp ?? 0} />
+          {/* The firm's dashboard: the whole company, not the user's own work. */}
+          <h2>Situația firmei azi</h2>
+          <p className="dbHelloLine">
+            În lucru sunt <a href={`${base}/rapoarte?status=deschise`}><b>{d.openCount}</b> {d.openCount === 1 ? "raport" : "rapoarte"}</a>
+            {(firm?.late ?? 0) > 0
+              ? <>, dintre care <a href={`${base}/rapoarte?termen=peste`} className="hot"><b>{firm?.late}</b> peste termen</a>.</>
+              : d.openCount > 0 ? ", toate în termen." : "."}
+            {" "}{(firm?.insp ?? 0) > 0
+              ? <>Echipa mai are <a href={`${base}/agenda-inspectii`}><b>{firm?.insp}</b> {firm?.insp === 1 ? "inspecție" : "inspecții"} de făcut</a>.</>
+              : "Nicio inspecție în așteptare."}
+            {" "}Luna aceasta: <b>{d.delivered.n}</b> {d.delivered.n === 1 ? "raport finalizat" : "rapoarte finalizate"} și <b>{d.newOrders.n}</b> {d.newOrders.n === 1 ? "comandă nouă" : "comenzi noi"}.
+          </p>
         </div>
         <nav className="dbQuick" aria-label="Acțiuni rapide">
           {quick.map(([label, href, icon, sub]) => (
