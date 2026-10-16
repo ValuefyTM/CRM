@@ -3,21 +3,36 @@ import { fmtDate } from "@/lib/guard";
 import { getDb } from "@/lib/db";
 import { cap, listReports } from "@/lib/reports";
 import { ReportTable } from "../rapoarte/ReportTable";
-import { DUE_SQL } from "@/lib/reports";
+import { OVER_TERM_SQL } from "@/lib/reports";
 import { mySql } from "@/lib/perms-db";
 import { can } from "@/lib/perms";
 import type { User } from "@/lib/users";
 
 const today = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
 
+/** The line under the greeting (both dashboards): reports in work, how many past the standard term, inspections left. */
+export function HelloLine({ base, open, late, visits }: { base: string; open: number; late: number; visits: number }) {
+  return (
+    <p className="dbHelloLine">
+      Ai <a href={`${base}/rapoarte?status=deschise`}><b>{open}</b> {open === 1 ? "raport" : "rapoarte"} în lucru</a>
+      {late > 0
+        ? <>, dintre care <a href={`${base}/rapoarte?termen=peste`} className="hot"><b>{late}</b> peste termen</a></>
+        : open > 0 ? ", toate în termen" : ""}
+      {visits > 0
+        ? <>, și <a href={`${base}/agenda-inspectii`}><b>{visits}</b> {visits === 1 ? "inspecție" : "inspecții"} de făcut</a>.</>
+        : ". Nicio inspecție de făcut."}
+    </p>
+  );
+}
+
 export async function MyHome({ user, base, denied }: { user: User; base: string; denied: boolean }) {
   // The database comes from getDb, not as a prop: a binding cannot be passed between components.
   const db = (await getDb())!;
   const t = today();
-  const [open, counts, visits] = await Promise.all([
+  const [open, counts, visits, left] = await Promise.all([
     listReports(db, { status: "deschise", mine: { id: user.id, sql: mySql(user) } }),
     db.prepare(`SELECT SUM(r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL) AS open,
-        SUM(r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL AND (${DUE_SQL}) < ?) AS late,
+        SUM(r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL AND ${OVER_TERM_SQL}) AS late,
         SUM(r.status = 'done' AND substr(COALESCE(r.report_date, r.delivered_at), 1, 7) = substr(?, 1, 7)) AS done_month
       FROM reports r WHERE ${mySql(user)}`).bind(t, t, user.id).first<{ open: number | null; late: number | null; done_month: number | null }>(),
     db.prepare(`SELECT i.id, i.status, i.scheduled_at, i.report_id, r.number, p.type, COALESCE(NULLIF(i.address, ''), p.full_address, p.city) AS address
@@ -25,15 +40,18 @@ export async function MyHome({ user, base, denied }: { user: User; base: string;
       WHERE i.inspector_id = ? AND i.status IN ('to_schedule', 'scheduled') AND (r.id IS NULL OR (r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL))
       ORDER BY i.scheduled_at IS NULL, i.scheduled_at LIMIT 8`).bind(user.id)
       .all<{ id: string; status: string; scheduled_at: string | null; report_id: string | null; number: string | null; type: string | null; address: string | null }>(),
+    // All the inspections still to do (the list above shows the next 8).
+    db.prepare(`SELECT COUNT(*) AS n FROM inspections i LEFT JOIN reports r ON r.id = i.report_id
+      WHERE i.inspector_id = ? AND i.status IN ('to_schedule', 'scheduled') AND (r.id IS NULL OR (r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL))`)
+      .bind(user.id).first<{ n: number }>().then((x) => x?.n ?? 0),
   ]);
   const first = user.name ? user.name.split(" ")[0] : "";
   const hour = Number(new Date().toLocaleString("en-GB", { hour: "2-digit", hour12: false, timeZone: "Europe/Bucharest" }));
   const hello = hour < 11 ? "Bună dimineața" : hour < 18 ? "Bună ziua" : "Bună seara";
   const late = counts?.late ?? 0;
-  const todayVisits = visits.results.filter((v) => v.scheduled_at?.slice(0, 10) === t).length;
   const quick: [string, string, string?][] = [
-    ["Rapoartele mele", `${base}/rapoarte`, `${counts?.open ?? 0} deschise`],
-    ["Inspecțiile mele", `${base}/agenda-inspectii`, visits.results.length ? `${visits.results.length} active` : undefined],
+    ["Rapoartele mele", `${base}/rapoarte`, `${counts?.open ?? 0} în lucru`],
+    ["Inspecțiile mele", `${base}/agenda-inspectii`, left ? `${left} active` : undefined],
     ...(can(user, "properties") ? [["Comparabile", `${base}/proprietati`, "proprietăți evaluate"] as [string, string, string]] : []),
     ...(can(user, "tenders") ? [["Licitații SEAP", `${base}/licitatii`] as [string, string]] : []),
   ];
@@ -42,23 +60,18 @@ export async function MyHome({ user, base, denied }: { user: User; base: string;
       {denied && <div className="note">Nu ai acces la pagina aceea. Ce vezi în CRM stabilește administratorul, în Setări → Permisiuni.</div>}
       <section className="dbHello">
         <div className="dbHelloText">
-          <span className="eyebrow">{new Date().toLocaleDateString("ro-RO", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Bucharest" })}</span>
           <h2>{hello}{first ? `, ${first}` : ""}.</h2>
-          <p>
-            Ai <a href={`${base}/rapoarte?status=deschise`}><b>{counts?.open ?? 0}</b> rapoarte deschise</a>
-            {late > 0 ? <>, dintre care <a href={`${base}/rapoarte?termen=depasit`} className="hot"><b>{late}</b> cu termenul depășit</a></> : ", toate în termen"}
-            {todayVisits > 0 ? <>, și <b>{todayVisits}</b> {todayVisits === 1 ? "inspecție programată" : "inspecții programate"} azi.</> : "."}
-          </p>
+          <HelloLine base={base} open={counts?.open ?? 0} late={late} visits={left} />
         </div>
         <nav className="dbQuick" aria-label="Acțiuni rapide">
           {quick.map(([label, href, sub]) => <a key={label} href={href}><span><b>{label}</b>{sub && <small>{sub}</small>}</span></a>)}
         </nav>
       </section>
       <div className="dbKpis">
-        <a className="dbKpi" href={`${base}/rapoarte?status=deschise`}><span className="dbKpiLabel"><i style={{ background: "var(--acc)" }} />Rapoarte deschise</span><b>{counts?.open ?? 0}</b></a>
-        <a className="dbKpi" href={`${base}/rapoarte?termen=depasit`}><span className="dbKpiLabel"><i style={{ background: "var(--err)" }} />Termen depășit</span><b style={late ? { color: "var(--err)" } : undefined}>{late}</b></a>
+        <a className="dbKpi" href={`${base}/rapoarte?status=deschise`}><span className="dbKpiLabel"><i style={{ background: "var(--acc)" }} />Rapoarte în lucru</span><b>{counts?.open ?? 0}</b></a>
+        <a className="dbKpi" href={`${base}/rapoarte?termen=peste`}><span className="dbKpiLabel"><i style={{ background: "var(--err)" }} />Peste termen</span><b style={late ? { color: "var(--err)" } : undefined}>{late}</b></a>
         <a className="dbKpi" href={`${base}/rapoarte?status=done`}><span className="dbKpiLabel"><i style={{ background: "var(--ok)" }} />Finalizate luna aceasta</span><b>{counts?.done_month ?? 0}</b></a>
-        <a className="dbKpi" href={`${base}/agenda-inspectii`}><span className="dbKpiLabel"><i style={{ background: "var(--ink)" }} />Inspecții de făcut</span><b>{visits.results.length}</b></a>
+        <a className="dbKpi" href={`${base}/agenda-inspectii`}><span className="dbKpiLabel"><i style={{ background: "var(--ink)" }} />Inspecții de făcut</span><b>{left}</b></a>
       </div>
       <div className="cols myCols">
         <section className="card repCard">

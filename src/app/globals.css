@@ -2063,3 +2063,8 @@ a.navItem[aria-current="page"] .navIcon { opacity: 1; }
 .bellText small { font-size: 12px; color: var(--muted-2); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .bellList time { font-size: 11px; color: var(--muted-2); white-space: nowrap; padding-top: 2px; }
 @media (max-width: 760px) { .bell { order: 2; } .top.topDark .gs { order: 3; } }
+/* Tablouri: data în bara neagră, salutul în card și rândul de sub el mai mare, cu cifra peste termen roșie. */
+.dbHello p.dbHelloLine { max-width: 600px; font-size: clamp(15px, 1.35vw, 17.5px); line-height: 1.55; margin-top: 10px; color: rgba(255, 255, 255, 0.82); }
+.dbHello p.dbHelloLine b { font-size: 1.12em; color: #fff; }
+.dbHello p.dbHelloLine a.hot, .dbHello p.dbHelloLine a.hot b { color: #ff6b5e; }
+.dbHello p.dbHelloLine a.hot { text-decoration-color: rgba(255, 107, 94, 0.6); }

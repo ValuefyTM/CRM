@@ -100,7 +100,12 @@ export const DUE_SQL = `COALESCE(r.due_on, CASE WHEN r.term_days > 0 AND ${INSPE
   ((CASE ${WD} WHEN 6 THEN -1 WHEN 0 THEN -2 ELSE 0 END) + r.term_days + 2 * ((r.term_days + (CASE WHEN ${WD} IN (0, 6) THEN 5 ELSE ${WD} END) - 1) / 5)) || ' days') END)`;
 const STAGE_ORDER_SQL = `CASE (${STAGE_SQL}) WHEN 'inspection' THEN 1 WHEN 'drafting' THEN 2 WHEN 'review' THEN 3 ELSE 4 END`;
 export const STAGE_FILTERS: Record<string, string> = { inspectie: "inspection", redactare: "drafting", verificare: "review" };
-export const DUE_FILTERS: Record<string, string> = { depasit: "Termen depășit", curand: "Termen în 2 zile" };
+export const DUE_FILTERS: Record<string, string> = { depasit: "Termen depășit", curand: "Termen în 2 zile", peste: "Peste termenul standard" };
+/**
+ * Past the standard term, like the red days counter of the list (report-stage.ts daysOf): calendar days since the
+ * order (or since the report came in) over the term set at processing, 3 by default. Binds today once.
+ */
+export const OVER_TERM_SQL = `(julianday(?) - julianday(substr(COALESCE((SELECT o.created_at FROM orders o WHERE o.id = r.order_id), r.received_on, r.created_at), 1, 10))) > COALESCE(NULLIF(r.term_days, 0), 3)`;
 const bucharestToday = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
 
 function where(f: ReportFilters) {
@@ -109,6 +114,7 @@ function where(f: ReportFilters) {
   const open = "r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL";
   if (f.etapa && STAGE_FILTERS[f.etapa]) { w.push(`${open} AND (${STAGE_SQL}) = ?`); p.push(STAGE_FILTERS[f.etapa]); }
   if (f.termen === "depasit") { w.push(`${open} AND (${DUE_SQL}) < ?`); p.push(bucharestToday()); }
+  if (f.termen === "peste") { w.push(`${open} AND ${OVER_TERM_SQL}`); p.push(bucharestToday()); }
   if (f.termen === "curand") {
     const d = new Date(`${bucharestToday()}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 2);
     w.push(`${open} AND (${DUE_SQL}) BETWEEN ? AND ?`); p.push(bucharestToday(), d.toISOString().slice(0, 10));

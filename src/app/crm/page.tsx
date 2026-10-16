@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { staffPage } from "@/lib/guard";
 import { can } from "@/lib/perms";
-import { MyHome } from "./acasa/MyHome";
+import { HelloLine, MyHome } from "./acasa/MyHome";
 import { dashboard, type Alert } from "@/lib/dashboard";
+import { OVER_TERM_SQL } from "@/lib/reports";
 import { STAGE_LABEL } from "@/lib/dossier";
 import { niceName } from "@/lib/labels";
 import { CrmShell } from "@/components/CrmShell";
@@ -79,20 +80,27 @@ function Donut({ parts }: { parts: { label: string; n: number; color: string }[]
 export default async function CrmHome({ searchParams }: { searchParams: Promise<{ "fara-acces"?: string }> }) {
   const { db, user, base } = await staffPage();
   const denied = !!(await searchParams)["fara-acces"];
+  // The date goes in the black bar; the card keeps only the greeting and the line under it.
+  const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
+  const dateTitle = new Date(`${today}T12:00:00Z`).toLocaleDateString("ro-RO", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
   // Without the firm's dashboard: the user's own reports and inspections.
   if (!can(user, "dashboard.all")) {
-    return <CrmShell user={user} base={base} active="home" title=""><MyHome user={user} base={base} denied={denied} /></CrmShell>;
+    return <CrmShell user={user} base={base} active="home" title={dateTitle}><MyHome user={user} base={base} denied={denied} /></CrmShell>;
   }
-  const d = await dashboard(db, base);
+  const [d, firm] = await Promise.all([
+    dashboard(db, base),
+    // Past the standard term (red in the list) and the inspections still to do, for the whole firm.
+    db.prepare(`SELECT (SELECT COUNT(*) FROM reports r WHERE r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL AND ${OVER_TERM_SQL}) AS late,
+        (SELECT COUNT(*) FROM inspections i JOIN reports r ON r.id = i.report_id WHERE i.status IN ('to_schedule', 'scheduled')
+          AND r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL) AS insp`).bind(today).first<{ late: number; insp: number }>(),
+  ]);
   const money = can(user, "fees.all");
   const first = user.name ? user.name.split(" ")[0] : "";
   const hour = Number(new Date().toLocaleString("en-GB", { hour: "2-digit", hour12: false, timeZone: "Europe/Bucharest" }));
   const hello = hour < 11 ? "Bună dimineața" : hour < 18 ? "Bună ziua" : "Bună seara";
-  const dateLabel = new Date(`${d.today}T12:00:00Z`).toLocaleDateString("ro-RO", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
   const monthLabel = new Date(`${d.today}T12:00:00Z`).toLocaleDateString("ro-RO", { month: "long", timeZone: "UTC" });
   const alerts = d.alerts.filter((a) => a.count > 0);
   const urgent = alerts.filter((a) => a.tone === "err").reduce((s, a) => s + a.count, 0);
-  const visitsToday = d.visits.filter((v) => !v.tomorrow).length;
   const spark = (k: "n" | "fees") => d.months.slice(-6).map((m) => m[k]);
   const maxLoad = Math.max(1, ...d.team.map((t) => t.open + t.inspections));
   const year = d.today.slice(0, 4);
@@ -109,17 +117,12 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
   ];
 
   return (
-    <CrmShell user={user} base={base} active="home" title="">
+    <CrmShell user={user} base={base} active="home" title={dateTitle}>
       {denied && <div className="note">Nu ai acces la pagina aceea. Ce vezi în CRM stabilește administratorul, în Setări → Permisiuni.</div>}
       <section className="dbHello">
         <div className="dbHelloText">
-          <span className="eyebrow">{dateLabel}</span>
           <h2>{hello}{first ? `, ${first}` : ""}.</h2>
-          <p>
-            Ai <a href={`${base}/rapoarte?status=deschise`}><b>{d.openCount}</b> rapoarte deschise</a>
-            {d.late > 0 ? <>, dintre care <a href={`${base}/rapoarte?termen=depasit`} className="hot"><b>{d.late}</b> cu termenul depășit</a></> : ", toate în termen"}
-            {visitsToday > 0 ? <>, și <b>{visitsToday}</b> {visitsToday === 1 ? "inspecție programată" : "inspecții programate"} azi.</> : ". Nicio inspecție programată azi."}
-          </p>
+          <HelloLine base={base} open={d.openCount} late={firm?.late ?? 0} visits={firm?.insp ?? 0} />
         </div>
         <nav className="dbQuick" aria-label="Acțiuni rapide">
           {quick.map(([label, href, icon, sub]) => (
