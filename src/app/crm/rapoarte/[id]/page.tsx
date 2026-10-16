@@ -163,14 +163,19 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const d = daysOf(stageRow, today);
   const inspector = team.find((m) => m.role === "inspector");
   const doneBy = tasks.find((a) => a.inspection_status === "done")?.inspector;
+  const finished = r.status === "done" || !!r.delivered_at;
   const segNote = [
     stageRow.insp_total && stageRow.insp_done === stageRow.insp_total ? `realizată ${short(inspectedOn)}${doneBy ? ` · ${firstName(doneBy)}` : ""}`
       : nextVisit ? `programată ${short(nextVisit)}${inspector ? ` · ${firstName(inspector.name)}` : ""}`
       : stageRow.no_insp && !stageRow.insp_total ? "fără inspecție" : stageRow.insp_total ? `de programat${inspector ? ` · ${firstName(inspector.name)}` : ""}` : "nealocată",
     stage === "inspection" ? (evaluator ? firstName(evaluator.name) : "evaluator nealocat") : stage === "drafting" ? `în redactare${evaluator ? ` · ${firstName(evaluator.name)}` : ""}` : `redactat${r.report_date ? ` ${short(r.report_date)}` : ""}`,
     r.verified_at ? `verificat ${short(r.verified_at)}` : stage === "review" ? `la verificare${verifier ? ` · ${firstName(verifier.name)}` : ""}` : verifier ? firstName(verifier.name) : "verificator nealocat",
-    r.delivered_at ? `predat ${short(r.delivered_at)}${repInvoices.length ? " · facturat" : " · nefacturat"}` : due ? `termen ${short(due)}` : "",
+    finished
+      ? [r.report_date && `raport ${short(r.report_date)}`, r.delivered_at && `predat ${short(r.delivered_at)}`, repInvoices.length ? "facturat" : "nefacturat"].filter(Boolean).join(" · ")
+      : due ? `termen ${short(due)}` : `termen ${d.term} zile de la comandă`,
   ];
+  // The client is also the designated user: one chip, "client / utilizator desemnat".
+  const clientIsUser = !r.recipient_id || r.recipient_id === r.client_id;
   const memberShare = (m: (typeof team)[number]) =>
     m.role === "evaluator" && m.share_evaluator != null ? `${m.share_evaluator}%`
     : m.role === "verifier" && m.share_verifier != null ? `${m.share_verifier}%`
@@ -183,24 +188,24 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
     <CrmShell
       user={user} base={base} active="reports" title={`${r.number ? `Raport nr. ${r.number}` : r.label ?? "Raport"} · Detaliu raport`}
       subtitle={`Operațional / Rapoarte${r.label ? ` · ${r.label}` : ""}`}
-      actions={<a href={`${base}/rapoarte`} className="btn btnGhost btnSm">← Rapoarte</a>}
+      bare
     >
       <section className="rHero dHero" style={{ "--stripe": stripe } as React.CSSProperties}>
         <div className="dHeroTop">
           <div className="rHeroMain">
-            <p className="eyebrow">{r.report_type ? cap(r.report_type) : "Raport de evaluare"}{r.valuation_types && <span> · {r.valuation_types.split(",").map((v) => VAL_TYPE[v] ?? v).join(", ")}</span>}</p>
+            <p className="eyebrow"><a className="dBack" href={`${base}/rapoarte`}>← Rapoarte</a>{r.report_type ? cap(r.report_type) : "Raport de evaluare"}{r.valuation_types && <span> · {r.valuation_types.split(",").map((v) => VAL_TYPE[v] ?? v).join(", ")}</span>}</p>
             <div className="rTitle">
               <span className="dLogo">{logo ? <SafeImg src={logo} alt={r.issuer_name ?? ""} fallback={<b>{(r.issuer_short ?? initials(r.issuer_name ?? "VALUEFY", "v")).slice(0, 3)}</b>} /> : <b>{(r.issuer_short ?? initials(r.issuer_name ?? "VALUEFY", "v")).slice(0, 3)}</b>}</span>
               <h2>{r.number ? `Nr. ${r.number}` : "Fără număr"}</h2>
-              <span className={`pill ${cls}`}><i />{label}</span>
+              <span className={`pill ${cls}`}><i />{label}{finished && r.report_date ? ` · ${fmtDate(r.report_date)}` : ""}</span>
               {r.status !== "cancelled" && <span className={`pill ${stage === "delivered" ? "pillOk" : "pillWarn"}`}><i />{STAGE_LABEL[stage]}</span>}
             </div>
             <div className="rChips">
               {r.client_name && (() => {
-                const body = <>{clientLogo ? <SafeImg src={clientLogo} className="rcLogo" fallback={<i className="rcLogo">{initials(r.client_name, "c")}</i>} /> : <i className="rcLogo">{initials(r.client_name, "c")}</i>}{niceName(r.client_name)}<small>· client</small></>;
+                const body = <>{clientLogo ? <SafeImg src={clientLogo} className="rcLogo" fallback={<i className="rcLogo">{initials(r.client_name, "c")}</i>} /> : <i className="rcLogo">{initials(r.client_name, "c")}</i>}{niceName(r.client_name)}<small>· {clientIsUser ? "client / utilizator desemnat" : "client"}</small></>;
                 return can(user, "clients") ? <a className="rChip" href={`${base}/clienti/${r.client_id}`}>{body}</a> : <span className="rChip">{body}</span>;
               })()}
-              {r.bank_name && <span className="rChip">{bankLogo ? <SafeImg src={bankLogo} className="rcLogo" fallback={<i className="rcLogo">{(r.bank_code ?? r.bank_name).slice(0, 3).toUpperCase()}</i>} /> : <i className="rcLogo">{(r.bank_code ?? r.bank_name).slice(0, 3).toUpperCase()}</i>}{niceName(r.bank_name)}<small>· utilizator desemnat</small></span>}
+              {r.bank_name && !clientIsUser && <span className="rChip">{bankLogo ? <SafeImg src={bankLogo} className="rcLogo" fallback={<i className="rcLogo">{(r.bank_code ?? r.bank_name).slice(0, 3).toUpperCase()}</i>} /> : <i className="rcLogo">{(r.bank_code ?? r.bank_name).slice(0, 3).toUpperCase()}</i>}{niceName(r.bank_name)}<small>· utilizator desemnat</small></span>}
               {evaluator && <span className="rChip" title={evaluator.seen}><Avatar id={evaluator.id} name={evaluator.name || evaluator.email} size={24} presence={evaluator.presence} photo={evaluator.photo} />{evaluator.name || evaluator.email}<small>· evaluator principal</small></span>}
               {orderChip && (can(user, "orders") ? <a className="rChip" href={`${base}/comenzi/${r.order_id}`}>{orderChip}</a> : <span className="rChip">{orderChip}</span>)}
             </div>
@@ -651,6 +656,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             </ul>
           )}
         </section>
+        <Messages entity="report" id={r.id} rows={messages} title="Mesaje echipă" hint="Discuția echipei pe acest raport. Clientul nu le vede." />
         <section className="card">
           <h2>Date cheie</h2>
           <dl className="kv dKv">
@@ -666,7 +672,6 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             <Row k="Borderou">{r.statement_number ? `B-${r.statement_number}` : <span className="muted">neinclus</span>}</Row>
           </dl>
         </section>
-        <Messages entity="report" id={r.id} rows={messages} />
       </aside>
       </div>
     </CrmShell>

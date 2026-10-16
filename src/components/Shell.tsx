@@ -16,6 +16,8 @@ export function Shell(props: {
   actions?: React.ReactNode;
   /** Shown in the top bar between the page title and its actions (the CRM's general search). */
   search?: React.ReactNode;
+  /** No top bar (title, search, actions): pages with their own header, like a report. */
+  bare?: boolean;
   /** A strip above the top bar (the CRM's "Vezi ca…" banner). */
   banner?: React.ReactNode;
   children: React.ReactNode;
@@ -47,14 +49,14 @@ export function Shell(props: {
       </aside>
       <div className="main">
         {props.banner}
-        <header className="top">
+        {!props.bare && <header className="top">
           <div>
             <h1>{props.title}</h1>
             {props.subtitle && <p>{props.subtitle}</p>}
           </div>
           {props.search}
           {props.actions && <div className="actions">{props.actions}</div>}
-        </header>
+        </header>}
         <main className="content">{props.children}</main>
       </div>
       <nav className="bottomNav" aria-label="Meniu">
