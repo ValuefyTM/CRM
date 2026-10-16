@@ -200,13 +200,15 @@ export type Report = ReportRow & {
   stage: string | null; term_days: number | null; due_on: string | null; offer_id: string | null; client_notified_at: string | null;
   order_seq: number | null; order_bank_ref: string | null; order_source: string | null; statement_number: string | null; client_code: string | null;
   recipient_kind: string | null; recipient_email: string | null; recipient_phone: string | null; recipient_code: string | null; issuer_logo: string | null;
+  issuer_color: string | null; issuer_short: string | null; bank_logo: string | null; client_logo: string | null; ordered_at: string | null;
 };
 
 export async function getReport(db: D1Database, id: string) {
   return db
     .prepare(
       `SELECT r.*, c.name AS client_name, c.kind AS client_kind, c.phone AS client_phone, c.email AS client_email, c.cui AS client_cui, c.billing_address AS client_address,
-        COALESCE(b.code, b.name) AS bank_code, b.name AS bank_name, i.name AS issuer_name, i.logo_url AS issuer_logo,
+        COALESCE(b.code, b.name) AS bank_code, b.name AS bank_name, i.name AS issuer_name, i.logo_url AS issuer_logo, i.color AS issuer_color,
+        COALESCE(NULLIF(i.code, ''), i.name) AS issuer_short, b.logo_url AS bank_logo, c.logo_url AS client_logo, o.created_at AS ordered_at,
         k.number AS contract_number, k.kind AS contract_kind, k.signed_on AS contract_date, k.fee AS contract_fee,
         ru.name AS referral_name, ru.id AS referral_id, COALESCE(NULLIF(du.name, ''), du.email) AS delivered_by_name,
         o.seq AS order_seq, o.bank_ref AS order_bank_ref, o.source AS order_source, st.number AS statement_number, c.code AS client_code,
@@ -222,10 +224,11 @@ export async function getReport(db: D1Database, id: string) {
 export type TeamMember = {
   role: string; id: string; name: string; email: string; phone: string | null; anevar_no: string | null; specializations: string | null; coverage: string | null;
   engagement: string | null; share_evaluator: number | null; share_verifier: number | null;
+  inspector_fee_kind: string | null; inspector_fee: number | null;
 };
 
 export async function reportTeam(db: D1Database, id: string) {
-  return withPresence((await db.prepare(`SELECT m.role, u.id, u.name, u.email, u.phone, u.anevar_no, u.specializations, u.coverage, u.engagement, u.share_evaluator, u.share_verifier, u.last_seen_at, u.avatar_at
+  return withPresence((await db.prepare(`SELECT m.role, u.id, u.name, u.email, u.phone, u.anevar_no, u.specializations, u.coverage, u.engagement, u.share_evaluator, u.share_verifier, u.inspector_fee_kind, u.inspector_fee, u.last_seen_at, u.avatar_at
     FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = ?
     ORDER BY CASE m.role WHEN 'evaluator' THEN 1 WHEN 'inspector' THEN 2 WHEN 'verifier' THEN 3 ELSE 4 END`).bind(id).all<TeamMember & { last_seen_at: string | null; avatar_at: string | null }>()).results);
 }
