@@ -340,14 +340,25 @@ export function AddMember({ id, people }: { id: string; people: PickPerson[] }) 
   );
 }
 
-export function RemoveMember({ id, user, role, name }: { id: string; user: string; role: string; name: string }) {
-  return (
-    <button type="button" className="linkBtn danger" onClick={async () => {
-      if (!confirm(`Scoți pe ${name} din echipa raportului?`)) return;
-      const error = await send(`/api/crm/reports/${id}/members?user=${user}&role=${role}`, { method: "DELETE" });
+/** "Scoate" a team member; someone with several roles (evaluator and inspector) is taken out of one role or of all. */
+export function RemoveMember({ id, user, roles, name }: { id: string; user: string; roles: { role: string; label: string }[]; name: string }) {
+  const remove = async (list: { role: string; label: string }[], what: string) => {
+    if (!confirm(`Scoți pe ${name} ${what}?`)) return;
+    for (const x of list) {
+      const error = await send(`/api/crm/reports/${id}/members?user=${user}&role=${x.role}`, { method: "DELETE" });
       if (error) return alert(error);
-      location.reload();
-    }}>Scoate</button>
+    }
+    location.reload();
+  };
+  if (roles.length < 2) return <button type="button" className="linkBtn danger" onClick={() => remove(roles, "din echipa raportului")}>Scoate</button>;
+  return (
+    <details className="rmMenu">
+      <summary className="linkBtn danger">Scoate</summary>
+      <div className="rmList">
+        {roles.map((x) => <button key={x.role} type="button" onClick={() => remove([x], `din rolul de ${x.label}`)}>ca {x.label}</button>)}
+        <button type="button" className="danger" onClick={() => remove(roles, "din echipa raportului")}>din toate rolurile</button>
+      </div>
+    </details>
   );
 }
 

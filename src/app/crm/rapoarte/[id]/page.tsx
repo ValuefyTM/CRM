@@ -592,15 +592,18 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
           <div className="cardHead"><h2>Echipa</h2>{c.members && <AddMember id={r.id} people={people.map((x) => ({ ...x, sub: ROLE_NAME[x.role] ?? x.role }))} />}</div>
           {team.length === 0 ? <p className="hint">Nimeni alocat încă.</p> : (
             <ul className="dTeam">
-              {team.map((m) => {
-                const pct = memberShare(m);
-                const about = [m.anevar_no && `legitimație ${m.anevar_no}`, specs(m.specializations), m.role === "inspector" && m.coverage && `zone: ${m.coverage}`, m.engagement === "contractor" && "colaborator extern"].filter(Boolean).join(" · ");
+              {/* One line per person: someone who is both evaluator and inspector shows once, with both roles. */}
+              {team.filter((m, i) => team.findIndex((x) => x.id === m.id) === i).map((m) => {
+                const mine = team.filter((x) => x.id === m.id);
+                const roles = mine.map((x) => ({ role: x.role, label: (ROLE_LABEL[x.role] ?? x.role).toLowerCase() }));
+                const pct = mine.map(memberShare).filter(Boolean).join(" + ");
+                const about = [m.anevar_no && `legitimație ${m.anevar_no}`, specs(m.specializations), mine.some((x) => x.role === "inspector") && m.coverage && `zone: ${m.coverage}`, m.engagement === "contractor" && "colaborator extern"].filter(Boolean).join(" · ");
                 return (
-                  <li key={m.role + m.id} title={about || undefined}>
+                  <li key={m.id} title={about || undefined}>
                     <Avatar id={m.id} name={m.name || m.email} size={32} presence={m.presence} photo={m.photo} title={`${m.name || m.email} · ${m.seen}`} />
-                    <span className="who">{link("users", `/utilizatori/${m.id}`, "rowLink", m.name || m.email)}<small>{(ROLE_LABEL[m.role] ?? m.role).toLowerCase()} · {m.seen}</small></span>
+                    <span className="who">{link("users", `/utilizatori/${m.id}`, "rowLink", m.name || m.email)}<small>{roles.map((x) => x.label).join(" și ")} · {m.seen}</small></span>
                     {pct && (fees || m.id === user.id) && <b className="mono">{pct}</b>}
-                    {c.members && <RemoveMember id={r.id} user={m.id} role={m.role} name={m.name || m.email} />}
+                    {c.members && <RemoveMember id={r.id} user={m.id} roles={roles} name={m.name || m.email} />}
                   </li>
                 );
               })}
