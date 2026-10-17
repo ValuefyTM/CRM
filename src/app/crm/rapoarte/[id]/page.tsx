@@ -340,7 +340,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                   <div className="dAsset">
                     {(() => { const ph = fileSrc(main.sheet_photo) ?? fileSrc(main.image_url); return ph ? <SafeImg src={ph} className="dPh" fallback={<span className="dPh" />} /> : <span className="dPh" />; })()}
                     <span className="who">
-                      <b>{cap(main.type) || "Bun"}{main.construction === "under_construction" ? " · în construcție" : ""}</b>
+                      <b><a className="rowLink" href={`${base}/rapoarte/${r.id}/bun/${main.id}`}>{cap(main.type) || "Bun"}</a>{main.construction === "under_construction" ? " · în construcție" : ""}</b>
                       <small>{[main.full_address ?? main.city, main.cf_number && `CF ${main.cf_number}`, main.usable_area && `${main.usable_area.toLocaleString("ro-RO")} mp`].filter(Boolean).join(" · ") || "—"}</small>
                     </span>
                     {(() => {
@@ -472,6 +472,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                       <small>{none ? a.no_inspection : a.inspection_status === "done" ? [a.done_at && fmtDate(a.done_at), a.inspector && firstName(a.inspector)].filter(Boolean).join(" · ")
                         : active ? [a.scheduled_at ? fmtDate(a.scheduled_at, true) : a.due_on ? `termen ${fmtDate(a.due_on)}` : null, a.inspector && firstName(a.inspector)].filter(Boolean).join(" · ") : ""}</small>
                       <span className="abVal">{a.value != null ? <b className="mono num">{lei(a.value, cur)}</b> : <small className="muted">fără valoare</small>}{a.approach && <small> · {APPROACH[a.approach]}</small>}</span>
+                      <a className="link abDetail" href={`${base}/rapoarte/${r.id}/bun/${a.id}`}>Detalii bun →</a>
                       {c.assets && (
                         <span className="abActs">
                           <AssetEditor report={r.id} label="Modifică" shared={a.other_reports} client={{ name: r.client_name, phone: r.client_phone }} initial={assetForm(a)} />
@@ -484,7 +485,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                 panel: (
                   <section className="card abPanelCard">
                     <div className="cardHead"><h2>Inspecție</h2><span className={`pill ${pc}`}><i />{pt}</span></div>
-                    <p className="abPanelFor"><span className="abNo">{n + 1}</span>{label}</p>
+                    <p className="abPanelFor"><span className="abNo">{n + 1}</span><a className="rowLink" href={`${base}/rapoarte/${r.id}/bun/${a.id}`}>{label}</a></p>
                     <div className="abWho">
                       {person || (!cancelled && a.inspector) ? <PersonLine id={a.inspector_id ?? a.inspector!} name={a.inspector!} presence={person?.presence} photo={person?.photo} sub={person?.seen ?? "inspector"} size={36} />
                         : <span className="muted">{none ? "Nu are nevoie de inspecție" : "Niciun inspector alocat"}</span>}

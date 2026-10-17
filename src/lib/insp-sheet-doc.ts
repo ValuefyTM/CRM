@@ -21,6 +21,10 @@ export type SheetDoc = {
   photos: { src: string; label: string; group: string; taken_at: string | null }[];
 };
 
+/** A photo's group: the one chosen by hand, else the room taken in UVALO, else the category of the CRM app. */
+export const photoGroup = (p: { category: string; caption: string | null; album: string | null }, uvalo: boolean) =>
+  p.album || (uvalo && p.caption) || (PHOTO_CATEGORIES.find((c) => c.k === p.category)?.label ?? "Alte fotografii");
+
 const UTIL_LABEL: Record<string, string> = { water: "Apă", sewer: "Canalizare", gas: "Gaz", power: "Curent electric" };
 
 /** One answer as text ("" when not answered), with the "Altele" text of the question. */
@@ -53,19 +57,20 @@ function baseText(f: Field, a: Answers[string]): string {
   return f.kind === "num" && f.unit ? `${a.trim()} ${f.unit}` : a.trim();
 }
 
-export async function inspectionSheetDoc(db: D1Database, reportId: string, assetId: string): Promise<SheetDoc | null> {
+/** The sheet of the asset (its latest one, or the one of `inspectionId`). */
+export async function inspectionSheetDoc(db: D1Database, reportId: string, assetId: string, inspectionId?: string): Promise<SheetDoc | null> {
   const row = await db.prepare(
     `SELECT r.id AS report_id, r.number, r.label, r.purpose, b.name AS bank, c.name AS client,
         p.type, p.full_address, p.city, p.county, p.geo, p.cf_number, p.cad_building, p.cad_land, p.usable_area, p.land_area,
         i.id AS inspection_id, i.done_at, COALESCE(NULLIF(u.name, ''), u.email) AS inspector, u.anevar_no,
-        s.sheet_type, s.status, s.details, s.description, s.present_person, s.present_role, s.present_phone, s.location, s.submitted_at, s.signature_url
+        s.sheet_type, s.status, s.details, s.description, s.present_person, s.present_role, s.present_phone, s.location, s.submitted_at, s.signature_url, s.photo_url
       FROM assets a JOIN reports r ON r.id = a.report_id JOIN crm_properties p ON p.id = a.property_id
       LEFT JOIN entities b ON b.id = r.recipient_id LEFT JOIN entities c ON c.id = r.client_id
       LEFT JOIN inspections i ON i.asset_id = a.id AND i.status <> 'cancelled'
       LEFT JOIN inspection_sheets s ON s.inspection_id = i.id
       LEFT JOIN users u ON u.id = COALESCE(s.inspector_id, i.inspector_id)
-      WHERE a.id = ? AND a.report_id = ? ORDER BY s.updated_at DESC LIMIT 1`,
-  ).bind(assetId, reportId).first<Record<string, string | number | null>>();
+      WHERE a.id = ? AND a.report_id = ? AND (?3 = '' OR i.id = ?3) ORDER BY s.updated_at DESC LIMIT 1`,
+  ).bind(assetId, reportId, inspectionId ?? "").first<Record<string, string | number | null>>();
   if (!row?.inspection_id || !row.sheet_type) return null;
 
   const type = (FORMS as Record<string, unknown>)[row.sheet_type as string] ? (row.sheet_type as SheetType) : "apartament";
@@ -82,8 +87,10 @@ export async function inspectionSheetDoc(db: D1Database, reportId: string, asset
       .map((f) => ({ label: f.kind === "util" ? UTIL_LABEL[f.k] ?? f.label : f.label, value: answerText(f, answers) })).filter((r) => r.value),
   })).filter((s) => s.rows.length);
 
-  const { results } = await db.prepare("SELECT category, caption, r2_key, taken_at FROM inspection_photos WHERE inspection_id = ? AND deleted_at IS NULL ORDER BY sort, created_at")
-    .bind(row.inspection_id).all<{ category: string; caption: string | null; r2_key: string; taken_at: string | null }>();
+  // the profile photo first (chosen on the asset page), then by the order given there
+  const { results } = await db.prepare(`SELECT category, caption, album, r2_key, taken_at FROM inspection_photos WHERE inspection_id = ? AND deleted_at IS NULL
+      ORDER BY 'r2:' || r2_key = ? DESC, sort, created_at`)
+    .bind(row.inspection_id, row.photo_url ?? "").all<{ category: string; caption: string | null; album: string | null; r2_key: string; taken_at: string | null }>();
   const catLabel = (k: string) => PHOTO_CATEGORIES.find((c) => c.k === k)?.label ?? "Fotografie";
 
   return {
@@ -101,7 +108,7 @@ export async function inspectionSheetDoc(db: D1Database, reportId: string, asset
     rooms: roomsOf(answers),
     notes: (typeof answers.notes === "string" && answers.notes.trim()) || (row.description as string | null),
     // from UVALO the caption is the room / category chosen on the phone: it groups the photos, as there
-    photos: results.map((p) => ({ src: fileSrc(`r2:${p.r2_key}`)!, label: p.caption || catLabel(p.category), group: (uvalo && p.caption) || catLabel(p.category), taken_at: p.taken_at })),
+    photos: results.map((p) => ({ src: fileSrc(`r2:${p.r2_key}`)!, label: p.caption || catLabel(p.category), group: photoGroup(p, !!uvalo), taken_at: p.taken_at })),
   };
 }
 
