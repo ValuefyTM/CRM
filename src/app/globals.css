@@ -2072,3 +2072,42 @@ a.navItem[aria-current="page"] .navIcon { opacity: 1; }
 .dbHello p.dbHelloLine { font-size: 14px; line-height: 1.7; margin-top: 0; max-width: 520px; color: var(--on-navy); }
 .dbHello p.dbHelloLine b { font-size: inherit; }
 .topDark h1.topDate { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; color: var(--acc-light); }
+
+/* ===== Setări → Model contract: editor ca Word (pagină A4, bară de formatare, variabile) ===== */
+.tplWrap { display: flex; flex-direction: column; gap: 12px; }
+.tplTop { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.tplParts { display: inline-flex; gap: 2px; padding: 3px; background: var(--cream); border: 1px solid var(--line); border-radius: 11px; flex-wrap: wrap; }
+.tplParts button { height: 32px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; font: inherit; font-size: 13px; font-weight: 700; color: var(--muted); cursor: pointer; }
+.tplParts button[aria-pressed="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.tplActions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.tplPreview { height: 32px; max-width: 260px; font-size: 12.5px; }
+.tplHint { margin: 0; }
+.note.ok { background: var(--ok-bg); color: var(--ok-text); border-color: var(--ok-line); }
+.tplBody { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+.tplDoc { min-width: 0; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: #e9e6df; }
+.tplBar { position: relative; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; background: #fff; border-bottom: 1px solid var(--line); }
+.tplStyle { height: 32px; border: 1px solid var(--line); border-radius: 8px; background: var(--cream); font: inherit; font-size: 12.5px; padding: 0 8px; }
+.tplGroup { display: inline-flex; gap: 2px; padding-left: 6px; border-left: 1px solid var(--line); }
+.tplGroup button { width: 32px; height: 32px; border: 0; border-radius: 7px; background: transparent; color: var(--ink); display: grid; place-items: center; font-size: 14px; cursor: pointer; }
+.tplGroup button:hover { background: var(--cream); }
+.tplPaper { padding: 18px 0 26px; max-height: calc(100vh - var(--topH, 64px) - 120px); overflow: auto; }
+.tplPage { margin-top: 0; color: #1a1a1a; font-size: 10pt; line-height: 1.45; }
+.tplEdit { outline: none; min-height: 60vh; }
+.tplEdit:focus { outline: none; }
+.tplEdit ul, .cdBody ul:not([class]), .cdBody ol { margin: 0 0 6px; padding-left: 22px; }
+.tplEdit table, .cdBody table:not([class]) { border-collapse: collapse; width: 100%; margin: 6px 0; }
+.tplEdit td, .tplEdit th, .cdBody table:not([class]) td, .cdBody table:not([class]) th { border: 1px solid #bbb; padding: 4px 6px; }
+.tplVar { display: inline-block; padding: 0 6px; margin: 0 1px; border-radius: 5px; background: #fff1c7; border: 1px solid #f2c25b; color: #6b4a00; font: 600 0.92em/1.5 var(--font); white-space: nowrap; cursor: default; }
+.tplVar.block { display: block; margin: 6px 0; padding: 8px 10px; text-align: center; border-style: dashed; background: #fff8e1; }
+.tplVar.block::before { content: "▦ "; }
+.tplVars { position: sticky; top: calc(var(--topH, 64px) + 12px); max-height: calc(100vh - var(--topH, 64px) - 30px); display: flex; flex-direction: column; gap: 10px; }
+.tplVarList { overflow: auto; display: flex; flex-direction: column; gap: 4px; margin: 0 -6px; padding: 0 6px; }
+.tplVarList .section { margin: 8px 0 4px; }
+.tplVarBtn { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 9px; background: #fff; text-align: left; cursor: pointer; font: inherit; }
+.tplVarBtn:hover:not(:disabled) { border-color: #f2c25b; background: #fffaf0; }
+.tplVarBtn b { font-size: 12.5px; font-weight: 600; }
+.tplVarBtn small { font: 500 10.5px var(--mono); color: var(--muted-2); }
+.tplVarBtn.block b::before { content: "▦ "; color: #b98500; }
+.tplVarBtn:disabled { cursor: default; opacity: 0.7; }
+@media (max-width: 1100px) { .tplBody { grid-template-columns: 1fr; } .tplVars { position: static; max-height: none; } .tplPaper { max-height: none; } }
+.tplVars .input { height: 36px; min-height: 36px; padding: 0 12px; }

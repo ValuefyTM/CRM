@@ -1,6 +1,7 @@
 // Server-only: the client signs the classic contract online. A secret link (portal.valuefy.ro/contract/<token>) is
 // sent by email — by hand from the contract page, or by itself when the client accepts an offer. The client completes
 // the billing details the contract needs, reads it and signs; what was signed is kept as a snapshot with its hash.
+import { getContractTemplate, templateParts } from "./contract-template-db";
 import { now } from "./db";
 import { audit } from "./auth";
 import { randomToken, sha256, validEmail } from "./crypto";
@@ -41,10 +42,12 @@ export function billingMissing(d: ContractDocData) {
 
 /** The document as the client sees it now, and its fingerprint: signing is refused if it changed since the page was shown. */
 export async function currentVersion(db: D1Database, id: string) {
-  const [doc, firm] = await Promise.all([contractDoc(db, id), getFirmWithImages(db)]);
+  const [doc, firm, tpl] = await Promise.all([contractDoc(db, id), getFirmWithImages(db), getContractTemplate(db)]);
   if (!doc) return null;
-  const snapshot = JSON.stringify({ doc, firm });
-  return { doc, firm, snapshot, hash: await sha256(snapshot) };
+  // The contract model is part of what is signed: a signed contract keeps its text even if the model changes later.
+  const template = templateParts(tpl);
+  const snapshot = JSON.stringify({ doc, firm, template });
+  return { doc, firm, template, snapshot, hash: await sha256(snapshot) };
 }
 
 /** Sends (or sends again) the signing link to the client. Contracts already signed cannot be sent. */

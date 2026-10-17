@@ -24,7 +24,7 @@ export default async function ContractSignPage({ params }: { params: Promise<{ t
   }
   const snap = k.signed_at ? await signedSnapshot(db, k.id) : null;
   const cur = snap ? null : await currentVersion(db, k.id);
-  const [d, firm] = snap ? [snap.doc, snap.firm] : cur ? [cur.doc, cur.firm] : [null, null];
+  const [d, firm, template] = snap ? [snap.doc, snap.firm, snap.template ?? null] : cur ? [cur.doc, cur.firm, cur.template] : [null, null, null];
   if (!d || !firm) notFound();
   const missing = snap ? [] : billingMissing(d);
   const c = d.contract;
@@ -57,7 +57,7 @@ export default async function ContractSignPage({ params }: { params: Promise<{ t
             rep: (c.rep ?? "").split(" / ")[0], rep_role: (c.rep ?? "").split(" / ")[1] ?? "" }} name={c.client ?? ""} />
         ) : (
           <>
-            <div className="csDoc"><ContractDocView d={d} firm={firm} sealed clientSig={snap?.sig ?? null} /></div>
+            <div className="csDoc"><ContractDocView d={d} firm={firm} sealed clientSig={snap?.sig ?? null} template={template} /></div>
             {!snap && <ContractSignForm token={token} version={cur?.hash ?? ""} number={c.number ?? ""} defaultName={company ? (c.rep ?? "").split(" / ")[0] : c.client ?? ""} />}
           </>
         )}

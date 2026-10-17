@@ -4,6 +4,7 @@
 import type { ContractDocData } from "@/lib/contract-doc";
 import type { FirmWithImages } from "@/lib/settings";
 import { DELIVERABLES, PURPOSE_BOXES, purposeKey, VALUE_TYPES } from "@/lib/contract-terms";
+import { fillTemplate, type ContractTemplate } from "@/lib/contract-template";
 
 const day = (iso: string | null | undefined) => (iso ? iso.slice(0, 10).split("-").reverse().join(".") : "____________");
 const money = (n: number | null) => (n == null ? "__________" : n.toLocaleString("ro-RO", { maximumFractionDigits: 2 }));
@@ -13,7 +14,113 @@ const upper = (s: string | null | undefined) => (s ?? "").toLocaleUpperCase("ro-
 
 export type ClientSignature = { name: string; signature: string; at: string };
 
-export function ContractDocView({ d, firm, sealed, clientSig }: { d: ContractDocData; firm: Pick<FirmWithImages, "name" | "address" | "mail" | "cui" | "reg" | "iban" | "rep" | "repRole" | "phone" | "email" | "anevar" | "court" | "stamp" | "signature">; sealed: boolean; clientSig: ClientSignature | null }) {
+type DocFirm = Pick<FirmWithImages, "name" | "address" | "mail" | "cui" | "reg" | "iban" | "rep" | "repRole" | "phone" | "email" | "anevar" | "court" | "stamp" | "signature">;
+
+/**
+ * The contract from the model edited in Setări → Model contract. Without a model (contracts signed before the model
+ * could be edited), the document as it was written then.
+ */
+export function ContractDocView({ template, ...p }: { d: ContractDocData; firm: DocFirm; sealed: boolean; clientSig: ClientSignature | null; template?: ContractTemplate | null }) {
+  return template ? <TemplatedDoc {...p} template={template} /> : <LegacyDoc {...p} />;
+}
+
+const esc = (s: string | number | null | undefined) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+const boxHtml = (on: boolean) => `<span class="cdBox" aria-label="${on ? "bifat" : "nebifat"}">${on ? "☒" : "☐"}</span>`;
+
+/** The values of every variable of the model, for the whole contract and for each annex. */
+export function templateValues(d: ContractDocData, firm: DocFirm, sealed: boolean, clientSig: ClientSignature | null) {
+  const k = d.contract, pay = d.payment;
+  const company = k.client_kind !== "person" || /\b(S\.?R\.?L|S\.?A|PFA|S\.?C\.?S|S\.?N\.?C|II|IF)\.?$|\bSRL\b/i.test((k.client ?? "").trim());
+  const client = upper(k.client) || "____________________";
+  const number = k.number ?? "____";
+  const date = day(k.signed_on);
+  const many = d.annexes.length > 1;
+  const address = [k.billing_address, k.city, k.county && `Jud. ${k.county}`].filter(Boolean).join(", ");
+  const signatures = `<div class="cdSign"><div><b>EVALUATOR:</b><span>${esc(firm.name)}</span><small>prin ${esc(firm.rep)}, ${esc(firm.repRole)}</small>${sealed ? `<span class="cdSeal"><img src="${esc(firm.stamp)}" alt="Ștampilă VALUEFY" class="cdStamp" /><img src="${esc(firm.signature)}" alt="Semnătură" class="cdSig" /></span>` : ""}</div>`
+    + `<div><b>CLIENT:</b><span>${esc(client)}</span>${company && k.rep ? `<small>prin ${esc(k.rep)}</small>` : ""}${clientSig ? `<span class="cdClientSig"><img src="${esc(clientSig.signature)}" alt="Semnătura ${esc(clientSig.name)}" /><small>Semnat electronic de ${esc(clientSig.name)}, ${esc(stamp(clientSig.at))}</small></span>` : `<span class="cdSignLine"></span>`}</div></div>`;
+  const dl = (rows: [string, string | null | undefined][]) => `<dl>${rows.map(([t, v]) => `<dt>${esc(t)}</dt><dd>${esc(v || "—")}</dd>`).join("")}</dl>`;
+  const common: Record<string, string> = {
+    "contract.numar": esc(number), "contract.data": esc(date), "contract.pret_total": esc(money(d.total)), "contract.plata_cand": esc(pay.payment_when),
+    "contract.tiparire": pay.print ? esc(` (${pay.print})`) : "",
+    "contract.anexe_mentiune": many ? esc(`, câte o anexă pentru fiecare raport contractat: 1.1–1.${d.annexes.length}`) : "",
+    "contract.anexe_oricare": many ? " (oricare dintre anexele 1.x)" : "",
+    "firma.nume": esc(firm.name), "firma.adresa": esc(firm.address), "firma.adresa_corespondenta": esc(firm.mail), "firma.cui": esc(firm.cui), "firma.reg_com": esc(firm.reg),
+    "firma.iban": esc(firm.iban), "firma.reprezentant": esc(firm.rep), "firma.calitate": esc(firm.repRole), "firma.telefon": esc(firm.phone), "firma.email": esc(firm.email),
+    "firma.autorizatie": esc(firm.anevar), "firma.instanta": esc(firm.court),
+    "client.nume": esc(client), "client.tip": company ? "Persoană juridică" : "Persoană fizică", "client.adresa": esc(address || "—"), "client.cui": esc(k.cui || "—"),
+    "client.reg_com": esc(k.reg_no || "—"), "client.reprezentant": esc(k.rep || "—"), "client.telefon": esc(k.phone || "—"), "client.email": esc(k.email || "—"),
+    "bloc.semnaturi": signatures,
+    "bloc.parti": `<div class="cdParties"><section><h3>EVALUATORUL</h3><b>${esc(firm.name)}</b>${dl([["Sediul social", firm.address], ["CUI", firm.cui], ["Nr. înmatriculare", firm.reg], ["IBAN", firm.iban], ["Reprezentant", `${firm.rep}, ${firm.repRole}`]])}</section>`
+      + `<section><h3>CLIENTUL</h3><b>${esc(client)}</b>${dl(company
+        ? [[company ? "Sediul / adresa de facturare" : "Adresa de facturare", address], ["CUI", k.cui], ["Nr. înregistrare", k.reg_no], ["Reprezentant", k.rep]]
+        : [["Adresa de facturare", address], ["Telefon", k.phone], ["Email", k.email]])}</section></div>`,
+    "bloc.contacte": `<div class="cdContacts"><div><b>${esc(firm.name)}</b><span>Adresa de corespondență: ${esc(firm.mail)}</span><span>Telefon: ${esc(firm.phone)}</span><span>E-mail: ${esc(firm.email)}</span></div>`
+      + `<div><b>CLIENT: ${esc(client)}</b><span>Adresa de corespondență: ${esc(address || "cea din identificarea Părților")}</span><span>Telefon: ${esc(k.phone || "—")}</span><span>E-mail: ${esc(k.email || "—")}</span></div></div>`,
+    "bloc.pret": d.priced
+      ? `<p>1.1. Prețul Serviciilor este următorul:</p><table class="cdTable"><thead><tr><th>Nr.</th><th>Serviciu</th><th style="text-align: right">Preț (lei, fără TVA)</th></tr></thead><tbody>`
+        + d.annexes.map((x) => `<tr><td>${x.n}.</td><td>${esc(`${x.reportType ?? "Raport de evaluare"}${x.services.movable && !x.services.immovable ? " – bunuri mobile" : x.services.immovable && !x.services.movable ? " – bunuri imobile" : ""}${x.purpose ? ` – ${x.purpose}` : ""} (Anexa 1.${x.n})`)}</td><td style="text-align: right">${esc(money(x.fee))}</td></tr>`).join("")
+        + `<tr><td></td><td><b>Total</b></td><td style="text-align: right"><b>${esc(money(d.total))} lei + TVA</b></td></tr></tbody></table>`
+      : `<p>1.1. Prețul Serviciului este de <b>${esc(money(d.total))} lei + TVA</b>.</p>`,
+    "bloc.transe": `<ul class="cdPlain">${pay.tranches.split(/\n+/).filter(Boolean).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`,
+  };
+  const annexes = d.annexes.map((x) => {
+    const t = x.terms;
+    const pk = purposeKey(x.purpose);
+    const other = !pk && x.purpose ? x.purpose : null;
+    const vt = VALUE_TYPES.find(([key]) => key === t.value_type) ?? VALUE_TYPES[0];
+    const deliverable = DELIVERABLES.find(([key]) => key === t.deliverable)?.[0] ?? "raport";
+    const shared = x.assets.some((a) => a.shared);
+    const checks = (items: [boolean, string][], cols = false) => `<ul class="cdChecks${cols ? " cdCols" : ""}">${items.map(([on, l]) => `<li>${boxHtml(on)} ${l}</li>`).join("")}</ul>`;
+    const vals: Record<string, string> = {
+      ...common,
+      "anexa.numar": many ? `1.${x.n}` : "1",
+      "anexa.raport_din": many ? `<b>${esc(`Raportul ${x.n} din ${d.annexes.length}${x.purpose ? ` · ${x.purpose}` : ""}`)}</b>${x.number ? esc(` · nr. ${x.number}`) : ""}` : "",
+      "anexa.numar_raport": esc(x.number ?? "—"), "anexa.scop": esc(x.purpose ?? "—"),
+      "anexa.termen": esc(`${t.term_days} ${t.term_days === 1 ? "zi lucrătoare" : "zile lucrătoare"}`), "anexa.nr_rapoarte": esc(t.reports),
+      "anexa.utilizatori": esc(t.users || client), "anexa.alte_persoane": esc(t.others), "anexa.tip_valoare": esc(vt[1]), "anexa.definitie_valoare": esc(vt[2]),
+      "anexa.data_referinta": deliverable === "nop" && !t.nop_inspection ? "data emiterii notei de opinie" : "data inspecției",
+      "anexa.limitari": esc(t.limitations), "anexa.surse": esc(t.sources), "anexa.ipoteze_speciale": esc(t.special),
+      "bloc.servicii": checks([[x.services.immovable, "Evaluarea bunurilor imobile"], [x.services.movable, "Evaluarea bunurilor mobile"], [false, "Evaluarea întreprinderilor / afacerilor"], [false, "Verificarea evaluărilor"]]),
+      "bloc.livrabile": checks([
+        [deliverable === "raport", `Raport de evaluare${deliverable === "raport" ? ` – număr rapoarte: <b>${esc(t.reports)}</b>` : ""}`],
+        [deliverable === "nop", `Notă de opinie asupra valorii (NOP): cu inspecție ${boxHtml(deliverable === "nop" && t.nop_inspection)} fără inspecție ${boxHtml(deliverable === "nop" && !t.nop_inspection)}`],
+        [deliverable === "nip", "Notă de inspecție a proprietății (NIP)"],
+      ]),
+      "bloc.tabel_bunuri": `<table class="cdTable"><thead><tr><th>Nr.</th><th>Tip bun</th><th>Nr. de identificare</th><th>Adresa / amplasament</th></tr></thead><tbody>`
+        + (x.assets.length ? x.assets.map((a, i) => `<tr><td>${i + 1}.</td><td>${esc(a.type)}${a.shared ? `<small class="cdNote"> · inspecție comună</small>` : ""}</td><td>${esc(a.ids)}</td><td>${esc(a.address)}</td></tr>`).join("")
+          : `<tr><td>1.</td><td colspan="3" class="cdBlank">bunurile se completează la crearea raportului</td></tr>`) + `</tbody></table>`,
+      "bloc.tip_client": `<p>Client: ${boxHtml(!company)} Persoană fizică ${boxHtml(company)} Persoană juridică – <b>${esc(client)}</b></p>`,
+      "bloc.scopuri": checks([...PURPOSE_BOXES.map(([key, label]): [boolean, string] => [pk === key, esc(label)]), ...(other ? [[true, esc(other)] as [boolean, string]] : [])], true),
+      "bloc.tipuri_valoare": checks(VALUE_TYPES.map(([key, label]): [boolean, string] => [key === vt[0], esc(label)]), true)
+        + `<p class="cdDef"><b>Definiție (${esc(vt[1].toLowerCase())}):</b> ${esc(vt[2])}</p>`,
+      "bloc.inspectie_comuna": shared ? "<p>8.3. Bunurile marcate „inspecție comună” sunt evaluate și în alt raport din prezentul Contract: inspecția lor se realizează o singură dată, iar constatările și fotografiile de la inspecție sunt folosite în ambele rapoarte.</p>" : "",
+    };
+    return { n: x.n, vals };
+  });
+  return { common, annexes, number, date };
+}
+
+function TemplatedDoc({ d, firm, sealed, clientSig, template }: { d: ContractDocData; firm: DocFirm; sealed: boolean; clientSig: ClientSignature | null; template: ContractTemplate }) {
+  const { common, annexes, number, date } = templateValues(d, firm, sealed, clientSig);
+  const Head = () => (
+    <header className="cdHead">
+      <img src="/valuefy-logo.png" alt="VALUEFY" />
+      <span>Contract de prestări servicii nr. {number} / {date}</span>
+    </header>
+  );
+  const page = (key: string, html: string) => (
+    <article className="cdPage" key={key}><Head /><div className="cdBody" dangerouslySetInnerHTML={{ __html: html }} /></article>
+  );
+  return (
+    <>
+      {page("general", fillTemplate(template.general, common))}
+      {annexes.map((a) => page(`a${a.n}`, fillTemplate(template.annex1, a.vals)))}
+      {page("annex2", fillTemplate(template.annex2, common))}
+    </>
+  );
+}
+
+function LegacyDoc({ d, firm, sealed, clientSig }: { d: ContractDocData; firm: DocFirm; sealed: boolean; clientSig: ClientSignature | null }) {
   const k = d.contract, pay = d.payment;
   // Some clients imported from Glide are firms recorded as persons: the legal form in the name tells.
   const company = k.client_kind !== "person" || /\b(S\.?R\.?L|S\.?A|PFA|S\.?C\.?S|S\.?N\.?C|II|IF)\.?$|\bSRL\b/i.test((k.client ?? "").trim());

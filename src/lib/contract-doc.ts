@@ -91,7 +91,8 @@ export async function contractDoc(db: D1Database, id: string) {
 }
 
 export type ContractDocData = NonNullable<Awaited<ReturnType<typeof contractDoc>>>;
-export type SignedSnapshot = { doc: ContractDocData; firm: import("./settings").FirmWithImages; sig: { name: string; signature: string; at: string } };
+/** Snapshots signed before the model was editable have no template: they show the document as it was written then. */
+export type SignedSnapshot = { doc: ContractDocData; firm: import("./settings").FirmWithImages; template?: import("./contract-template").ContractTemplate; sig: { name: string; signature: string; at: string } };
 
 /** What the client signed, exactly as it was (the document is rendered from it afterwards, not from current data). */
 export async function signedSnapshot(db: D1Database, id: string): Promise<SignedSnapshot | null> {
