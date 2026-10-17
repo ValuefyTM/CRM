@@ -63,7 +63,8 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
   if (!client) return { ok: false as const, error: "Completează numele clientului." };
   const phone = str(b.client_phone, 40);
   if (phone.replace(/\D/g, "").length < 9) return { ok: false as const, error: "Completează telefonul clientului." };
-  if (!str(b.bank_ref, 60)) return { ok: false as const, error: "Completează numărul comenzii." };
+  // Bank orders carry the bank's number; a collaboration gets the next number of the CRM (CO-<n>).
+  if (kind === "bank" && !str(b.bank_ref, 60)) return { ok: false as const, error: "Completează numărul comenzii." };
   const main = assets[0];
   const type = propertyType(main), city = main.city ?? "", address = main.full_address ?? "";
   const contactName = main.contact_kind && main.contact_kind !== "client" ? main.contact_name : null;
@@ -89,13 +90,14 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
       contact_name, contact_phone, inspection_notes, notes, status, client_id, contract_id, collaboration_id, bank_id, bank_branch, bank_ref, report_type, fee, share, fee_net,
       ordered_on, viewed_at, viewed_by, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'received', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(id, kind, actor, type, city || null, address || null, main.usable_area || null, str(b.purpose, 120) || contract?.purpose || (kind === "bank" ? "Credit bancar" : null),
+    .bind(id, kind, actor, type, city || null, address || null, main.usable_area || null, str(b.purpose, 120) || contract?.purpose || (kind === "bank" ? "Garantare bancară" : null),
       contract ? contract.bank_code || contract.bank : null, b.urgent === true ? 1 : 0, client, phone, str(b.client_email, 160).toLowerCase() || null,
       contactName, contactPhone, str(b.inspection_notes, 1000) || null, str(b.notes, 2000) || null,
-      clientId, contract?.id ?? null, collab?.id ?? null, contract?.bank_id ?? null, str(b.bank_branch, 120) || null, str(b.bank_ref, 60) || null,
+      clientId, contract?.id ?? null, collab?.id ?? null, contract?.bank_id ?? null, str(b.bank_branch, 120) || null, kind === "bank" ? str(b.bank_ref, 60) || null : null,
       str(b.report_type, 120) || contract?.report_type || null, fee, share, fee != null && share != null ? Math.round(fee * share * 100) / 100 : null,
       ordered, t, actor, t, t)
     .run();
+  if (kind === "collab") await db.prepare("UPDATE orders SET seq = (SELECT COALESCE(MAX(seq), 0) + 1 FROM orders) WHERE id = ? AND seq IS NULL").bind(id).run();
   await audit(db, `user:${actor}`, "order.create", "order", id, kind === "bank" ? `${contract!.bank} ${str(b.bank_ref, 60)}` : `colaborare ${collab!.firm}`);
   return { ok: true as const, id };
 }

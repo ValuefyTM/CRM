@@ -101,7 +101,7 @@ export function AssetFields({ value: f, onChange }: { value: AssetForm; onChange
 
       {details.length > 0 && <div className="formRow afDetails">{details.map(field)}</div>}
       {ids.length > 0 && <div className="formRow">{ids.map(field)}</div>}
-      <label className="field">Descriere <small>(opțional)</small>
+      <label className="field"><span className="fLabel">Descriere <small>(opțional)</small></span>
         <input className="input" value={f.description} onChange={(e) => onChange({ description: e.target.value })}
           placeholder={p.key === "vehicle" ? "ex. motorină, cutie automată, stare bună" : p.key === "land" ? "ex. formă regulată, front stradal 20 m, utilități la limită" : "ex. compartimentare, finisaje, stare"} />
       </label>

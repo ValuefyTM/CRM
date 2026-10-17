@@ -107,17 +107,29 @@ const Step = ({ n, title, sub, done }: { n: number; title: string; sub?: string;
 );
 const Req = () => <span className="req" aria-label="obligatoriu">*</span>;
 
+// The designated use of the report (the bank's "credit" is a bank guarantee); the kind of report, in three.
+const USES = ["Garantare bancară", ...PURPOSES.filter((x) => x !== "Credit bancar")];
+const REPORT_KINDS = ["Raport de evaluare", "Notă de evaluare", "Notă de inspecție"];
+const kindOf = (t: string | null | undefined) => REPORT_KINDS.find((k) => k.toLowerCase() === (t ?? "").trim().toLowerCase()) ?? "Raport de evaluare";
+/** Now + 3 days, as a local date and time for <input type="datetime-local"> (Bucharest). */
+const inThreeDays = () => {
+  const d = new Date(Date.now() + 3 * 86400000);
+  const s = d.toLocaleString("sv-SE", { timeZone: "Europe/Bucharest", hour12: false });
+  return s.slice(0, 16).replace(" ", "T");
+};
+
 /** Bank (framework contract) or collaboration order: the statement line and the report file, in one form. */
 export function ContractOrderForm(p: {
   base: string; me: string; initialKind: "bank" | "collab"; initialContract?: string | null; contracts: Contract[]; collabs: Collab[]; evaluators: PickPerson[]; inspectors: PickPerson[];
+  nextOrder: number;
 }) {
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
   const [kind, setKind] = useState(p.initialKind);
   const preset = p.contracts.find((c) => c.id === p.initialContract) ?? (p.contracts.length === 1 ? p.contracts[0] : null);
   const [f, setF] = useState({
-    contract_id: preset?.id ?? "", collaboration_id: "", bank_ref: "", bank_branch: "", ordered_on: today, report_type: preset?.report_type ?? "", purpose: preset?.purpose ?? "",
+    contract_id: preset?.id ?? "", collaboration_id: "", bank_ref: "", bank_branch: "", ordered_on: today, report_type: kindOf(preset?.report_type), purpose: preset?.purpose || "Garantare bancară",
     fee: preset?.fee ? String(preset.fee) : "", client_id: "", client_kind: "person" as "person" | "company", client_name: "", client_phone: "", client_email: "", client_cui: "",
-    inspection_notes: "", notes: "", evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "", verifier_id: "", inspector_id: "", due_on: "", urgent: false,
+    inspection_notes: "", notes: "", evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "", verifier_id: "", inspector_id: "", due_on: inThreeDays(), urgent: false,
   });
   const [picked, setPicked] = useState<Hit | null>(null);
   const [assets, setAssets] = useState<AssetForm[]>([{ ...emptyAsset(), full_address: "", is_main: true }]);
@@ -136,7 +148,7 @@ export function ContractOrderForm(p: {
 
   const pickContract = (id: string) => {
     const c = p.contracts.find((x) => x.id === id);
-    setF({ ...f, contract_id: id, fee: c?.fee ? String(c.fee) : f.fee, report_type: c?.report_type || f.report_type, purpose: c?.purpose || f.purpose });
+    setF({ ...f, contract_id: id, fee: c?.fee ? String(c.fee) : f.fee, report_type: c?.report_type ? kindOf(c.report_type) : f.report_type, purpose: c?.purpose || f.purpose });
     setErrors((x) => ({ ...x, source: "" }));
   };
   const pickClient = (h: Hit) => {
@@ -150,7 +162,7 @@ export function ContractOrderForm(p: {
     const e: Record<string, string> = {};
     if (kind === "bank" && !f.contract_id) e.source = "Alege banca și contractul cadru.";
     if (kind === "collab" && !f.collaboration_id) e.source = "Alege firma colaboratoare.";
-    if (!f.bank_ref.trim()) e.bank_ref = "Completează numărul comenzii.";
+    if (kind === "bank" && !f.bank_ref.trim()) e.bank_ref = "Completează numărul comenzii.";
     if (!f.client_name.trim()) e.client_name = "Completează numele clientului.";
     if (f.client_phone.replace(/\D/g, "").length < 9) e.client_phone = "Completează telefonul clientului.";
     assets.forEach((a, i) => {
@@ -206,25 +218,35 @@ export function ContractOrderForm(p: {
           </div>
           {kind === "bank" && p.contracts.length === 0 && <div className="note">Nu există contracte cadru în CRM. Se adaugă la clientul băncii.</div>}
           <div className="formRow">
-            <label className="field"><span className="fLabel">Nr. comandă <Req /></span>
-              <input className="input mono" value={f.bank_ref} onChange={set("bank_ref")} aria-invalid={!!errors.bank_ref || undefined} placeholder={kind === "bank" ? "din aplicația băncii" : "ex. CMD-1042"} />
-              {err("bank_ref")}
-            </label>
+            {kind === "bank" ? (
+              <label className="field"><span className="fLabel">Nr. comandă <Req /></span>
+                <input className="input mono" value={f.bank_ref} onChange={set("bank_ref")} aria-invalid={!!errors.bank_ref || undefined} placeholder="din aplicația băncii" />
+                {err("bank_ref")}
+              </label>
+            ) : (
+              <div className="field"><span className="fLabel">Nr. comandă <small>(automat)</small></span>
+                <span className="nwAuto mono">CO-{p.nextOrder}<small>se atribuie la înregistrare</small></span>
+              </div>
+            )}
             <label className="field">Data comenzii<input className="input" type="date" value={f.ordered_on} onChange={set("ordered_on")} /></label>
           </div>
-          {kind === "bank" && <label className="field">Agenție / sucursală <small>(opțional)</small><input className="input" value={f.bank_branch} onChange={set("bank_branch")} placeholder="ex. Timișoara Iosefin" /></label>}
+          {kind === "bank" && <label className="field"><span className="fLabel">Agenție / sucursală <small>(opțional)</small></span><input className="input" value={f.bank_branch} onChange={set("bank_branch")} placeholder="ex. Timișoara Iosefin" /></label>}
           <div className="formRow">
-            <label className="field">Scop
+            <label className="field">Utilizarea desemnată
               <select className="select" value={f.purpose} onChange={set("purpose")}>
-                <option value="">{kind === "bank" ? "Credit bancar" : "—"}</option>
-                {PURPOSES.map((x) => <option key={x} value={x}>{x}</option>)}
+                {!USES.includes(f.purpose) && f.purpose && <option value={f.purpose}>{f.purpose}</option>}
+                {USES.map((x) => <option key={x} value={x}>{x}</option>)}
               </select>
             </label>
             <label className="field">Onorariu fără TVA
               <span className="nwSuffix"><input className="input" inputMode="decimal" value={f.fee} onChange={set("fee")} placeholder={contract?.fee ? String(contract.fee) : "0"} /><em>lei</em></span>
             </label>
           </div>
-          <label className="field">Tip raport <small>(opțional)</small><input className="input" value={f.report_type} onChange={set("report_type")} placeholder="ex. Garanție ipotecară" /></label>
+          <div className="field">Tip raport
+            <div className="segment nwSeg" role="group" aria-label="Tip raport">
+              {REPORT_KINDS.map((k) => <button key={k} type="button" aria-pressed={f.report_type === k} onClick={() => setF({ ...f, report_type: k })}>{k}</button>)}
+            </div>
+          </div>
           {kind === "collab" && collab?.share != null && Number.isFinite(feeNum) && <p className="nwInfo">Cota VALUEFY: <b>{Math.round(collab.share * 100)}%</b> · {(feeNum * collab.share).toLocaleString("ro-RO", { maximumFractionDigits: 2 })} lei</p>}
         </section>
 
@@ -248,9 +270,9 @@ export function ContractOrderForm(p: {
               <input className="input" type="tel" value={f.client_phone} onChange={set("client_phone")} aria-invalid={!!errors.client_phone || undefined} placeholder="07xx xxx xxx" />
               {err("client_phone")}
             </label>
-            <label className="field">Email <small>(opțional)</small><input className="input" type="email" value={f.client_email} onChange={set("client_email")} placeholder="nume@exemplu.ro" /></label>
+            <label className="field"><span className="fLabel">Email <small>(opțional)</small></span><input className="input" type="email" value={f.client_email} onChange={set("client_email")} placeholder="nume@exemplu.ro" /></label>
           </div>
-          {f.client_kind === "company" && <label className="field">CUI <small>(opțional)</small><input className="input mono" value={f.client_cui} onChange={set("client_cui")} placeholder="ex. 12345678" disabled={!!picked} /></label>}
+          {f.client_kind === "company" && <label className="field"><span className="fLabel">CUI <small>(opțional)</small></span><input className="input mono" value={f.client_cui} onChange={set("client_cui")} placeholder="ex. 12345678" disabled={!!picked} /></label>}
         </section>
       </div>
 
@@ -259,7 +281,7 @@ export function ContractOrderForm(p: {
         <AssetsEditor assets={assets} setAssets={(a) => { setAssets(a); setErrors((x) => Object.fromEntries(Object.entries(x).filter(([k]) => !k.startsWith("asset")))); }}
           client={{ name: f.client_name, phone: f.client_phone }} />
         {assets.map((_, i) => <span key={i} style={{ display: "contents" }}>{err(`asset${i}`)}</span>)}
-        <label className="field">Observații pentru inspecție <small>(opțional · le vede inspectorul)</small>
+        <label className="field"><span className="fLabel">Observații pentru inspecție <small>(opțional · le vede inspectorul)</small></span>
           <textarea className="textarea" rows={2} value={f.inspection_notes} onChange={set("inspection_notes")} placeholder="ex. cheia la administrator, sunați cu o zi înainte" /></label>
       </section>
 
@@ -270,28 +292,29 @@ export function ContractOrderForm(p: {
             <PersonPicker label="Evaluator principal" value={f.evaluator_id} onChange={(v) => { setF({ ...f, evaluator_id: v }); setErrors((x) => ({ ...x, evaluator_id: "" })); }} people={p.evaluators} me={p.me} />
             {err("evaluator_id")}
           </div>
-          <div className="field">Verificator <small>(opțional)</small>
+          <div className="field"><span className="fLabel">Verificator <small>(opțional)</small></span>
             <PersonPicker label="Verificator" value={f.verifier_id} onChange={(v) => setF({ ...f, verifier_id: v })} people={p.evaluators.filter((x) => x.id !== f.evaluator_id)} me={p.me}
               extras={[{ value: "", label: "Mai târziu", hint: "se alege după creare" }]} placeholder="Mai târziu" />
           </div>
-          <div className="field">Inspector <small>(opțional · pentru toate bunurile)</small>
+          <div className="field"><span className="fLabel">Inspector <small>(opțional · pentru toate bunurile)</small></span>
             <PersonPicker label="Inspector" value={f.inspector_id} onChange={(v) => setF({ ...f, inspector_id: v })} people={p.inspectors} me={p.me}
               extras={[{ value: "", label: "Mai târziu", hint: "aloci inspecțiile din raport, bun cu bun" }]} placeholder="Mai târziu" />
           </div>
         </div>
         <div className="formRow">
-          <label className="field">Termen predare raport <small>(opțional)</small><input className="input" type="date" value={f.due_on} onChange={set("due_on")} min={today} /></label>
+          <label className="field"><span className="fLabel">Termen predare raport <small>(implicit 3 zile de la adăugare)</small></span>
+            <input className="input" type="datetime-local" value={f.due_on} onChange={set("due_on")} min={`${today}T00:00`} /></label>
           <div className="field">Prioritate
             <label className={`nwUrgent${f.urgent ? " on" : ""}`}><input type="checkbox" checked={f.urgent} onChange={(e) => setF({ ...f, urgent: e.target.checked })} /><span>Urgent</span><small>apare marcat în liste</small></label>
           </div>
         </div>
-        <label className="field">Note interne <small>(opțional)</small><textarea className="textarea" rows={2} value={f.notes} onChange={set("notes")} /></label>
+        <label className="field"><span className="fLabel">Note interne <small>(opțional)</small></span><textarea className="textarea" rows={2} value={f.notes} onChange={set("notes")} /></label>
       </section>
 
       {msg && <div role="alert" className="error">{msg}</div>}
       <div className="nwBar">
         <div className="nwSum">
-          <span>{source ? <b>{source}</b> : <span className="muted">fără sursă</span>}{f.bank_ref ? ` · ${f.bank_ref}` : ""}</span>
+          <span>{source ? <b>{source}</b> : <span className="muted">fără sursă</span>}{kind === "bank" ? (f.bank_ref ? ` · ${f.bank_ref}` : "") : ` · CO-${p.nextOrder}`}</span>
           <span>{f.client_name ? <b>{f.client_name}</b> : <span className="muted">fără client</span>}</span>
           <span>{assets.length} {assets.length === 1 ? "bun" : "bunuri"}{assets[0]?.type ? ` · ${capType(assets[0].type)}` : ""}</span>
           {missing.length > 0 ? <span className="nwMissing" title={missing.join("\n")}>{missing.length === 1 ? "Mai lipsește 1 câmp obligatoriu" : `Mai lipsesc ${missing.length} câmpuri obligatorii`}</span>

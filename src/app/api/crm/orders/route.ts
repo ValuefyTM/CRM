@@ -21,7 +21,8 @@ export async function POST(req: Request) {
   if (!assets.ok) return err(assets.error);
   const o = await createContractOrder(a.db, a.user.id, b, assets.assets);
   if (!o.ok) return err(o.error);
-  const due = typeof b.due_on === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.due_on) ? b.due_on : null;
+  // The delivery deadline: a date, or a date and time ("2026-10-20T14:30").
+  const due = typeof b.due_on === "string" && /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$/.test(b.due_on) ? b.due_on : null;
   const r = await openDossier(a.db, o.id, { id: a.user.id, name: a.user.name }, { evaluator_id: evaluator, verifier_id: id_(b.verifier_id), due_on: due });
   if (!r.ok) return err(r.error);
   if (r.created && r.assetId) {
