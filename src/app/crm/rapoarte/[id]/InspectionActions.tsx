@@ -28,7 +28,7 @@ async function send(url: string, init: RequestInit) {
 
 /** "Alocă inspecția" / "Realocă": the inspection task of one asset, given to the evaluator themselves or to a colleague. */
 /** `reinspect`: the asset was inspected already; a new inspection is given (the message goes to the inspector by email and in the app). */
-export function AssignInspection({ report, me, people, initial, docs = [], access, reinspect = false }: { report: string; me: string; people: Person[]; initial: TaskInitial; docs?: AccessDoc[]; access?: string[] | null; reinspect?: boolean }) {
+export function AssignInspection({ report, me, people, initial, docs = [], access, reinspect = false, sheets = SHEET_TYPES }: { report: string; me: string; people: Person[]; initial: TaskInitial; docs?: AccessDoc[]; access?: string[] | null; reinspect?: boolean; sheets?: [string, string][] }) {
   const [open, setOpen] = useState(false);
   const realloc = !!initial.inspection && !reinspect;
   const [f, setF] = useState({
@@ -70,7 +70,7 @@ export function AssignInspection({ report, me, people, initial, docs = [], acces
             {moving && <div className="note">Inspecția este deja programată. Dacă o dai altcuiva, programarea se anulează și noul inspector o programează din nou.</div>}
             <div className="formRow">
               <label className="field">Fișa de inspecție
-                <select className="select" value={f.sheet_type} onChange={set("sheet_type")}>{SHEET_TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+                <select className="select" value={f.sheet_type} onChange={set("sheet_type")}>{sheets.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
               </label>
               <label className="field">Termen (opțional)
                 <input className="input" type="date" value={f.due_on} onChange={set("due_on")} />

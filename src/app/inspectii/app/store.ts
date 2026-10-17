@@ -5,7 +5,7 @@ import type { Answers, Section, SheetType } from "@/lib/insp-forms";
 export type InspStatus = "to_schedule" | "scheduled" | "done" | "cancelled";
 export type Insp = {
   id: string; status: InspStatus; scheduled_at: string | null; done_at: string | null; duration_min: number | null;
-  sheet_type: SheetType; property_label: string; address: string; city: string | null; county: string | null;
+  sheet_type: SheetType; template?: string | null; sheet_label?: string; property_label: string; address: string; city: string | null; county: string | null;
   lat: number | null; lng: number | null; cf_number: string | null; cad: string | null; usable_area: number | null; year_built: number | null;
   contact_kind: string | null; contact_name: string | null; contact_phone: string | null; notes: string | null;
   report_number: string | null; report_label: string | null; purpose: string | null; client: string | null; bank: string | null;

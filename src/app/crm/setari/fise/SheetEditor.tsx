@@ -1,21 +1,27 @@
 "use client";
-// Setări → Fișe de inspecție, as in UVALO: the sheets on the left (one per property type), the selected sheet in the middle
+// Setări → Fișe de inspecție, as in UVALO: the sheets on the left (one per property type, then the firm's own: new ones are
+// copies of a sheet, renamed and deleted here), the selected sheet in the middle
 // (groups that open, questions to pick, reorder, hide or delete) and the selected question on the right (text, kind, preset
 // answers with the default, composite follow-ups, required / in PDF / photo). Built-in questions (the VALUEFY model) keep their
 // kind and can be hidden; the firm's own can be changed freely. Saved as a whole; applies to sheets started from now on (and,
 // with inspections through UVALO, the sheet is sent there too).
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { SheetType, SubField, SubKind } from "@/lib/insp-forms";
 import { newQuestionKey, QKINDS, qKindLabel, SUBKINDS, templateStats, type QKind, type Template, type TplQuestion } from "@/lib/insp-templates";
 
-export type SheetItem = { t: SheetType; label: string; tpl: Template; model: Template; custom: boolean; synced: string | null; syncError: string | null };
+export type SheetItem = { t: string; base: SheetType; builtin: boolean; label: string; tpl: Template; model: Template; custom: boolean; synced: string | null; syncError: string | null };
 
 const hasOpts = (k: QKind) => k === "one" || k === "many" || k === "comp";
 const rid = () => Math.random().toString(36).slice(2, 7);
 const when = (iso: string) => new Date(iso).toLocaleString("ro-RO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).replace(".", "");
 
-export function SheetEditor({ items, start, edit, uvalo }: { items: SheetItem[]; start: SheetType; edit: boolean; uvalo: boolean }) {
-  const [sel, setSel] = useState<SheetType>(items.some((x) => x.t === start) ? start : items[0].t);
+export function SheetEditor({ items: given, start, edit, uvalo }: { items: SheetItem[]; start: string; edit: boolean; uvalo: boolean }) {
+  const router = useRouter();
+  const [items, setItems] = useState(given);
+  const [sel, setSel] = useState<string>(items.some((x) => x.t === start) ? start : items[0].t);
+  const [making, setMaking] = useState<{ name: string; from: string; model: boolean } | null>(null);
+  const [naming, setNaming] = useState<string | null>(null);
   const cur = items.find((x) => x.t === sel)!;
   const [tpl, setTpl] = useState<Template>(cur.tpl);
   const [custom, setCustom] = useState(cur.custom);
@@ -28,7 +34,7 @@ export function SheetEditor({ items, start, edit, uvalo }: { items: SheetItem[];
   const stats = templateStats(tpl);
   const ro = !edit;
 
-  const choose = (t: SheetType) => {
+  const choose = (t: string) => {
     if (t === sel) return;
     if (changed && !confirm("Ai modificări nesalvate. Le pierzi?")) return;
     const x = items.find((i) => i.t === t)!;
@@ -46,6 +52,47 @@ export function SheetEditor({ items, start, edit, uvalo }: { items: SheetItem[];
     setQ([gi, tpl[gi].questions.length]);
   };
 
+  async function create() {
+    if (!making) return;
+    setBusy(true); setMsg(null);
+    const r = await fetch("/api/crm/insp-templates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(making) }).catch(() => null);
+    const d = (await r?.json().catch(() => null)) as { key?: string; base?: SheetType; name?: string; tpl?: Template; model?: Template; error?: string } | null;
+    setBusy(false);
+    if (!r?.ok || !d?.key || !d.tpl || !d.model || !d.base) return setMsg({ ok: false, t: d?.error ?? "Fișa nu s-a putut crea." });
+    const item: SheetItem = { t: d.key, base: d.base, builtin: false, label: d.name ?? making.name, tpl: d.tpl, model: d.model, custom: true, synced: null, syncError: null };
+    setItems((l) => [...l, item]);
+    setMaking(null);
+    setSel(item.t); setTpl(item.tpl); setCustom(true); setOpen(0); setQ(null); setChanged(false);
+    history.replaceState(null, "", `?tip=${item.t}`);
+    setMsg({ ok: true, t: `Fișa „${item.label}” a fost creată. O poți aloca la inspecții${uvalo ? " și a fost trimisă în UVALO" : ""}.` });
+  }
+  async function rename() {
+    const name = naming?.trim();
+    if (!name || name === cur.label) return setNaming(null);
+    setBusy(true); setMsg(null);
+    const r = await fetch(`/api/crm/insp-templates/${sel}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) }).catch(() => null);
+    const d = (await r?.json().catch(() => null)) as { name?: string; error?: string } | null;
+    setBusy(false);
+    if (!r?.ok) return setMsg({ ok: false, t: d?.error ?? "Nu s-a putut redenumi." });
+    setItems((l) => l.map((x) => (x.t === sel ? { ...x, label: d?.name ?? name } : x)));
+    setNaming(null);
+    setMsg({ ok: true, t: "Fișa a fost redenumită." });
+  }
+  async function remove() {
+    if (!confirm(`Ștergi fișa „${cur.label}”? Inspecțiile care au folosit-o o păstrează; nu se mai poate alege la inspecții noi.`)) return;
+    setBusy(true);
+    const r = await fetch(`/api/crm/insp-templates/${sel}?sterge=1`, { method: "DELETE" }).catch(() => null);
+    setBusy(false);
+    if (!r?.ok) return setMsg({ ok: false, t: ((await r?.json().catch(() => null)) as { error?: string } | null)?.error ?? "Nu s-a putut șterge." });
+    const rest = items.filter((x) => x.t !== sel);
+    setItems(rest);
+    const x = rest[0];
+    setSel(x.t); setTpl(x.tpl); setCustom(x.custom); setOpen(0); setQ(null); setChanged(false);
+    history.replaceState(null, "", `?tip=${x.t}`);
+    setMsg({ ok: true, t: "Fișa a fost ștearsă." });
+    router.refresh();
+  }
+
   async function send(method: "PUT" | "DELETE") {
     setBusy(true); setMsg(null);
     const r = await fetch(`/api/crm/insp-templates/${sel}`, { method, headers: { "Content-Type": "application/json" }, body: method === "PUT" ? JSON.stringify({ groups: tpl }) : undefined }).catch(() => null);
@@ -60,23 +107,48 @@ export function SheetEditor({ items, start, edit, uvalo }: { items: SheetItem[];
   return (
     <div className="seTplPage">
       <aside className="seTplList">
-        <span className="eyebrow">Fișe pe tipuri de imobil</span>
-        {items.map((x) => {
+        <span className="eyebrow">Fișe de inspecție</span>
+        {items.map((x, i) => {
           const s = templateStats(x.t === sel ? tpl : x.tpl);
+          const head = i > 0 && !x.builtin && items[i - 1].builtin ? <small className="seTplSep">Fișele firmei</small> : null;
           return (
-            <button key={x.t} type="button" aria-pressed={sel === x.t} onClick={() => choose(x.t)}>
+            <Fragment key={x.t}>{head}
+            <button type="button" aria-pressed={sel === x.t} onClick={() => choose(x.t)}>
               <b>{x.label}</b>
               <small>{s.questions} întrebări · {(x.t === sel ? custom : x.custom) ? "personalizată" : "modelul VALUEFY"}{x.t === sel && changed ? " · nesalvată" : ""}</small>
               {uvalo && <small className={x.syncError ? "errTxt" : ""}>{x.syncError ? `UVALO: ${x.syncError}` : x.synced ? `în UVALO · ${when(x.synced)}` : "netrimisă în UVALO"}</small>}
             </button>
+            </Fragment>
           );
         })}
-        <small className="hint">Fiecare fișă pornește de la modelul VALUEFY. {uvalo ? "Fișele se modifică doar aici; în UVALO apar ca fișele firmei." : ""}</small>
+        {!ro && (making ? (
+          <div className="seTplNew">
+            <label className="field">Numele fișei<input className="input" autoFocus value={making.name} placeholder="ex. Apartament credit ipotecar" onChange={(e) => setMaking({ ...making, name: e.target.value })} onKeyDown={(e) => e.key === "Enter" && create()} /></label>
+            <label className="field">Pornește de la
+              <select className="select" value={making.from} onChange={(e) => setMaking({ ...making, from: e.target.value })}>
+                {items.map((x) => <option key={x.t} value={x.t}>{x.label}</option>)}
+              </select>
+            </label>
+            <label className="check"><input type="checkbox" checked={making.model} onChange={(e) => setMaking({ ...making, model: e.target.checked })} /> modelul VALUEFY, fără modificările firmei</label>
+            <span className="seTplNewActs">
+              <button type="button" className="btn btnGold btnSm" disabled={busy || !making.name.trim()} onClick={create}>Creează fișa</button>
+              <button type="button" className="btn btnGhost btnSm" onClick={() => setMaking(null)}>Renunță</button>
+            </span>
+          </div>
+        ) : <button type="button" className="btn btnGhost btnSm seTplAdd" onClick={() => setMaking({ name: "", from: sel, model: false })}>+ Fișă nouă</button>)}
+        <small className="hint">O fișă nouă pornește ca o copie a altei fișe; tipul ei (apartament, casă, teren…) dă coloanele CRM, încăperile și fotografiile cerute. {uvalo ? "Fișele se modifică doar aici; în UVALO apar ca fișele firmei." : ""}</small>
       </aside>
 
       <section className="card seTplEdit">
         <div className="seTplHead">
-          <h2>{cur.label}</h2>
+          {naming != null ? (
+            <span className="seTplRename">
+              <input className="input" autoFocus value={naming} aria-label="Numele fișei" onChange={(e) => setNaming(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") rename(); if (e.key === "Escape") setNaming(null); }} />
+              <button type="button" className="btn btnGold btnSm" disabled={busy || !naming.trim()} onClick={rename}>Salvează</button>
+              <button type="button" className="btn btnGhost btnSm" onClick={() => setNaming(null)}>Renunță</button>
+            </span>
+          ) : <h2>{cur.label}{!ro && <button type="button" className="seTplPen" aria-label="Redenumește fișa" title="Redenumește fișa" onClick={() => setNaming(cur.label)}>✎</button>}</h2>}
+          {!cur.builtin && <span className="seTplTag">fișă {items.find((x) => x.builtin && x.base === cur.base)?.label.toLowerCase() ?? cur.base}</span>}
           <span className="seTplTag">{changed ? "Modificări nesalvate" : custom ? "Personalizată" : "Modelul VALUEFY"}</span>
         </div>
         <p className="hint">{stats.groups} grupuri · {stats.questions} întrebări{stats.custom ? ` · ${stats.custom} adăugate de voi` : ""}{stats.hidden ? ` · ${stats.hidden} ascunse` : ""}. Întrebările din model își păstrează tipul (din ele se completează coloanele CRM); le poți redenumi, schimba răspunsurile sau ascunde.</p>
@@ -128,6 +200,7 @@ export function SheetEditor({ items, start, edit, uvalo }: { items: SheetItem[];
             <button type="button" className="btn btnGold" disabled={busy || !changed} onClick={() => send("PUT")}>{busy ? "Se salvează…" : "Salvează fișa"}</button>
             {changed && <button type="button" className="btn btnGhost" disabled={busy} onClick={() => { setTpl(cur.tpl); setChanged(false); setQ(null); setMsg(null); }}>Renunță la modificări</button>}
             {custom && <button type="button" className="btn btnDanger" disabled={busy} onClick={() => confirm("Revii la modelul VALUEFY? Întrebările adăugate de voi și schimbările se pierd.") && send("DELETE")}>Revino la modelul VALUEFY</button>}
+            {!cur.builtin && <button type="button" className="btn btnDanger" disabled={busy} onClick={remove}>Șterge fișa</button>}
           </div>
         )}
         <p className="hint">Fișele începute își păstrează forma; schimbările se aplică fișelor începute de acum.</p>

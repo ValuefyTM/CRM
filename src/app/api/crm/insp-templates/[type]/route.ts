@@ -1,37 +1,58 @@
 import { NextResponse } from "next/server";
 import { audit } from "@/lib/auth";
 import { err, json, staffApi } from "@/lib/api";
-import { SHEET_TYPES, sheetTypeLabel, type SheetType } from "@/lib/insp-forms";
 import { cleanTemplate } from "@/lib/insp-templates";
-import { saveTemplate, templateOf } from "@/lib/insp-templates-db";
+import { removeTemplate, renameTemplate, saveTemplate, templateList, templateOf } from "@/lib/insp-templates-db";
 import { inspChannel, later, syncTemplates } from "@/lib/uvalo";
 
 type P = { params: Promise<{ type: string }> };
-const typeOf = async (p: P) => { const { type } = await p.params; return SHEET_TYPES.some(([t]) => t === type) ? (type as SheetType) : null; };
+const sheetOf = async (db: D1Database, p: P) => { const { type } = await p.params; return (await templateList(db)).find((x) => x.key === type) ?? null; };
 
-/** Saves the firm's template of one sheet type (owner / admins). Applies to the sheets started from now on. */
+/** Saves the firm's template of one sheet (owner / admins). Applies to the sheets started from now on. */
 export async function PUT(req: Request, p: P) {
   const a = await staffApi("templates.E", true);
   if ("res" in a) return a.res;
-  const t = await typeOf(p);
-  if (!t) return err("Fișă necunoscută.", 404);
-  const r = cleanTemplate(t, (await json(req)).groups);
+  const s = await sheetOf(a.db, p);
+  if (!s) return err("Fișă necunoscută.", 404);
+  const r = cleanTemplate(s.base, (await json(req)).groups);
   if (!r.ok) return err(r.error);
-  await saveTemplate(a.db, t, r.tpl, a.user.id);
-  await audit(a.db, `user:${a.user.id}`, "insp.template", "insp_template", t, `Fișa ${sheetTypeLabel(t)} modificată`);
+  await saveTemplate(a.db, s.key, r.tpl, a.user.id);
+  await audit(a.db, `user:${a.user.id}`, "insp.template", "insp_template", s.key, `Fișa ${s.name} modificată`);
   // inspections through UVALO: the sheet is sent there too (the UVALO copy is changed only from here)
-  if ((await inspChannel(a.db)) === "uvalo") await later(syncTemplates(a.db, t));
-  return NextResponse.json({ ok: true, ...(await templateOf(a.db, t)) });
+  if ((await inspChannel(a.db)) === "uvalo") await later(syncTemplates(a.db, s.key));
+  return NextResponse.json({ ok: true, ...(await templateOf(a.db, s.key, s.base)) });
 }
 
-/** Back to the built-in form ("Modelul VALUEFY"). */
-export async function DELETE(_req: Request, p: P) {
+/** Renames a sheet: `{ name }`. */
+export async function PATCH(req: Request, p: P) {
   const a = await staffApi("templates.E", true);
   if ("res" in a) return a.res;
-  const t = await typeOf(p);
-  if (!t) return err("Fișă necunoscută.", 404);
-  await saveTemplate(a.db, t, null, a.user.id);
-  await audit(a.db, `user:${a.user.id}`, "insp.template", "insp_template", t, `Fișa ${sheetTypeLabel(t)} readusă la modelul VALUEFY`);
-  if ((await inspChannel(a.db)) === "uvalo") await later(syncTemplates(a.db, t));
-  return NextResponse.json({ ok: true, ...(await templateOf(a.db, t)) });
+  const s = await sheetOf(a.db, p);
+  if (!s) return err("Fișă necunoscută.", 404);
+  const b = await json(req);
+  const name = typeof b.name === "string" ? b.name.trim().replace(/\s+/g, " ").slice(0, 60) : "";
+  if (!name) return err("Scrie numele fișei.");
+  if ((await templateList(a.db)).some((x) => x.key !== s.key && x.name.toLowerCase() === name.toLowerCase())) return err("Există deja o fișă cu acest nume.");
+  await renameTemplate(a.db, s.key, s.base, name);
+  await audit(a.db, `user:${a.user.id}`, "insp.template", "insp_template", s.key, `Fișa ${s.name} redenumită „${name}”`);
+  if ((await inspChannel(a.db)) === "uvalo") await later(syncTemplates(a.db, s.key));
+  return NextResponse.json({ ok: true, name });
+}
+
+/** Back to the built-in form ("Modelul VALUEFY"); `?sterge=1` on a sheet made in the CRM takes it off the list. */
+export async function DELETE(req: Request, p: P) {
+  const a = await staffApi("templates.E", true);
+  if ("res" in a) return a.res;
+  const s = await sheetOf(a.db, p);
+  if (!s) return err("Fișă necunoscută.", 404);
+  if (new URL(req.url).searchParams.get("sterge") === "1") {
+    if (s.builtin) return err("Fișele de bază nu se pot șterge; le poți readuce la modelul VALUEFY.");
+    await removeTemplate(a.db, s.key);
+    await audit(a.db, `user:${a.user.id}`, "insp.template", "insp_template", s.key, `Fișa ${s.name} ștearsă`);
+    return NextResponse.json({ ok: true, removed: true });
+  }
+  await saveTemplate(a.db, s.key, null, a.user.id);
+  await audit(a.db, `user:${a.user.id}`, "insp.template", "insp_template", s.key, `Fișa ${s.name} readusă la modelul VALUEFY`);
+  if ((await inspChannel(a.db)) === "uvalo") await later(syncTemplates(a.db, s.key));
+  return NextResponse.json({ ok: true, ...(await templateOf(a.db, s.key, s.base)) });
 }

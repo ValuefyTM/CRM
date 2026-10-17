@@ -62,7 +62,7 @@ export async function inspectionSheetDoc(db: D1Database, reportId: string, asset
   const row = await db.prepare(
     `SELECT r.id AS report_id, r.number, r.label, r.purpose, b.name AS bank, c.name AS client,
         p.type, p.full_address, p.city, p.county, p.geo, p.cf_number, p.cad_building, p.cad_land, p.usable_area, p.land_area,
-        i.id AS inspection_id, i.done_at, COALESCE(NULLIF(u.name, ''), u.email) AS inspector, u.anevar_no,
+        i.id AS inspection_id, i.done_at, i.template, COALESCE(NULLIF(u.name, ''), u.email) AS inspector, u.anevar_no,
         s.sheet_type, s.status, s.details, s.description, s.present_person, s.present_role, s.present_phone, s.location, s.submitted_at, s.signature_url, s.photo_url
       FROM assets a JOIN reports r ON r.id = a.report_id JOIN crm_properties p ON p.id = a.property_id
       LEFT JOIN entities b ON b.id = r.recipient_id LEFT JOIN entities c ON c.id = r.client_id
@@ -79,7 +79,8 @@ export async function inspectionSheetDoc(db: D1Database, reportId: string, asset
   let geo: { lat?: number; lng?: number } = {};
   try { geo = row.geo ? JSON.parse(row.geo as string) : {}; } catch { /* no pin */ }
   // The form the sheet was filled in with; older sheets: the current template (same keys).
-  const fields = form ?? (await currentForms(db))[type] ?? FORMS[type];
+  const forms = await currentForms(db);
+  const fields = form ?? (row.template ? forms[row.template as string] : null) ?? forms[type] ?? FORMS[type];
 
   const sections = fields.map((s) => ({
     title: s.title,

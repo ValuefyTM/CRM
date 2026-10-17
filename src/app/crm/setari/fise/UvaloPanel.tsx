@@ -1,15 +1,14 @@
 "use client";
-// Setări → Fișe de inspecție: where the inspections are done — in UVALO (the inspectors' phone app on app.uvalo.ro, by their
-// ANEVAR card) or in the CRM's own app (the fallback) — and whether the link with UVALO works.
+// Setări → Fișe de inspecție, one band: where the inspections are done — in UVALO (the inspectors' phone app on app.uvalo.ro, by
+// their ANEVAR card) or in the CRM's own app (the fallback) — and whether the link with UVALO works (details folded). The state of
+// each sheet in UVALO is in the list of sheets.
 import { useEffect, useState } from "react";
-import { SHEET_TYPES } from "@/lib/insp-forms";
 
 type State = {
   configured: boolean; webhook_secret: boolean; channel: "uvalo" | "app";
   ping: { ok: boolean; org?: string | null; key?: string; error?: string } | null;
   templates: Record<string, { at: string; error?: string }>;
 };
-const when = (iso: string) => new Date(iso).toLocaleString("ro-RO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).replace(".", "");
 
 export function UvaloPanel({ edit, webhook }: { edit: boolean; webhook: string }) {
   const [s, setS] = useState<State | null>(null);
@@ -25,38 +24,36 @@ export function UvaloPanel({ edit, webhook }: { edit: boolean; webhook: string }
     setMsg(r?.ok ? { ok: true, t: ok } : { ok: false, t: d?.error ?? "Nu am putut salva." });
     await load();
   };
-  if (!s) return <section className="card uvCard"><h2>Inspecții prin UVALO</h2><p className="hint">Se verifică legătura…</p></section>;
+  if (!s) return <section className="card uvMini"><span className="hint">Se verifică legătura cu UVALO…</span></section>;
   const ready = s.configured && !!s.ping?.ok;
+  const status = !s.configured ? { ok: false, t: "UVALO neconfigurat" } : s.ping?.ok ? { ok: true, t: `UVALO conectat${s.ping.org ? ` · ${s.ping.org}` : ""}` } : { ok: false, t: s.ping?.error ?? "UVALO nu răspunde" };
   return (
-    <section className="card uvCard">
-      <div className="cardHead"><h2>Unde se fac inspecțiile</h2>
-        <span className={`pill ${s.channel === "uvalo" ? "pillOk" : ""}`}><i />{s.channel === "uvalo" ? "În aplicația UVALO" : "În aplicația CRM"}</span></div>
-      <div className="uvPick" role="radiogroup" aria-label="Aplicația de inspecții">
-        <button type="button" role="radio" aria-checked={s.channel === "uvalo"} disabled={!edit || busy || !ready}
-          onClick={() => post({ action: "channel", value: "uvalo" }, "Inspecțiile noi se trimit în UVALO; fișele au fost trimise acolo.")}>
-          <b>UVALO</b><small>Inspectorul primește inspecția în aplicația UVALO (după legitimația ANEVAR) și o face acolo; fișa finalizată vine înapoi în raport.</small>
-        </button>
-        <button type="button" role="radio" aria-checked={s.channel === "app"} disabled={!edit || busy}
-          onClick={() => post({ action: "channel", value: "app" }, "Inspecțiile noi se fac în aplicația CRM.")}>
-          <b>Aplicația CRM</b><small>Aplicația proprie de inspecții (rezerva). Inspecțiile deja trimise în UVALO rămân acolo.</small>
-        </button>
+    <section className="card uvMini">
+      <div className="uvMiniRow">
+        <b>Inspecțiile se fac în</b>
+        <div className="uvSeg" role="radiogroup" aria-label="Aplicația de inspecții">
+          <button type="button" role="radio" aria-checked={s.channel === "uvalo"} disabled={!edit || busy || !ready}
+            title="Inspectorul primește inspecția în UVALO (după legitimația ANEVAR); fișa finalizată vine înapoi în raport."
+            onClick={() => post({ action: "channel", value: "uvalo" }, "Inspecțiile noi se trimit în UVALO; fișele au fost trimise acolo.")}>UVALO</button>
+          <button type="button" role="radio" aria-checked={s.channel === "app"} disabled={!edit || busy}
+            title="Aplicația proprie de inspecții (rezerva). Inspecțiile deja trimise în UVALO rămân acolo."
+            onClick={() => post({ action: "channel", value: "app" }, "Inspecțiile noi se fac în aplicația CRM.")}>Aplicația CRM</button>
+        </div>
+        <span className={`uvDot ${status.ok ? "ok" : "bad"}`}>{status.t}</span>
+        {!s.webhook_secret && <span className="uvDot bad">fără webhook</span>}
+        <span className="uvGrow" />
+        {edit && ready && <button type="button" className="linkBtn" disabled={busy} onClick={() => post({ action: "sync" }, "Fișele au fost trimise în UVALO.")}>Trimite fișele în UVALO</button>}
+        <details className="uvMore">
+          <summary>Detalii</summary>
+          <dl className="kv uvKv">
+            <div><dt>Cheia UVALO</dt><dd><span>{!s.configured ? <span className="errTxt">lipsește — secretul <code>UVALO_API_KEY</code> în Cloudflare</span>
+              : s.ping?.ok ? <>funcționează · cheia „{s.ping.key}”</> : <span className="errTxt">{s.ping?.error ?? "nu răspunde"}</span>}</span></dd></div>
+            <div><dt>Webhook</dt><dd>{s.webhook_secret ? <span>secretul e setat</span> : <span className="errTxt">lipsește secretul <code>UVALO_WEBHOOK_SECRET</code></span>}
+              <small className="uvUrl">În UVALO → Firma mea → Integrare, la cheie: <code>{webhook}</code></small></dd></div>
+          </dl>
+          <small className="hint">Fișele se modifică doar aici; la fiecare salvare se trimit și în UVALO, unde apar ca fișele firmei.</small>
+        </details>
       </div>
-      <dl className="kv uvKv">
-        <div><dt>Cheia UVALO</dt><dd><span>{!s.configured ? <span className="errTxt">lipsește — secretul <code>UVALO_API_KEY</code> în Cloudflare</span>
-          : s.ping?.ok ? <>funcționează · firma <b>{s.ping.org ?? "—"}</b> · cheia „{s.ping.key}”</> : <span className="errTxt">{s.ping?.error ?? "nu răspunde"}</span>}</span></dd></div>
-        <div><dt>Webhook</dt><dd>{s.webhook_secret ? <span>secretul e setat</span> : <span className="errTxt">lipsește secretul <code>UVALO_WEBHOOK_SECRET</code></span>}
-          <small className="uvUrl">În UVALO → Firma mea → Integrare, la cheie, adresa: <code>{webhook}</code></small></dd></div>
-        <div><dt>Fișele în UVALO</dt><dd>
-          <ul className="uvTpl">
-            {SHEET_TYPES.map(([t, l]) => {
-              const x = s.templates[t];
-              return <li key={t}><span>{l}</span>{x ? x.error ? <span className="errTxt">{x.error}</span> : <small>trimisă {when(x.at)}</small> : <small className="muted">netrimisă</small>}</li>;
-            })}
-          </ul>
-          {edit && ready && <button type="button" className="btn btnGhost btnSm" disabled={busy} onClick={() => post({ action: "sync" }, "Fișele au fost trimise în UVALO.")}>Trimite fișele acum</button>}
-          <small className="hint">Fișele se modifică doar aici; la fiecare salvare se trimit și în UVALO, unde apar ca fișele firmei (nu se pot modifica acolo).</small>
-        </dd></div>
-      </dl>
       {msg && <p className={msg.ok ? "okTxt" : "errTxt"} role="status">{msg.t}</p>}
     </section>
   );

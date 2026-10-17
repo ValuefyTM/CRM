@@ -1,5 +1,5 @@
 // Sends what was done on the phone (schedulings, photos, sheets) and refreshes the inspections list.
-import type { Section, SheetType } from "@/lib/insp-forms";
+import type { Section } from "@/lib/insp-forms";
 import {
   allDrafts, allOps, allPhotos, deleteOp, deletePhoto, getDraft, kvGet, kvSet, putDraft, putOp, putPhoto,
   type Insp, type ServerPhoto, type ServerSheet,
@@ -26,7 +26,7 @@ async function call<T = Json>(path: string, init?: RequestInit): Promise<{ ok: t
   return { ok: true, data: data as T };
 }
 
-export type ListData = { inspections: Insp[]; at: string; forms?: Partial<Record<SheetType, Section[]>> };
+export type ListData = { inspections: Insp[]; at: string; forms?: Record<string, Section[]> };
 /** CF extract / floor survey of the inspection (or of an accessory inspected on its sheet: `for`). */
 export type InspDoc = { ref: string; type: "cf" | "rlv" | "alte"; name: string; content_type: string | null; for: string | null; url: string };
 export type DetailData = { inspection: Insp; sheet: ServerSheet | null; photos: ServerPhoto[]; docs?: InspDoc[] };

@@ -7,7 +7,8 @@ import { esc, layout, sendEmail } from "./email";
 import { type User } from "./users";
 import { isFinished, reportAccess } from "./perms-db";
 import { can } from "./perms";
-import { FORMS, guessSheetType, sheetTypeLabel, type SheetType } from "./insp-forms";
+import { guessSheetType, sheetTypeLabel, type SheetType } from "./insp-forms";
+import { templateList } from "./insp-templates-db";
 import { photoUrl, presenceOf } from "./presence";
 import { missingDocs, missingText, type DocType } from "./insp-docs";
 import { cancelInUvalo, deleteInUvalo, inspChannel, inspectorByLegit, later, pushInspection, uvaloAppUrl } from "./uvalo";
@@ -65,7 +66,12 @@ export async function assignInspection(db: D1Database, user: User, reportId: str
     if (found instanceof Error) return { ok: false as const, error: `UVALO: ${found.message}` };
     if (!found) return { ok: false as const, error: `${inspector.name} nu are cont UVALO activ cu legitimația ${inspector.anevar_no}. Fără cont nu poate primi inspecția (sau treci pe aplicația CRM din Setări → Fișe de inspecție).` };
   }
-  const type = (FORMS as Record<string, unknown>)[str(b.sheet_type, 20)] ? (str(b.sheet_type, 20) as SheetType) : guessSheetType(asset.category, asset.type, asset.order_type);
+  // The sheet: a built-in type or one made in the CRM (its built-in type goes in sheet_type, the sheet itself in template).
+  const sheets = await templateList(db);
+  const picked = sheets.find((x) => x.key === str(b.sheet_type, 40));
+  const type: SheetType = picked?.base ?? guessSheetType(asset.category, asset.type, asset.order_type);
+  const template = picked && !picked.builtin ? picked.key : null;
+  const sheetName = picked?.name ?? sheets.find((x) => x.key === type)?.name ?? sheetTypeLabel(type);
   const due = str(b.due_on, 10);
   if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) return { ok: false as const, error: "Termenul nu este o dată validă." };
   const kind = CONTACT_KINDS.includes(str(b.contact_kind, 20)) ? str(b.contact_kind, 20) : null;
@@ -90,17 +96,17 @@ export async function assignInspection(db: D1Database, user: User, reportId: str
     id = open.id;
     const same = open.inspector_id === inspector.id;
     await db
-      .prepare(`UPDATE inspections SET inspector_id = ?, sheet_type = ?, due_on = ?, contact_kind = ?, contact_name = ?, contact_phone = ?, instructions = ?,
+      .prepare(`UPDATE inspections SET inspector_id = ?, sheet_type = ?, template = ?, due_on = ?, contact_kind = ?, contact_name = ?, contact_phone = ?, instructions = ?,
         assigned_by = ?, assigned_at = ?, status = CASE WHEN ? THEN status ELSE 'to_schedule' END, scheduled_at = CASE WHEN ? THEN scheduled_at ELSE NULL END, updated_at = ?,
         doc_refs = COALESCE(?, doc_refs) WHERE id = ?`)
-      .bind(inspector.id, type, due || null, kind, name, phone, instructions, user.id, t, same ? 1 : 0, same ? 1 : 0, t, docRefs, id)
+      .bind(inspector.id, type, template, due || null, kind, name, phone, instructions, user.id, t, same ? 1 : 0, same ? 1 : 0, t, docRefs, id)
       .run();
   } else {
     id = uuid();
     await db
-      .prepare(`INSERT INTO inspections (id, asset_id, report_id, order_id, inspector_id, status, sheet_type, due_on, contact_kind, contact_name, contact_phone, instructions,
-        assigned_by, assigned_at, updated_at, doc_refs) VALUES (?, ?, ?, ?, ?, 'to_schedule', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(id, asset.id, reportId, asset.order_id, inspector.id, type, due || null, kind, name, phone, instructions, user.id, t, t, docRefs)
+      .prepare(`INSERT INTO inspections (id, asset_id, report_id, order_id, inspector_id, status, sheet_type, template, due_on, contact_kind, contact_name, contact_phone, instructions,
+        assigned_by, assigned_at, updated_at, doc_refs) VALUES (?, ?, ?, ?, ?, 'to_schedule', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(id, asset.id, reportId, asset.order_id, inspector.id, type, template, due || null, kind, name, phone, instructions, user.id, t, t, docRefs)
       .run();
   }
   await db.batch([
@@ -122,12 +128,12 @@ export async function assignInspection(db: D1Database, user: User, reportId: str
     await sendEmail({
       to: inspector.email,
       subject: `Inspecție nouă de programat: ${where}`,
-      text: `${user.name || "Evaluatorul"} ți-a alocat inspecția pentru ${where}${asset.number ? ` (raport ${asset.number})` : ""}${dueText}. Fișă: ${sheetTypeLabel(type)}.${name ? ` Contact: ${name} ${phone ?? ""}.` : ""}${instructions ? `\nInstrucțiuni: ${instructions}` : ""}${missing.length ? `\nÎncă nu sunt încărcate ${missingText(missing)}.` : `\nActele pentru inspecție sunt în aplicația${viaUvalo ? " UVALO" : ""}, la inspecție.`}\nProgramează inspecția din aplicația${viaUvalo ? " UVALO" : ""}: ${link}`,
+      text: `${user.name || "Evaluatorul"} ți-a alocat inspecția pentru ${where}${asset.number ? ` (raport ${asset.number})` : ""}${dueText}. Fișă: ${sheetName}.${name ? ` Contact: ${name} ${phone ?? ""}.` : ""}${instructions ? `\nInstrucțiuni: ${instructions}` : ""}${missing.length ? `\nÎncă nu sunt încărcate ${missingText(missing)}.` : `\nActele pentru inspecție sunt în aplicația${viaUvalo ? " UVALO" : ""}, la inspecție.`}\nProgramează inspecția din aplicația${viaUvalo ? " UVALO" : ""}: ${link}`,
       html: layout({
         eyebrow: "Inspecții VALUEFY",
         title: "Ai o inspecție nouă de programat",
         body: `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A4A"><strong style="color:#111111">${esc(user.name || "Evaluatorul")}</strong> ți-a alocat inspecția pentru <strong style="color:#111111">${esc(where)}</strong>${asset.number ? ` (raport ${esc(asset.number)})` : ""}${esc(dueText)}.</p>
-<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A4A">Fișă: ${esc(sheetTypeLabel(type))}${name ? ` · Contact: ${esc(name)} ${esc(phone ?? "")}` : ""}</p>
+<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A4A">Fișă: ${esc(sheetName)}${name ? ` · Contact: ${esc(name)} ${esc(phone ?? "")}` : ""}</p>
 ${instructions ? `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A4A;white-space:pre-wrap">${esc(instructions)}</p>` : ""}
 ${missing.length ? `<p style="margin:0;font-size:15px;line-height:1.65;color:#9A3412">Încă nu sunt încărcate ${esc(missingText(missing))}; le găsești în aplicație când apar.</p>` : `<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A4A">Actele pentru inspecție sunt în aplicație, la inspecție.</p>`}`,
         button: { label: viaUvalo ? "Deschide aplicația UVALO →" : "Programează din aplicație →", url: link },

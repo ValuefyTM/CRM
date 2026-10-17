@@ -7,11 +7,11 @@ import { err } from "./api";
 import type { User } from "./users";
 import { docsForInspection } from "./insp-docs";
 import {
-  ACC_FIELDS, FEATURE_COLUMNS, FORM_VERSION, FORMS, PRESENT_ROLES, accKey, featureColumns, guessSheetType, isAccessoryType, missingRequired,
+  ACC_FIELDS, FEATURE_COLUMNS, FORM_VERSION, FORMS, PRESENT_ROLES, accKey, featureColumns, guessSheetType, isAccessoryType, missingRequired, sheetTypeLabel,
   type Answers, type Section, type SheetType,
 } from "./insp-forms";
 import { cleanForm } from "./insp-templates";
-import { currentForms } from "./insp-templates-db";
+import { currentForms, templateNames } from "./insp-templates-db";
 
 /** A signed-in inspector or evaluator. */
 export async function inspApi(): Promise<{ db: D1Database; user: User } | { res: NextResponse }> {
@@ -28,6 +28,8 @@ export type InspStatus = "to_schedule" | "scheduled" | "done" | "cancelled";
 export type Insp = {
   id: string; status: InspStatus; scheduled_at: string | null; done_at: string | null; duration_min: number | null;
   sheet_type: SheetType; property_label: string; address: string; city: string | null; county: string | null;
+  /** the sheet made in the CRM the inspection was given with (null: the firm's sheet of its type), and the sheet's name */
+  template: string | null; sheet_label: string;
   lat: number | null; lng: number | null; cf_number: string | null; cad: string | null; usable_area: number | null; year_built: number | null;
   contact_kind: string | null; contact_name: string | null; contact_phone: string | null; notes: string | null;
   report_number: string | null; report_label: string | null; purpose: string | null; client: string | null; bank: string | null;
@@ -42,15 +44,15 @@ export type Insp = {
   together: { id: string; label: string; status: InspStatus }[]; // the other properties of the group (own sheets)
 };
 
-type Row = Omit<Insp, "sheet_type" | "property_label" | "address" | "lat" | "lng" | "cad" | "is_main" | "accessory" | "group" | "host_id" | "hosted" | "together"> & {
+type Row = Omit<Insp, "sheet_type" | "template" | "sheet_label" | "property_label" | "address" | "lat" | "lng" | "cad" | "is_main" | "accessory" | "group" | "host_id" | "hosted" | "together"> & {
   a_main: number | null;
-  sheet_type: string | null; i_address: string | null; i_lat: number | null; i_lng: number | null;
+  sheet_type: string | null; template: string | null; i_address: string | null; i_lat: number | null; i_lng: number | null;
   category: string | null; type: string | null; order_type: string | null; full_address: string | null; street_type: string | null; street: string | null;
   number: string | null; block: string | null; stair: string | null; floor: string | null; apartment: string | null; geo: string | null;
   cad_building: string | null; cad_land: string | null;
 };
 
-const SELECT = `SELECT i.id, i.report_id, i.asset_id, a.is_main AS a_main, i.status, i.scheduled_at, i.done_at, i.duration_min, i.sheet_type, i.address AS i_address, i.lat AS i_lat, i.lng AS i_lng,
+const SELECT = `SELECT i.id, i.report_id, i.asset_id, a.is_main AS a_main, i.status, i.scheduled_at, i.done_at, i.duration_min, i.sheet_type, i.template, i.address AS i_address, i.lat AS i_lat, i.lng AS i_lng,
     i.contact_kind, i.contact_name, i.contact_phone, i.notes, i.reschedule_count, i.contact_notified_at, i.started_at, i.updated_at,
     i.due_on, i.instructions, (SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE x.id = i.assigned_by) AS assigned_by_name,
     p.category, p.type, p.full_address, p.street_type, p.street, p.number, p.block, p.stair, p.floor, p.apartment, p.city, p.county, p.geo,
@@ -101,6 +103,7 @@ function toInsp(r: Row): Insp {
   const sheet = stored && !(isAccessoryType(r.type) && !r.sheet_status && stored !== "accesoriu") ? stored : guessSheetType(r.category, r.type, r.order_type);
   return {
     id: r.id, status: r.status, scheduled_at: r.scheduled_at, done_at: r.done_at, duration_min: r.duration_min, sheet_type: sheet,
+    template: sheet === stored ? r.template : null, sheet_label: sheetTypeLabel(sheet),
     property_label: title(r.type) || title(r.category) || "Proprietate", address: addressOf(r), city: r.city, county: r.county,
     lat: geo?.[0] ?? null, lng: geo?.[1] ?? null, cf_number: r.cf_number, cad: r.cad_building || r.cad_land, usable_area: r.usable_area, year_built: r.year_built,
     contact_kind: r.contact_kind, contact_name: r.contact_name, contact_phone: r.contact_phone, notes: r.notes,
@@ -160,16 +163,23 @@ export async function myInspections(db: D1Database, user: User): Promise<Insp[]>
     .prepare(`${SELECT} WHERE ${MINE} AND ${CURRENT} ORDER BY i.scheduled_at IS NULL, i.scheduled_at, i.due_on IS NULL, i.due_on LIMIT 500`)
     .bind(user.id)
     .all<Row>();
-  return grouped(results.map(toInsp));
+  return named(db, grouped(results.map(toInsp)));
+}
+
+/** The names the firm gave its sheets. */
+async function named(db: D1Database, list: Insp[]) {
+  const names = await templateNames(db);
+  for (const x of list) x.sheet_label = names[x.template ?? x.sheet_type] ?? x.sheet_label;
+  return list;
 }
 
 /** One inspection, with its group (the other inspections of the same report that are the user's). */
 export async function myInspection(db: D1Database, user: User, id: string): Promise<Insp | null> {
   const r = await db.prepare(`${SELECT} WHERE i.id = ?2 AND ${MINE}`).bind(user.id, id).first<Row>();
   if (!r) return null;
-  if (!r.report_id) return toInsp(r);
+  if (!r.report_id) return (await named(db, [toInsp(r)]))[0];
   const { results } = await db.prepare(`${SELECT} WHERE i.report_id = ?2 AND ${MINE} AND (i.id = ?3 OR ${CURRENT})`).bind(user.id, r.report_id, id).all<Row>();
-  return grouped(results.map(toInsp)).find((x) => x.id === id) ?? toInsp(r);
+  return (await named(db, [grouped(results.map(toInsp)).find((x) => x.id === id) ?? toInsp(r)]))[0];
 }
 
 // ---------- the sheet ----------
@@ -261,7 +271,8 @@ export async function saveSheet(db: D1Database, user: User, ins: Insp, b: Record
   const lat = numOrNull(b.lat), lng = numOrNull(b.lng), acc = numOrNull(b.accuracy_m);
   const id = sheetId(ins.id);
   // The form: the one the sheet was started with on the phone, else the firm's current template.
-  const form = cleanForm(b.form) ?? current?.form ?? (await currentForms(db))[type];
+  const forms = await currentForms(db);
+  const form = cleanForm(b.form) ?? current?.form ?? forms[ins.template ?? type] ?? forms[type];
 
   // Signature: PNG data URL from the phone → R2.
   let signature: string | null = null;

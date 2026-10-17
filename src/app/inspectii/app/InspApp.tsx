@@ -14,7 +14,7 @@ import { PhotosView } from "./PhotosView";
 import { SignView } from "./SignView";
 import { RoomsView } from "./RoomsView";
 import { AccountView } from "./AccountView";
-import type { Section, SheetType } from "@/lib/insp-forms";
+import type { Section } from "@/lib/insp-forms";
 
 export type Me = { id: string; name: string; email: string; role: string };
 
@@ -24,7 +24,7 @@ export type Ctx = {
   base: string;
   list: Local[];
   /** The firm's sheet templates (from the last list), used for the sheets started on this phone. */
-  forms: Partial<Record<SheetType, Section[]>> | null;
+  forms: Record<string, Section[]> | null;
   loaded: boolean;
   online: boolean;
   syncing: boolean;

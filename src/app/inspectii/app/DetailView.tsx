@@ -54,7 +54,7 @@ export function DetailView({ ctx, id, item }: { ctx: Ctx; id: string; item: Loca
 
   return (
     <>
-      <TopBar title={i.property_label} sub={[sheetTypeLabel(i.sheet_type).split(" (")[0], i.cad && `nr. cad. ${i.cad}`, i.report_number && `raport ${i.report_number}`].filter(Boolean).join(" · ")} onBack={ctx.back} />
+      <TopBar title={i.property_label} sub={[(i.sheet_label || sheetTypeLabel(i.sheet_type)).split(" (")[0], i.cad && `nr. cad. ${i.cad}`, i.report_number && `raport ${i.report_number}`].filter(Boolean).join(" · ")} onBack={ctx.back} />
       <div className={`iPad${sent || sending ? " withCta" : ""}`}>
         {!sent && !sending && (
           <div className="dTiles">
@@ -134,7 +134,7 @@ export function DetailView({ ctx, id, item }: { ctx: Ctx; id: string; item: Loca
         <section className="iBox">
           <h3>Proprietatea</h3>
           <div className="iKv"><span>Tip</span><b>{i.property_label}</b></div>
-          <div className="iKv"><span>Fișă</span><b>{sheetTypeLabel(draft?.sheet_type ?? i.sheet_type)}</b></div>
+          <div className="iKv"><span>Fișă</span><b>{i.sheet_label || sheetTypeLabel(draft?.sheet_type ?? i.sheet_type)}</b></div>
           {i.cf_number && <div className="iKv"><span>Carte funciară</span><b className="mono">{i.cf_number}</b></div>}
           {i.cad && <div className="iKv"><span>Nr. cadastral</span><b className="mono">{i.cad}</b></div>}
           {i.usable_area != null && <div className="iKv"><span>Suprafață utilă (acte)</span><b>{i.usable_area.toLocaleString("ro-RO")} m²</b></div>}

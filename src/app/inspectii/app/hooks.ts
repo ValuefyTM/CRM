@@ -24,7 +24,7 @@ export function useDetail(ctx: Ctx, id: string) {
 /** A new sheet: the firm's current template for the type, with its default answers. */
 const blank = (item: Local | undefined, id: string, forms: Ctx["forms"]): Draft => {
   const type = item?.sheet_type ?? "apartament";
-  const form: Section[] = forms?.[type] ?? FORMS[type];
+  const form: Section[] = (item?.template && forms?.[item.template]) || forms?.[type] || FORMS[type];
   return { ...empty(item, id), sheet_type: type, form, answers: defaultAnswers(form) };
 };
 const empty = (item: Local | undefined, id: string): Draft => ({

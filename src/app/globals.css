@@ -2733,3 +2733,28 @@ a.navItem[aria-current="page"] .navIcon { opacity: 1; }
 .apLane { width: 212px; }
 .apLaneHead b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3; }
 a.dAssetLink { color: inherit; text-decoration: none; border-radius: 12px; transition: background .15s; } a.dAssetLink:hover { background: var(--acc-soft); } a.dAssetLink:hover b { text-decoration: underline; }
+/* Setări → Fișe: UVALO in one band, new / renamed sheets */
+.uvMini { padding: 12px 16px; }
+.uvMiniRow { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; font-size: 13px; }
+.uvSeg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--bg, #f6f3ec); border: 1px solid var(--line); }
+.uvSeg button { height: 30px; padding: 0 14px; border-radius: 999px; border: 0; background: transparent; color: var(--muted-2); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.uvSeg button[aria-checked="true"] { background: var(--navy); color: #fff; }
+.uvSeg button:disabled:not([aria-checked="true"]) { opacity: .5; cursor: not-allowed; }
+.uvDot { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted-2); }
+.uvDot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+.uvDot.bad { color: var(--err); } .uvDot.bad::before { background: var(--err); }
+.uvGrow { flex: 1; }
+.uvMore { font-size: 12.5px; }
+.uvMore summary { cursor: pointer; color: var(--acc-text); font-weight: 700; }
+.uvMore[open] { flex-basis: 100%; }
+.uvMore .uvKv { margin-top: 8px; }
+.seTplSep { margin: 10px 2px 2px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-2); }
+.seTplAdd { margin-top: 6px; align-self: flex-start; }
+.seTplNew { display: flex; flex-direction: column; gap: 8px; padding: 12px; margin-top: 6px; border-radius: 14px; background: var(--acc-soft); border: 1px solid var(--acc-line); }
+.seTplNew .field { margin: 0; }
+.seTplNew .check { display: flex; gap: 6px; align-items: center; font-size: 12.5px; }
+.seTplNewActs { display: flex; gap: 8px; }
+.seTplRename { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 0; }
+.seTplRename .input { flex: 1; min-width: 160px; font-size: 16px; font-weight: 700; }
+.seTplPen { margin-left: 8px; width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--line); background: #fff; color: var(--muted-2); cursor: pointer; font-size: 13px; vertical-align: middle; }
+.seTplPen:hover { border-color: var(--acc); color: var(--ink); }

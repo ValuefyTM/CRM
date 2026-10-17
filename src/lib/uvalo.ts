@@ -9,9 +9,9 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { now, parseJson } from "./db";
 import { audit } from "./auth";
 import { bucket } from "./orders";
-import { currentForms } from "./insp-templates-db";
+import { baseOfKey, currentForms, templateList, tplKey } from "./insp-templates-db";
 import { docsForInspection } from "./insp-docs";
-import { FEATURE_COLUMNS, FORM_VERSION, ROOMS_KEY, SHEET_TYPES, featureColumns, type Answers, type Field, type Room, type Section, type SheetType } from "./insp-forms";
+import { FEATURE_COLUMNS, FORM_VERSION, ROOMS_KEY, featureColumns, type Answers, type Field, type Room, type Section, type SheetType } from "./insp-forms";
 import { sheetId } from "./insp";
 import { advanceIfInspected } from "./insp-assign";
 
@@ -89,18 +89,18 @@ export const toUvaloTemplate = (t: SheetType, form: Section[]) => ({
   ...(t === "apartament" || t === "casa" || t === "comercial" ? { rooms: true } : {}),
   groups: form.map((s) => ({ id: s.id, name: s.title, qs: s.fields.map(toUvaloQ).filter((q): q is UQ => !!q) })).filter((g) => g.qs.length),
 });
-export const tplRef = (t: SheetType) => `crm-${t}`;
+export const tplRef = (key: string) => `crm-${key}`;
 
-/** Sends the firm's sheets to UVALO (all, or one type): they appear there as the firm's sheets, changed only from the CRM. */
-export async function syncTemplates(db: D1Database, only?: SheetType) {
-  const forms = await currentForms(db);
-  const out: { type: SheetType; ok: boolean; error?: string }[] = [];
-  for (const [t, label] of SHEET_TYPES) {
-    if (only && t !== only) continue;
+/** Sends the firm's sheets to UVALO (all, or one): they appear there as the firm's sheets, changed only from the CRM. */
+export async function syncTemplates(db: D1Database, only?: string) {
+  const [forms, list] = await Promise.all([currentForms(db), templateList(db)]);
+  const out: { type: string; ok: boolean; error?: string }[] = [];
+  for (const x of list) {
+    if (only && x.key !== only) continue;
     try {
-      await call(`/templates/${tplRef(t)}`, { method: "PUT", body: JSON.stringify({ name: `Fișa firmei · ${label}`, prop_type: PROP[t], template: toUvaloTemplate(t, forms[t]), enforced: true }) });
-      out.push({ type: t, ok: true });
-    } catch (e) { out.push({ type: t, ok: false, error: (e as Error).message }); }
+      await call(`/templates/${tplRef(x.key)}`, { method: "PUT", body: JSON.stringify({ name: `Fișa firmei · ${x.name}`, prop_type: PROP[x.base], template: toUvaloTemplate(x.base, forms[x.key]), enforced: true }) });
+      out.push({ type: x.key, ok: true });
+    } catch (e) { out.push({ type: x.key, ok: false, error: (e as Error).message }); }
   }
   // when each sheet was last sent (settings `uvalo_templates`: {type: {at, error?}}), for Setări → Fișe de inspecție
   const state = await templateSync(db);
@@ -109,7 +109,7 @@ export async function syncTemplates(db: D1Database, only?: SheetType) {
     .bind(JSON.stringify(state), now()).run();
   return out;
 }
-export async function templateSync(db: D1Database): Promise<Partial<Record<SheetType, { at: string; error?: string }>>> {
+export async function templateSync(db: D1Database): Promise<Record<string, { at: string; error?: string }>> {
   const r = await db.prepare("SELECT value FROM settings WHERE key = 'uvalo_templates'").first<{ value: string }>().catch(() => null);
   return parseJson(r?.value, {});
 }
@@ -117,14 +117,14 @@ export async function templateSync(db: D1Database): Promise<Partial<Record<Sheet
 /* ---------- inspections ---------- */
 
 type Row = {
-  id: string; report_id: string | null; asset_id: string; status: string; sheet_type: string | null; due_on: string | null; instructions: string | null;
+  id: string; report_id: string | null; asset_id: string; status: string; sheet_type: string | null; template: string | null; due_on: string | null; instructions: string | null;
   contact_kind: string | null; contact_name: string | null; contact_phone: string | null; inspector_id: string | null; uvalo_id: string | null; uvalo_docs: string | null;
   legit: string | null; inspector: string | null; full_address: string | null; city: string | null; county: string | null; cad_building: string | null; cad_land: string | null;
   cf_number: string | null; usable_area: number | null; land_area: number | null; geo: string | null; type: string | null;
 };
 const CONTACT_ROLE: Record<string, string> = { client: "Client", owner: "Proprietar", agent: "Agent imobiliar", other: "Altă persoană" };
 
-const rowOf = (db: D1Database, id: string) => db.prepare(`SELECT i.id, i.report_id, i.asset_id, i.status, i.sheet_type, i.due_on, i.instructions, i.contact_kind, i.contact_name, i.contact_phone,
+const rowOf = (db: D1Database, id: string) => db.prepare(`SELECT i.id, i.report_id, i.asset_id, i.status, i.sheet_type, i.template, i.due_on, i.instructions, i.contact_kind, i.contact_name, i.contact_phone,
     i.inspector_id, i.uvalo_id, i.uvalo_docs, u.anevar_no AS legit, COALESCE(NULLIF(u.name, ''), u.email) AS inspector,
     p.full_address, p.city, p.county, p.cad_building, p.cad_land, p.cf_number, p.usable_area, p.land_area, p.geo, p.type
   FROM inspections i JOIN assets a ON a.id = i.asset_id JOIN crm_properties p ON p.id = a.property_id LEFT JOIN users u ON u.id = i.inspector_id WHERE i.id = ?`).bind(id).first<Row>();
@@ -143,15 +143,15 @@ export async function pushInspection(db: D1Database, id: string) {
   const r = await rowOf(db, id);
   if (!r) return { ok: false as const, error: "Inspecția nu există." };
   if (!r.legit?.trim()) return fail(db, id, new UvaloError(`${r.inspector ?? "Inspectorul"} nu are legitimația ANEVAR completată în CRM (Utilizatori).`));
-  const type = (SHEET_TYPES.some(([t]) => t === r.sheet_type) ? r.sheet_type : "apartament") as SheetType;
+  const key = tplKey(r), type = baseOfKey(await templateList(db, true), key);
   const geo = r.geo ? parseJson<{ lat?: number; lng?: number }>(r.geo, {}) : {};
   try {
-    await syncTemplates(db, type);
+    await syncTemplates(db, key);
     const d = await call<{ id: string; code: string }>("/inspections", { method: "POST", body: JSON.stringify({
       ref: r.id, legit: r.legit, address: r.full_address || [r.city, r.county].filter(Boolean).join(", ") || "Adresă necompletată",
       cad_nr: r.cad_building || r.cad_land || null, cf_nr: r.cf_number, county: r.county, uat: r.city, lat: geo.lat ?? null, lng: geo.lng ?? null,
       prop_type: PROP[type], area_util: r.usable_area, area_land: r.land_area, contact_name: r.contact_name, contact_phone: r.contact_phone,
-      contact_role: r.contact_kind ? CONTACT_ROLE[r.contact_kind] ?? null : null, instructions: r.instructions, due_on: r.due_on, template_ref: tplRef(type),
+      contact_role: r.contact_kind ? CONTACT_ROLE[r.contact_kind] ?? null : null, instructions: r.instructions, due_on: r.due_on, template_ref: tplRef(key),
     }) });
     // the documents the inspector may open, each sent once
     const sent = new Set(parseJson<string[]>(r.uvalo_docs, []));
@@ -251,14 +251,14 @@ function toCrmAnswers(form: Section[], u: UInsp): Answers {
  * goes to drafting when nothing is left to inspect. Safe to run again (photos already copied are skipped).
  */
 export async function importSheet(db: D1Database, id: string, u?: UInsp) {
-  const ins = await db.prepare(`SELECT i.id, i.report_id, i.asset_id, i.inspector_id, i.sheet_type, a.property_id FROM inspections i JOIN assets a ON a.id = i.asset_id WHERE i.id = ?`)
-    .bind(id).first<{ id: string; report_id: string | null; asset_id: string; inspector_id: string | null; sheet_type: string | null; property_id: string }>();
+  const ins = await db.prepare(`SELECT i.id, i.report_id, i.asset_id, i.inspector_id, i.sheet_type, i.template, a.property_id FROM inspections i JOIN assets a ON a.id = i.asset_id WHERE i.id = ?`)
+    .bind(id).first<{ id: string; report_id: string | null; asset_id: string; inspector_id: string | null; sheet_type: string | null; template: string | null; property_id: string }>();
   if (!ins) return { ok: false as const, error: "Inspecția nu există în CRM." };
   try {
     const x = u ?? (await call<{ inspection: UInsp }>(`/inspections/${encodeURIComponent(id)}`)).inspection;
     if (x.status !== "gata" && x.status !== "pred") return { ok: false as const, error: "Fișa nu e finalizată în UVALO." };
-    const type = (SHEET_TYPES.some(([t]) => t === ins.sheet_type) ? ins.sheet_type : "apartament") as SheetType;
-    const form = (await currentForms(db))[type];
+    const key = tplKey(ins), type = baseOfKey(await templateList(db, true), key);
+    const form = (await currentForms(db))[key] ?? (await currentForms(db))[type];
     const answers = toCrmAnswers(form, x);
     const r2 = await bucket();
     if (!r2) throw new UvaloError("Stocarea fișierelor nu este disponibilă.");
