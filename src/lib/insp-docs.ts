@@ -6,7 +6,8 @@ export const DOC_TYPE_LABEL: Record<DocType, string> = { cf: "Extras CF", rlv: "
 
 export type InspDoc = {
   ref: string;              // r-<report document id> | o-<order document id> | g-<asset id>-cf / -rlv
-  type: DocType; name: string; asset_id: string | null; content_type: string | null;
+  // "alte": another document the evaluator chose to give (act de proprietate, certificat…).
+  type: DocType | "alte"; name: string; asset_id: string | null; content_type: string | null;
   key: string | null;       // R2 key
   url: string | null;       // external file (Glide)
 };
@@ -53,6 +54,25 @@ export async function assetDocs(db: D1Database, reportId: string, assetIds: stri
     }
   }
   return out;
+}
+
+/**
+ * The documents an inspector may open for an inspection: the ones chosen when it was given (`doc_refs`), else the
+ * CF extract and floor survey of its assets.
+ */
+export async function docsForInspection(db: D1Database, inspectionId: string, reportId: string, assetIds: string[]): Promise<InspDoc[]> {
+  const row = await db.prepare("SELECT doc_refs FROM inspections WHERE id = ?").bind(inspectionId).first<{ doc_refs: string | null }>().catch(() => null);
+  let refs: string[] | null = null;
+  try { refs = row?.doc_refs ? (JSON.parse(row.doc_refs) as string[]).filter((x) => typeof x === "string") : null; } catch { refs = null; }
+  if (!refs) return assetDocs(db, reportId, assetIds);
+  if (!refs.length) return [];
+  const { results } = await db.prepare(`SELECT id, filename, content_type, r2_key, doc_type, asset_id FROM report_documents
+      WHERE report_id = ? AND status = 'uploaded' AND r2_key IS NOT NULL AND id IN (${refs.map(() => "?").join(", ")}) ORDER BY created_at`)
+    .bind(reportId, ...refs).all<{ id: string; filename: string; content_type: string | null; r2_key: string; doc_type: string | null; asset_id: string | null }>();
+  return results.map((d) => {
+    const t = d.doc_type ?? guessDocType(d.filename);
+    return { ref: `r-${d.id}`, type: t === "cf" || t === "rlv" ? t : "alte", name: d.filename, asset_id: d.asset_id, content_type: d.content_type, key: d.r2_key, url: null };
+  });
 }
 
 /** Which of CF / RLV are missing for an asset. */

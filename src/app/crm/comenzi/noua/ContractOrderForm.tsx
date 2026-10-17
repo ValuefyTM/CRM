@@ -7,6 +7,7 @@ import { PURPOSES } from "@/lib/order-labels";
 import { assetProfile, capType, emptyAsset, type AssetForm } from "@/lib/asset-labels";
 import { AssetsEditor, newUid } from "@/components/AssetsEditor";
 import type { DraftDoc } from "@/components/AssetDocs";
+import { docKindLabel } from "@/lib/doc-kinds";
 import { SafeImg } from "@/app/crm/rapoarte/[id]/ReportActions";
 
 type Contract = { id: string; number: string | null; bank: string; bank_code: string | null; fee: number | null; report_type: string | null; purpose: string | null; logo?: string | null };
@@ -135,6 +136,11 @@ export function ContractOrderForm(p: {
   const [picked, setPicked] = useState<Hit | null>(null);
   const [assets, setAssets] = useState<AssetForm[]>([{ ...emptyAsset(), uid: newUid(), full_address: "", is_main: true }]);
   const [drafts, setDrafts] = useState<Record<string, DraftDoc[]>>({});
+  // Which dropped documents the inspector may open ("<asset uid>:<index>"), chosen when the inspector is picked.
+  const [inspDocs, setInspDocs] = useState<string[] | null>(null);
+  const [docModal, setDocModal] = useState(false);
+  const draftList = assets.flatMap((a, i) => (drafts[a.uid ?? ""] ?? []).map((x, j) => ({ key: `${a.uid}:${j}`, name: x.file.name, kind: x.kind, asset: i === 0 ? "Bun principal" : `Bunul ${i + 1}` })));
+  const chosenDocs = inspDocs ?? draftList.map((d) => d.key);
   const [phase, setPhase] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState("");
@@ -195,15 +201,22 @@ export function ContractOrderForm(p: {
     const d = (await r?.json().catch(() => ({}))) as { report?: string; error?: string; inspections?: number; assets?: string[] } | undefined;
     if (!r?.ok || !d?.report) { setBusy(false); setMsg(d?.error || "Nu am putut salva. Încearcă din nou."); return; }
     // The documents dropped under each asset go to the new report, on the asset they belong to.
-    const queue = assets.flatMap((a, i) => (drafts[a.uid ?? ""] ?? []).map((x) => ({ ...x, asset: d.assets?.[i] ?? "" })));
+    const queue = assets.flatMap((a, i) => (drafts[a.uid ?? ""] ?? []).map((x, j) => ({ ...x, key: `${a.uid}:${j}`, asset: d.assets?.[i] ?? "" })));
     const failed: string[] = [];
+    const ids: Record<string, string> = {};
     for (const [n, x] of queue.entries()) {
       setPhase(`Se încarcă actele ${n + 1} / ${queue.length}…`);
       const body = new FormData();
       body.set("file", x.file); body.set("kind", "source"); body.set("doc_type", x.kind);
       if (x.asset) body.set("asset", x.asset);
       const u = await fetch(`/api/crm/reports/${d.report}/documents`, { method: "POST", body }).catch(() => null);
-      if (!u?.ok) failed.push(x.file.name);
+      const j = (await u?.json().catch(() => null)) as { id?: string } | null;
+      if (!u?.ok || !j?.id) failed.push(x.file.name); else ids[x.key] = j.id;
+    }
+    // The inspector sees the documents ticked for them.
+    if (f.inspector_id && d.inspections && queue.length) {
+      await fetch(`/api/crm/reports/${d.report}/inspections`, { method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ doc_refs: chosenDocs.map((k) => ids[k]).filter(Boolean) }) }).catch(() => null);
     }
     setBusy(false);
     if (failed.length) alert(`Raportul a fost creat, dar nu s-au încărcat: ${failed.join(", ")}. Le poți adăuga din raport, la Documente.`);
@@ -312,8 +325,9 @@ export function ContractOrderForm(p: {
               extras={[{ value: "", label: "Mai târziu", hint: "se alege după creare" }]} placeholder="Mai târziu" />
           </div>
           <div className="field"><span className="fLabel">Inspector <small>(opțional · pentru toate bunurile)</small></span>
-            <PersonPicker label="Inspector" value={f.inspector_id} onChange={(v) => setF({ ...f, inspector_id: v })} people={p.inspectors} me={p.me}
+            <PersonPicker label="Inspector" value={f.inspector_id} onChange={(v) => { setF({ ...f, inspector_id: v }); if (v && draftList.length) setDocModal(true); }} people={p.inspectors} me={p.me}
               extras={[{ value: "", label: "Mai târziu", hint: "aloci inspecțiile din raport, bun cu bun" }]} placeholder="Mai târziu" />
+            {f.inspector_id && draftList.length > 0 && <button type="button" className="linkBtn nwDocsLink" onClick={() => setDocModal(true)}>Acte vizibile inspectorului: {chosenDocs.length} din {draftList.length}</button>}
           </div>
         </div>
         <div className="formRow">
@@ -326,6 +340,27 @@ export function ContractOrderForm(p: {
         <label className="field"><span className="fLabel">Note interne <small>(opțional)</small></span><textarea className="textarea" rows={2} value={f.notes} onChange={set("notes")} /></label>
       </section>
 
+      {docModal && (
+        <div className="vfModal" role="dialog" aria-modal="true" aria-labelledby="nwDocsT" onClick={(e) => { if (e.target === e.currentTarget) setDocModal(false); }}>
+          <div className="vfModalBox" style={{ maxWidth: 520 }}>
+            <h2 id="nwDocsT">Ce acte vede inspectorul?</h2>
+            <p className="hint">Bifează actele pe care inspectorul le poate deschide în aplicația de inspecții. Se pot schimba și din raport.</p>
+            <div className="daBox">
+              <div className="daHead"><b>Acte trase la bunuri</b>
+                <button type="button" className="linkBtn" onClick={() => setInspDocs(chosenDocs.length === draftList.length ? [] : draftList.map((d) => d.key))}>{chosenDocs.length === draftList.length ? "Niciunul" : "Toate"}</button></div>
+              <ul className="daList">
+                {draftList.map((d) => (
+                  <li key={d.key}><label className="check">
+                    <input type="checkbox" checked={chosenDocs.includes(d.key)} onChange={(e) => setInspDocs(e.target.checked ? [...chosenDocs, d.key] : chosenDocs.filter((k) => k !== d.key))} />
+                    <span><b>{d.name}</b><small>{docKindLabel(d.kind)} · {d.asset}</small></span>
+                  </label></li>
+                ))}
+              </ul>
+            </div>
+            <div className="actions"><button type="button" className="btn btnNavy" onClick={() => setDocModal(false)}>Gata</button></div>
+          </div>
+        </div>
+      )}
       {msg && <div role="alert" className="error">{msg}</div>}
       <div className="nwBar">
         <div className="nwSum">

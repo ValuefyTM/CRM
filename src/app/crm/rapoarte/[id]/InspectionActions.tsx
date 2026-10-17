@@ -6,7 +6,8 @@ import { NO_INSPECTION_REASONS, SHEET_TYPES } from "@/lib/insp-forms";
 import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
 import { PersonLine } from "@/components/Avatar";
 import type { Presence } from "@/lib/presence";
-import { DocsConfirm, missingOf, type DocState } from "@/components/DocsConfirm";
+import { type DocState } from "@/components/DocsConfirm";
+import { DocAccess, defaultAccess, type AccessDoc } from "@/components/DocAccess";
 
 export type Person = { id: string; name: string; role: string; coverage: string | null; presence?: Presence; seen?: string; photo?: string | null };
 export type TaskInitial = {
@@ -26,7 +27,7 @@ async function send(url: string, init: RequestInit) {
 }
 
 /** "Alocă inspecția" / "Realocă": the inspection task of one asset, given to the evaluator themselves or to a colleague. */
-export function AssignInspection({ report, me, people, initial }: { report: string; me: string; people: Person[]; initial: TaskInitial }) {
+export function AssignInspection({ report, me, people, initial, docs = [], access }: { report: string; me: string; people: Person[]; initial: TaskInitial; docs?: AccessDoc[]; access?: string[] | null }) {
   const [open, setOpen] = useState(false);
   const realloc = !!initial.inspection;
   const [f, setF] = useState({
@@ -36,17 +37,17 @@ export function AssignInspection({ report, me, people, initial }: { report: stri
   });
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
-  const [confirm, setConfirm] = useState(false);
+  // The documents the inspector may open: the ones chosen before, else the asset's own (and the whole report's).
+  const [refs, setRefs] = useState<string[]>(access ?? defaultAccess(docs, [initial.asset]));
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
-  const missing = missingOf(initial.docs);
   const moving = realloc && initial.scheduled && f.inspector !== initial.inspector;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!f.inspector) return setMsg("Alege cine face inspecția.");
-    if (missing.length && !confirm) return setMsg(`Lipsesc ${missing.join(" și ")}: bifează că aloci inspecția fără ele sau încarcă-le întâi.`);
     setBusy(true); setMsg("");
-    const error = await send(`/api/crm/reports/${report}/inspections`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ asset: initial.asset, ...f, confirm_missing: confirm }) });
+    const error = await send(`/api/crm/reports/${report}/inspections`, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ asset: initial.asset, ...f, confirm_missing: true, ...(docs.length ? { doc_refs: refs } : {}) }) });
     setBusy(false);
     if (error) return setMsg(error);
     location.reload();
@@ -63,7 +64,7 @@ export function AssignInspection({ report, me, people, initial }: { report: stri
             <div className="field">Cine face inspecția
               <PersonPicker label="Cine face inspecția" value={f.inspector} onChange={(v) => setF({ ...f, inspector: v })} people={picks(people)} me={me} />
             </div>
-            <DocsConfirm have={initial.docs} checked={confirm} onChange={setConfirm} />
+            <DocAccess docs={docs} value={refs} onChange={setRefs} />
             {moving && <div className="note">Inspecția este deja programată. Dacă o dai altcuiva, programarea se anulează și noul inspector o programează din nou.</div>}
             <div className="formRow">
               <label className="field">Fișa de inspecție
@@ -117,7 +118,7 @@ export type AllocRow = {
  * "Alocă inspecțiile": every asset of the report in one window — an inspector, "Fără inspecție" (with the reason) or
  * later. Opens by itself right after the report is created; it can be closed without giving anything.
  */
-export function AllocateAll({ report, me, people, rows, autoOpen }: { report: string; me: string; people: Person[]; rows: AllocRow[]; autoOpen: boolean }) {
+export function AllocateAll({ report, me, people, rows, autoOpen, docs = [] }: { report: string; me: string; people: Person[]; rows: AllocRow[]; autoOpen: boolean; docs?: AccessDoc[] }) {
   // Opened after mounting: the window is a portal into document.body, which the server render does not have.
   const [open, setOpen] = useState(false);
   useEffect(() => { if (autoOpen) setOpen(true); }, [autoOpen]);
@@ -126,7 +127,7 @@ export function AllocateAll({ report, me, people, rows, autoOpen }: { report: st
   const [reason, setReason] = useState<Record<string, string>>(() => Object.fromEntries(free.map((r) => [r.asset, r.none ?? NO_INSPECTION_REASONS[0]])));
   const [due, setDue] = useState("");
   const [instructions, setInstructions] = useState("");
-  const [confirm, setConfirm] = useState(false);
+  const [refs, setRefs] = useState<string[] | null>(null);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -136,18 +137,19 @@ export function AllocateAll({ report, me, people, rows, autoOpen }: { report: st
     if (u.searchParams.has("alocare")) { u.searchParams.delete("alocare"); history.replaceState(null, "", u); }
   };
   const given = free.filter((r) => pick[r.asset] && pick[r.asset] !== "none");
-  const lacking = given.filter((r) => missingOf(r.docs).length);
+  // Ticked by default: the documents of the assets given now and the ones of the whole report.
+  const access = refs ?? defaultAccess(docs, given.map((r) => r.asset));
   const changes = free.filter((r) => (pick[r.asset] || "") !== (r.state === "none" ? "none" : "") || (r.state === "none" && pick[r.asset] === "none" && reason[r.asset] !== r.none));
 
   const submit = async () => {
-    if (lacking.length && !confirm) return setMsg("Unele bunuri nu au extrasul CF sau releveul: bifează că aloci fără ele sau încarcă-le întâi.");
     setBusy(true); setMsg("");
     const errors: string[] = [];
     for (const r of changes) {
       const v = pick[r.asset];
       const body = !v || v === "none"
         ? { asset: r.asset, none: v === "none" ? reason[r.asset] : null }
-        : { asset: r.asset, inspector: v, sheet_type: r.sheet_type, due_on: due, contact_kind: r.contact_kind ?? "client", contact_name: r.contact_name ?? "", contact_phone: r.contact_phone ?? "", instructions, confirm_missing: confirm };
+        : { asset: r.asset, inspector: v, sheet_type: r.sheet_type, due_on: due, contact_kind: r.contact_kind ?? "client", contact_name: r.contact_name ?? "", contact_phone: r.contact_phone ?? "", instructions, confirm_missing: true,
+          ...(docs.length ? { doc_refs: access.filter((id) => { const d = docs.find((x) => x.id === id); return !d?.asset_id || d.asset_id === r.asset || given.length === 1; }) } : {}) };
       const e = await send(`/api/crm/reports/${report}/inspections`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       if (e) errors.push(`${r.label}: ${e}`);
     }
@@ -181,11 +183,8 @@ export function AllocateAll({ report, me, people, rows, autoOpen }: { report: st
                     <div className="allocWhat">
                       <b>{r.label}</b>
                       {r.address && <small>{r.address}</small>}
-                      {editable && v && v !== "none" && (
-                        <span className="allocTags">
-                          {(["cf", "rlv"] as const).map((t) => <span key={t} className={`docTag ${r.docs[t] ? "ok" : "miss"}`}>{r.docs[t] ? "✓" : "!"} {t === "cf" ? "CF" : "RLV"}</span>)}
-                          {r.contact_name && <small>Contact: {r.contact_name}{r.contact_phone ? ` · ${r.contact_phone}` : ""}</small>}
-                        </span>
+                      {editable && v && v !== "none" && r.contact_name && (
+                        <span className="allocTags"><small>Contact: {r.contact_name}{r.contact_phone ? ` · ${r.contact_phone}` : ""}</small></span>
                       )}
                     </div>
                     {editable ? (
@@ -218,12 +217,7 @@ export function AllocateAll({ report, me, people, rows, autoOpen }: { report: st
                 </label>
               </>
             )}
-            {lacking.length > 0 && (
-              <div className="docsWarn">
-                <p><b>Fără extras CF sau releveu: {lacking.map((r) => r.label).join(", ")}.</b> Inspectorul are nevoie de ele la vizionare. Le poți încărca în raport, la „Documente & Livrare”; apar singure în aplicația de inspecții.</p>
-                <label className="check"><input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} /><span>Aloc inspecțiile fără ele</span></label>
-              </div>
-            )}
+            {given.length > 0 && <DocAccess docs={docs} value={access} onChange={setRefs} />}
             {msg && <div role="alert" className="error">{msg}</div>}
             <div className="actions">
               {free.length > 0 && <button type="button" className="btn btnNavy" disabled={busy || !changes.length} onClick={submit}>{busy ? "Se salvează…" : given.length ? `Alocă (${given.length})` : "Salvează"}</button>}
@@ -245,5 +239,45 @@ export function NeedsInspection({ report, asset }: { report: string; asset: stri
       if (error) return alert(error);
       location.reload();
     }}>Necesită inspecție</button>
+  );
+}
+
+/** "Inspecție realizată": the inspection was done without the app; its date (and hour), then the report moves on. */
+export function MarkInspectionDone({ report, asset, label }: { report: string; asset: string; label: string }) {
+  const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
+  const [open, setOpen] = useState(false);
+  const [day, setDay] = useState(today);
+  const [hour, setHour] = useState("");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    setBusy(true); setMsg("");
+    const error = await send(`/api/crm/reports/${report}/inspections`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ asset, done_at: hour ? `${day}T${hour}` : day }) });
+    setBusy(false);
+    if (error) return setMsg(error);
+    location.reload();
+  };
+  return (
+    <>
+      <button type="button" className="btn btnGhost btnSm" onClick={() => setOpen(true)}>✓ Inspecție realizată</button>
+      {open && createPortal(
+        <div className="vfModal" role="dialog" aria-modal="true" aria-labelledby="doneTitle" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
+          <div className="vfModalBox" style={{ maxWidth: 440 }}>
+            <h2 id="doneTitle">Inspecție realizată</h2>
+            <p className="hint">{label}. Pentru o inspecție făcută fără aplicație. Când nu mai rămâne niciun bun de inspectat, raportul trece la redactare.</p>
+            <div className="formRow">
+              <label className="field">Data inspecției<input className="input" type="date" value={day} max={today} onChange={(e) => setDay(e.target.value)} /></label>
+              <label className="field"><span className="fLabel">Ora <small>(opțional)</small></span><input className="input" type="time" value={hour} onChange={(e) => setHour(e.target.value)} /></label>
+            </div>
+            {msg && <div role="alert" className="error">{msg}</div>}
+            <div className="actions">
+              <button type="button" className="btn btnNavy" disabled={busy || !day} onClick={submit}>{busy ? "Se salvează…" : "Marchează realizată"}</button>
+              <button type="button" className="btn btnGhost" onClick={() => setOpen(false)}>Renunță</button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }

@@ -5,7 +5,7 @@ import { currentUser, audit } from "./auth";
 import { bucket } from "./orders";
 import { err } from "./api";
 import type { User } from "./users";
-import { assetDocs } from "./insp-docs";
+import { docsForInspection } from "./insp-docs";
 import {
   ACC_FIELDS, FEATURE_COLUMNS, FORM_VERSION, FORMS, PRESENT_ROLES, accKey, featureColumns, guessSheetType, isAccessoryType, missingRequired,
   type Answers, type Section, type SheetType,
@@ -398,7 +398,7 @@ export async function inspectionDocs(db: D1Database, ins: Insp) {
     ? (await db.prepare(`SELECT id, asset_id FROM inspections WHERE id IN (${ins.hosted.map(() => "?").join(", ")})`).bind(...ins.hosted.map((h) => h.id)).all<{ id: string; asset_id: string | null }>()).results
     : [];
   const label = new Map<string, string>(hosted.filter((h) => h.asset_id).map((h) => [h.asset_id!, ins.hosted.find((x) => x.id === h.id)?.label ?? "accesoriu"]));
-  const docs = await assetDocs(db, ins.report_id, [ins.asset_id, ...label.keys()]);
+  const docs = await docsForInspection(db, ins.id, ins.report_id, [ins.asset_id, ...label.keys()]);
   return docs.map((d) => ({
     ref: d.ref, type: d.type, name: d.name, content_type: d.content_type, for: d.asset_id && label.has(d.asset_id) ? label.get(d.asset_id)! : null,
     url: `/api/insp/inspections/${encodeURIComponent(ins.id)}/docs/${encodeURIComponent(d.ref)}`,

@@ -60,7 +60,14 @@ export async function assignInspection(db: D1Database, user: User, reportId: str
   const kind = CONTACT_KINDS.includes(str(b.contact_kind, 20)) ? str(b.contact_kind, 20) : null;
   const name = str(b.contact_name, 120) || null, phone = str(b.contact_phone, 40) || null;
   const instructions = typeof b.instructions === "string" ? b.instructions.trim().slice(0, 2000) || null : null;
-  const missing = await missingDocs(db, reportId, asset.id);
+  // The documents the inspector may open, when chosen (ids of the report's documents); else the CF and floor survey.
+  let docRefs: string | null = null;
+  if (Array.isArray(b.doc_refs)) {
+    const ids = (b.doc_refs as unknown[]).filter((x): x is string => typeof x === "string").slice(0, 100);
+    const ok = ids.length ? (await db.prepare(`SELECT id FROM report_documents WHERE report_id = ? AND id IN (${ids.map(() => "?").join(", ")})`).bind(reportId, ...ids).all<{ id: string }>()).results.map((x) => x.id) : [];
+    docRefs = JSON.stringify(ok);
+  }
+  const missing = docRefs ? [] : await missingDocs(db, reportId, asset.id);
   if (missing.length && b.confirm_missing !== true)
     return { ok: false as const, missing, error: `Nu sunt încărcate ${missingText(missing)}. Confirmă că aloci inspecția fără ${missing.length > 1 ? "ele" : "el"}.` };
   const t = now();
@@ -73,15 +80,16 @@ export async function assignInspection(db: D1Database, user: User, reportId: str
     const same = open.inspector_id === inspector.id;
     await db
       .prepare(`UPDATE inspections SET inspector_id = ?, sheet_type = ?, due_on = ?, contact_kind = ?, contact_name = ?, contact_phone = ?, instructions = ?,
-        assigned_by = ?, assigned_at = ?, status = CASE WHEN ? THEN status ELSE 'to_schedule' END, scheduled_at = CASE WHEN ? THEN scheduled_at ELSE NULL END, updated_at = ? WHERE id = ?`)
-      .bind(inspector.id, type, due || null, kind, name, phone, instructions, user.id, t, same ? 1 : 0, same ? 1 : 0, t, id)
+        assigned_by = ?, assigned_at = ?, status = CASE WHEN ? THEN status ELSE 'to_schedule' END, scheduled_at = CASE WHEN ? THEN scheduled_at ELSE NULL END, updated_at = ?,
+        doc_refs = COALESCE(?, doc_refs) WHERE id = ?`)
+      .bind(inspector.id, type, due || null, kind, name, phone, instructions, user.id, t, same ? 1 : 0, same ? 1 : 0, t, docRefs, id)
       .run();
   } else {
     id = uuid();
     await db
       .prepare(`INSERT INTO inspections (id, asset_id, report_id, order_id, inspector_id, status, sheet_type, due_on, contact_kind, contact_name, contact_phone, instructions,
-        assigned_by, assigned_at, updated_at) VALUES (?, ?, ?, ?, ?, 'to_schedule', ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(id, asset.id, reportId, asset.order_id, inspector.id, type, due || null, kind, name, phone, instructions, user.id, t, t)
+        assigned_by, assigned_at, updated_at, doc_refs) VALUES (?, ?, ?, ?, ?, 'to_schedule', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(id, asset.id, reportId, asset.order_id, inspector.id, type, due || null, kind, name, phone, instructions, user.id, t, t, docRefs)
       .run();
   }
   await db.batch([
@@ -101,14 +109,14 @@ export async function assignInspection(db: D1Database, user: User, reportId: str
     await sendEmail({
       to: inspector.email,
       subject: `Inspecție nouă de programat: ${where}`,
-      text: `${user.name || "Evaluatorul"} ți-a alocat inspecția pentru ${where}${asset.number ? ` (raport ${asset.number})` : ""}${dueText}. Fișă: ${sheetTypeLabel(type)}.${name ? ` Contact: ${name} ${phone ?? ""}.` : ""}${instructions ? `\nInstrucțiuni: ${instructions}` : ""}${missing.length ? `\nÎncă nu sunt încărcate ${missingText(missing)}.` : "\nExtrasul CF și releveul sunt în aplicație, la inspecție."}\nProgramează inspecția din aplicație: ${link}`,
+      text: `${user.name || "Evaluatorul"} ți-a alocat inspecția pentru ${where}${asset.number ? ` (raport ${asset.number})` : ""}${dueText}. Fișă: ${sheetTypeLabel(type)}.${name ? ` Contact: ${name} ${phone ?? ""}.` : ""}${instructions ? `\nInstrucțiuni: ${instructions}` : ""}${missing.length ? `\nÎncă nu sunt încărcate ${missingText(missing)}.` : "\nActele pentru inspecție sunt în aplicație, la inspecție."}\nProgramează inspecția din aplicație: ${link}`,
       html: layout({
         eyebrow: "Inspecții VALUEFY",
         title: "Ai o inspecție nouă de programat",
         body: `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A4A"><strong style="color:#111111">${esc(user.name || "Evaluatorul")}</strong> ți-a alocat inspecția pentru <strong style="color:#111111">${esc(where)}</strong>${asset.number ? ` (raport ${esc(asset.number)})` : ""}${esc(dueText)}.</p>
 <p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A4A">Fișă: ${esc(sheetTypeLabel(type))}${name ? ` · Contact: ${esc(name)} ${esc(phone ?? "")}` : ""}</p>
 ${instructions ? `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A4A;white-space:pre-wrap">${esc(instructions)}</p>` : ""}
-${missing.length ? `<p style="margin:0;font-size:15px;line-height:1.65;color:#9A3412">Încă nu sunt încărcate ${esc(missingText(missing))}; le găsești în aplicație când apar.</p>` : `<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A4A">Extrasul CF și releveul sunt în aplicație, la inspecție.</p>`}`,
+${missing.length ? `<p style="margin:0;font-size:15px;line-height:1.65;color:#9A3412">Încă nu sunt încărcate ${esc(missingText(missing))}; le găsești în aplicație când apar.</p>` : `<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A4A">Actele pentru inspecție sunt în aplicație, la inspecție.</p>`}`,
         button: { label: "Programează din aplicație →", url: link },
         foot: "Inspecția apare în aplicația de inspecții la „De programat”.",
       }),
@@ -133,6 +141,42 @@ export async function markNoInspection(db: D1Database, user: User, reportId: str
   ]);
   await audit(db, `user:${user.id}`, reason ? "report.no_inspection" : "report.needs_inspection", "report", reportId, `${a.type ? a.type.toLowerCase() : "bun"}${reason ? `: ${reason}` : ""}`);
   return { ok: true as const };
+}
+
+/**
+ * "Inspecție realizată": an inspection done without the app (date, optional hour). The open task is closed, or a done
+ * one is recorded; when no inspection is left to do, the report moves on to drafting.
+ */
+export async function markInspectionDone(db: D1Database, user: User, reportId: string, assetId: string, doneAt: string) {
+  const a = await db.prepare("SELECT a.id, p.type FROM assets a JOIN crm_properties p ON p.id = a.property_id WHERE a.id = ? AND a.report_id = ?")
+    .bind(assetId, reportId).first<{ id: string; type: string | null }>();
+  if (!a) return { ok: false as const, error: "Bunul nu aparține acestui raport." };
+  const m = doneAt.match(/^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2}))?$/);
+  if (!m) return { ok: false as const, error: "Alege data inspecției." };
+  if (m[1] > now().slice(0, 10)) return { ok: false as const, error: "Data inspecției nu poate fi în viitor." };
+  // Bucharest time to UTC, roughly (the hour is a convenience; the date is what counts).
+  const at = new Date(`${m[1]}T${m[2] ?? "12:00"}:00+03:00`).toISOString();
+  const t = now();
+  const open = await openTask(db, a.id);
+  if (open) {
+    await db.prepare("UPDATE inspections SET status = 'done', done_at = ?, updated_at = ? WHERE id = ?").bind(at, t, open.id).run();
+  } else {
+    const order = await db.prepare("SELECT order_id FROM reports WHERE id = ?").bind(reportId).first<{ order_id: string | null }>();
+    await db.prepare(`INSERT INTO inspections (id, asset_id, report_id, order_id, inspector_id, status, done_at, assigned_by, assigned_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'done', ?, ?, ?, ?)`).bind(uuid(), a.id, reportId, order?.order_id ?? null, user.id, at, user.id, t, t).run();
+  }
+  await db.prepare("UPDATE assets SET no_inspection = NULL, no_inspection_at = NULL, no_inspection_by = NULL WHERE id = ?").bind(a.id).run();
+  await audit(db, `user:${user.id}`, "report.inspection_done", "report", reportId, `${a.type ? a.type.toLowerCase() : "bun"} · inspecție realizată ${m[1].split("-").reverse().join(".")} (marcată în CRM)`);
+  // Nothing left to inspect: on to drafting.
+  const left = await db.prepare(`SELECT COUNT(*) AS n FROM assets x WHERE x.report_id = ? AND x.no_inspection IS NULL
+      AND NOT EXISTS (SELECT 1 FROM inspections i WHERE i.asset_id = x.id AND i.status = 'done')`).bind(reportId).first<{ n: number }>();
+  let advanced = false;
+  if (!left?.n) {
+    const r = await db.prepare("UPDATE reports SET stage = 'drafting', updated_at = ? WHERE id = ? AND COALESCE(stage, 'inspection') = 'inspection'").bind(t, reportId).run();
+    advanced = !!r.meta.changes;
+    if (advanced) await audit(db, `user:${user.id}`, "report.stage", "report", reportId, "Redactare");
+  }
+  return { ok: true as const, advanced };
 }
 
 /** Cancels a task that is not done yet (the inspection disappears from the inspector's app). */

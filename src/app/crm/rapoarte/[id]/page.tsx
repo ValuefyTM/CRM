@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { fmtDate, initials, staffPage } from "@/lib/guard";
 import {
-  cap, getReport, INSPECTION_STATUS, lei, propertyHistory, REPORT_STATUS, reportAssets, reportDocuments, reportLog, reportOrderDocuments, reportTeam, ROLE_LABEL, teamCandidates,
+  cap, getReport, lei, propertyHistory, REPORT_STATUS, reportAssets, reportDocuments, reportLog, reportOrderDocuments, reportTeam, ROLE_LABEL, teamCandidates,
 } from "@/lib/reports";
 import { fileSrc } from "@/lib/files";
 import { fmtSize } from "@/lib/orders";
@@ -11,17 +11,20 @@ import { orderCode, SOURCE_LABEL } from "@/lib/order-labels";
 import { SPECIALIZATIONS } from "@/lib/labels";
 import { CrmShell } from "@/components/CrmShell";
 import { ReportList } from "@/components/ReportList";
-import { AllocateAll, AssignInspection, CancelInspection, NeedsInspection, type AllocRow } from "./InspectionActions";
+import { AllocateAll, AssignInspection, CancelInspection, MarkInspectionDone, NeedsInspection, type AllocRow } from "./InspectionActions";
+import { AssetBoard } from "./AssetBoard";
+import { ReportDocs, type DocItem } from "./ReportDocs";
+import type { AccessDoc } from "@/components/DocAccess";
 import { AssetEditor, RemoveAsset } from "./AssetEditor";
-import { emptyAsset, type AssetForm } from "@/lib/asset-labels";
+import { assetProfile, emptyAsset, FIELD_LABELS, type AssetForm, type ProfileField } from "@/lib/asset-labels";
 import { canAssign, inspectorChoices } from "@/lib/insp-assign";
 import { guessSheetType } from "@/lib/insp-forms";
 import { docsByAsset } from "@/lib/insp-docs";
-import { DOC_KIND_KEYS, guessDocKind } from "@/lib/doc-kinds";
+import { guessDocKind } from "@/lib/doc-kinds";
 import { Avatar, PersonLine } from "@/components/Avatar";
 import { Messages } from "@/components/Messages";
 import { messagesOf } from "@/lib/messages";
-import { AddMember, CollectedToggle, DeleteDoc, DocTypeSelect, DeliverButton, FinalDrop, MissingDoc, NotesEditor, RemoveMember, SafeImg, StageActions, StatusButton, UploadButton, VerifyActions } from "./ReportActions";
+import { AddMember, CollectedToggle, DeliverButton, FinalDrop, MissingDoc, NotesEditor, RemoveMember, SafeImg, StageActions, StatusButton, UploadButton, VerifyActions } from "./ReportActions";
 import { dueOf, STAGE_LABEL, stageOf } from "@/lib/dossier";
 import { nextReportNumber, noticeTarget } from "@/lib/delivery";
 import { draftForReport, invoicesFor } from "@/lib/billing";
@@ -40,7 +43,9 @@ const CONTACT: Record<string, string> = { client: "Clientul", owner: "Proprietar
 const APPROACH: Record<string, string> = { market: "Piață", income: "Venit", cost: "Cost" };
 const VAL_TYPE: Record<string, string> = { EPI: "EPI — proprietăți imobiliare", EBM: "EBM — bunuri mobile", EI: "EI — întreprinderi", EIF: "EIF — instrumente financiare" };
 const ROLE_NAME: Record<string, string> = { owner: "Proprietar", admin: "Administrator", evaluator: "Evaluator", operator: "Operator", inspector: "Inspector" };
-const TABS = [["general", "General"], ["bunuri", "Bunuri"], ["inspectii", "Inspecții"], ["documente", "Documente & livrare"], ["utilizatori", "Utilizatori"]] as const;
+const TABS = [["general", "General"], ["bunuri", "Bunuri & inspecții"], ["documente", "Acte & livrare"], ["mesaje", "Mesaje"]] as const;
+// Old links: the inspections are now with the assets, the users of the report in General.
+const OLD_TABS: Record<string, string> = { inspectii: "bunuri", utilizatori: "general" };
 type Tab = (typeof TABS)[number][0];
 
 const ago = (iso: string) => {
@@ -71,10 +76,11 @@ function Row({ k, children }: { k: string; children?: React.ReactNode }) {
   return <div><dt>{k}</dt><dd>{children ?? "—"}</dd></div>;
 }
 
-export default async function ReportPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; alocare?: string }> }) {
+export default async function ReportPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; alocare?: string; bun?: string }> }) {
   const { db, user, base } = await staffPage();
   const { id } = await params;
-  const { tab: wanted, alocare } = await searchParams;
+  const { tab: asked, alocare, bun } = await searchParams;
+  const wanted = asked && OLD_TABS[asked] ? OLD_TABS[asked] : asked;
   const tab: Tab = TABS.find(([k]) => k === wanted)?.[0] ?? "general";
   const r = await getReport(db, id);
   if (!r) notFound();
@@ -106,14 +112,15 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
     };
   };
   const inspState = (a: A): AllocRow["state"] => a.inspection_status === "done" ? "done" : isActive(a) ? "open" : a.no_inspection ? "none" : "free";
-  const assetLabel = (a: A) => `${cap(a.type) || "Bun"}${a.full_address ? ` · ${a.full_address}` : ""}`;
   const [history, log, suggested, notifyTo] = await Promise.all([
     main ? propertyHistory(db, main.property_id, id) : Promise.resolve([]), reportLog(db, r, assets),
     r.number ? Promise.resolve("") : nextReportNumber(db), r.delivered_at ? Promise.resolve(null) : noticeTarget(db, r.order_id),
   ]);
   // Working stage and deadline (from the offer: working days counted from the inspection).
   const tasks = assets.filter((a) => a.inspection_status && a.inspection_status !== "cancelled");
-  const stage = stageOf(r, { total: tasks.length, done: tasks.filter((a) => a.inspection_status === "done").length, none: assets.filter((a) => a.no_inspection).length });
+  // Assets still waiting for an inspection to be given count too: one asset inspected out of two is not "drafting" yet.
+  const waiting = assets.filter((a) => !a.no_inspection && (!a.inspection_status || a.inspection_status === "cancelled")).length;
+  const stage = stageOf(r, { total: tasks.length + waiting, done: tasks.filter((a) => a.inspection_status === "done").length, none: assets.filter((a) => a.no_inspection).length });
   const inspectedOn = tasks.map((a) => a.done_at).filter((d): d is string => !!d).sort().pop()?.slice(0, 10) ?? null;
   const due = dueOf(r, inspectedOn);
   // The deadline may carry an hour ("2026-10-20T14:30", Bucharest time): late once that moment has passed.
@@ -127,8 +134,6 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   // Without all the amounts: only the user's own share (fișa utilizatorului), when their team role shows it.
   const share = !fees && acc.fee === "share" ? await feeShare(db, user.id, acc.roles, r.fee) : null;
   const myShare = share ? share.parts.map((p) => `${p.label}${p.amount != null ? ` · ${lei(p.amount, "RON")}` : ""}`).join(" + ") : null;
-  const inspected = assets.filter((a) => a.inspection_status);
-  const toSchedule = inspected.filter((a) => a.inspection_status === "to_schedule").length;
   const sources = docs.filter((d) => d.kind === "source");
   const missing = sources.filter((d) => d.status === "missing");
   const final = docs.find((d) => d.kind === "final" && d.status === "uploaded");
@@ -137,7 +142,6 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
     a.plan_file ? { name: `Releveu ${cap(a.type)}`.trim(), path: a.plan_file } : null,
   ].filter((x): x is { name: string; path: string } => !!x));
   const docCount = sources.length + orderDocs.length + glideFiles.length + (final ? 1 : 0);
-  const mains = assets.filter((a) => a.is_main).length;
   const assetsTotal = assets.reduce((s, a) => s + (a.value ?? 0), 0);
   const order = r.order_id ? orderCode({ id: r.order_id, seq: r.order_seq, bank_ref: r.order_bank_ref, bank: r.bank_code, source: r.order_source ?? undefined }) : null;
   type Recipient = { id: string; name: string; kind: string | null; role: string; contact: string; link?: boolean };
@@ -153,7 +157,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
     [final ? "ok" : "todo", "PDF semnat încărcat"],
   ];
   const href = (t: Tab) => `${base}/rapoarte/${id}${t === "general" ? "" : `?tab=${t}`}`;
-  const counts: Partial<Record<Tab, number>> = { bunuri: assets.length, utilizatori: recipients.length, inspectii: inspected.length, documente: docCount };
+  const counts: Partial<Record<Tab, number>> = { bunuri: assets.length, documente: docCount, mesaje: messages.length };
   const logo = fileSrc(r.issuer_logo), bankLogo = fileSrc(r.bank_logo), clientLogo = fileSrc(r.client_logo);
   const stripe = issuerColor(r.issuer_name, r.issuer_color);
   // The four segments and the days counter, the same as in the list of reports.
@@ -161,7 +165,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const nextVisit = tasks.filter((a) => a.inspection_status === "scheduled" && a.scheduled_at).map((a) => a.scheduled_at!).sort()[0] ?? null;
   const stageRow = {
     status: r.status, stage: r.stage, delivered_at: r.delivered_at, verified_at: r.verified_at, report_date: r.report_date,
-    insp_total: tasks.length, insp_done: tasks.filter((a) => a.inspection_status === "done").length, no_insp: assets.filter((a) => a.no_inspection).length,
+    insp_total: tasks.length + waiting, insp_done: tasks.filter((a) => a.inspection_status === "done").length, no_insp: assets.filter((a) => a.no_inspection).length,
     insp_next: nextVisit, insp_last: inspectedOn, invoiced: repInvoices.length ? 1 : 0,
     ordered_at: r.ordered_at, received_on: r.received_on, created_at: r.created_at, term_days: r.term_days,
   };
@@ -183,9 +187,40 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   // The client is also the designated user: one chip, "client / utilizator desemnat".
   const clientIsUser = !r.recipient_id || r.recipient_id === r.client_id;
   const memberShare = (m: (typeof team)[number]) =>
-    m.role === "evaluator" && m.share_evaluator != null ? `${m.share_evaluator}%`
-    : m.role === "verifier" && m.share_verifier != null ? `${m.share_verifier}%`
+    m.role === "verifier" && m.share_verifier != null ? `${m.share_verifier}%`
     : m.role === "inspector" && m.inspector_fee != null ? (m.inspector_fee_kind === "pct" ? `${m.inspector_fee}%` : lei(m.inspector_fee, "RON")) : null;
+  // Short asset names (for the documents): the type, numbered when two assets share it.
+  const assetShort = (a: A) => `${cap(a.type) || "Bun"}${assets.filter((y) => y.type === a.type).length > 1 ? ` ${assets.indexOf(a) + 1}` : ""}`;
+  const shortOf = (assetId: string | null) => { const a = assets.find((x) => x.id === assetId); return a ? assetShort(a) : null; };
+  // The documents the inspector may be given, and the ones chosen for an open inspection (null: the default CF / releveu).
+  const accessDocs: AccessDoc[] = sources.filter((x) => x.status === "uploaded").map((x) => ({ id: x.id, name: x.filename, kind: x.doc_type ?? guessDocKind(x.filename), asset_id: x.asset_id, asset_label: shortOf(x.asset_id) }));
+  const accessOf = (a: A) => { try { const v: unknown = a.doc_refs ? JSON.parse(a.doc_refs) : null; return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : null; } catch { return null; } };
+  // What a card shows: the details this type of asset has (an apartment its rooms and floor, land its area, a car its plate).
+  const facts = (a: A): [string, string][] => {
+    const p = assetProfile(a.category, a.type);
+    const num = (n: number | null, u: string) => (n ? `${n.toLocaleString("ro-RO")}${u}` : null);
+    const val: Partial<Record<ProfileField, string | null>> = {
+      usable_area: num(a.usable_area, " mp"), land_area: num(a.land_area, " mp"), rooms: a.rooms ? String(a.rooms) : null, floor: a.floor, height_regime: a.height_regime,
+      year_built: a.year_built ? String(a.year_built) : null, vehicle_make: a.vehicle_make, vehicle_model: a.vehicle_model, reg_number: a.reg_number, vin: a.vin,
+      mileage: num(a.mileage, " km"), cf_number: a.cf_number, cad_building: a.cad_building !== a.cf_number ? a.cad_building : null, cad_land: a.cad_land,
+    };
+    return p.fields.filter((k) => k !== "construction" && val[k]).map((k) => [(p.labels[k] ?? FIELD_LABELS[k]).replace(/ \((mp|km)\)$/, ""), val[k]!]);
+  };
+  const inspPill = (a: A): [string, string] => {
+    const st = inspState(a);
+    return st === "none" ? ["Fără inspecție", ""] : st === "done" ? ["Inspecție realizată", "pillOk"] : st === "open" ? [a.inspection_status === "scheduled" ? "Inspecție programată" : "Inspecție de programat", "pillInfo"] : ["Inspecție nealocată", "pillWarn"];
+  };
+  const fresh = messages.length > 0 && !messages[messages.length - 1].mine;
+  const docItems: DocItem[] = [
+    ...sources.map((x): DocItem => ({ id: x.id, name: x.filename, kind: x.doc_type ?? guessDocKind(x.filename), asset_id: x.asset_id, status: x.status === "missing" ? "missing" : "uploaded", origin: "report",
+      href: x.status === "missing" ? null : `/api/crm/reports/${r.id}/documents/${x.id}`, size: x.size_bytes, at: x.status === "missing" ? x.requested_at : x.created_at, by: x.uploaded_by_name })),
+    ...orderDocs.map((x): DocItem => ({ id: x.id, name: x.filename, kind: guessDocKind(x.filename), asset_id: null, status: "uploaded", origin: "order", href: `/api/crm/orders/${r.order_id}/documents/${x.id}`, size: x.size_bytes, at: x.created_at, by: null })),
+    ...assets.flatMap((a) => [
+      a.cf_file ? { name: `Extras CF ${a.cf_number ?? ""}`.trim(), path: a.cf_file, kind: "cf" } : null,
+      a.plan_file ? { name: `Releveu ${cap(a.type)}`.trim(), path: a.plan_file, kind: "rlv" } : null,
+    ].filter((x): x is { name: string; path: string; kind: string } => !!x).map((f): DocItem => ({ id: f.path, name: f.name, kind: f.kind, asset_id: a.id, status: "uploaded", origin: "glide", href: null, size: null, at: null, by: null }))),
+  ];
+  const sheets = assets.filter((a) => a.sheet_type && (a.sheet_photo || a.sheet_person || a.inspection_status === "done"));
   const orderChip = order && (
     <><i className="rcLogo">CO</i>Comandă {order}{r.ordered_at && <small>· {short(r.ordered_at)}</small>}</>
   );
@@ -218,6 +253,11 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             </div>
           </div>
           <div className="dActs">
+            <a className={`dMsgBtn${fresh ? " fresh" : ""}`} href={href("mesaje")} aria-current={tab === "mesaje" ? "page" : undefined}
+              title={messages.length ? `${messages.length} ${messages.length === 1 ? "mesaj" : "mesaje"} în echipă${fresh ? " · ultimul de la " + messages[messages.length - 1].author : ""}` : "Mesajele echipei"}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.8 7L3 21l2-6.2A8 8 0 1 1 21 12z" /></svg>
+              Mesaje{messages.length > 0 && <b>{messages.length}</b>}
+            </a>
             {c.docs && <a className="btn btnGold btnSm" href={href("documente")}>{final ? "Livrare raport" : "Încarcă raportul final"}</a>}
             {c.status && <StatusButton id={r.id} status={r.status} reason={r.suspend_reason} />}
             {c.status && !r.glide_id && r.status !== "cancelled" && <StageActions id={r.id} stage={stage} hasVerifier={!!verifier} />}
@@ -265,7 +305,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
               </dl>
             </section>
             <section className="card">
-              <div className="cardHead"><h2>Bunul principal</h2>{main && <a className="btn btnGhost btnSm" href={`${base}/proprietati/${main.property_id}/comparabile?raport=${r.id}`}>Comparabile →</a>}</div>
+              <div className="cardHead"><h2>Bunul principal</h2>{main && <a className="link" href={href("bunuri")}>bunuri & inspecții →</a>}</div>
               {!main ? <p className="hint">Raportul nu are bunuri înregistrate.</p> : (
                 <>
                   <div className="dAsset">
@@ -284,12 +324,32 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                     <Row k="Valoare rezultat">{r.result_value || assetsTotal ? <span className="mono num">{lei(r.result_value || assetsTotal, cur)}</span> : null}</Row>
                     <Row k="Abordare">{main.approach ? APPROACH[main.approach] : null}</Row>
                     {assets.length > 1 && <Row k="Alte bunuri"><a className="link" href={href("bunuri")}>{assets.length - 1} {assets.length === 2 ? "bun" : "bunuri"} →</a></Row>}
-                    <Row k="Fișa proprietății"><a className="link" href={`${base}/proprietati/${main.property_id}`}>{main.other_reports > 0 ? `și în alte ${main.other_reports} rapoarte` : "deschide"} →</a></Row>
                   </dl>
                 </>
               )}
             </section>
           </div>
+          <section className="card flush">
+            <div className="cardHead"><h2>Utilizatori / destinatari ai raportului</h2></div>
+            {recipients.length === 0 ? <p className="hint pad">Raportul nu are client sau utilizator desemnat.</p> : (
+              <div className="tableWrap">
+                <table className="table">
+                  <thead><tr><th>Entitate</th><th>Tip</th><th>Rol utilizator</th><th>Contact</th></tr></thead>
+                  <tbody>
+                    {recipients.map((x) => (
+                      <tr key={x.id + x.role}>
+                        <td>{x.link && can(user, "clients") ? <a className="rowLink" href={`${base}/clienti/${x.id}`}>{x.name}</a> : <b>{x.name}</b>}</td>
+                        <td><span className="pill"><i />{(x.kind ? KIND[x.kind] ?? x.kind : "—").toUpperCase()}</span></td>
+                        <td>{x.role}</td>
+                        <td className="muted">{x.contact || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p className="hint pad">Raportul se emite către utilizatorii desemnați. Orice altă utilizare necesită acordul scris al evaluatorului.</p>
+          </section>
           <section className="card flush">
             <div className="cardHead"><h2>Documente</h2><span className="muted">{missing.length ? `${missing.length} lipsă din ${sources.length + orderDocs.length + glideFiles.length}` : `${sources.length + orderDocs.length + glideFiles.length} sursă`}{" · "}<a className="link" href={href("documente")}>toate →</a></span></div>
             <ul className="fileList">
@@ -345,166 +405,111 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
 
       {tab === "bunuri" && (
         <>
-          <section className="card flush">
-            <div className="cardHead" style={{ padding: "16px 22px 0" }}>
-              <h2>Bunuri evaluate</h2>
-              {c.assets && <AssetEditor report={r.id} label="+ Adaugă bun" client={{ name: r.client_name, phone: r.client_phone }}
-                initial={{ ...emptyAsset({ county: main?.county, city: main?.city }), is_main: assets.length === 0, contact_name: r.client_name ?? "", contact_phone: r.client_phone ?? "" }} />}
-            </div>
-            {assets.length === 0 ? <p className="hint pad">Raportul nu are bunuri înregistrate.</p> : (
-              <div className="tableWrap">
-                <table className="table">
-                  <thead><tr><th>Proprietate</th><th>Tip / categorie</th><th>Supr. utilă</th><th>An constr.</th><th>Abordare</th><th className="r">Valoare</th><th /></tr></thead>
-                  <tbody>
-                    {assets.map((a) => (
-                      <tr key={a.id}>
-                        <td>
-                          {a.is_main ? <span className="tag">Principal</span> : null}
-                          <b className="block">{cap(a.type) || "Bun"}{a.construction === "under_construction" ? " · în construcție" : ""}</b>
-                          <span className="muted">{a.full_address ?? a.city ?? "—"}{a.cf_number ? ` · CF ${a.cf_number}` : ""}{a.cad_building && a.cad_building !== a.cf_number ? ` · nr. cad. ${a.cad_building}` : ""}</span>
-                          <span className="block" />
-                          <a className="link" style={{ fontSize: 12, marginTop: 2, marginRight: 12 }} href={`${base}/proprietati/${a.property_id}/comparabile?raport=${r.id}`}>Comparabile →</a>
-                          <a className="link" style={{ fontSize: 12, marginTop: 2 }} href={`${base}/proprietati/${a.property_id}`}>{a.other_reports > 0 ? `Fișa proprietății · evaluată și în alte ${a.other_reports} rapoarte` : "Fișa proprietății"} →</a>
-                          {(() => {
-                            const st = inspState(a);
-                            const [t, c] = st === "none" ? ["Fără inspecție", ""] : st === "done" ? ["Inspecție realizată", "pillOk"] : st === "open" ? [a.inspection_status === "scheduled" ? "Inspecție programată" : "Inspecție de programat", "pillInfo"] : ["Inspecție nealocată", "pillWarn"];
-                            return <span className="block" style={{ marginTop: 4 }}><span className={`pill ${c}`}><i />{t}</span>{st === "none" && <span className="muted"> {a.no_inspection}</span>}</span>;
-                          })()}
-                        </td>
-                        <td>{[cap(a.category), cap(a.type)].filter(Boolean).join(" · ") || "—"}</td>
-                        <td className="mono">{a.usable_area ? `${a.usable_area.toLocaleString("ro-RO")} mp` : "—"}</td>
-                        <td>{a.year_built ?? "—"}</td>
-                        <td>{a.approach ? APPROACH[a.approach] : "—"}</td>
-                        <td className="mono num r">{a.value != null ? lei(a.value, cur) : "—"}</td>
-                        <td className="r">
-                          <span className="actions" style={{ justifyContent: "flex-end", flexWrap: "nowrap" }}>
-                            {c.assets && <AssetEditor report={r.id} label="Modifică" shared={a.other_reports} client={{ name: r.client_name, phone: r.client_phone }} initial={assetForm(a)} />}
-                            {c.assets && assets.length > 1 && a.inspection_status !== "done" && !a.sheet_status && <RemoveAsset report={r.id} asset={a.id} name={cap(a.type) || "bunul"} />}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <td colSpan={5}>Total raport{r.value_type ? ` · ${r.value_type.toLowerCase()}` : ""}{r.valuation_date ? ` la ${fmtDate(r.valuation_date)}` : ""}</td>
-                      <td className="mono num r">{lei(assetsTotal || r.result_value, cur)}</td>
-                      <td />
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            )}
-          </section>
-          <ReportList reports={history} base={base} title="Alte evaluări ale aceleiași proprietăți" />
-        </>
-      )}
-
-      {tab === "utilizatori" && (
-        <section className="card flush">
-          <div className="cardHead"><h2>Utilizatori / destinatari ai raportului</h2></div>
-          {recipients.length === 0 ? <p className="hint pad">Raportul nu are client sau utilizator desemnat.</p> : (
-            <div className="tableWrap">
-              <table className="table">
-                <thead><tr><th>Entitate</th><th>Tip</th><th>Rol utilizator</th><th>Contact</th></tr></thead>
-                <tbody>
-                  {recipients.map((x) => (
-                    <tr key={x.id + x.role}>
-                      <td>{x.link && can(user, "clients") ? <a className="rowLink" href={`${base}/clienti/${x.id}`}>{x.name}</a> : <b>{x.name}</b>}</td>
-                      <td><span className="pill"><i />{(x.kind ? KIND[x.kind] ?? x.kind : "—").toUpperCase()}</span></td>
-                      <td>{x.role}</td>
-                      <td className="muted">{x.contact || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          <p className="hint pad">Raportul se emite către utilizatorii desemnați. Orice altă utilizare necesită acordul scris al evaluatorului.</p>
-        </section>
-      )}
-
-      {tab === "inspectii" && (
-        <>
-          <section className="card flush">
+          <section className="card abHeadCard">
             <div className="cardHead">
-              <h2>Inspecții</h2>
-              {mayAssign && assets.length > 0 && (
-                <AllocateAll report={r.id} me={user.id} people={inspectors} autoOpen={alocare === "1" && assets.some((a) => inspState(a) === "free")}
-                  rows={assets.map((a): AllocRow => ({
-                    asset: a.id, label: `${cap(a.type) || "Bun"}${a.is_main && assets.length > 1 ? " (principal)" : ""}`, address: a.full_address ?? a.city, state: inspState(a),
-                    inspector: a.inspector_id, none: a.no_inspection, sheet_type: guessSheetType(a.category, a.type), docs: docState(a.id), ...contactOf(a),
-                  }))} />
-              )}
+              <h2>Bunuri evaluate <span className="muted">· {assets.length} {assets.length === 1 ? "bun" : "bunuri"}{assetsTotal || r.result_value ? <> · total <span className="mono num">{lei(assetsTotal || r.result_value, cur)}</span></> : null}</span></h2>
+              <span className="actions">
+                {mayAssign && assets.length > 0 && (
+                  <AllocateAll report={r.id} me={user.id} people={inspectors} docs={accessDocs} autoOpen={alocare === "1" && assets.some((a) => inspState(a) === "free")}
+                    rows={assets.map((a): AllocRow => ({
+                      asset: a.id, label: `${cap(a.type) || "Bun"}${a.is_main && assets.length > 1 ? " (principal)" : ""}`, address: a.full_address ?? a.city, state: inspState(a),
+                      inspector: a.inspector_id, none: a.no_inspection, sheet_type: guessSheetType(a.category, a.type), docs: docState(a.id), ...contactOf(a),
+                    }))} />
+                )}
+                {c.assets && <AssetEditor report={r.id} label="+ Adaugă bun" client={{ name: r.client_name, phone: r.client_phone }}
+                  initial={{ ...emptyAsset({ county: main?.county, city: main?.city }), is_main: assets.length === 0, contact_name: r.client_name ?? "", contact_phone: r.client_phone ?? "" }} />}
+              </span>
             </div>
-            {assets.length === 0 ? <p className="hint pad">Raportul nu are bunuri, deci nici inspecții.</p> : (
-              <div className="tableWrap">
-                <table className="table">
-                  <thead><tr><th>Bun</th><th>Inspector</th><th>Programat / realizat</th><th>Contact la fața locului</th><th>Status</th><th>Fișă</th>{mayAssign && <th />}</tr></thead>
-                  <tbody>
-                    {assets.map((a) => {
-                      const fromApp = !!a.inspection_id && !a.inspection_from_glide;
-                      const active = fromApp && (a.inspection_status === "to_schedule" || a.inspection_status === "scheduled");
-                      const cancelled = a.inspection_status === "cancelled";
-                      const none = !!a.no_inspection && !active && a.inspection_status !== "done";
-                      const [ins, insCls] = none ? ["Fără inspecție", ""] : cancelled || !a.inspection_status ? ["Nealocată", "pillWarn"] : INSPECTION_STATUS[a.inspection_status] ?? [a.inspection_status, ""];
-                      // Glide history counts as done only when it was done; a new task can always replace an unfinished one.
-                      const canGive = !active && a.inspection_status !== "done";
-                      const contact = cancelled ? null : [a.contact_kind ? CONTACT[a.contact_kind] : null, a.contact_name, a.contact_phone].filter(Boolean).join(" · ");
-                      return (
-                        <tr key={a.id}>
-                          <td>
-                            {cap(a.type) || "Bun"} {a.is_main ? <span className="muted">(principal)</span> : null}
-                            {!cancelled && !none && a.inspection_status !== "done" && (
-                              <span className="block" style={{ display: "flex", gap: 6, marginTop: 4 }}>
-                                {(["cf", "rlv"] as const).map((t) => <span key={t} className={`docTag ${docState(a.id)[t] ? "ok" : "miss"}`}>{docState(a.id)[t] ? "✓" : "!"} {t === "cf" ? "CF" : "RLV"}</span>)}
-                              </span>
-                            )}
-                            {fromApp && a.instructions && !cancelled && <span className="muted block">Instrucțiuni: {a.instructions}</span>}
-                          </td>
-                          <td>
-                            {!cancelled && a.inspector ? (() => {
-                              const p = inspectors.find((x) => x.id === a.inspector_id);
-                              return <PersonLine id={a.inspector_id ?? a.inspector} name={a.inspector} presence={p?.presence} photo={p?.photo} sub={p?.seen} size={30} />;
-                            })() : none ? "—" : <span className="muted">nealocat</span>}
-                            {fromApp && !cancelled && a.assigned_by_name && <span className="muted block">alocată de {a.assigned_by_name}{a.assigned_at ? `, ${fmtDate(a.assigned_at)}` : ""}</span>}
-                          </td>
-                          <td className="mono">
-                            {!cancelled && (a.done_at || a.scheduled_at) ? fmtDate(a.done_at ?? a.scheduled_at, true) : "—"}
-                            {active && a.due_on && <span className="muted block">termen {fmtDate(a.due_on)}</span>}
-                          </td>
-                          <td>{contact || "—"}</td>
-                          <td>
-                            <span className={`pill ${insCls}`}><i />{ins}</span>
-                            {none && <span className="muted block">{a.no_inspection}</span>}
-                            {cancelled && !none && <span className="muted block">inspecția a fost anulată</span>}
-                            {fromApp && a.sheet_status === "draft" && active && <span className="muted block">fișă în lucru</span>}
-                          </td>
-                          <td>{a.sheet_photo || a.sheet_person ? <a className="link" href={`#fisa-${a.id}`}>Vezi fișa</a> : "—"}</td>
-                          {mayAssign && (
-                            <td className="r">
-                              {(canGive || active) && (
-                                <span className="actions" style={{ justifyContent: "flex-end" }}>
-                                  <AssignInspection report={r.id} me={user.id} people={inspectors} initial={{
-                                    asset: a.id, label: `${cap(a.type) || "Bun"}${a.full_address ? ` · ${a.full_address}` : ""}`, inspection: active ? a.inspection_id : null,
-                                    inspector: active ? a.inspector_id : null, sheet_type: (active && a.sheet_type) || guessSheetType(a.category, a.type),
-                                    due_on: active ? a.due_on : null, ...contactOf(a), instructions: active ? a.instructions : null, scheduled: a.inspection_status === "scheduled",
-                                    docs: docState(a.id),
-                                  }} />
-                                  {none && <NeedsInspection report={r.id} asset={a.id} />}
-                                  {active && <CancelInspection report={r.id} inspection={a.inspection_id!} who={a.inspector ?? "inspector"} />}
-                                </span>
-                              )}
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            {assets.length > 0 && <p className="hint">Alege un bun ca să vezi în dreapta inspecția lui: cine o face, când, contactul și actele pe care le vede inspectorul.</p>}
           </section>
+          {assets.length === 0 ? <section className="card"><p className="hint">Raportul nu are bunuri înregistrate.</p></section> : (
+            <AssetBoard initial={bun} items={assets.map((a, n) => {
+              const [pt, pc] = inspPill(a);
+              const fromApp = !!a.inspection_id && !a.inspection_from_glide;
+              const active = isActive(a);
+              const cancelled = a.inspection_status === "cancelled";
+              const none = !!a.no_inspection && !active && a.inspection_status !== "done";
+              const canGive = !active && a.inspection_status !== "done";
+              const ct = contactOf(a);
+              const contact = [ct.contact_kind ? CONTACT[ct.contact_kind] : null, ct.contact_name, ct.contact_phone].filter(Boolean).join(" · ");
+              const person = !cancelled && a.inspector ? inspectors.find((x) => x.id === a.inspector_id) : null;
+              const refs = accessOf(a);
+              const seen = refs ? refs.filter((x) => accessDocs.some((y) => y.id === x)).length : (inspDocs[a.id]?.cf.length ?? 0) + (inspDocs[a.id]?.rlv.length ?? 0);
+              const f = facts(a);
+              const label = `${cap(a.type) || "Bun"}${a.full_address ? ` · ${a.full_address}` : ""}`;
+              return {
+                id: a.id,
+                card: (
+                  <>
+                    <div className="abTop">
+                      <span className="abNo">{n + 1}</span>
+                      <span className="abTitle"><b>{cap(a.type) || "Bun"}{a.construction === "under_construction" ? " · în construcție" : ""}</b><small>{cap(a.category) || "—"}</small></span>
+                      {a.is_main ? <span className="tag">Principal</span> : null}
+                    </div>
+                    <p className="abAddr">{a.full_address ?? a.city ?? <span className="muted">fără adresă</span>}</p>
+                    {f.length > 0 && <dl className="abFacts">{f.map(([k, v]) => <div key={k}><dt>{k}</dt><dd className={/CF|cad|VIN|înmatriculare/i.test(k) ? "mono" : ""}>{v}</dd></div>)}</dl>}
+                    <div className="abFoot">
+                      <span className="abInsp">
+                        <span className={`pill ${pc}`}><i />{pt}</span>
+                        <small>{none ? a.no_inspection : a.inspection_status === "done" ? [a.done_at && fmtDate(a.done_at), a.inspector && firstName(a.inspector)].filter(Boolean).join(" · ")
+                          : active ? [a.scheduled_at ? fmtDate(a.scheduled_at, true) : a.due_on ? `termen ${fmtDate(a.due_on)}` : null, a.inspector && firstName(a.inspector)].filter(Boolean).join(" · ") : ""}</small>
+                      </span>
+                      <span className="abVal">{a.value != null ? <b className="mono num">{lei(a.value, cur)}</b> : <small className="muted">fără valoare</small>}{a.approach && <small>{APPROACH[a.approach]}</small>}</span>
+                    </div>
+                    {c.assets && (
+                      <div className="abActs">
+                        <AssetEditor report={r.id} label="Modifică" shared={a.other_reports} client={{ name: r.client_name, phone: r.client_phone }} initial={assetForm(a)} />
+                        {assets.length > 1 && a.inspection_status !== "done" && !a.sheet_status && <RemoveAsset report={r.id} asset={a.id} name={cap(a.type) || "bunul"} />}
+                      </div>
+                    )}
+                  </>
+                ),
+                panel: (
+                  <section className="card abPanelCard">
+                    <div className="cardHead"><h2>Inspecție</h2><span className={`pill ${pc}`}><i />{pt}</span></div>
+                    <p className="abPanelFor"><span className="abNo">{n + 1}</span>{label}</p>
+                    <div className="abWho">
+                      {person || (!cancelled && a.inspector) ? <PersonLine id={a.inspector_id ?? a.inspector!} name={a.inspector!} presence={person?.presence} photo={person?.photo} sub={person?.seen ?? "inspector"} size={36} />
+                        : <span className="muted">{none ? "Nu are nevoie de inspecție" : "Niciun inspector alocat"}</span>}
+                    </div>
+                    <dl className="kv abKv">
+                      {none && <Row k="Motiv">{a.no_inspection}</Row>}
+                      {!cancelled && a.inspection_status === "done" && <Row k="Realizată">{a.done_at ? fmtDate(a.done_at, a.done_at.length > 10) : null}</Row>}
+                      {active && <Row k="Programată">{a.scheduled_at ? fmtDate(a.scheduled_at, true) : <span className="muted">încă nu</span>}</Row>}
+                      {active && a.due_on && <Row k="Termen">{fmtDate(a.due_on)}</Row>}
+                      {!none && <Row k="Contact">{contact || null}</Row>}
+                      {fromApp && !cancelled && a.assigned_by_name && <Row k="Alocată de">{a.assigned_by_name}{a.assigned_at ? `, ${fmtDate(a.assigned_at)}` : ""}</Row>}
+                      {fromApp && a.instructions && !cancelled && <Row k="Instrucțiuni">{a.instructions}</Row>}
+                      {active && <Row k="Acte în aplicație">{seen ? `${seen} ${seen === 1 ? "act" : "acte"}` : <span className="muted">niciun act</span>}</Row>}
+                      {fromApp && a.sheet_status === "draft" && active && <Row k="Fișă">în lucru</Row>}
+                      {cancelled && !none && <Row k="Stare">inspecția a fost anulată</Row>}
+                    </dl>
+                    {(a.sheet_photo || a.sheet_person || a.sheet_description) && (
+                      <p className="abSheet">
+                        <a className="link" href={`#fisa-${a.id}`}>Vezi fișa de inspecție ↓</a>
+                        {a.sheet_type && <a className="link" href={`${base}/rapoarte/${r.id}/fisa/${a.id}`}>Fișa pentru raport (PDF)</a>}
+                      </p>
+                    )}
+                    {mayAssign && (
+                      <div className="abPanelActs">
+                        {(canGive || active) && (
+                          <AssignInspection report={r.id} me={user.id} people={inspectors} docs={accessDocs} access={active ? refs : null} initial={{
+                            asset: a.id, label, inspection: active ? a.inspection_id : null,
+                            inspector: active ? a.inspector_id : null, sheet_type: (active && a.sheet_type) || guessSheetType(a.category, a.type),
+                            due_on: active ? a.due_on : null, ...ct, instructions: active ? a.instructions : null, scheduled: a.inspection_status === "scheduled",
+                            docs: docState(a.id),
+                          }} />
+                        )}
+                        {a.inspection_status !== "done" && !none && <MarkInspectionDone report={r.id} asset={a.id} label={label} />}
+                        {none && <NeedsInspection report={r.id} asset={a.id} />}
+                        {active && <CancelInspection report={r.id} inspection={a.inspection_id!} who={a.inspector ?? "inspector"} />}
+                      </div>
+                    )}
+                  </section>
+                ),
+              };
+            })} />
+          )}
           {assets.filter((a) => a.sheet_photo || a.sheet_person || a.sheet_description || a.sheet_location).map((a) => {
             const photos = [fileSrc(a.sheet_photo), fileSrc(a.image_url)].filter((x, i, l): x is string => !!x && l.indexOf(x) === i);
             const sig = fileSrc(a.sheet_signature);
@@ -543,104 +548,62 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
               </section>
             );
           })}
+          <ReportList reports={history} base={base} title="Alte evaluări ale aceleiași proprietăți" />
         </>
       )}
 
       {tab === "documente" && (
         <>
-        <section className="card">
-          <h2>Pentru inspecție <span className="muted">· extras CF și releveu</span></h2>
-          <p className="hint">Inspectorul le vede în aplicația de inspecții, la inspecția bunului și în fișă. Un document încărcat aici fără bun ales e valabil pentru toate bunurile raportului.</p>
-          {assets.length === 0 ? <p className="hint">Raportul nu are bunuri.</p> : (
-            <div className="docsGrid">
-              {assets.map((a) => (
-                <div key={a.id} className="docsAsset">
-                  <b>{assetLabel(a)}</b>
-                  {(["cf", "rlv"] as const).map((t) => {
-                    const list = inspDocs[a.id]?.[t] ?? [];
-                    return (
-                      <span key={t} style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
-                        <span className={`docTag ${list.length ? "ok" : "miss"}`} title={list.map((d) => d.name).join(", ")}>{list.length ? "✓" : "lipsă"} {t === "cf" ? "Extras CF" : "Releveu"}{list.length > 1 ? ` (${list.length})` : ""}</span>
-                        {c.docs && <UploadButton id={r.id} docType={t} asset={assets.length > 1 ? a.id : undefined} label={list.length ? "+ încă unul" : "Încarcă"} className="linkBtn" accept=".pdf,.jpg,.jpeg,.png,.heic,.webp" />}
-                      </span>
-                    );
-                  })}
-                </div>
-              ))}
+          <section className="card dDeliver">
+            <div className="cardHead"><h2><span className="dDelTag">Livrabile</span>Raportul final și predarea</h2>{r.delivered_at && <span className="pill pillOk"><i />Predat {fmtDate(r.delivered_at)}</span>}</div>
+            <div className="dDelGrid">
+              <div className="dDelMain">
+                {final ? (
+                  <ul className="fileList boxed">
+                    <li>
+                      <span className="ext">PDF</span>
+                      <span className="who"><b>{final.filename}</b><small>raport final · {fmtDate(final.created_at, true)} · {fmtSize(final.size_bytes ?? 0)}{final.uploaded_by_name ? ` · ${final.uploaded_by_name}` : ""}</small></span>
+                      <a className="link" href={`/api/crm/reports/${r.id}/documents/${final.id}`} target="_blank" rel="noopener">Deschide</a>
+                      {c.docs && <UploadButton id={r.id} kind="final" label="Înlocuiește" className="linkBtn" />}
+                    </li>
+                  </ul>
+                ) : c.docs ? <FinalDrop id={r.id} /> : <p className="hint">Raportul final nu a fost încărcat încă.</p>}
+                {sheets.length > 0 && (
+                  <ul className="fileList boxed dDelSheets">
+                    {sheets.map((a) => (
+                      <li key={a.id}>
+                        <span className="ext">FIȘĂ</span>
+                        <span className="who"><b>Fișa de inspecție · {assetShort(a)}</b><small>{a.done_at ? `inspecție ${fmtDate(a.done_at)}` : "pentru anexa raportului"}{a.inspector ? ` · ${a.inspector}` : ""}</small></span>
+                        <a className="link" href={`${base}/rapoarte/${r.id}/fisa/${a.id}`}>PDF</a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <dl className="kv">
+                  <Row k="Transmis către">{recipients.length ? recipients.map((x) => x.name).join(" · ") : null}</Row>
+                  <Row k="Facturare">{r.statement_number ? `în borderoul B-${r.statement_number}` : <span className="muted">neinclus în borderou</span>}</Row>
+                  <Row k="Predat">{r.delivered_at ? `${fmtDate(r.delivered_at, true)}${r.delivered_by_name ? ` · ${r.delivered_by_name}` : ""}` : null}</Row>
+                </dl>
+                {r.client_notified_at && <p className="hint">Clientul a fost anunțat pe email la {fmtDate(r.client_notified_at, true)} și descarcă raportul din portal.</p>}
+                {c.deliver && !r.delivered_at && <DeliverButton id={r.id} ready={!!final} number={r.number} suggested={suggested} notifyTo={notifyTo} />}
+              </div>
+              <div className="dDelCheck">
+                <div className="section">Verificare înainte de predare</div>
+                <ul className="checklist">
+                  {checks.map(([st, t, n], i) => (
+                    <li key={i} className={st}><i aria-hidden>{st === "ok" ? "✓" : st === "miss" ? "!" : "○"}</i><span>{t}{n && <small>{n}</small>}</span></li>
+                  ))}
+                </ul>
+              </div>
             </div>
-          )}
-        </section>
-        <section className="card">
-          <h2>Verificare înainte de predare</h2>
-          <ul className="checklist">
-            {checks.map(([st, t, n], i) => (
-              <li key={i} className={st}><i aria-hidden>{st === "ok" ? "✓" : st === "miss" ? "!" : "○"}</i><span>{t}{n && <small>{n}</small>}</span></li>
-            ))}
-          </ul>
-        </section>
-        <div className="cols dCols">
-          <section className="card flush">
-            <div className="cardHead"><h2>Documente sursă</h2>{c.docs && <UploadButton id={r.id} label="+ Încarcă" />}</div>
-            {sources.length + orderDocs.length + glideFiles.length === 0 ? <p className="hint pad">Niciun document încă.</p> : (
-              <ul className="fileList">
-                {sources.map((d) => d.status === "missing" ? (
-                  <li key={d.id} className="miss">
-                    <span className="ext">LIPSĂ</span>
-                    <span className="who"><b>{d.filename}</b><small>solicitat {fmtDate(d.requested_at)} · blochează predarea</small></span>
-                    {c.docs && <UploadButton id={r.id} doc={d.id} label="Încarcă" className="linkBtn" />}
-                    {c.docsDelete && <DeleteDoc id={r.id} doc={d.id} name={d.filename} />}
-                  </li>
-                ) : (
-                  <li key={d.id}>
-                    <span className="ext">{ext(d.filename)}</span>
-                    <span className="who"><b>{d.filename}</b><small>încărcat {fmtDate(d.created_at)}{d.size_bytes ? ` · ${fmtSize(d.size_bytes)}` : ""}{d.uploaded_by_name ? ` · ${d.uploaded_by_name}` : ""}</small></span>
-                    {c.docs && <DocTypeSelect id={r.id} doc={d.id} assets={assets.length > 1 ? assets.map((x, n) => ({ id: x.id, label: `${cap(x.type) || "Bun"}${assets.filter((y) => y.type === x.type).length > 1 ? ` ${n + 1}` : ""}` })) : null}
-                      value={(() => { const t = d.doc_type ?? guessDocKind(d.filename); return DOC_KIND_KEYS.includes(t) ? `${t}:${d.asset_id ?? ""}` : "other"; })()} />}
-                    <a className="link" href={`/api/crm/reports/${r.id}/documents/${d.id}`} target="_blank" rel="noopener">Descarcă</a>
-                    {c.docsDelete && <DeleteDoc id={r.id} doc={d.id} name={d.filename} />}
-                  </li>
-                ))}
-                {orderDocs.map((d) => (
-                  <li key={d.id}>
-                    <span className="ext">{ext(d.filename)}</span>
-                    <span className="who"><b>{d.filename}</b><small>din comanda {order} · {fmtDate(d.created_at)} · {fmtSize(d.size_bytes)}</small></span>
-                    <a className="link" href={`/api/crm/orders/${r.order_id}/documents/${d.id}`} target="_blank" rel="noopener">Descarcă</a>
-                  </li>
-                ))}
-                {glideFiles.map((f) => (
-                  <li key={f.path}>
-                    <span className="ext">{ext(f.path)}</span>
-                    <span className="who"><b>{f.name}</b><small>în Glide · {f.path.split("/").pop()} · nemutat încă</small></span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {c.docs && <div className="pad"><MissingDoc id={r.id} /></div>}
           </section>
-          <section className="card">
-            <h2>Livrare raport</h2>
-            {final ? (
-              <ul className="fileList boxed">
-                <li>
-                  <span className="ext">PDF</span>
-                  <span className="who"><b>{final.filename}</b><small>{fmtSize(final.size_bytes ?? 0)}{final.uploaded_by_name ? ` · ${final.uploaded_by_name}` : ""}</small></span>
-                  <a className="link" href={`/api/crm/reports/${r.id}/documents/${final.id}`} target="_blank" rel="noopener">Deschide</a>
-                  {c.docs && <UploadButton id={r.id} kind="final" label="Înlocuiește" className="linkBtn" />}
-                </li>
-              </ul>
-            ) : c.docs ? <FinalDrop id={r.id} /> : <p className="hint pad">Raportul final nu a fost încărcat încă.</p>}
-            <dl className="kv">
-              <Row k="Data încărcării">{final ? fmtDate(final.created_at, true) : r.uploaded_on ? fmtDate(r.uploaded_on) : null}</Row>
-              <Row k="Transmis către">{recipients.length ? recipients.map((x) => x.name).join(" · ") : null}</Row>
-              <Row k="Facturare">{r.statement_number ? `în borderoul B-${r.statement_number}` : <span className="muted">neinclus în borderou</span>}</Row>
-              <Row k="Predat">{r.delivered_at ? `${fmtDate(r.delivered_at, true)}${r.delivered_by_name ? ` · ${r.delivered_by_name}` : ""}` : null}</Row>
-            </dl>
-            {missing.length > 0 && <div className="note">{missing.length === 1 ? "Lipsește un document" : `Lipsesc ${missing.length} documente`} din lista de documente sursă.</div>}
-            {r.client_notified_at && <p className="hint">Clientul a fost anunțat pe email la {fmtDate(r.client_notified_at, true)} și descarcă raportul din portal.</p>}
-            {c.deliver && !r.delivered_at && <DeliverButton id={r.id} ready={!!final} number={r.number} suggested={suggested} notifyTo={notifyTo} />}
-          </section>
-        </div>
+          <ReportDocs report={r.id} assets={assets.map((a) => ({ id: a.id, label: assetShort(a) }))} items={docItems} edit={c.docs} remove={c.docsDelete} />
+          {c.docs && <div className="rdMissing"><span className="muted">Lipsește un act de la client?</span><MissingDoc id={r.id} /></div>}
         </>
+      )}
+
+      {tab === "mesaje" && (
+        <Messages full entity="report" id={r.id} rows={messages} title="Chat echipă" hint="Discuția echipei pe acest raport: evaluator, verificator, inspector, operatori. Clientul nu vede mesajele." />
       )}
       </div>
       <aside className="dSide">
@@ -663,7 +626,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             </ul>
           )}
         </section>
-        <Messages entity="report" id={r.id} rows={messages} title="Mesaje echipă" hint="Discuția echipei pe acest raport. Clientul nu le vede." />
+        {tab !== "mesaje" && <Messages entity="report" id={r.id} rows={messages} title="Mesaje echipă" limit={3} more={href("mesaje")} />}
         <section className="card">
           <h2>Date cheie</h2>
           <dl className="kv dKv">

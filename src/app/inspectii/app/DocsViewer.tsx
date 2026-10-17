@@ -6,7 +6,10 @@ import { createPortal } from "react-dom";
 import { PdfPages } from "./PdfPages";
 import type { InspDoc } from "./sync";
 
-const LABEL = { cf: "Extras CF", rlv: "Releveu" } as const;
+const LABEL = { cf: "Extras CF", rlv: "Releveu", alte: "Alte acte" } as const;
+type Kind = keyof typeof LABEL;
+/** CF and RLV always (they say when missing), other documents only when there are some. */
+const kindsOf = (docs: InspDoc[]): Kind[] => ["cf", "rlv", ...(docs.some((d) => d.type === "alte") ? ["alte" as const] : [])];
 const P = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
 const DocIcon = () => <svg {...P}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M9 13h6M9 17h4" /></svg>;
 const Close = () => <svg {...P}><path d="M18 6L6 18M6 6l12 12" /></svg>;
@@ -30,7 +33,7 @@ export function usePrefetchDocs(docs: InspDoc[] | undefined) {
 /** The viewer: CF / RLV switch, a document per tab (several documents of one kind: chips to pick). */
 export function DocsModal({ docs, start, onClose }: { docs: InspDoc[]; start?: InspDoc | null; onClose: () => void }) {
   const first = start ?? docs.find((d) => d.type === "cf") ?? docs[0] ?? null;
-  const [type, setType] = useState<"cf" | "rlv">(first?.type ?? "cf");
+  const [type, setType] = useState<Kind>(first?.type ?? "cf");
   const [ref, setRef] = useState<string | null>(first?.ref ?? null);
   const [zoom, setZoom] = useState(1);
   const list = docs.filter((d) => d.type === type);
@@ -44,7 +47,7 @@ export function DocsModal({ docs, start, onClose }: { docs: InspDoc[]; start?: I
     return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
   }, [onClose]);
 
-  const pick = (t: "cf" | "rlv") => { setType(t); setRef(docs.find((d) => d.type === t)?.ref ?? null); setZoom(1); };
+  const pick = (t: Kind) => { setType(t); setRef(docs.find((d) => d.type === t)?.ref ?? null); setZoom(1); };
   const zoomBtns = (
     <span className="iDocZoom">
       <button type="button" aria-label="Micșorează" disabled={zoom <= 1} onClick={() => setZoom(Math.max(1, zoom - 0.5))}>−</button>
@@ -56,7 +59,7 @@ export function DocsModal({ docs, start, onClose }: { docs: InspDoc[]; start?: I
     <div className="iDocModal" role="dialog" aria-modal="true" aria-label="Documente">
       <div className="iDocHead">
         <div className="iDocSwitch" role="tablist" aria-label="Document">
-          {(["cf", "rlv"] as const).map((t) => {
+          {kindsOf(docs).map((t) => {
             const n = docs.filter((d) => d.type === t).length;
             return (
               <button key={t} type="button" role="tab" aria-selected={type === t} className={type === t ? "on" : ""} onClick={() => pick(t)}>
@@ -106,7 +109,7 @@ export function DocsSection({ docs }: { docs: InspDoc[] | undefined }) {
       <h3>Documente pentru inspecție</h3>
       {docs.map((d) => (
         <button key={d.ref} type="button" className="iDocRow" onClick={() => setOpen(d)}>
-          <span className={`iDocTag ${d.type}`}>{d.type === "cf" ? "CF" : "RLV"}</span>
+          <span className={`iDocTag ${d.type}`}>{d.type === "cf" ? "CF" : d.type === "rlv" ? "RLV" : "ACT"}</span>
           <b>{d.for ? `${d.for}: ` : ""}{d.name}</b>
           <DocIcon />
         </button>

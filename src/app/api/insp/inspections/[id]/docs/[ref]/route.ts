@@ -1,7 +1,7 @@
 import { bucket } from "@/lib/orders";
 import { fileHeaders } from "@/lib/file-response";
 import { inspApi, myInspection } from "@/lib/insp";
-import { assetDocs } from "@/lib/insp-docs";
+import { docsForInspection } from "@/lib/insp-docs";
 
 /** One CF extract / floor survey of an inspection given to the user (files still in Glide are passed through). */
 export async function GET(_: Request, { params }: { params: Promise<{ id: string; ref: string }> }) {
@@ -15,7 +15,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const h = await a.db.prepare(`SELECT asset_id FROM inspections WHERE id IN (${ins.hosted.map(() => "?").join(", ")})`).bind(...ins.hosted.map((x) => x.id)).all<{ asset_id: string | null }>();
     assets.push(...h.results.map((x) => x.asset_id).filter((x): x is string => !!x));
   }
-  const doc = (await assetDocs(a.db, ins.report_id, assets)).find((d) => d.ref === decodeURIComponent(ref));
+  const doc = (await docsForInspection(a.db, ins.id, ins.report_id, assets)).find((d) => d.ref === decodeURIComponent(ref));
   if (!doc) return new Response("Nu există.", { status: 404 });
   // Served by the file name's extension, whatever type was stored or sent by Glide.
   const headers = (_type: string | null) => fileHeaders(/\.\w{2,5}$/.test(doc.name) ? doc.name : `${doc.name}.pdf`, "private, max-age=604800");
