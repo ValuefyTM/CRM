@@ -70,7 +70,8 @@ export async function reportAccess(db: D1Database, u: Viewer, r: { id: string; s
   // The Onorarii module decides for everyone: all the amounts, or at most the user's own share.
   if (can(u, "fees.all") || (can(u, "fees.lead") && leads)) fee = "all";
   else if (fee === "all") fee = "share";
-  if (!can(u, "fees") && !roles.length) fee = "none";
+  // Onorarii turned off in the user rights: no amounts at all, not even their own share.
+  if (!can(u, "fees")) fee = "none";
   if (!view) for (const k of Object.keys(right)) right[k] = false;
   return { view, can: right as Record<TeamRight, boolean>, fee, roles, all };
 }

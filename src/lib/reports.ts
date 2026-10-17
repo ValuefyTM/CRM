@@ -19,7 +19,7 @@ export const INSPECTION_STATUS: Record<string, [string, string]> = {
 
 export type ReportRow = {
   id: string; number: string | null; label: string | null; report_date: string | null; status: string; fee: number | null; result_value: number | null;
-  report_type: string | null; client_name: string | null; bank_code: string | null; issuer_name: string | null; evaluator: string | null; asset: string | null;
+  report_type: string | null; client_name: string | null; bank_code: string | null; issuer_name: string | null; evaluator: string | null; asset: string | null; asset_photo?: string | null;
   issuer_short: string | null; insp_total: number; insp_done: number; insp_next: string | null; insp_last: string | null; no_insp: number;
   issuer_logo: string | null; issuer_color: string | null; bank_name: string | null; bank_logo: string | null; purpose: string | null; value_type: string | null;
   stage: string | null; delivered_at: string | null; verified_at: string | null; invoiced: number; ordered_at: string | null; received_on: string | null; created_at: string; term_days: number | null;
@@ -49,7 +49,13 @@ const ROW = `SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.r
   (SELECT COUNT(*) FROM assets a WHERE a.report_id = r.id AND a.no_inspection IS NOT NULL) AS no_insp,
   (SELECT u.name FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = r.id AND m.role = 'evaluator' LIMIT 1) AS evaluator,
   (SELECT COALESCE(p.type, '') || '|' || COALESCE(p.full_address, p.city, '') FROM assets a JOIN crm_properties p ON p.id = a.property_id
-     WHERE a.report_id = r.id ORDER BY a.is_main DESC LIMIT 1) AS asset
+     WHERE a.report_id = r.id ORDER BY a.is_main DESC LIMIT 1) AS asset,
+  -- The asset's profile photo, once its inspection is done (the sheet's photo, else the one imported with the property).
+  (SELECT COALESCE(s.photo_url, p.image_url) FROM assets a JOIN crm_properties p ON p.id = a.property_id
+     LEFT JOIN inspection_sheets s ON s.id = (SELECT y.id FROM inspection_sheets y WHERE y.asset_id = a.id AND y.photo_url IS NOT NULL ORDER BY y.created_at DESC LIMIT 1)
+     WHERE a.report_id = r.id AND COALESCE(s.photo_url, p.image_url) IS NOT NULL
+       AND EXISTS (SELECT 1 FROM inspections x WHERE x.asset_id = a.id AND (x.status = 'done' OR x.done_at IS NOT NULL))
+     ORDER BY a.is_main DESC LIMIT 1) AS asset_photo
   FROM reports r LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id LEFT JOIN entities i ON i.id = r.issuer_id LEFT JOIN orders o ON o.id = r.order_id`;
 
 export type ReportFilters = { q?: string; status?: string; year?: string; bank?: string; issuer?: string; evaluator?: string; sort?: string; page?: number; etapa?: string; termen?: string;

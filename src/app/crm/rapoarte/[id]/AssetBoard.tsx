@@ -1,6 +1,6 @@
 "use client";
 // The assets of a report as cards (each type shows its own details); the selected one shows its inspection on the right.
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 export type BoardItem = { id: string; card: React.ReactNode; panel: React.ReactNode };
 
@@ -20,7 +20,7 @@ export function AssetBoard({ items, initial }: { items: BoardItem[]; initial?: s
         {items.map((x) => (
           <div key={x.id} className={`abCard${x.id === sel ? " on" : ""}`} onClick={(e) => { if (!(e.target as HTMLElement).closest("button, a, input, select, textarea, [role=dialog]")) pick(x.id); }}>
             <button type="button" className="abPick" aria-pressed={x.id === sel} aria-label="Arată inspecția acestui bun" onClick={() => pick(x.id)} />
-            {x.card}
+            <Fragment key="card">{x.card}</Fragment>
           </div>
         ))}
       </div>

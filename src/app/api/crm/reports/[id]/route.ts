@@ -31,11 +31,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   if (typeof b.status === "string") {
     if (!REPORT_STATUS[b.status]) return err("Status necunoscut.");
-    const reason = typeof b.suspend_reason === "string" ? b.suspend_reason.trim().slice(0, 500) : "";
-    if (b.status === "suspended" && !reason) return err("Scrie motivul suspendării.");
+    // Suspending or cancelling needs the reason: kept on the report (suspend_reason) and posted in the team's messages.
+    const raw = typeof b.reason === "string" ? b.reason : typeof b.suspend_reason === "string" ? b.suspend_reason : "";
+    const reason = raw.trim().slice(0, 500);
+    const why = b.status === "suspended" || b.status === "cancelled";
+    if (why && !reason) return err(b.status === "suspended" ? "Scrie motivul suspendării." : "Scrie motivul anulării.");
     await a.db.prepare("UPDATE reports SET status = ?, suspend_reason = ?, updated_at = ? WHERE id = ?")
-      .bind(b.status, b.status === "suspended" ? reason : null, now(), id).run();
-    await audit(a.db, actor, "report.status", "report", id, `${REPORT_STATUS[r.status]?.[0] ?? r.status} → ${REPORT_STATUS[b.status][0]}${reason && b.status === "suspended" ? ` (${reason})` : ""}`);
+      .bind(b.status, why ? reason : null, now(), id).run();
+    await audit(a.db, actor, "report.status", "report", id, `${REPORT_STATUS[r.status]?.[0] ?? r.status} → ${REPORT_STATUS[b.status][0]}${why ? ` (${reason})` : ""}`);
+    if (why) await addMessage(a.db, "report", id, a.user, `${b.status === "suspended" ? (r.status === "suspended" ? "Motivul suspendării" : "Raport suspendat") : (r.status === "cancelled" ? "Motivul anulării" : "Raport anulat")}: ${reason}`);
     return Response.json({ ok: true });
   }
   // Payment collected (marked by hand, for reports not paid through an invoice of the CRM).

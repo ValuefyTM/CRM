@@ -8,6 +8,7 @@ import { issuerColor } from "@/lib/issuer-color";
 import { daysOf, SEGMENTS, segmentsOf } from "@/lib/report-stage";
 import { StageHelp } from "./StageHelp";
 import { ClickRow } from "@/components/ClickRow";
+import { HoverThumb } from "@/components/HoverThumb";
 
 const SEG_LABEL = { done: "făcut", now: "în lucru", late: "întârziat", todo: "urmează" } as const;
 
@@ -70,7 +71,11 @@ export function ReportTable({ rows, base, today, sort, sortHref, scope = true }:
                           <span className="two"><b>{niceName(r.client_name) || "—"}</b><small>{niceName(r.bank_name) || "fără utilizator desemnat"}</small></span>
                         </span>
                       </td>
-                      <td style={{ minWidth: 160 }}><div className="two"><b>{cap(type) || "—"}</b><small>{address}</small></div></td>
+                      <td style={{ minWidth: 160 }}>{(() => {
+                        const ph = fileSrc(r.asset_photo);
+                        const text = <div className="two"><b>{cap(type) || "—"}</b><small>{address}</small></div>;
+                        return ph ? <div className="repAsset"><HoverThumb src={ph} alt={cap(type) || "Bun"} />{text}</div> : text;
+                      })()}</td>
                       {scope && <td><div className="two nowrap"><b>{r.purpose || "—"}</b><small>{r.value_type || ""}</small></div></td>}
                       <td>
                         {team.length === 0 ? <span className="muted">—</span> : (

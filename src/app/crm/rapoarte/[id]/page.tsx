@@ -13,6 +13,7 @@ import { CrmShell } from "@/components/CrmShell";
 import { ReportList } from "@/components/ReportList";
 import { AllocateAll, AssignInspection, CancelInspection, MarkInspectionDone, NeedsInspection, type AllocRow } from "./InspectionActions";
 import { AssetBoard } from "./AssetBoard";
+import { SheetModal } from "./SheetModal";
 import { ReportDocs, type DocItem } from "./ReportDocs";
 import type { AccessDoc } from "@/components/DocAccess";
 import { AssetEditor, RemoveAsset } from "./AssetEditor";
@@ -275,7 +276,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
         )}
         {c.verify && stage === "review" && <div className="dVerify"><span>Raportul așteaptă verificarea.</span><VerifyActions id={r.id} verified={r.verified_at ? fmtDate(r.verified_at, true) : null} /></div>}
       </section>
-      {r.status === "suspended" && r.suspend_reason && <div className="note"><b>Suspendat:</b> {r.suspend_reason}</div>}
+      {(r.status === "suspended" || r.status === "cancelled") && r.suspend_reason && <div className="note"><b>{r.status === "suspended" ? "Suspendat" : "Anulat"}:</b> {r.suspend_reason}</div>}
 
       <nav className="pillTabs dTabs" aria-label="Secțiuni raport">
         {TABS.map(([k, l]) => (
@@ -283,7 +284,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
         ))}
       </nav>
 
-      <div className="dBody">
+      <div className={`dBody${tab === "documente" ? " solo" : ""}`}>
       <div className="dMain">
       {tab === "general" && (
         <>
@@ -437,32 +438,38 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
               const seen = refs ? refs.filter((x) => accessDocs.some((y) => y.id === x)).length : (inspDocs[a.id]?.cf.length ?? 0) + (inspDocs[a.id]?.rlv.length ?? 0);
               const f = facts(a);
               const label = `${cap(a.type) || "Bun"}${a.full_address ? ` · ${a.full_address}` : ""}`;
+              const photos = [fileSrc(a.sheet_photo), fileSrc(a.image_url)].filter((x, i, l): x is string => !!x && l.indexOf(x) === i);
+              const sig = fileSrc(a.sheet_signature);
+              // The sheet shows once the inspection is done and something was filled in.
+              const hasSheet = a.inspection_status === "done" && !!(a.sheet_photo || a.sheet_person || a.sheet_description || a.sheet_location);
+              const thumb = a.inspection_status === "done" ? photos[0] ?? null : null;
               return {
                 id: a.id,
                 card: (
-                  <>
-                    <div className="abTop">
-                      <span className="abNo">{n + 1}</span>
-                      <span className="abTitle"><b>{cap(a.type) || "Bun"}{a.construction === "under_construction" ? " · în construcție" : ""}</b><small>{cap(a.category) || "—"}</small></span>
-                      {a.is_main ? <span className="tag">Principal</span> : null}
-                    </div>
-                    <p className="abAddr">{a.full_address ?? a.city ?? <span className="muted">fără adresă</span>}</p>
-                    {f.length > 0 && <dl className="abFacts">{f.map(([k, v]) => <div key={k}><dt>{k}</dt><dd className={/CF|cad|VIN|înmatriculare/i.test(k) ? "mono" : ""}>{v}</dd></div>)}</dl>}
-                    <div className="abFoot">
-                      <span className="abInsp">
-                        <span className={`pill ${pc}`}><i />{pt}</span>
-                        <small>{none ? a.no_inspection : a.inspection_status === "done" ? [a.done_at && fmtDate(a.done_at), a.inspector && firstName(a.inspector)].filter(Boolean).join(" · ")
-                          : active ? [a.scheduled_at ? fmtDate(a.scheduled_at, true) : a.due_on ? `termen ${fmtDate(a.due_on)}` : null, a.inspector && firstName(a.inspector)].filter(Boolean).join(" · ") : ""}</small>
-                      </span>
-                      <span className="abVal">{a.value != null ? <b className="mono num">{lei(a.value, cur)}</b> : <small className="muted">fără valoare</small>}{a.approach && <small>{APPROACH[a.approach]}</small>}</span>
-                    </div>
-                    {c.assets && (
-                      <div className="abActs">
-                        <AssetEditor report={r.id} label="Modifică" shared={a.other_reports} client={{ name: r.client_name, phone: r.client_phone }} initial={assetForm(a)} />
-                        {assets.length > 1 && a.inspection_status !== "done" && !a.sheet_status && <RemoveAsset report={r.id} asset={a.id} name={cap(a.type) || "bunul"} />}
+                  <div className="abRow">
+                    <span className="abThumb">{thumb ? <SafeImg src={thumb} alt="" fallback={<span className="abNo">{n + 1}</span>} /> : <span className="abNo">{n + 1}</span>}</span>
+                    <div className="abMain">
+                      <div className="abTitle">
+                        <b>{cap(a.type) || "Bun"}{a.construction === "under_construction" ? " · în construcție" : ""}</b>
+                        {a.is_main ? <span className="tag">Principal</span> : null}
+                        <small>{cap(a.category) || ""}</small>
                       </div>
-                    )}
-                  </>
+                      <p className="abAddr">{a.full_address ?? a.city ?? <span className="muted">fără adresă</span>}</p>
+                      {f.length > 0 && <dl className="abFacts">{f.map(([k, v]) => <div key={k}><dt>{k}</dt><dd className={/CF|cad|VIN|înmatriculare/i.test(k) ? "mono" : ""}>{v}</dd></div>)}</dl>}
+                    </div>
+                    <div className="abSide">
+                      <span className={`pill ${pc}`}><i />{pt}</span>
+                      <small>{none ? a.no_inspection : a.inspection_status === "done" ? [a.done_at && fmtDate(a.done_at), a.inspector && firstName(a.inspector)].filter(Boolean).join(" · ")
+                        : active ? [a.scheduled_at ? fmtDate(a.scheduled_at, true) : a.due_on ? `termen ${fmtDate(a.due_on)}` : null, a.inspector && firstName(a.inspector)].filter(Boolean).join(" · ") : ""}</small>
+                      <span className="abVal">{a.value != null ? <b className="mono num">{lei(a.value, cur)}</b> : <small className="muted">fără valoare</small>}{a.approach && <small> · {APPROACH[a.approach]}</small>}</span>
+                      {c.assets && (
+                        <span className="abActs">
+                          <AssetEditor report={r.id} label="Modifică" shared={a.other_reports} client={{ name: r.client_name, phone: r.client_phone }} initial={assetForm(a)} />
+                          {assets.length > 1 && a.inspection_status !== "done" && !a.sheet_status && <RemoveAsset report={r.id} asset={a.id} name={cap(a.type) || "bunul"} />}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 ),
                 panel: (
                   <section className="card abPanelCard">
@@ -484,11 +491,33 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                       {fromApp && a.sheet_status === "draft" && active && <Row k="Fișă">în lucru</Row>}
                       {cancelled && !none && <Row k="Stare">inspecția a fost anulată</Row>}
                     </dl>
-                    {(a.sheet_photo || a.sheet_person || a.sheet_description) && (
-                      <p className="abSheet">
-                        <a className="link" href={`#fisa-${a.id}`}>Vezi fișa de inspecție ↓</a>
-                        {a.sheet_type && <a className="link" href={`${base}/rapoarte/${r.id}/fisa/${a.id}`}>Fișa pentru raport (PDF)</a>}
-                      </p>
+                    {hasSheet && (
+                      <div className="abSheetBox">
+                        {thumb ? <SafeImg src={thumb} alt="" className="abSheetPh" fallback={<span className="abSheetPh" />} /> : <span className="abSheetPh" />}
+                        <span className="abSheetTxt"><b>Fișa de inspecție</b><small>{[a.done_at && `efectuată ${fmtDate(a.done_at, a.done_at.length > 10)}`, a.inspector].filter(Boolean).join(" · ") || "completată"}</small></span>
+                        <SheetModal label="Deschide fișa" title={`Fișa de inspecție · ${cap(a.type) || "bun"}`}>
+                          <div className="shGrid">
+                            <div className="shPhotos">
+                              {photos.length === 0 ? <div className="shNoPh">Nicio fotografie.</div> : photos.map((ph) => <a key={ph} href={ph} target="_blank" rel="noopener"><SafeImg src={ph} fallback={<span className="noImg">fotografie indisponibilă</span>} /></a>)}
+                            </div>
+                            <div className="shInfo">
+                              <dl className="kv">
+                                <Row k="Bun">{label}</Row>
+                                <Row k="Efectuată">{a.done_at ? fmtDate(a.done_at, a.done_at.length > 10) : null}</Row>
+                                <Row k="Inspector">{a.inspector}</Row>
+                                <Row k="Persoană prezentă">{a.sheet_person}</Row>
+                                <Row k="Localizare GPS">{a.sheet_location ? <a className="link" href={`https://www.google.com/maps?q=${encodeURIComponent(a.sheet_location)}`} target="_blank" rel="noopener">{a.sheet_location}</a> : null}</Row>
+                                {f.map(([k, v]) => <Row key={k} k={k}>{v}</Row>)}
+                              </dl>
+                              <div className="section">Constatări</div>
+                              {a.sheet_description || a.description ? <p className="prose">{a.sheet_description ?? a.description}</p> : <p className="hint">Fișa nu are descriere.</p>}
+                              <div className="section">Semnătură</div>
+                              {sig ? <SafeImg className="signature" src={sig} alt="Semnătură" fallback={<div className="sigEmpty mono">semnătură indisponibilă</div>} /> : <div className="sigEmpty mono">fără semnătură captată</div>}
+                              {a.sheet_type && <p><a className="btn btnGhost btnSm" href={`${base}/rapoarte/${r.id}/fisa/${a.id}`}>Fișa pentru raport (PDF)</a></p>}
+                            </div>
+                          </div>
+                        </SheetModal>
+                      </div>
                     )}
                     {mayAssign && (
                       <div className="abPanelActs">
@@ -510,103 +539,55 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
               };
             })} />
           )}
-          {assets.filter((a) => a.sheet_photo || a.sheet_person || a.sheet_description || a.sheet_location).map((a) => {
-            const photos = [fileSrc(a.sheet_photo), fileSrc(a.image_url)].filter((x, i, l): x is string => !!x && l.indexOf(x) === i);
-            const sig = fileSrc(a.sheet_signature);
-            return (
-              <section key={a.id} id={`fisa-${a.id}`} className="card">
-                <div className="cardHead">
-                  <h2>Fișa de inspecție <span className="muted">· {cap(a.type) || "bun"}{a.done_at ? ` · efectuată ${fmtDate(a.done_at, true)}` : ""}{a.inspector ? ` · ${a.inspector}` : ""}</span></h2>
-                  {a.sheet_type && <a className="btn btnGhost btnSm" href={`${base}/rapoarte/${r.id}/fisa/${a.id}`}>Fișa pentru raport (PDF)</a>}
-                </div>
-                <div className="grid3 tight">
-                  <div>
-                    <div className="section">Constatări</div>
-                    {a.sheet_description || a.description ? <p className="prose">{a.sheet_description ?? a.description}</p> : <p className="hint">Fișa nu are descriere.</p>}
-                    <dl className="kv">
-                      {a.year_built && <Row k="An construcție">{a.year_built}</Row>}
-                      {a.usable_area && <Row k="Suprafață utilă">{a.usable_area.toLocaleString("ro-RO")} mp</Row>}
-                    </dl>
-                  </div>
-                  <div>
-                    <div className="section">Galerie ({photos.length})</div>
-                    {photos.length === 0 ? <p className="hint">Nicio fotografie.</p> : (
-                      <div className="gallery">
-                        {photos.map((p) => <a key={p} href={p} target="_blank" rel="noopener"><SafeImg src={p} fallback={<span className="noImg">fotografie indisponibilă</span>} /></a>)}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <div className="section">Prezență și semnătură</div>
-                    <dl className="kv">
-                      <Row k="Persoană prezentă">{a.sheet_person}</Row>
-                      <Row k="Localizare GPS">{a.sheet_location ? <a className="link" href={`https://www.google.com/maps?q=${encodeURIComponent(a.sheet_location)}`} target="_blank" rel="noopener">{a.sheet_location}</a> : null}</Row>
-                    </dl>
-                    {sig ? <SafeImg className="signature" src={sig} alt="Semnătură" fallback={<div className="sigEmpty mono">semnătură indisponibilă</div>} /> : <div className="sigEmpty mono">fără semnătură captată</div>}
-                  </div>
-                </div>
-              </section>
-            );
-          })}
           <ReportList reports={history} base={base} title="Alte evaluări ale aceleiași proprietăți" />
         </>
       )}
 
       {tab === "documente" && (
-        <>
-          <section className="card dDeliver">
-            <div className="cardHead"><h2><span className="dDelTag">Livrabile</span>Raportul final și predarea</h2>{r.delivered_at && <span className="pill pillOk"><i />Predat {fmtDate(r.delivered_at)}</span>}</div>
-            <div className="dDelGrid">
-              <div className="dDelMain">
-                {final ? (
-                  <ul className="fileList boxed">
-                    <li>
-                      <span className="ext">PDF</span>
-                      <span className="who"><b>{final.filename}</b><small>raport final · {fmtDate(final.created_at, true)} · {fmtSize(final.size_bytes ?? 0)}{final.uploaded_by_name ? ` · ${final.uploaded_by_name}` : ""}</small></span>
-                      <a className="link" href={`/api/crm/reports/${r.id}/documents/${final.id}`} target="_blank" rel="noopener">Deschide</a>
-                      {c.docs && <UploadButton id={r.id} kind="final" label="Înlocuiește" className="linkBtn" />}
-                    </li>
-                  </ul>
-                ) : c.docs ? <FinalDrop id={r.id} /> : <p className="hint">Raportul final nu a fost încărcat încă.</p>}
-                {sheets.length > 0 && (
-                  <ul className="fileList boxed dDelSheets">
-                    {sheets.map((a) => (
-                      <li key={a.id}>
-                        <span className="ext">FIȘĂ</span>
-                        <span className="who"><b>Fișa de inspecție · {assetShort(a)}</b><small>{a.done_at ? `inspecție ${fmtDate(a.done_at)}` : "pentru anexa raportului"}{a.inspector ? ` · ${a.inspector}` : ""}</small></span>
-                        <a className="link" href={`${base}/rapoarte/${r.id}/fisa/${a.id}`}>PDF</a>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <dl className="kv">
-                  <Row k="Transmis către">{recipients.length ? recipients.map((x) => x.name).join(" · ") : null}</Row>
-                  <Row k="Facturare">{r.statement_number ? `în borderoul B-${r.statement_number}` : <span className="muted">neinclus în borderou</span>}</Row>
-                  <Row k="Predat">{r.delivered_at ? `${fmtDate(r.delivered_at, true)}${r.delivered_by_name ? ` · ${r.delivered_by_name}` : ""}` : null}</Row>
-                </dl>
-                {r.client_notified_at && <p className="hint">Clientul a fost anunțat pe email la {fmtDate(r.client_notified_at, true)} și descarcă raportul din portal.</p>}
-                {c.deliver && !r.delivered_at && <DeliverButton id={r.id} ready={!!final} number={r.number} suggested={suggested} notifyTo={notifyTo} />}
-              </div>
-              <div className="dDelCheck">
-                <div className="section">Verificare înainte de predare</div>
+        <ReportDocs report={r.id} assets={assets.map((a) => ({ id: a.id, label: assetShort(a), sub: a.full_address ?? a.city }))} items={docItems} edit={c.docs} remove={c.docsDelete}
+          missing={c.docs ? <><span className="muted">Lipsește un act de la client?</span><MissingDoc id={r.id} /></> : null}
+          deliver={
+            <section className="card dDeliver">
+              <div className="cardHead"><h2><span className="dDelTag">Livrabile</span></h2>{r.delivered_at && <span className="pill pillOk"><i />Predat {fmtDate(r.delivered_at)}</span>}</div>
+              {final ? (
+                <ul className="fileList boxed">
+                  <li>
+                    <span className="ext">PDF</span>
+                    <span className="who"><b>{final.filename}</b><small>raport final · {fmtDate(final.created_at)}</small></span>
+                    <a className="link" href={`/api/crm/reports/${r.id}/documents/${final.id}`} target="_blank" rel="noopener">Deschide</a>
+                  </li>
+                </ul>
+              ) : c.docs ? <FinalDrop id={r.id} /> : <p className="hint">Raportul final nu a fost încărcat încă.</p>}
+              {final && c.docs && <UploadButton id={r.id} kind="final" label="Înlocuiește raportul final" className="linkBtn" />}
+              {sheets.length > 0 && (
+                <ul className="dDelSheets">
+                  {sheets.map((a) => <li key={a.id}><a className="link" href={`${base}/rapoarte/${r.id}/fisa/${a.id}`}>Fișa de inspecție · {assetShort(a)}</a><small>PDF</small></li>)}
+                </ul>
+              )}
+              <details className="dDelCheck">
+                <summary>Verificare înainte de predare <b>{checks.filter(([st]) => st === "ok").length}/{checks.length}</b></summary>
                 <ul className="checklist">
                   {checks.map(([st, t, n], i) => (
                     <li key={i} className={st}><i aria-hidden>{st === "ok" ? "✓" : st === "miss" ? "!" : "○"}</i><span>{t}{n && <small>{n}</small>}</span></li>
                   ))}
                 </ul>
-              </div>
-            </div>
-          </section>
-          <ReportDocs report={r.id} assets={assets.map((a) => ({ id: a.id, label: assetShort(a) }))} items={docItems} edit={c.docs} remove={c.docsDelete} />
-          {c.docs && <div className="rdMissing"><span className="muted">Lipsește un act de la client?</span><MissingDoc id={r.id} /></div>}
-        </>
+              </details>
+              <dl className="kv dDelKv">
+                <Row k="Transmis către">{recipients.length ? recipients.map((x) => x.name).join(" · ") : null}</Row>
+                <Row k="Borderou">{r.statement_number ? `B-${r.statement_number}` : <span className="muted">neinclus</span>}</Row>
+                {r.delivered_at && <Row k="Predat">{fmtDate(r.delivered_at, true)}{r.delivered_by_name ? ` · ${r.delivered_by_name}` : ""}</Row>}
+              </dl>
+              {r.client_notified_at && <p className="hint">Clientul a fost anunțat pe email la {fmtDate(r.client_notified_at, true)}.</p>}
+              {c.deliver && !r.delivered_at && <DeliverButton id={r.id} ready={!!final} number={r.number} suggested={suggested} notifyTo={notifyTo} />}
+            </section>
+          } />
       )}
 
       {tab === "mesaje" && (
         <Messages full entity="report" id={r.id} rows={messages} title="Chat echipă" hint="Discuția echipei pe acest raport: evaluator, verificator, inspector, operatori. Clientul nu vede mesajele." />
       )}
       </div>
-      <aside className="dSide">
+      {tab !== "documente" && <aside className="dSide">
         <section className="card">
           <div className="cardHead"><h2>Echipa</h2>{c.members && <AddMember id={r.id} people={people.map((x) => ({ ...x, sub: ROLE_NAME[x.role] ?? x.role }))} />}</div>
           {team.length === 0 ? <p className="hint">Nimeni alocat încă.</p> : (
@@ -627,7 +608,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
           )}
         </section>
         {tab !== "mesaje" && <Messages entity="report" id={r.id} rows={messages} title="Mesaje echipă" limit={3} more={href("mesaje")} />}
-        <section className="card">
+        {tab === "general" && <section className="card">
           <h2>Date cheie</h2>
           <dl className="kv dKv">
             <Row k="Comandă">{r.ordered_at ? fmtDate(r.ordered_at) : r.received_on ? fmtDate(r.received_on) : fmtDate(r.created_at)}</Row>
@@ -641,8 +622,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             {!fees && myShare && <Row k="Cota ta">{myShare}</Row>}
             <Row k="Borderou">{r.statement_number ? `B-${r.statement_number}` : <span className="muted">neinclus</span>}</Row>
           </dl>
-        </section>
-      </aside>
+        </section>}
+      </aside>}
       </div>
     </CrmShell>
   );

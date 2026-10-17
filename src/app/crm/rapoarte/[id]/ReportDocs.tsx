@@ -16,8 +16,12 @@ const ext = (name: string) => (name.match(/\.(\w{2,4})$/)?.[1] ?? "doc").toUpper
 const size = (n: number | null) => (n == null ? "" : n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 const day = (iso: string | null) => (iso ? new Date(iso.length <= 10 ? `${iso}T12:00:00` : iso).toLocaleDateString("ro-RO", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Bucharest" }).replace(".", "") : "");
 
-export function ReportDocs({ report, assets, items, edit, remove }: {
-  report: string; assets: { id: string; label: string }[]; items: DocItem[]; edit: boolean; remove: boolean;
+export function ReportDocs({ report, assets, items, edit, remove, deliver, missing }: {
+  report: string; assets: { id: string; label: string; sub?: string | null }[]; items: DocItem[]; edit: boolean; remove: boolean;
+  /** The deliverables (final report, sheets, delivery), shown smaller on the right. */
+  deliver?: React.ReactNode;
+  /** "Marchează un document lipsă", under the list. */
+  missing?: React.ReactNode;
 }) {
   const router = useRouter();
   // "" = all, "report" = the ones of the whole report, else an asset id.
@@ -50,16 +54,27 @@ export function ReportDocs({ report, assets, items, edit, remove }: {
     if (done) router.refresh();
   };
 
-  const chips: [string, string][] = [["", "Toate"], ...(many ? [["report", "Tot raportul"] as [string, string]] : []), ...(many ? assets.map((a): [string, string] => [a.id, a.label]) : [])];
+  const nav: [string, string, string | null | undefined][] = [["", "Toate actele", null], ...(many ? [["report", "Tot raportul", "acte comune tuturor bunurilor"] as [string, string, string]] : []),
+    ...assets.map((a): [string, string, string | null | undefined] => [a.id, a.label, a.sub])];
+  const choose = (k: string) => { setFilter(k); if (k && k !== "report") setTarget(k); else if (k === "report") setTarget(""); };
   return (
+    <div className={`rdLayout${deliver ? "" : " noDeliver"}`}>
+    <nav className="card rdNav" aria-label="Acte pe bunuri">
+      <div className="section">Bunuri</div>
+      <ul>
+        {nav.map(([k, l, sub]) => (
+          <li key={k || "all"}>
+            <button type="button" aria-pressed={filter === k} onClick={() => choose(k)}>
+              <span><b>{l}</b>{sub && <small>{sub}</small>}</span><em>{count(k)}</em>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </nav>
     <section className="card flush rdCard">
       <div className="cardHead rdHead">
-        <h2>Acte</h2>
-        {chips.length > 1 && (
-          <div className="rdChips" role="group" aria-label="Filtru pe bunuri">
-            {chips.map(([k, l]) => <button key={k || "all"} type="button" aria-pressed={filter === k} onClick={() => { setFilter(k); if (k && k !== "report") setTarget(k); else if (k === "report") setTarget(""); }}>{l}<small>{count(k)}</small></button>)}
-          </div>
-        )}
+        <h2>Acte{filter ? <span className="muted"> · {nav.find(([k]) => k === filter)?.[1]}</span> : null}</h2>
+        <span className="muted">{shown.length} {shown.length === 1 ? "act" : "acte"}</span>
       </div>
 
       {edit && (
@@ -113,6 +128,9 @@ export function ReportDocs({ report, assets, items, edit, remove }: {
           })}
         </ul>
       )}
+      {missing && <div className="rdMissing">{missing}</div>}
     </section>
+    {deliver && <aside className="rdDeliver">{deliver}</aside>}
+    </div>
   );
 }
