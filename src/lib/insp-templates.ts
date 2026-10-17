@@ -174,4 +174,4 @@ export const newQuestionKey = () => `q_${Date.now().toString(36)}${Math.random()
 
 /** The asset types a sheet is linked to, as sent by the editor ("CATEGORIE" or "CATEGORIE|TIP"). */
 export const cleanAssets = (v: unknown): string[] =>
-  Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string").map((x) => x.trim().toUpperCase().slice(0, 100)).filter(Boolean))].slice(0, 60) : [];
+  Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string").map((x) => x.trim().toUpperCase().slice(0, 100)).filter(Boolean))].slice(0, 300) : [];

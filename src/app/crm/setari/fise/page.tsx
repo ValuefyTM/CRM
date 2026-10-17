@@ -3,6 +3,8 @@ import { can } from "@/lib/perms";
 import { staffPage } from "@/lib/guard";
 import { baseTemplate } from "@/lib/insp-templates";
 import { templateList, templateOf } from "@/lib/insp-templates-db";
+import { ASSET_CATEGORIES } from "@/lib/asset-labels";
+import { defaultSheetAssets } from "@/lib/insp-forms";
 import { inspChannel, templateSync } from "@/lib/uvalo";
 import { origin } from "@/lib/site";
 import { CrmShell } from "@/components/CrmShell";
@@ -18,16 +20,24 @@ export default async function SheetTemplatesPage({ searchParams }: { searchParam
   const { db, user, base } = await staffPage("templates");
   const { tip } = await searchParams;
   const [sync, channel] = await Promise.all([templateSync(db), inspChannel(db)]);
+  // The asset types to link the sheets to: the list of asset types, plus types the assets in the CRM have that it lacks.
+  const { results: seen } = await db.prepare("SELECT DISTINCT UPPER(category) AS c, UPPER(type) AS t FROM crm_properties WHERE category IS NOT NULL AND type IS NOT NULL AND type <> ''")
+    .all<{ c: string; t: string }>();
+  const nomen: [string, string, string[]][] = ASSET_CATEGORIES.map(([c, l, types]) => [c, l, [...types]]);
+  for (const r of seen) {
+    const cat = nomen.find(([c]) => c === r.c.trim()) ?? (nomen.push([r.c.trim(), r.c.trim().charAt(0) + r.c.trim().slice(1).toLowerCase(), []]), nomen[nomen.length - 1]);
+    if (!cat[2].includes(r.t.trim())) cat[2].push(r.t.trim());
+  }
   const items = await Promise.all((await templateList(db)).map(async (x) => {
     const cur = await templateOf(db, x.key, x.base);
-    return { t: x.key, base: x.base, builtin: x.builtin, assets: x.assets, label: x.name, tpl: cur.tpl, model: baseTemplate(x.base), custom: cur.custom, synced: sync[x.key]?.at ?? null, syncError: sync[x.key]?.error ?? null };
+    return { t: x.key, base: x.base, builtin: x.builtin, assets: x.auto ? defaultSheetAssets(x.base, nomen.map(([c, , t]) => [c, t])) : x.assets, label: x.name, tpl: cur.tpl, model: baseTemplate(x.base), custom: cur.custom, synced: sync[x.key]?.at ?? null, syncError: sync[x.key]?.error ?? null };
   }));
   return (
     <CrmShell user={user} base={base} active="settings" title="Setări · Fișe de inspecție" subtitle="Ce completează inspectorii pe telefon, pe tipuri de proprietate">
       <SettingsTabs base={base} active="fise" user={user} />
       <UvaloPanel edit={can(user, "templates.E")} webhook={`${await origin()}/api/integrations/uvalo/webhook`} />
       {!can(user, "templates.E") && <div className="note">Doar proprietarul și administratorii pot modifica fișele.</div>}
-      <SheetEditor items={items} start={items.some((x) => x.t === tip) ? tip! : items[0]?.t ?? ""} edit={can(user, "templates.E")} uvalo={channel === "uvalo"} />
+      <SheetEditor nomen={nomen} items={items} start={items.some((x) => x.t === tip) ? tip! : items[0]?.t ?? ""} edit={can(user, "templates.E")} uvalo={channel === "uvalo"} />
     </CrmShell>
   );
 }

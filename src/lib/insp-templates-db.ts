@@ -1,12 +1,15 @@
 // Server-only: the firm's inspection sheet templates. The built-in ones (one per property type, table insp_templates keyed by the
 // type) and the ones made in the CRM ("c-<id>", started from a built-in type); names and the new sheets in insp_template_meta.
 import { now } from "./db";
-import { SHEET_TYPES, type Section, type SheetType } from "./insp-forms";
+import { ALL_ASSETS, SHEET_TYPES, defaultSheetAssets, guessSheetType, type Section, type SheetType } from "./insp-forms";
+import { ASSET_CATEGORIES } from "./asset-labels";
 import { baseTemplate, effectiveForms, mergeTemplate, templateSections, type Template } from "./insp-templates";
 
 export type TplInfo = { key: string; name: string; base: SheetType; builtin: boolean; deleted: boolean;
-  /** asset types the sheet is for ("CATEGORIE" or "CATEGORIE|TIP"); empty: every asset */
-  assets: string[] };
+  /** asset types the sheet is for ("CATEGORIE|TIP", or a whole "CATEGORIE"; "*": every asset) */
+  assets: string[];
+  /** a built-in sheet never linked by hand: for the asset types whose sheet it is (by the type of the asset) */
+  auto: boolean };
 
 /** The sheet of an inspection given with "the standard sheet" (UVALO's of the type, in the CRM app the VALUEFY model). */
 export const STD = "std";
@@ -20,18 +23,24 @@ export async function templateList(db: D1Database, withDeleted = false): Promise
     .all<M>().catch(() => ({ results: [] as M[] }));
   const meta = new Map(results.map((r) => [r.key, r]));
   const assets = (r?: M) => { try { const v: unknown = JSON.parse(r?.asset_types ?? "[]"); return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []; } catch { return []; } };
-  const builtin = SHEET_TYPES.map(([t, label]): TplInfo => ({ key: t, name: meta.get(t)?.name?.trim() || label, base: t, builtin: true, deleted: !!meta.get(t)?.deleted_at, assets: assets(meta.get(t)) }));
+  const nomen = ASSET_CATEGORIES.map(([c, , types]): [string, string[]] => [c, types]);
+  const builtin = SHEET_TYPES.map(([t, label]): TplInfo => {
+    const m = meta.get(t), auto = m?.asset_types == null;
+    return { key: t, name: m?.name?.trim() || label, base: t, builtin: true, deleted: !!m?.deleted_at, assets: auto ? defaultSheetAssets(t, nomen) : assets(m), auto };
+  });
   const own = results.filter((r) => !isType(r.key) && isType(r.base))
-    .map((r): TplInfo => ({ key: r.key, name: r.name?.trim() || "Fișă fără nume", base: r.base as SheetType, builtin: false, deleted: !!r.deleted_at, assets: assets(r) }));
+    .map((r): TplInfo => ({ key: r.key, name: r.name?.trim() || "Fișă fără nume", base: r.base as SheetType, builtin: false, deleted: !!r.deleted_at, assets: assets(r), auto: false }));
   return [...builtin, ...own].filter((x) => withDeleted || !x.deleted);
 }
 
 /** The sheet an inspection uses: the one it was given with; null for the standard sheet; older inspections: the sheet of their type. */
 export const tplKey = (i: { template?: string | null; sheet_type?: string | null }) => (i.template === STD ? null : i.template || i.sheet_type || "apartament");
 
-/** Whether a sheet is meant for an asset (a sheet linked to no asset type is for every asset). */
+/** Whether a sheet is meant for an asset: "every asset", its type or its whole category; a built-in sheet never linked by hand:
+ * the assets whose sheet it is (also types not in the list of asset types). */
 export const sheetFits = (x: TplInfo, a: { category: string | null; type: string | null }) =>
-  !x.assets.length || x.assets.includes(`${a.category ?? ""}|${a.type ?? ""}`) || (!!a.category && x.assets.includes(a.category));
+  x.auto ? (a.category ?? "").toUpperCase() !== "BUN MOBIL" && guessSheetType(a.category, a.type) === x.base
+    : !x.assets.length || x.assets.includes(ALL_ASSETS) || x.assets.includes(`${a.category ?? ""}|${a.type ?? ""}`) || (!!a.category && x.assets.includes(a.category));
 
 /** The built-in type behind a key (a built-in key is its own type). */
 export const baseOfKey = (list: TplInfo[], key: string | null | undefined): SheetType =>

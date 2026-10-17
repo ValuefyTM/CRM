@@ -7,8 +7,7 @@
 // from now on (and, with inspections through UVALO, the sheet is sent there too).
 import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
-import { SHEET_TYPES, type SheetType, type SubField, type SubKind } from "@/lib/insp-forms";
-import { ASSET_CATEGORIES } from "@/lib/asset-labels";
+import { ALL_ASSETS, SHEET_TYPES, defaultSheetAssets, type SheetType, type SubField, type SubKind } from "@/lib/insp-forms";
 import { newQuestionKey, QKINDS, qKindLabel, SUBKINDS, templateStats, type QKind, type Template, type TplQuestion } from "@/lib/insp-templates";
 
 export type SheetItem = { t: string; base: SheetType; builtin: boolean; assets: string[]; label: string; tpl: Template; model: Template; custom: boolean; synced: string | null; syncError: string | null };
@@ -17,11 +16,18 @@ const hasOpts = (k: QKind) => k === "one" || k === "many" || k === "comp";
 const rid = () => Math.random().toString(36).slice(2, 7);
 const when = (iso: string) => new Date(iso).toLocaleString("ro-RO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).replace(".", "");
 
-export function SheetEditor({ items: given, start, edit, uvalo }: { items: SheetItem[]; start: string; edit: boolean; uvalo: boolean }) {
+/** The asset types to link sheets to: [category, its label, its types]. */
+export type Nomen = [string, string, string[]][];
+
+export function SheetEditor({ items: given, start, edit, uvalo, nomen }: { items: SheetItem[]; start: string; edit: boolean; uvalo: boolean; nomen: Nomen }) {
   const router = useRouter();
   const [items, setItems] = useState(given);
   const [sel, setSel] = useState<string>(items.some((x) => x.t === start) ? start : items[0]?.t ?? "");
-  const [making, setMaking] = useState<{ name: string; from: string; assets: string[] } | null>(given.length ? null : { name: "", from: "blank", assets: [] });
+  const [making, setMaking] = useState<{ name: string; from: string; assets: string[] } | null>(given.length ? null : { name: "", from: "blank", assets: [ALL_ASSETS] });
+  // the asset types a new sheet starts with: every asset (blank), the ones of the sheet copied, the ones of the model's type
+  const startAssets = (from: string) => from === "blank" ? [ALL_ASSETS]
+    : from.startsWith("model:") ? defaultSheetAssets(from.slice(6) as SheetType, nomen.map(([c, , t]) => [c, t]))
+    : items.find((x) => x.t === from)?.assets ?? [ALL_ASSETS];
   const [naming, setNaming] = useState<string | null>(null);
   const [linking, setLinking] = useState<string[] | null>(null);
   const cur: SheetItem = items.find((x) => x.t === sel) ?? { t: "", base: "apartament", builtin: false, assets: [], label: "", tpl: [], model: [], custom: false, synced: null, syncError: null };
@@ -126,7 +132,7 @@ export function SheetEditor({ items: given, start, edit, uvalo }: { items: Sheet
             <Fragment key={x.t}>
             <button type="button" aria-pressed={sel === x.t} onClick={() => choose(x.t)}>
               <b>{x.label}</b>
-              <small>{s.questions} întrebări · {x.assets.length ? assetText(x.assets).slice(0, 2).join(", ") + (x.assets.length > 2 ? "…" : "") : "orice bun"}{x.t === sel && changed ? " · nesalvată" : ""}</small>
+              <small>{s.questions} întrebări · {assetSummary(x.assets, nomen)}{x.t === sel && changed ? " · nesalvată" : ""}</small>
               {uvalo && <small className={x.syncError ? "errTxt" : ""}>{x.syncError ? `UVALO: ${x.syncError}` : x.synced ? `în UVALO · ${when(x.synced)}` : "netrimisă în UVALO"}</small>}
             </button>
             </Fragment>
@@ -136,21 +142,20 @@ export function SheetEditor({ items: given, start, edit, uvalo }: { items: Sheet
           <div className="seTplNew">
             <label className="field">Numele fișei<input className="input" autoFocus value={making.name} placeholder="ex. Apartament credit ipotecar" onChange={(e) => setMaking({ ...making, name: e.target.value })} onKeyDown={(e) => e.key === "Enter" && create()} /></label>
             <label className="field">Pornește de la
-              <select className="select" value={making.from} onChange={(e) => setMaking({ ...making, from: e.target.value })}>
+              <select className="select" value={making.from} onChange={(e) => setMaking({ ...making, from: e.target.value, assets: startAssets(e.target.value) })}>
                 <option value="blank">Fișă goală</option>
                 {items.length > 0 && <optgroup label="Copie după o fișă a firmei">{items.map((x) => <option key={x.t} value={x.t}>{x.label}</option>)}</optgroup>}
                 <optgroup label="Modelul VALUEFY">{SHEET_TYPES.map(([t, l]) => <option key={t} value={`model:${t}`}>{l}</option>)}</optgroup>
               </select>
             </label>
-            <details className="seNewAssets"><summary>Pentru ce tipuri de bun {making.assets.length ? `(${making.assets.length})` : "(orice bun)"}</summary>
-              <AssetPick value={making.assets} onChange={(assets) => setMaking({ ...making, assets })} />
-            </details>
+            <span className="field">Pentru ce bunuri</span>
+            <AssetPick nomen={nomen} value={making.assets} onChange={(assets) => setMaking({ ...making, assets })} />
             <span className="seTplNewActs">
-              <button type="button" className="btn btnGold btnSm" disabled={busy || !making.name.trim()} onClick={create}>Creează fișa</button>
+              <button type="button" className="btn btnGold btnSm" disabled={busy || !making.name.trim() || !making.assets.length} onClick={create}>Creează fișa</button>
               {items.length > 0 && <button type="button" className="btn btnGhost btnSm" onClick={() => setMaking(null)}>Renunță</button>}
             </span>
           </div>
-        ) : <button type="button" className="btn btnGhost btnSm seTplAdd" onClick={() => setMaking({ name: "", from: "blank", assets: [] })}>+ Fișă nouă</button>)}
+        ) : <button type="button" className="btn btnGhost btnSm seTplAdd" onClick={() => setMaking({ name: "", from: "blank", assets: [ALL_ASSETS] })}>+ Fișă nouă</button>)}
         <small className="hint">O fișă nouă poate fi goală, o copie a altei fișe sau modelul VALUEFY al unui tip. Fără nicio fișă, inspecțiile se fac pe fișa standard{uvalo ? " a UVALO" : ""}.</small>
       </aside>
 
@@ -167,16 +172,16 @@ export function SheetEditor({ items: given, start, edit, uvalo }: { items: Sheet
           {changed && <span className="seTplTag">Modificări nesalvate</span>}
         </div>
         <div className="seLinked">
-          <span>Pentru: {cur.assets.length ? assetText(cur.assets).map((t) => <b key={t} className="seChip">{t}</b>) : <b className="seChip">orice bun</b>}</span>
-          {!ro && linking == null && <button type="button" className="linkBtn" onClick={() => setLinking(cur.assets)}>schimbă tipurile de bun</button>}
+          <span>Pentru: {assetChips(cur.assets, nomen).map((t) => <b key={t} className="seChip">{t}</b>)}</span>
+          {!ro && linking == null && <button type="button" className="linkBtn" onClick={() => setLinking(cur.assets.length ? cur.assets : [ALL_ASSETS])}>schimbă tipurile de bun</button>}
         </div>
         {linking != null && (
           <div className="seLinkBox">
-            <AssetPick value={linking} onChange={setLinking} />
+            <AssetPick nomen={nomen} value={linking} onChange={setLinking} />
             <span className="seTplNewActs">
-              <button type="button" className="btn btnGold btnSm" disabled={busy} onClick={link}>Salvează tipurile</button>
+              <button type="button" className="btn btnGold btnSm" disabled={busy || !linking.length} onClick={link}>Salvează tipurile</button>
               <button type="button" className="btn btnGhost btnSm" onClick={() => setLinking(null)}>Renunță</button>
-              <small className="hint">Nimic bifat: fișa se poate alege pentru orice bun.</small>
+              {!linking.length && <small className="errTxt">Bifează „Toate bunurile” sau cel puțin un tip de bun.</small>}
             </span>
           </div>
         )}
@@ -314,31 +319,42 @@ export function SheetEditor({ items: given, start, edit, uvalo }: { items: Sheet
   );
 }
 
-/** The asset types a sheet is for: a whole category, or some of its types. */
-function AssetPick({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
-  const has = (k: string) => value.includes(k);
-  const toggle = (k: string, on: boolean) => onChange(on ? [...value, k] : value.filter((x) => x !== k));
+/** The asset types a sheet is for: every asset (a universal sheet), or any number of types from the list, whole categories at once. */
+function AssetPick({ value, onChange, nomen }: { value: string[]; onChange: (v: string[]) => void; nomen: Nomen }) {
+  const all = value.includes(ALL_ASSETS);
+  // a whole category saved earlier counts as all its types
+  const picked = new Set(value.flatMap((x) => (x.includes("|") ? [x] : (nomen.find(([c]) => c === x)?.[2] ?? []).map((t) => `${x}|${t}`))));
+  const set = (keys: string[], on: boolean) => { const n = new Set(picked); for (const k of keys) if (on) n.add(k); else n.delete(k); onChange([...n]); };
   return (
     <div className="seAssets">
-      {ASSET_CATEGORIES.map(([cat, label, types]) => {
-        const all = has(cat);
-        return (
-          <fieldset key={cat}>
-            <label className="check seAssetCat"><input type="checkbox" checked={all} onChange={(e) => onChange(e.target.checked ? [...value.filter((x) => !x.startsWith(`${cat}|`)), cat] : value.filter((x) => x !== cat))} /> <b>{label}</b> <small>toate</small></label>
-            {!all && types.length > 0 && (
-              <span className="seAssetTypes">
-                {types.map((t) => <label key={t} className="check"><input type="checkbox" checked={has(`${cat}|${t}`)} onChange={(e) => toggle(`${cat}|${t}`, e.target.checked)} /> {t.charAt(0) + t.slice(1).toLowerCase()}</label>)}
-              </span>
-            )}
-          </fieldset>
-        );
-      })}
+      <label className="check seAssetAll"><input type="checkbox" checked={all} onChange={(e) => onChange(e.target.checked ? [ALL_ASSETS] : [])} /> <b>Toate bunurile</b> <small>fișă universală, se poate alege la orice bun</small></label>
+      {!all && (
+        <div className="seAssetGrid">
+          {nomen.filter(([, , types]) => types.length).map(([cat, label, types]) => {
+            const keys = types.map((t) => `${cat}|${t}`), n = keys.filter((k) => picked.has(k)).length;
+            return (
+              <fieldset key={cat}>
+                <label className="check seAssetCat"><input type="checkbox" checked={n === keys.length} ref={(el) => { if (el) el.indeterminate = n > 0 && n < keys.length; }} onChange={(e) => set(keys, e.target.checked)} /> <b>{label}</b> <small>{n ? `${n} din ${keys.length}` : ""}</small></label>
+                <span className="seAssetTypes">
+                  {types.map((t) => <label key={t} className="check"><input type="checkbox" checked={picked.has(`${cat}|${t}`)} onChange={(e) => set([`${cat}|${t}`], e.target.checked)} /> {nice(t)}</label>)}
+                </span>
+              </fieldset>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
-const assetText = (v: string[]) => v.map((x) => {
-  const [cat, t] = x.split("|");
-  const c = ASSET_CATEGORIES.find(([k]) => k === cat)?.[1] ?? cat;
-  return t ? t.charAt(0) + t.slice(1).toLowerCase() : `${c} (toate)`;
-});
+const nice = (t: string) => t.charAt(0) + t.slice(1).toLowerCase();
+/** What a sheet is for, as chips: "toate bunurile", whole categories, else the types. */
+function assetChips(v: string[], nomen: Nomen): string[] {
+  if (!v.length || v.includes(ALL_ASSETS)) return ["toate bunurile"];
+  const picked = new Set(v.flatMap((x) => (x.includes("|") ? [x] : (nomen.find(([c]) => c === x)?.[2] ?? []).map((t) => `${x}|${t}`))));
+  return nomen.flatMap(([cat, label, types]) => {
+    const mine = types.filter((t) => picked.has(`${cat}|${t}`));
+    return mine.length && mine.length === types.length ? [`${label} (toate)`] : mine.map(nice);
+  });
+}
+const assetSummary = (v: string[], nomen: Nomen) => { const c = assetChips(v, nomen); return c.length > 2 ? `${c.slice(0, 2).join(", ")} +${c.length - 2}` : c.join(", ") || "niciun bun"; };

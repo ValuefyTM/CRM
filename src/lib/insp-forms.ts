@@ -358,6 +358,13 @@ export function guessSheetType(category: string | null, type: string | null, ord
   return "apartament";
 }
 
+/** "Every asset" in the list of asset types a sheet is for. */
+export const ALL_ASSETS = "*";
+
+/** The asset types a built-in sheet is for by default: the types whose sheet it would be (movable goods have none). */
+export const defaultSheetAssets = (t: SheetType, nomen: [cat: string, types: string[]][]) =>
+  nomen.filter(([c]) => c !== "BUN MOBIL").flatMap(([c, types]) => types.filter((x) => guessSheetType(c, x) === t).map((x) => `${c}|${x}`));
+
 // ---------- answers ----------
 
 /** The sections of a sheet: the ones it was started with (template snapshot), else the built-in form. */

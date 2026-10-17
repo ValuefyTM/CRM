@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   if ((await templateList(a.db)).some((x) => x.name.toLowerCase() === name.toLowerCase())) return err("Există deja o fișă cu acest nume.");
   const assets = cleanAssets(b.assets);
   // a blank sheet takes the built-in type of the first asset type it is for (rooms, required photos, CRM columns)
-  const [cat, type] = (assets[0] ?? "").split("|");
+  const [cat, type] = (assets.find((x) => x !== "*") ?? "").split("|");
   const base: SheetType = SHEET_TYPES.some(([t]) => t === b.base) ? (b.base as SheetType) : assets.length ? guessSheetType(cat || null, type || null) : "apartament";
   const made = await createTemplate(a.db, name, typeof b.from === "string" ? b.from : "blank", base, assets, a.user.id);
   if (!made) return err("Alege fișa de la care pornești.");
