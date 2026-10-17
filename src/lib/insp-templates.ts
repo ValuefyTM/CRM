@@ -3,18 +3,24 @@
 // the API and the inspections app. No server code here.
 //
 // A sheet keeps the form it was started with (a snapshot in its answers JSON), so a change applies to new sheets.
-import { FORMS, SHEET_TYPES, type Field, type Section, type SheetType } from "./insp-forms";
+import { FORMS, SHEET_TYPES, type Field, type Section, type SheetType, type SubField, type SubKind } from "./insp-forms";
 
 /** How a question is answered. "yn" is a one-option question with Da / Nu; "long" is a text over several lines. */
-export type QKind = "one" | "many" | "yn" | "num" | "int" | "text" | "long" | "util" | "photo";
+export type QKind = "one" | "many" | "yn" | "num" | "int" | "text" | "long" | "util" | "photo" | "comp";
 export const QKINDS: [QKind, string][] = [
   ["one", "O variantă"], ["many", "Mai multe"], ["yn", "Da / Nu"], ["num", "Număr"], ["text", "Text"], ["long", "Text lung"], ["photo", "Fotografie"],
+  ["comp", "Compusă (întrebări după răspuns)"],
 ];
+export const SUBKINDS: [SubKind, string][] = [["one", "O variantă"], ["many", "Mai multe"], ["text", "Text"], ["num", "Număr"]];
 export const qKindLabel = (k: QKind) => (k === "int" ? "Număr întreg" : k === "util" ? "Branșament" : QKINDS.find(([x]) => x === k)?.[1] ?? k);
 
 export type TplQuestion = {
   k: string; label: string; kind: QKind; opts?: string[]; defaults?: string[]; unit?: string;
   req?: boolean; pdf?: boolean; other?: boolean; hidden?: boolean; custom?: boolean;
+  /** "comp": the follow-ups asked after each answer. */
+  sub?: Record<string, SubField[]>;
+  /** The inspector is asked a photo for this question too. */
+  photo?: boolean;
 };
 export type TplGroup = { id: string; title: string; hidden?: boolean; custom?: boolean; questions: TplQuestion[] };
 export type Template = TplGroup[];
@@ -69,7 +75,7 @@ export function mergeTemplate(t: SheetType, saved: Template | null | undefined):
 export function toField(q: TplQuestion, base?: Field): Field {
   const meta = {
     ...(q.req ? { req: true } : {}), ...(q.other ? { other: true } : {}), ...(q.pdf === false ? { pdf: false } : {}),
-    ...(q.defaults?.length ? { defaults: q.defaults } : {}), ...(q.custom ? { custom: true } : {}),
+    ...(q.defaults?.length ? { defaults: q.defaults } : {}), ...(q.custom ? { custom: true } : {}), ...(q.photo ? { photo: true } : {}),
   };
   if (base && !q.custom) {
     // Built-in: what the code knows (placeholder, meter label…) with the firm's label and options.
@@ -83,6 +89,11 @@ export function toField(q: TplQuestion, base?: Field): Field {
     case "num": case "int": return { k: q.k, label, kind: q.kind, unit: q.unit, ...meta };
     case "long": return { k: q.k, label, kind: "text", long: true, ...meta };
     case "photo": return { k: q.k, label, kind: "photo", ...meta };
+    case "comp": {
+      const opts = q.opts?.filter(Boolean) ?? [];
+      const sub = Object.fromEntries(opts.map((o) => [o, (q.sub?.[o] ?? []).filter((s) => s.label.trim())]).filter(([, l]) => (l as SubField[]).length));
+      return { k: q.k, label, kind: "comp", opts, sub, ...meta };
+    }
     default: return { k: q.k, label, kind: "text", ...meta };
   }
 }
@@ -110,7 +121,7 @@ export const templateStats = (tpl: Template) => {
 export function cleanTemplate(t: SheetType, raw: unknown): { ok: true; tpl: Template } | { ok: false; error: string } {
   if (!Array.isArray(raw) || raw.length > 40) return { ok: false, error: "Fișa nu este validă." };
   const keys = new Set<string>();
-  const kinds = new Set<string>(["one", "many", "yn", "num", "int", "text", "long", "util", "photo"]);
+  const kinds = new Set<string>(["one", "many", "yn", "num", "int", "text", "long", "util", "photo", "comp"]);
   const str = (v: unknown, n: number) => (typeof v === "string" ? v.trim().slice(0, n) : "");
   const groups: Template = [];
   for (const g of raw as Record<string, unknown>[]) {
@@ -127,13 +138,31 @@ export function cleanTemplate(t: SheetType, raw: unknown): { ok: true; tpl: Temp
       if (keys.has(k)) return { ok: false, error: `Întrebarea „${label}” apare de două ori.` };
       keys.add(k);
       const opts = Array.isArray(q.opts) ? [...new Set((q.opts as unknown[]).map((o) => str(o, 80)).filter(Boolean))].slice(0, 40) : undefined;
-      if ((kind === "one" || kind === "many") && !opts?.length) return { ok: false, error: `Întrebarea „${label}” are nevoie de cel puțin un răspuns.` };
+      if ((kind === "one" || kind === "many" || kind === "comp") && !opts?.length) return { ok: false, error: `Întrebarea „${label}” are nevoie de cel puțin un răspuns.` };
+      // the follow-ups of a composite question, by answer (only for answers it has)
+      let sub: Record<string, SubField[]> | undefined;
+      if (kind === "comp" && q.sub && typeof q.sub === "object") {
+        sub = {};
+        for (const o of opts ?? []) {
+          const list = Array.isArray((q.sub as Record<string, unknown>)[o]) ? ((q.sub as Record<string, unknown[]>)[o]).slice(0, 12) : [];
+          const out: SubField[] = [];
+          for (const x of list as Record<string, unknown>[]) {
+            const sl = str(x?.label, 160), sk = str(x?.k, 40).replace(/[^\w-]/g, "") || `s${out.length + 1}`;
+            const skind = (["one", "many", "text", "num"].includes(String(x?.kind)) ? x.kind : "text") as SubKind;
+            if (!sl || out.some((y) => y.k === sk)) continue;
+            const so = Array.isArray(x.opts) ? [...new Set((x.opts as unknown[]).map((v) => str(v, 80)).filter(Boolean))].slice(0, 20) : [];
+            out.push({ k: sk, label: sl, kind: skind, ...((skind === "one" || skind === "many") ? { opts: so.length ? so : ["Da", "Nu"] } : {}), ...(skind === "num" && str(x.unit, 10) ? { unit: str(x.unit, 10) } : {}) });
+          }
+          if (out.length) sub[o] = out;
+        }
+      }
       const defaults = Array.isArray(q.defaults) ? (q.defaults as unknown[]).map((o) => str(o, 80)).filter((o) => opts?.includes(o)) : undefined;
       questions.push({
         k, label, kind, ...(opts ? { opts } : {}), ...(defaults?.length ? { defaults: kind === "one" ? defaults.slice(0, 1) : defaults } : {}),
         ...(str(q.unit, 10) ? { unit: str(q.unit, 10) } : {}),
         ...(q.req === true ? { req: true } : {}), ...(q.pdf === false ? { pdf: false } : {}), ...(q.other === true ? { other: true } : {}),
-        ...(q.hidden === true ? { hidden: true } : {}), ...(q.custom === true ? { custom: true } : {}),
+        ...(q.hidden === true ? { hidden: true } : {}), ...(q.custom === true ? { custom: true } : {}), ...(q.photo === true ? { photo: true } : {}),
+        ...(sub && Object.keys(sub).length ? { sub } : {}),
       });
     }
     groups.push({ id, title, ...(g.hidden === true ? { hidden: true } : {}), ...(g.custom === true ? { custom: true } : {}), questions });

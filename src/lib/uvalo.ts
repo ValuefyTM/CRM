@@ -63,11 +63,11 @@ export const inspectorByLegit = (legit: string) => call<{ inspector: { id: strin
 /* ---------- sheets: the CRM's form as a UVALO sheet (same keys) ---------- */
 
 const PROP: Record<SheetType, string> = { apartament: "Apartament", casa: "Casă", teren: "Teren", comercial: "Spațiu comercial / Hală", accesoriu: "Accesoriu (parcare, garaj, boxă)" };
-type UQ = { id: string; t: string; kind: "one" | "many" | "text" | "number" | "comp"; options?: string[]; def?: string; unit?: string; req?: boolean; pdf?: boolean;
-  sub?: Record<string, { id: string; t: string; kind: "one" | "number"; options?: string[]; unit?: string }[]> };
+type UQ = { id: string; t: string; kind: "one" | "many" | "text" | "number" | "comp"; options?: string[]; def?: string; unit?: string; req?: boolean; pdf?: boolean; photo?: boolean;
+  sub?: Record<string, { id: string; t: string; kind: "one" | "many" | "text" | "number"; options?: string[]; unit?: string }[]> };
 
 function toUvaloQ(f: Field): UQ | null {
-  const meta = { ...(f.req ? { req: true } : {}), ...(f.pdf === false ? { pdf: false } : {}) };
+  const meta = { ...(f.req ? { req: true } : {}), ...(f.pdf === false ? { pdf: false } : {}), ...(f.photo ? { photo: true } : {}) };
   switch (f.kind) {
     case "one": case "many": {
       const options = [...f.opts, ...(f.other && !f.opts.includes("Altele") ? ["Altele"] : [])];
@@ -79,6 +79,9 @@ function toUvaloQ(f: Field): UQ | null {
     case "util": return { id: f.k, t: f.label, kind: "comp", options: ["Branșat", "Nebranșat"], ...meta, sub: {
       ...(f.meterLabel ? { Branșat: [{ id: "meter", t: f.meterLabel, kind: "one" as const, options: ["Da", "Nu"] }] } : {}),
       Nebranșat: [{ id: "dist", t: "Distanța până la rețea", kind: "number" as const, unit: "ml" }] } };
+    case "comp": return { id: f.k, t: f.label, kind: "comp", options: f.opts, ...(f.defaults?.[0] ? { def: f.defaults[0] } : {}), ...meta,
+      sub: Object.fromEntries(Object.entries(f.sub).map(([o, l]) => [o, l.map((s) => ({ id: s.k, t: s.label, kind: s.kind === "num" ? "number" as const : s.kind,
+        ...(s.opts ? { options: s.opts } : {}), ...(s.unit ? { unit: s.unit } : {}) }))])) };
     default: return null; // photo questions: the photos are taken by category in UVALO
   }
 }
@@ -217,6 +220,8 @@ function toCrmAnswers(form: Section[], u: UInsp): Answers {
       continue;
     }
     if (a[f.k] !== undefined && a[f.k] !== "") out[f.k] = a[f.k];
+    // a composite question's follow-ups: answers["<question>.<follow-up>"], the same in both
+    if (f.kind === "comp") for (const [k, v] of Object.entries(a)) if (k.startsWith(`${f.k}.`) && v !== "") out[k] = v;
   }
   const rooms: Room[] = (u.sheet.rooms ?? []).map((x, i) => ({ id: `u${i + 1}`, pos: String(i + 1), name: x.n, level: "", area: x.a != null ? String(x.a).replace(".", ",") : "",
     ...(x.floor ? { floor: [x.floor] } : {}), ...(x.walls ? { walls: [x.walls] } : {}), ...(x.ceiling ? { ceiling: x.ceiling } : {}), ...(x.state ? { condition: x.state } : {}) }));

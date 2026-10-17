@@ -2492,3 +2492,46 @@ a.navItem[aria-current="page"] .navIcon { opacity: 1; }
 .uvTpl li { display: flex; gap: 10px; justify-content: flex-end; }
 .uvTpl small { color: var(--muted-2); }
 @media (max-width: 720px) { .uvPick { grid-template-columns: 1fr; } .uvKv dd { align-items: flex-start; text-align: left; } }
+
+/* Setări → Fișe de inspecție: the editor, as in UVALO (sheets · sheet · question) */
+.seTplPage { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+.seTplList { flex: 1 1 220px; max-width: 250px; display: flex; flex-direction: column; gap: 6px; }
+.seTplList .eyebrow { margin: 4px 2px 2px; }
+.seTplList button { text-align: left; border: 1px solid var(--line); background: #fff; border-radius: 12px; padding: 10px 12px; font: inherit; display: flex; flex-direction: column; gap: 2px; cursor: pointer; color: var(--ink); }
+.seTplList button b { font-size: 13.5px; }
+.seTplList button small { color: var(--muted-2); font-size: 11.5px; }
+.seTplList button[aria-pressed="true"] { border: 2px solid var(--navy); background: var(--navy); color: #fff; }
+.seTplList button[aria-pressed="true"] small { color: var(--on-navy-2); }
+.seTplList button[aria-pressed="true"] small.errTxt { color: #ffb4ab; }
+.seTplList .hint { margin-top: 6px; font-size: 11.5px; }
+.seTplEdit { flex: 999 1 440px; min-width: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.seTplHead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.seTplHead h2 { margin: 0; }
+.seTplTag { font-size: 11.5px; font-weight: 800; background: var(--acc-soft); color: var(--acc-text); border-radius: 999px; padding: 4px 10px; }
+.seGrp { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.seGrp.off { opacity: .6; }
+.seGrpHead { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--cream); }
+.seGrpHead small { color: var(--muted-2); white-space: nowrap; font-size: 11.5px; }
+.seGrpToggle { width: 30px; height: 30px; border: 0; background: transparent; font-size: 14px; cursor: pointer; color: var(--ink); }
+.seGrpName { height: 36px; font-size: 14px; font-weight: 800; flex: 1; min-width: 0; background: #fff; }
+.seMini { display: flex; gap: 2px; margin-left: auto; flex-shrink: 0; }
+.seMini button { width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 7px; background: #fff; cursor: pointer; font-size: 13px; color: var(--ink); }
+.seMini button:hover { border-color: var(--ink); }
+.seQs { padding: 8px 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.seQ { display: flex; align-items: center; gap: 6px; border: 1px solid var(--divider); border-radius: 10px; padding: 4px 6px 4px 0; background: #fff; }
+.seQ.on { border: 2px solid var(--acc); background: var(--acc-soft); }
+.seQ.off .seQMain span { text-decoration: line-through; color: var(--muted-2); }
+.seQMain { flex: 1; min-width: 0; text-align: left; border: 0; background: transparent; padding: 6px 10px; font: inherit; font-size: 13px; cursor: pointer; display: flex; justify-content: space-between; gap: 10px; color: var(--ink); }
+.seQMain span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.seQMain small { color: var(--muted-2); white-space: nowrap; font-size: 11.5px; }
+.seQAdd { display: flex; gap: 8px; flex-wrap: wrap; }
+.seQEdit { flex: 1 1 280px; max-width: 360px; margin: 0; position: sticky; top: calc(var(--topH, 64px) + 12px); display: flex; flex-direction: column; gap: 10px; }
+.seKindLocked { font-size: 13px; font-weight: 700; padding: 8px 0; } .seKindLocked small { font-weight: 400; color: var(--muted-2); }
+.seOpts { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.seOpt { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; width: 100%; }
+.seOpt .input { height: 36px; font-size: 13.5px; }
+.seSubEd { display: flex; flex-direction: column; gap: 8px; border-left: 3px solid var(--acc-line); padding: 4px 0 4px 12px; }
+.seSubQ { display: flex; flex-direction: column; gap: 6px; background: var(--cream); border: 1px solid var(--divider); border-radius: 10px; padding: 8px; }
+.seSubRow { display: flex; gap: 6px; align-items: center; }
+.seSubRow > .input, .seSubRow > .select { flex: 1; min-width: 0; }
+@media (max-width: 1100px) { .seTplList { max-width: none; flex-direction: row; flex-wrap: wrap; } .seTplList button { flex: 1 1 180px; } .seQEdit { max-width: none; position: static; } }

@@ -22,6 +22,16 @@ const UTIL_LABEL: Record<string, string> = { water: "Apă", sewer: "Canalizare",
 
 /** One answer as text ("" when not answered), with the "Altele" text of the question. */
 function answerText(f: Field, answers: Answers): string {
+  if (f.kind === "comp") {
+    const v = typeof answers[f.k] === "string" ? (answers[f.k] as string).trim() : "";
+    if (!v) return "";
+    const subs = (f.sub[v] ?? []).map((s) => {
+      const x = answers[`${f.k}.${s.k}`];
+      const t = Array.isArray(x) ? x.filter((y): y is string => typeof y === "string").join(", ") : typeof x === "string" ? x.trim() : "";
+      return t ? `${s.label}: ${t}${s.kind === "num" && s.unit ? ` ${s.unit}` : ""}` : "";
+    }).filter(Boolean);
+    return [v, ...subs].join(" · ");
+  }
   const base = baseText(f, answers[f.k]);
   const alt = f.other && typeof answers[otherKey(f.k)] === "string" ? (answers[otherKey(f.k)] as string).trim() : "";
   return [base, alt].filter(Boolean).join(", ");

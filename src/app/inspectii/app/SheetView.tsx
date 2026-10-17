@@ -8,7 +8,7 @@ import { Chips, Icon, type Local } from "./ui";
 import { DocsButton } from "./DocsViewer";
 import {
   accFields, answered, formOf, hasRooms, isFilled, isOptional, otherKey, roomsOf, sheetTypeLabel,
-  type Answers, type Field, type Section, type UtilAnswer,
+  subKey, type Answers, type Field, type Section, type UtilAnswer,
 } from "@/lib/insp-forms";
 
 function UtilBlock({ f, value, onChange, readOnly }: { f: Extract<Field, { kind: "util" }>; value: UtilAnswer; onChange: (v: UtilAnswer) => void; readOnly: boolean }) {
@@ -46,6 +46,26 @@ function FieldInput({ f, answers, set, readOnly, onPhoto, photos }: {
       <button type="button" className={`sPhotoQ${photos ? " ok" : ""}`} disabled={readOnly} onClick={() => onPhoto(f)}>
         <Icon.camera />{photos ? `Fotografiat (${photos}) · mai adaugă` : "Fotografiază"}
       </button>
+    );
+  }
+  if (f.kind === "comp") {
+    const v = typeof a === "string" ? a : "";
+    return (
+      <fieldset className="iChipsWrap" disabled={readOnly}>
+        <Chips label={f.label} opts={f.opts} value={v ? [v] : []} multi={false} onChange={(n) => set(f.k, n[0] ?? "")} />
+        {(f.sub[v] ?? []).map((s) => {
+          const key = subKey(f.k, s.k), sv = answers[key];
+          return (
+            <div key={s.k} className="iUtilRow iSub"><span>{s.label}</span>
+              {s.kind === "one" || s.kind === "many"
+                ? <Chips label={s.label} opts={s.opts ?? []} multi={s.kind === "many"} value={Array.isArray(sv) ? sv.filter((x): x is string => typeof x === "string") : typeof sv === "string" && sv ? [sv] : []}
+                    onChange={(n) => set(key, s.kind === "many" ? n : n[0] ?? "")} />
+                : <span className="iUnit"><input value={typeof sv === "string" ? sv : ""} aria-label={s.label} inputMode={s.kind === "num" ? "decimal" : undefined}
+                    onChange={(e) => set(key, s.kind === "num" ? e.target.value.replace(/[^\d.,]/g, "") : e.target.value)} />{s.unit && <em>{s.unit}</em>}</span>}
+            </div>
+          );
+        })}
+      </fieldset>
     );
   }
   if (f.kind === "one" || f.kind === "many") {

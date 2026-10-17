@@ -22,7 +22,15 @@ export type Utility = "water" | "sewer" | "gas" | "power";
  * Set in the CRM sheet templates (Setări → Fișe de inspecție): required before sending, a free "Altele" text next to
  * the options, left out of the PDF sheet, options ticked when the sheet starts, a question added by the firm.
  */
-export type FieldMeta = { req?: boolean; other?: boolean; pdf?: boolean; defaults?: string[]; custom?: boolean };
+export type FieldMeta = { req?: boolean; other?: boolean; pdf?: boolean; defaults?: string[]; custom?: boolean; photo?: boolean };
+
+/**
+ * A follow-up of a composite question, asked only after a given answer (like the utilities: „Branșat” → „Apometru montat”).
+ * Its answer is kept at answers["<question>.<follow-up>"].
+ */
+export type SubKind = "one" | "many" | "text" | "num";
+export type SubField = { k: string; label: string; kind: SubKind; opts?: string[]; unit?: string };
+export const subKey = (k: string, s: string) => `${k}.${s}`;
 
 export type Field = (
   | { k: string; label: string; kind: "one" | "many"; opts: string[] }
@@ -30,6 +38,7 @@ export type Field = (
   | { k: string; label: string; kind: "text"; placeholder?: string; long?: boolean }
   | { k: Utility; label: string; kind: "util"; meterLabel?: string }
   | { k: string; label: string; kind: "photo" }
+  | { k: string; label: string; kind: "comp"; opts: string[]; sub: Record<string, SubField[]> }
 ) & FieldMeta;
 
 /** Key of the free text next to the options of a question with "Altele". */
