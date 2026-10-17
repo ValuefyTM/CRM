@@ -3,6 +3,8 @@ import { staffPage } from "@/lib/guard";
 import { contractChoices } from "@/lib/contract-orders";
 import { evaluatorChoices } from "@/lib/dossier";
 import { inspectorChoices } from "@/lib/insp-assign";
+import { fileSrc } from "@/lib/files";
+import { roleLabel } from "@/lib/labels";
 import { CrmShell } from "@/components/CrmShell";
 import { ContractOrderForm } from "./ContractOrderForm";
 
@@ -18,8 +20,10 @@ export default async function NewContractOrder({ searchParams }: { searchParams:
   return (
     <CrmShell user={user} base={base} active="orders" title="Lucrare nouă" subtitle="Comandă din contract cadru (bancă) sau din colaborare · se procesează direct, fără ofertă"
       actions={<a href={`${base}/comenzi?tab=banci`} className="btn btnGhost btnSm">← Comenzi</a>}>
-      <ContractOrderForm base={base} me={user.id} initialKind={kind} initialContract={sp.contract ?? null} contracts={contracts} collabs={collabs}
-        evaluators={evaluators} inspectors={inspectors.map((x) => ({ id: x.id, name: x.name, role: x.role }))} />
+      <ContractOrderForm base={base} me={user.id} initialKind={kind} initialContract={sp.contract ?? null}
+        contracts={contracts.map((c) => ({ ...c, logo: fileSrc(c.logo) }))} collabs={collabs.map((c) => ({ ...c, logo: fileSrc(c.logo) }))}
+        evaluators={evaluators.map((e) => ({ id: e.id, name: e.name, sub: e.sub, presence: e.presence, seen: e.seen, photo: e.photo }))}
+        inspectors={inspectors.map((x) => ({ id: x.id, name: x.name, sub: [roleLabel("internal", x.role), x.coverage && `zone: ${x.coverage}`].filter(Boolean).join(" · "), presence: x.presence, seen: x.seen, photo: x.photo }))} />
     </CrmShell>
   );
 }

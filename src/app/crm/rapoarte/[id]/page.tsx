@@ -62,6 +62,8 @@ const assetForm = (a: Awaited<ReturnType<typeof reportAssets>>[number]): AssetFo
   usable_area: a.usable_area != null ? String(a.usable_area) : "", year_built: a.year_built != null ? String(a.year_built) : "", description: a.description ?? "",
   is_main: !!a.is_main, value: a.value != null ? String(a.value) : "", approach: a.approach ?? "", notes: a.notes ?? "",
   contact_kind: a.a_contact_kind ?? "client", contact_name: a.a_contact_name ?? "", contact_phone: a.a_contact_phone ?? "",
+  land_area: a.land_area != null ? String(a.land_area) : "", rooms: a.rooms != null ? String(a.rooms) : "", floor: a.floor ?? "", height_regime: a.height_regime ?? "",
+  vehicle_make: a.vehicle_make ?? "", vehicle_model: a.vehicle_model ?? "", reg_number: a.reg_number ?? "", vin: a.vin ?? "", mileage: a.mileage != null ? String(a.mileage) : "",
 });
 
 function Row({ k, children }: { k: string; children?: React.ReactNode }) {

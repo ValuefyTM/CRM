@@ -2,7 +2,7 @@
 // CF / cadastral number found again is linked, so its history follows it), and has its own value and inspection.
 import { now, uuid } from "./db";
 import { audit } from "./auth";
-import { ASSET_CATEGORIES, capType, type AssetInput } from "./asset-labels";
+import { ASSET_CATEGORIES, assetProfile, capType, trimToProfile, type AssetInput } from "./asset-labels";
 import { locateProperty } from "./geolocate";
 
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -18,12 +18,17 @@ export function validateAsset(body: unknown): { ok: true; value: AssetInput } | 
   const type = str(b.type, 120).toUpperCase();
   const property = opt(b.property_id, 80);
   if (!property && !type) return { ok: false, error: "Alege tipul bunului." };
-  if (!property && !str(b.city, 80) && !str(b.full_address, 300) && category !== "BUN MOBIL") return { ok: false, error: "Completează localitatea sau adresa." };
+  if (!property && !str(b.city, 80) && !str(b.full_address, 300) && assetProfile(category, type).address) return { ok: false, error: "Completează localitatea sau adresa." };
   const year = num(b.year_built);
   if (year != null && (year < 1700 || year > new Date().getFullYear() + 5)) return { ok: false, error: "Anul construcției nu pare corect." };
+  const int = (v: unknown) => { const n = num(v); return n != null ? Math.round(n) : null; };
   return {
     ok: true,
-    value: {
+    // Only the fields of this type of asset are kept (no land area on an apartment, no floor on land).
+    value: trimToProfile({
+      land_area: num(b.land_area), rooms: int(b.rooms), floor: opt(b.floor, 20), height_regime: opt(b.height_regime, 40),
+      vehicle_make: opt(b.vehicle_make, 60), vehicle_model: opt(b.vehicle_model, 80), reg_number: opt(b.reg_number, 20)?.toUpperCase() ?? null,
+      vin: opt(b.vin, 30)?.toUpperCase() ?? null, mileage: int(b.mileage),
       property_id: property, category, type, construction: b.construction === "under_construction" ? "under_construction" : "existing",
       county: opt(b.county, 60), city: opt(b.city, 80), full_address: opt(b.full_address, 300), cf_number: opt(b.cf_number, 40), cad_building: opt(b.cad_building, 40),
       cad_land: opt(b.cad_land, 40), usable_area: num(b.usable_area), year_built: year != null ? Math.round(year) : null, description: opt(b.description, 2000),
@@ -31,7 +36,7 @@ export function validateAsset(body: unknown): { ok: true; value: AssetInput } | 
       notes: opt(b.notes, 1000),
       contact_kind: ["client", "owner", "agent", "other"].includes(str(b.contact_kind, 10)) ? str(b.contact_kind, 10) : null,
       contact_name: opt(b.contact_name, 120), contact_phone: opt(b.contact_phone, 40),
-    },
+    }, null),
   };
 }
 
@@ -50,7 +55,8 @@ export async function searchProperties(db: D1Database, q: string) {
     ORDER BY (p.cf_number = ?1 OR p.cad_building = ?1 OR p.cad_land = ?1) DESC, p.updated_at DESC LIMIT 12`).bind(s, like).all<PropertyHit>()).results;
 }
 
-const PROP_COLS = ["category", "type", "construction", "county", "city", "full_address", "cf_number", "cad_building", "cad_land", "usable_area", "year_built", "description"] as const;
+const PROP_COLS = ["category", "type", "construction", "county", "city", "full_address", "cf_number", "cad_building", "cad_land", "usable_area", "year_built", "description",
+  "land_area", "rooms", "floor", "height_regime", "vehicle_make", "vehicle_model", "reg_number", "vin", "mileage"] as const;
 const propValues = (v: AssetInput) => PROP_COLS.map((c) => v[c]);
 
 /** A property with the same CF or building cadastral number, so a new asset does not duplicate it. */

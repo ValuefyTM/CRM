@@ -6,14 +6,14 @@ import { audit } from "./auth";
 import { propertyType } from "./process-order";
 import type { AssetInput } from "./asset-labels";
 
-export type ContractChoice = { id: string; number: string | null; bank_id: string | null; bank: string; bank_code: string | null; fee: number | null; report_type: string | null; purpose: string | null };
-export type CollabChoice = { id: string; number: string | null; firm: string; share: number | null };
+export type ContractChoice = { id: string; number: string | null; bank_id: string | null; bank: string; bank_code: string | null; fee: number | null; report_type: string | null; purpose: string | null; logo?: string | null };
+export type CollabChoice = { id: string; number: string | null; firm: string; share: number | null; logo?: string | null };
 
 export async function contractChoices(db: D1Database) {
   const [contracts, collabs] = await Promise.all([
-    db.prepare(`SELECT k.id, k.number, k.client_id AS bank_id, COALESCE(e.name, 'Fără bancă') AS bank, e.code AS bank_code, k.fee, k.report_type, k.purpose
+    db.prepare(`SELECT k.id, k.number, k.client_id AS bank_id, COALESCE(e.name, 'Fără bancă') AS bank, e.code AS bank_code, k.fee, k.report_type, k.purpose, e.logo_url AS logo
       FROM contracts k LEFT JOIN entities e ON e.id = k.client_id WHERE k.kind = 'framework' ORDER BY e.name, k.signed_on DESC`).all<ContractChoice>(),
-    db.prepare(`SELECT c.id, c.number, e.name AS firm, c.share FROM collaborations c JOIN entities e ON e.id = c.firm_id ORDER BY e.name`).all<CollabChoice>(),
+    db.prepare(`SELECT c.id, c.number, e.name AS firm, c.share, e.logo_url AS logo FROM collaborations c JOIN entities e ON e.id = c.firm_id ORDER BY e.name`).all<CollabChoice>(),
   ]);
   return { contracts: contracts.results, collabs: collabs.results };
 }
@@ -25,6 +25,35 @@ const amount = (v: unknown) => {
 };
 
 /**
+ * The client of the work: the one picked from the CRM, else the same name with the same phone or email, else a new
+ * client — a person, or a company (with its CUI) when "PJ" was chosen.
+ */
+async function clientOf(db: D1Database, actor: string, b: Record<string, unknown>, name: string, phone: string) {
+  const picked = str(b.client_id, 80);
+  if (picked) {
+    const e = await db.prepare("SELECT id FROM entities WHERE id = ? AND kind IN ('person', 'company')").bind(picked).first<{ id: string }>();
+    if (e) {
+      // Fill in what the client record did not have yet.
+      await db.prepare("UPDATE entities SET phone = COALESCE(NULLIF(phone, ''), ?), email = COALESCE(NULLIF(email, ''), ?), updated_at = ? WHERE id = ?")
+        .bind(phone || null, str(b.client_email, 160).toLowerCase() || null, now(), e.id).run();
+      return e.id;
+    }
+  }
+  const email = str(b.client_email, 160).toLowerCase() || null;
+  const last9 = phone.replace(/\D/g, "").slice(-9);
+  const found = await db.prepare(`SELECT id FROM entities WHERE kind IN ('person', 'company') AND lower(trim(name)) = lower(trim(?))
+      AND ((? IS NOT NULL AND lower(email) = ?) OR (length(?) = 9 AND substr(replace(replace(replace(phone, ' ', ''), '.', ''), '-', ''), -9) = ?))
+    ORDER BY updated_at DESC LIMIT 1`).bind(name, email, email, last9, last9).first<{ id: string }>();
+  if (found) return found.id;
+  const id = uuid();
+  const company = b.client_kind === "company";
+  await db.prepare("INSERT INTO entities (id, kind, name, phone, email, cui, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, company ? "company" : "person", name, phone || null, email, company ? str(b.client_cui, 20).toUpperCase().replace(/^RO\s*/, "") || null : null, actor).run();
+  await audit(db, `user:${actor}`, "client.create", "entity", id, `${name} · din lucrare nouă`);
+  return id;
+}
+
+/**
  * Registers the order of a bank (framework contract) or of a collaborating firm, with its assets (the first is the
  * main one: its place goes on the order). Returns its id.
  */
@@ -32,6 +61,9 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
   const kind = b.kind === "collab" ? "collab" : "bank";
   const client = str(b.client_name, 160);
   if (!client) return { ok: false as const, error: "Completează numele clientului." };
+  const phone = str(b.client_phone, 40);
+  if (phone.replace(/\D/g, "").length < 9) return { ok: false as const, error: "Completează telefonul clientului." };
+  if (!str(b.bank_ref, 60)) return { ok: false as const, error: "Completează numărul comenzii." };
   const main = assets[0];
   const type = propertyType(main), city = main.city ?? "", address = main.full_address ?? "";
   const contactName = main.contact_kind && main.contact_kind !== "client" ? main.contact_name : null;
@@ -44,7 +76,6 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
     contract = await db.prepare(`SELECT k.id, k.number, k.client_id AS bank_id, COALESCE(e.name, '') AS bank, e.code AS bank_code, k.fee, k.report_type, k.purpose
       FROM contracts k LEFT JOIN entities e ON e.id = k.client_id WHERE k.id = ? AND k.kind = 'framework'`).bind(str(b.contract_id, 80)).first<ContractChoice>();
     if (!contract) return { ok: false as const, error: "Alege contractul cadru." };
-    if (!str(b.bank_ref, 60)) return { ok: false as const, error: "Completează numărul comenzii din aplicația băncii." };
     fee ??= contract.fee || null; // 0 in Glide = no fee set on the contract
   } else {
     collab = await db.prepare("SELECT c.id, c.number, e.name AS firm, c.share FROM collaborations c JOIN entities e ON e.id = c.firm_id WHERE c.id = ?")
@@ -52,15 +83,16 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
     if (!collab) return { ok: false as const, error: "Alege colaborarea (firma de evaluare)." };
   }
   const share = collab?.share ?? null;
+  const clientId = await clientOf(db, actor, b, client, phone);
   const id = uuid(), t = now();
   await db.prepare(`INSERT INTO orders (id, source, created_by, property_type, city, address, surface_area, purpose, bank, urgent, client_name, client_phone, client_email,
-      contact_name, contact_phone, inspection_notes, notes, status, contract_id, collaboration_id, bank_id, bank_branch, bank_ref, report_type, fee, share, fee_net,
+      contact_name, contact_phone, inspection_notes, notes, status, client_id, contract_id, collaboration_id, bank_id, bank_branch, bank_ref, report_type, fee, share, fee_net,
       ordered_on, viewed_at, viewed_by, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'received', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'received', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(id, kind, actor, type, city || null, address || null, main.usable_area || null, str(b.purpose, 120) || contract?.purpose || (kind === "bank" ? "Credit bancar" : null),
-      contract ? contract.bank_code || contract.bank : null, b.urgent === true ? 1 : 0, client, str(b.client_phone, 40) || null, str(b.client_email, 160).toLowerCase() || null,
+      contract ? contract.bank_code || contract.bank : null, b.urgent === true ? 1 : 0, client, phone, str(b.client_email, 160).toLowerCase() || null,
       contactName, contactPhone, str(b.inspection_notes, 1000) || null, str(b.notes, 2000) || null,
-      contract?.id ?? null, collab?.id ?? null, contract?.bank_id ?? null, str(b.bank_branch, 120) || null, str(b.bank_ref, 60) || null,
+      clientId, contract?.id ?? null, collab?.id ?? null, contract?.bank_id ?? null, str(b.bank_branch, 120) || null, str(b.bank_ref, 60) || null,
       str(b.report_type, 120) || contract?.report_type || null, fee, share, fee != null && share != null ? Math.round(fee * share * 100) / 100 : null,
       ordered, t, actor, t, t)
     .run();

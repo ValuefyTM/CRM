@@ -269,6 +269,7 @@ async function openClaimed(db: D1Database, o: Order, actor: { id: string; name: 
 const linkInput = (property_id: string): AssetInput => ({
   property_id, category: null, type: "", construction: "existing", county: null, city: null, full_address: null, cf_number: null, cad_building: null, cad_land: null,
   usable_area: null, year_built: null, description: null, is_main: false, value: null, approach: null, notes: null, contact_kind: null, contact_name: null, contact_phone: null,
+  land_area: null, rooms: null, floor: null, height_regime: null, vehicle_make: null, vehicle_model: null, reg_number: null, vin: null, mileage: null,
 });
 
 /**

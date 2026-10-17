@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { APPROACHES, ASSET_CATEGORIES, capType, type AssetForm } from "@/lib/asset-labels";
 import { ContactFields } from "@/components/ContactFields";
+import { AssetFields } from "@/components/AssetFields";
 
 type Hit = { id: string; type: string | null; category: string | null; full_address: string | null; city: string | null; cf_number: string | null; cad_building: string | null; usable_area: number | null; reports: number; last_report: string | null };
 
@@ -91,42 +92,7 @@ export function AssetEditor({ report, initial, shared = 0, label, className, cli
               </>
             ) : (
               <>
-                <div className="formRow">
-                  <label className="field">Categorie
-                    <select className="select" value={f.category} onChange={(e) => { setF({ ...f, category: e.target.value, type: "" }); setOther(false); }}>
-                      {ASSET_CATEGORIES.map(([c, l]) => <option key={c} value={c}>{l}</option>)}
-                    </select>
-                  </label>
-                  <label className="field">Tip
-                    {other || types.length === 0
-                      ? <input className="input" value={f.type} onChange={(e) => setF({ ...f, type: e.target.value.toUpperCase() })} placeholder="ex. SPATIU DE BIROURI" />
-                      : (
-                        <select className="select" value={f.type} onChange={(e) => { if (e.target.value === "__other") { setOther(true); setF({ ...f, type: "" }); } else setF({ ...f, type: e.target.value }); }}>
-                          <option value="">Alege…</option>
-                          {types.map((t) => <option key={t} value={t}>{capType(t)}</option>)}
-                          <option value="__other">Alt tip…</option>
-                        </select>
-                      )}
-                  </label>
-                  <label className="field">Stadiu
-                    <select className="select" value={f.construction} onChange={set("construction")}><option value="existing">Existent</option><option value="under_construction">În construcție</option></select>
-                  </label>
-                </div>
-                <div className="formRow">
-                  <label className="field">Județ<input className="input" value={f.county} onChange={set("county")} /></label>
-                  <label className="field">Localitate<input className="input" value={f.city} onChange={set("city")} /></label>
-                </div>
-                <label className="field">Adresa completă<input className="input" value={f.full_address} onChange={set("full_address")} placeholder="Strada, număr, bloc, scară, etaj, apartament" /></label>
-                <div className="formRow">
-                  <label className="field">Nr. CF<input className="input mono" value={f.cf_number} onChange={set("cf_number")} /></label>
-                  <label className="field">Nr. cad. construcție<input className="input mono" value={f.cad_building} onChange={set("cad_building")} /></label>
-                  <label className="field">Nr. cad. teren<input className="input mono" value={f.cad_land} onChange={set("cad_land")} /></label>
-                </div>
-                <div className="formRow">
-                  <label className="field">Suprafață utilă (mp)<input className="input" inputMode="decimal" value={f.usable_area} onChange={set("usable_area")} /></label>
-                  <label className="field">An construcție<input className="input" inputMode="numeric" value={f.year_built} onChange={set("year_built")} /></label>
-                </div>
-                <label className="field">Descriere <small>(opțional)</small><textarea className="textarea" rows={2} value={f.description} onChange={set("description")} /></label>
+                <AssetFields value={f} onChange={(p) => setF({ ...f, ...p })} />
                 {!editing && <p className="hint">Dacă nr. CF sau nr. cadastral există deja în CRM, bunul se leagă de proprietatea existentă (cu istoricul ei).</p>}
               </>
             )}
