@@ -1,6 +1,6 @@
 import { err, json, reportApi } from "@/lib/api";
 import { later, pushInspection } from "@/lib/uvalo";
-import { assignInspection, canAssign, cancelInspection, markInspectionDone, markNoInspection } from "@/lib/insp-assign";
+import { assignInspection, canAssign, cancelInspection, deleteInspection, markInspectionDone, markNoInspection } from "@/lib/insp-assign";
 
 /**
  * Gives the inspection of an asset to an inspector: `{ asset, inspector, sheet_type, due_on, contact_kind, contact_name, contact_phone, instructions,
@@ -43,13 +43,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   return Response.json({ ok: true });
 }
 
-/** Cancels an inspection task that is not done yet: `?inspection=<id>`. */
+/** Cancels an inspection task that is not done yet: `?inspection=<id>`; with `&purge=1&reason=` deletes it from everywhere (sheet, photos, UVALO). */
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const a = await reportApi(id, "view", true);
   if ("res" in a) return a.res;
   if (!(await canAssign(a.db, a.user, id))) return err("Doar evaluatorul principal al raportului poate anula inspecția.", 403);
-  const r = await cancelInspection(a.db, a.user, id, new URL(req.url).searchParams.get("inspection") ?? "");
+  const u = new URL(req.url), ins = u.searchParams.get("inspection") ?? "";
+  const r = u.searchParams.get("purge") === "1" ? await deleteInspection(a.db, a.user, id, ins, u.searchParams.get("reason") ?? "") : await cancelInspection(a.db, a.user, id, ins);
   if (!r.ok) return err(r.error);
   return Response.json({ ok: true });
 }

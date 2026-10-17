@@ -9,19 +9,22 @@ import { fileSrc } from "./files";
 export type SheetRow = { label: string; value: string };
 export type SheetDoc = {
   report: { id: string; number: string | null; label: string | null; bank: string | null; client: string | null; purpose: string | null };
-  property: { type: string | null; address: string | null; cf: string | null; cad: string | null; usable_area: number | null };
+  property: { type: string | null; address: string | null; cf: string | null; cad: string | null; usable_area: number | null; land_area: number | null; city: string | null; county: string | null; lat: number | null; lng: number | null };
   inspection: { id: string; done_at: string | null; inspector: string | null; inspector_anevar: string | null };
-  sheet: { type: SheetType; status: string; present: string | null; role: string | null; phone: string | null; location: string | null; submitted_at: string | null; signature: string | null };
+  sheet: { type: SheetType; status: string; present: string | null; role: string | null; phone: string | null; location: string | null; submitted_at: string | null; signature: string | null;
+    /** the sheet number when it was made in UVALO (FI-2026-0001), and where it was made */
+    no: string | null; source: "uvalo" | "app" };
   sections: { title: string; rows: SheetRow[] }[];
   rooms: Room[];
   notes: string | null;
-  photos: { src: string; label: string }[];
+  /** group = the category (or the room in UVALO), the caption the room; profile photo first */
+  photos: { src: string; label: string; group: string; taken_at: string | null }[];
 };
 
 const UTIL_LABEL: Record<string, string> = { water: "Apă", sewer: "Canalizare", gas: "Gaz", power: "Curent electric" };
 
 /** One answer as text ("" when not answered), with the "Altele" text of the question. */
-function answerText(f: Field, answers: Answers): string {
+export function answerText(f: Field, answers: Answers): string {
   if (f.kind === "comp") {
     const v = typeof answers[f.k] === "string" ? (answers[f.k] as string).trim() : "";
     if (!v) return "";
@@ -53,7 +56,7 @@ function baseText(f: Field, a: Answers[string]): string {
 export async function inspectionSheetDoc(db: D1Database, reportId: string, assetId: string): Promise<SheetDoc | null> {
   const row = await db.prepare(
     `SELECT r.id AS report_id, r.number, r.label, r.purpose, b.name AS bank, c.name AS client,
-        p.type, p.full_address, p.city, p.cf_number, p.cad_building, p.cad_land, p.usable_area,
+        p.type, p.full_address, p.city, p.county, p.geo, p.cf_number, p.cad_building, p.cad_land, p.usable_area, p.land_area,
         i.id AS inspection_id, i.done_at, COALESCE(NULLIF(u.name, ''), u.email) AS inspector, u.anevar_no,
         s.sheet_type, s.status, s.details, s.description, s.present_person, s.present_role, s.present_phone, s.location, s.submitted_at, s.signature_url
       FROM assets a JOIN reports r ON r.id = a.report_id JOIN crm_properties p ON p.id = a.property_id
@@ -66,8 +69,10 @@ export async function inspectionSheetDoc(db: D1Database, reportId: string, asset
   if (!row?.inspection_id || !row.sheet_type) return null;
 
   const type = (FORMS as Record<string, unknown>)[row.sheet_type as string] ? (row.sheet_type as SheetType) : "apartament";
-  let answers: Answers = {}, form: Section[] | null = null;
-  try { const d = JSON.parse((row.details as string) ?? "{}") as { answers?: Answers; form?: unknown }; answers = d.answers ?? {}; form = cleanForm(d.form); } catch { /* old Glide sheet */ }
+  let answers: Answers = {}, form: Section[] | null = null, uvalo: { sheet_no?: string | null } | null = null;
+  try { const d = JSON.parse((row.details as string) ?? "{}") as { answers?: Answers; form?: unknown; uvalo?: { sheet_no?: string | null } }; answers = d.answers ?? {}; form = cleanForm(d.form); uvalo = d.uvalo ?? null; } catch { /* old Glide sheet */ }
+  let geo: { lat?: number; lng?: number } = {};
+  try { geo = row.geo ? JSON.parse(row.geo as string) : {}; } catch { /* no pin */ }
   // The form the sheet was filled in with; older sheets: the current template (same keys).
   const fields = form ?? (await currentForms(db))[type] ?? FORMS[type];
 
@@ -77,23 +82,26 @@ export async function inspectionSheetDoc(db: D1Database, reportId: string, asset
       .map((f) => ({ label: f.kind === "util" ? UTIL_LABEL[f.k] ?? f.label : f.label, value: answerText(f, answers) })).filter((r) => r.value),
   })).filter((s) => s.rows.length);
 
-  const { results } = await db.prepare("SELECT category, caption, r2_key FROM inspection_photos WHERE inspection_id = ? AND deleted_at IS NULL ORDER BY sort, created_at")
-    .bind(row.inspection_id).all<{ category: string; caption: string | null; r2_key: string }>();
+  const { results } = await db.prepare("SELECT category, caption, r2_key, taken_at FROM inspection_photos WHERE inspection_id = ? AND deleted_at IS NULL ORDER BY sort, created_at")
+    .bind(row.inspection_id).all<{ category: string; caption: string | null; r2_key: string; taken_at: string | null }>();
   const catLabel = (k: string) => PHOTO_CATEGORIES.find((c) => c.k === k)?.label ?? "Fotografie";
 
   return {
     report: { id: row.report_id as string, number: row.number as string | null, label: row.label as string | null, bank: row.bank as string | null, client: row.client as string | null, purpose: row.purpose as string | null },
-    property: { type: (row.type as string | null) ?? sheetTypeLabel(type), address: [row.full_address, row.city].filter(Boolean).join(", ") || null, cf: row.cf_number as string | null,
-      cad: (row.cad_building ?? row.cad_land) as string | null, usable_area: row.usable_area as number | null },
+    property: { type: (row.type as string | null) ?? sheetTypeLabel(type), address: (row.full_address && row.city && String(row.full_address).toLowerCase().includes(String(row.city).toLowerCase()) ? String(row.full_address) : [row.full_address, row.city].filter(Boolean).join(", ")) || null, cf: row.cf_number as string | null,
+      cad: (row.cad_building ?? row.cad_land) as string | null, usable_area: row.usable_area as number | null, land_area: row.land_area as number | null,
+      city: row.city as string | null, county: row.county as string | null, lat: typeof geo.lat === "number" ? geo.lat : null, lng: typeof geo.lng === "number" ? geo.lng : null },
     inspection: { id: row.inspection_id as string, done_at: row.done_at as string | null, inspector: row.inspector as string | null, inspector_anevar: row.anevar_no as string | null },
     sheet: {
       type, status: row.status as string, present: row.present_person as string | null, role: PRESENT_ROLES.find(([k]) => k === row.present_role)?.[1] ?? null,
       phone: row.present_phone as string | null, location: row.location as string | null, submitted_at: row.submitted_at as string | null, signature: fileSrc(row.signature_url as string | null),
+      no: uvalo?.sheet_no ?? null, source: uvalo ? "uvalo" : "app",
     },
     sections,
     rooms: roomsOf(answers),
     notes: (typeof answers.notes === "string" && answers.notes.trim()) || (row.description as string | null),
-    photos: results.map((p) => ({ src: fileSrc(`r2:${p.r2_key}`)!, label: p.caption || catLabel(p.category) })),
+    // from UVALO the caption is the room / category chosen on the phone: it groups the photos, as there
+    photos: results.map((p) => ({ src: fileSrc(`r2:${p.r2_key}`)!, label: p.caption || catLabel(p.category), group: (uvalo && p.caption) || catLabel(p.category), taken_at: p.taken_at })),
   };
 }
 

@@ -11,9 +11,11 @@ import { orderCode, SOURCE_LABEL } from "@/lib/order-labels";
 import { SPECIALIZATIONS } from "@/lib/labels";
 import { CrmShell } from "@/components/CrmShell";
 import { ReportList } from "@/components/ReportList";
-import { AllocateAll, AssignInspection, CancelInspection, MarkInspectionDone, NeedsInspection, UvaloAction, type AllocRow } from "./InspectionActions";
+import { AllocateAll, AssignInspection, CancelInspection, DeleteInspection, MarkInspectionDone, NeedsInspection, UvaloAction, type AllocRow } from "./InspectionActions";
 import { AssetBoard } from "./AssetBoard";
-import { SheetModal } from "./SheetModal";
+import { InspSheet } from "./InspSheet";
+import { inspectionSheetDoc } from "@/lib/insp-sheet-doc";
+import { getFirm } from "@/lib/settings";
 import { ReportDocs, type DocItem } from "./ReportDocs";
 import type { AccessDoc } from "@/components/DocAccess";
 import { AssetEditor, RemoveAsset } from "./AssetEditor";
@@ -242,6 +244,11 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
     <AssetEditor report={r.id} label="+ Adaugă bun" className="addAsset abAdd" client={{ name: r.client_name, phone: r.client_phone }}
       initial={{ ...emptyAsset({ county: main?.county, city: main?.city }), is_main: assets.length === 0, contact_name: r.client_name ?? "", contact_phone: r.client_phone ?? "" }} />
   ) : null;
+  // The inspection sheets of the inspected assets, opened over the page as in UVALO (all their photos).
+  const withSheet = assets.filter((a) => a.inspection_status === "done" && (a.sheet_photo || a.sheet_person || a.sheet_description || a.sheet_location));
+  const sheetDocs = Object.fromEntries(await Promise.all(withSheet.map(async (a) => [a.id, await inspectionSheetDoc(db, r.id, a.id)] as const)));
+  const ownIssuer = !r.issuer_name || /valuefy/i.test(r.issuer_name);
+  const sheetFirm = { name: r.issuer_name ?? "VALUEFY", logo, corp: ownIssuer ? (await getFirm(db)).anevar || null : null };
   const orderChip = order && (
     <><i className="rcLogo">CO</i>Comandă {order}{r.ordered_at && <small>· {short(r.ordered_at)}</small>}</>
   );
@@ -443,7 +450,6 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
               const f = facts(a);
               const label = `${cap(a.type) || "Bun"}${a.full_address ? ` · ${a.full_address}` : ""}`;
               const photos = [fileSrc(a.sheet_photo), fileSrc(a.image_url)].filter((x, i, l): x is string => !!x && l.indexOf(x) === i);
-              const sig = fileSrc(a.sheet_signature);
               // The sheet shows once the inspection is done and something was filled in.
               const hasSheet = a.inspection_status === "done" && !!(a.sheet_photo || a.sheet_person || a.sheet_description || a.sheet_location);
               const thumb = a.inspection_status === "done" ? photos[0] ?? null : null;
@@ -507,28 +513,9 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                       <div className="abSheetBox">
                         {thumb ? <SafeImg src={thumb} alt="" className="abSheetPh" fallback={<span className="abSheetPh" />} /> : <span className="abSheetPh" />}
                         <span className="abSheetTxt"><b>Fișa de inspecție</b><small>{[a.done_at && `efectuată ${fmtDate(a.done_at, a.done_at.length > 10)}`, a.inspector].filter(Boolean).join(" · ") || "completată"}</small></span>
-                        <SheetModal label="Deschide fișa" title={`Fișa de inspecție · ${cap(a.type) || "bun"}`}>
-                          <div className="shGrid">
-                            <div className="shPhotos">
-                              {photos.length === 0 ? <div className="shNoPh">Nicio fotografie.</div> : photos.map((ph) => <a key={ph} href={ph} target="_blank" rel="noopener"><SafeImg src={ph} fallback={<span className="noImg">fotografie indisponibilă</span>} /></a>)}
-                            </div>
-                            <div className="shInfo">
-                              <dl className="kv">
-                                <Row k="Bun">{label}</Row>
-                                <Row k="Efectuată">{a.done_at ? fmtDate(a.done_at, a.done_at.length > 10) : null}</Row>
-                                <Row k="Inspector">{a.inspector}</Row>
-                                <Row k="Persoană prezentă">{a.sheet_person}</Row>
-                                <Row k="Localizare GPS">{a.sheet_location ? <a className="link" href={`https://www.google.com/maps?q=${encodeURIComponent(a.sheet_location)}`} target="_blank" rel="noopener">{a.sheet_location}</a> : null}</Row>
-                                {f.map(([k, v]) => <Row key={k} k={k}>{v}</Row>)}
-                              </dl>
-                              <div className="section">Constatări</div>
-                              {a.sheet_description || a.description ? <p className="prose">{a.sheet_description ?? a.description}</p> : <p className="hint">Fișa nu are descriere.</p>}
-                              <div className="section">Semnătură</div>
-                              {sig ? <SafeImg className="signature" src={sig} alt="Semnătură" fallback={<div className="sigEmpty mono">semnătură indisponibilă</div>} /> : <div className="sigEmpty mono">fără semnătură captată</div>}
-                              {a.sheet_type && <p><a className="btn btnGhost btnSm" href={`${base}/rapoarte/${r.id}/fisa/${a.id}`}>Fișa pentru raport (PDF)</a></p>}
-                            </div>
-                          </div>
-                        </SheetModal>
+                        {sheetDocs[a.id]
+                          ? <InspSheet doc={sheetDocs[a.id]!} firm={sheetFirm} pdf={`${base}/rapoarte/${r.id}/fisa/${a.id}`} />
+                          : <a className="btn btnNavy btnSm" href={`${base}/rapoarte/${r.id}/fisa/${a.id}`}>Deschide fișa</a>}
                       </div>
                     )}
                     {mayAssign && (
@@ -550,6 +537,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                         {a.inspection_status !== "done" && !none && <MarkInspectionDone report={r.id} asset={a.id} label={label} />}
                         {none && <NeedsInspection report={r.id} asset={a.id} />}
                         {active && <CancelInspection report={r.id} inspection={a.inspection_id!} who={a.inspector ?? "inspector"} />}
+                        {a.inspection_id && !cancelled && <DeleteInspection report={r.id} inspection={a.inspection_id} label={label} done={a.inspection_status === "done"} uvalo={!!a.uvalo_id} />}
                       </div>
                     )}
                   </section>

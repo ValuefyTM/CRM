@@ -300,3 +300,43 @@ export function UvaloAction({ report, inspection, action }: { report: string; in
     }}>{busy ? "Se trimite…" : action === "push" ? "↻ Retrimite în UVALO" : "⤓ Preia fișa din UVALO"}</button>
   );
 }
+
+/** "Șterge inspecția": from everywhere (the sheet, its photos and signature, UVALO), as if it had not been made; with the reason. */
+export function DeleteInspection({ report, inspection, label, done, uvalo }: { report: string; inspection: string; label: string; done: boolean; uvalo: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [why, setWhy] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const run = async () => {
+    setBusy(true); setMsg("");
+    const error = await send(`/api/crm/reports/${report}/inspections?inspection=${encodeURIComponent(inspection)}&purge=1&reason=${encodeURIComponent(why)}`, { method: "DELETE" });
+    setBusy(false);
+    if (error) return setMsg(error);
+    location.reload();
+  };
+  return (
+    <>
+      <button type="button" className="linkBtn danger" onClick={() => setOpen(true)}>Șterge inspecția</button>
+      {open && createPortal(
+        <div className="vfModal" role="dialog" aria-modal="true" aria-labelledby="delInspTitle" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
+          <div className="vfModalBox" style={{ maxWidth: 480 }}>
+            <h2 id="delInspTitle">Șterge inspecția</h2>
+            <p className="hint">{label}.</p>
+            <div className="note">
+              Se șterge definitiv{done ? <>: <b>fișa de inspecție, fotografiile și semnătura</b>, datele preluate din fișă</> : " inspecția alocată"}{uvalo ? <>, și <b>din UVALO</b> (dispare de pe telefonul inspectorului)</> : null}.
+              Bunul rămâne fără inspecție, ca și cum nu ar fi fost făcută{done ? "; raportul revine la etapa Inspecție dacă era la Redactare" : ""}.
+            </div>
+            <label className="field"><span className="fLabel">Motivul <small>(opțional, rămâne în jurnal)</small></span>
+              <textarea className="textarea" rows={2} value={why} onChange={(e) => setWhy(e.target.value)} placeholder="ex. inspecția s-a făcut la alt imobil" /></label>
+            {msg && <div role="alert" className="error">{msg}</div>}
+            <div className="actions">
+              <button type="button" className="btn btnDanger" disabled={busy} onClick={run}>{busy ? "Se șterge…" : "Șterge definitiv"}</button>
+              <button type="button" className="btn btnGhost" onClick={() => setOpen(false)}>Renunță</button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}

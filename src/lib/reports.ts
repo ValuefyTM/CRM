@@ -355,6 +355,7 @@ const REPORT_ACTION: Record<string, (d: string | null) => string> = {
   "report.inspection_reassign": (d) => `Inspecție realocată${d ? `: ${d}` : ""}`,
   "report.inspection_cancel": (d) => `Inspecție anulată${d ? ` (${d})` : ""}`,
   "report.inspection_done": (d) => `Inspecție realizată${d ? `: ${d}` : ""}`,
+  "report.inspection_delete": (d) => `Inspecție ștearsă${d ? `: ${d}` : ""}`,
   "report.inspection_schedule": (d) => `Inspecție ${d ?? "programată"}`,
   "report.member_remove": (d) => `Echipă: scos ${d ?? ""}`.trim(),
 };

@@ -10,7 +10,7 @@ import { can } from "./perms";
 import { FORMS, guessSheetType, sheetTypeLabel, type SheetType } from "./insp-forms";
 import { photoUrl, presenceOf } from "./presence";
 import { missingDocs, missingText, type DocType } from "./insp-docs";
-import { cancelInUvalo, inspChannel, inspectorByLegit, later, pushInspection, uvaloAppUrl } from "./uvalo";
+import { cancelInUvalo, deleteInUvalo, inspChannel, inspectorByLegit, later, pushInspection, uvaloAppUrl } from "./uvalo";
 
 /** Who gives the inspector of a report: whoever allocates its team (the main evaluator), or "Inspecții: alocă inspectorul". */
 export async function canAssign(db: D1Database, user: User, reportId: string) {
@@ -182,6 +182,52 @@ export async function markInspectionDone(db: D1Database, user: User, reportId: s
   await db.prepare("UPDATE assets SET no_inspection = NULL, no_inspection_at = NULL, no_inspection_by = NULL WHERE id = ?").bind(a.id).run();
   await audit(db, `user:${user.id}`, "report.inspection_done", "report", reportId, `${a.type ? a.type.toLowerCase() : "bun"} · inspecție realizată ${m[1].split("-").reverse().join(".")} (marcată în CRM)`);
   return { ok: true as const, advanced: await advanceIfInspected(db, `user:${user.id}`, reportId) };
+}
+
+/**
+ * Deletes an inspection from everywhere, as if it had not been made: the task, its sheet (answers, signature), its photos (also
+ * from storage), the property features taken from it, its scheduling history — and the inspection in UVALO, when it was sent
+ * there (if UVALO refuses, nothing is deleted). A report already in drafting goes back to the inspection stage.
+ */
+export async function deleteInspection(db: D1Database, user: User, reportId: string, inspectionId: string, reason: string) {
+  const i = await db.prepare(`SELECT i.id, i.status, i.asset_id, p.type, COALESCE(NULLIF(u.name, ''), u.email) AS inspector FROM inspections i
+      JOIN assets a ON a.id = i.asset_id JOIN crm_properties p ON p.id = a.property_id LEFT JOIN users u ON u.id = i.inspector_id WHERE i.id = ? AND i.report_id = ?`)
+    .bind(inspectionId, reportId).first<{ id: string; status: string; asset_id: string; type: string | null; inspector: string | null }>();
+  if (!i) return { ok: false as const, error: "Inspecția nu există." };
+  const why = reason.trim().slice(0, 300);
+  const u = await deleteInUvalo(db, i.id, why || `ștearsă din CRM de ${user.name || user.email}`);
+  if (!u.ok) return { ok: false as const, error: `Nu s-a putut șterge din UVALO (${u.error}). Inspecția nu a fost ștearsă; încearcă din nou.` };
+  const [photos, sheets] = await Promise.all([
+    db.prepare("SELECT r2_key FROM inspection_photos WHERE inspection_id = ?").bind(i.id).all<{ r2_key: string }>(),
+    db.prepare("SELECT id, signature_url FROM inspection_sheets WHERE inspection_id = ?").bind(i.id).all<{ id: string; signature_url: string | null }>(),
+  ]);
+  const sheetIds = sheets.results.map((s) => s.id);
+  await db.batch([
+    db.prepare("DELETE FROM property_features WHERE inspection_id = ?").bind(i.id),
+    ...(sheetIds.length ? [db.prepare(`DELETE FROM property_features WHERE sheet_id IN (${sheetIds.map(() => "?").join(", ")})`).bind(...sheetIds)] : []),
+    db.prepare("DELETE FROM inspection_photos WHERE inspection_id = ?").bind(i.id),
+    db.prepare("DELETE FROM inspection_sheets WHERE inspection_id = ?").bind(i.id),
+    db.prepare("DELETE FROM inspection_schedule_log WHERE inspection_id = ?").bind(i.id),
+    db.prepare("DELETE FROM inspections WHERE id = ?").bind(i.id),
+    db.prepare("UPDATE reports SET updated_at = ? WHERE id = ?").bind(now(), reportId),
+  ]);
+  // the files: photos and the signature (only the CRM's own storage; Glide links are left alone)
+  const keys = [...photos.results.map((p) => p.r2_key), ...sheets.results.map((s) => s.signature_url).filter((x): x is string => !!x?.startsWith("r2:")).map((x) => x.slice(3))];
+  if (keys.length) {
+    const { bucket } = await import("./orders");
+    const r2 = await bucket();
+    if (r2) await r2.delete(keys).catch(() => {});
+  }
+  await audit(db, `user:${user.id}`, "report.inspection_delete", "report", reportId,
+    `${i.type ? i.type.toLowerCase() : "bun"}${i.inspector ? ` · ${i.inspector}` : ""}${i.status === "done" ? " · cu fișa și fotografiile" : ""}${why ? ` · ${why}` : ""}`);
+  // nothing done any more for an asset that needs an inspection: the report is back at the inspection stage
+  const left = await db.prepare(`SELECT COUNT(*) AS n FROM assets x WHERE x.report_id = ? AND x.no_inspection IS NULL
+      AND NOT EXISTS (SELECT 1 FROM inspections j WHERE j.asset_id = x.id AND j.status = 'done')`).bind(reportId).first<{ n: number }>();
+  if (left?.n) {
+    const r = await db.prepare("UPDATE reports SET stage = 'inspection', updated_at = ? WHERE id = ? AND stage = 'drafting'").bind(now(), reportId).run();
+    if (r.meta.changes) await audit(db, `user:${user.id}`, "report.stage", "report", reportId, "Inspecție");
+  }
+  return { ok: true as const };
 }
 
 /** Nothing left to inspect on the report (every asset inspected or without an inspection): on to drafting. */

@@ -183,6 +183,19 @@ export async function cancelInUvalo(db: D1Database, id: string, reason: string) 
   } catch (e) { if (!(e instanceof UvaloError && e.status === 404)) await fail(db, id, e); }
 }
 
+/** Deleted in the CRM with its sheet: it goes from UVALO too, finished or not (the API's force=1). */
+export async function deleteInUvalo(db: D1Database, id: string, reason: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const r = await db.prepare("SELECT uvalo_id, uvalo_status FROM inspections WHERE id = ?").bind(id).first<{ uvalo_id: string | null; uvalo_status: string | null }>();
+  if (!r?.uvalo_id || r.uvalo_status === "deleted") return { ok: true };
+  try {
+    await call(`/inspections/${encodeURIComponent(id)}?force=1&reason=${encodeURIComponent(reason)}`, { method: "DELETE" });
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof UvaloError && e.status === 404) return { ok: true };
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 /** Runs after the answer is sent (the request is not kept waiting for UVALO); failures stay on the inspection. */
 export async function later(p: Promise<unknown>) {
   const q = p.catch(() => {});
