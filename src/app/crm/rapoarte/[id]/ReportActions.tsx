@@ -22,21 +22,24 @@ const STATUS_HINT: Record<string, string> = {
   cancelled: "Lucrarea nu se mai face; scrii motivul.",
 };
 // Suspending or cancelling asks for the reason (kept on the report and posted in the team's messages).
+const REOPEN: [string, string, string] = ["Motivul redeschiderii", "ex. banca cere corectarea suprafeței", "Redeschide raportul"];
 const NEEDS_REASON: Record<string, [label: string, placeholder: string, button: string]> = {
   suspended: ["Motivul suspendării", "ex. așteptăm actele de la client", "Suspendă raportul"],
   cancelled: ["Motivul anulării", "ex. clientul a renunțat la credit", "Anulează raportul"],
 };
 
 /** "Schimbă status" in the report header: a sheet (from the bottom on a phone) with one big button per status. */
-export function StatusButton({ id, status, reason }: { id: string; status: string; reason: string | null }) {
-  const cur = status === "draft" ? "in_progress" : status;
+/** `locked`: the report is finished; it can only be reopened ("În lucru"), with the reason. */
+export function StatusButton({ id, status, reason, locked = false }: { id: string; status: string; reason: string | null; locked?: boolean }) {
+  const cur = locked ? "done" : status === "draft" ? "in_progress" : status;
+  const why_ = (s: string) => (locked && s === "in_progress" ? REOPEN : NEEDS_REASON[s]);
   const [open, setOpen] = useState(false);
   const [pick, setPick] = useState<string | null>(null);
   const [why, setWhy] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const save = async (s: string) => {
-    if (NEEDS_REASON[s] && !why.trim()) return setMsg("Scrie motivul.");
+    if (why_(s) && !why.trim()) return setMsg("Scrie motivul.");
     setBusy(s); setMsg("");
     const error = await patch(id, { status: s, reason: why });
     setBusy(null);
@@ -44,7 +47,7 @@ export function StatusButton({ id, status, reason }: { id: string; status: strin
     location.reload();
   };
   const choose = (s: string) => {
-    if (NEEDS_REASON[s]) { setPick(s); setWhy(s === cur ? reason ?? "" : ""); setMsg(""); return; }
+    if (why_(s)) { setPick(s); setWhy(s === cur ? reason ?? "" : ""); setMsg(""); return; }
     if (s === cur) return setOpen(false);
     save(s);
   };
@@ -58,8 +61,8 @@ export function StatusButton({ id, status, reason }: { id: string; status: strin
             <div className="cardHead"><h2 id="stTitle">Statusul raportului</h2><button type="button" className="btn btnGhost btnSm" onClick={() => setOpen(false)} aria-label="Închide">×</button></div>
             <p className="stNow">Acum: <span className={`stNowPill st-${cur}`}><i />{curLabel}</span>{(cur === "suspended" || cur === "cancelled") && reason ? <small> · {reason}</small> : null}</p>
             <div className="stChoices">
-              {STATUSES.map(([k, l]) => (
-                <button key={k} type="button" className={`stChoice st-${k}${k === cur ? " on" : ""}${k === pick ? " picked" : ""}`} aria-pressed={k === cur} disabled={!!busy}
+              {STATUSES.filter(([k]) => !locked || k === "in_progress" || k === cur).map(([k, l]) => (
+                <button key={k} type="button" className={`stChoice st-${k}${k === cur ? " on" : ""}${k === pick ? " picked" : ""}`} aria-pressed={k === cur} disabled={!!busy || (locked && k === cur)}
                   onClick={() => choose(k)}>
                   <i aria-hidden />
                   <span><b>{l}</b><small>{STATUS_HINT[k]}</small></span>
@@ -68,12 +71,13 @@ export function StatusButton({ id, status, reason }: { id: string; status: strin
                 </button>
               ))}
             </div>
-            {pick && NEEDS_REASON[pick] && (
+            {locked && <p className="hint">Raportul este finalizat și blocat. Îl poți redeschide (În lucru) cu motivul; după modificări se predă din nou.</p>}
+            {pick && why_(pick) && (
               <div className="stReason">
-                <label className="field">{NEEDS_REASON[pick][0]}<textarea className="textarea" rows={3} value={why} onChange={(e) => setWhy(e.target.value)} autoFocus placeholder={NEEDS_REASON[pick][1]} /></label>
+                <label className="field">{why_(pick)![0]}<textarea className="textarea" rows={3} value={why} onChange={(e) => setWhy(e.target.value)} autoFocus placeholder={why_(pick)![1]} /></label>
                 <small className="muted">Motivul rămâne pe raport și apare în mesajele echipei.</small>
                 <button type="button" className={`btn ${pick === "cancelled" ? "btnDanger" : "btnNavy"}`} disabled={!!busy || !why.trim()} onClick={() => save(pick)}>
-                  {busy ? "Se salvează…" : pick === cur ? "Actualizează motivul" : NEEDS_REASON[pick][2]}
+                  {busy ? "Se salvează…" : pick === cur ? "Actualizează motivul" : why_(pick)![2]}
                 </button>
               </div>
             )}

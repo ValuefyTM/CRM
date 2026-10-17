@@ -2469,3 +2469,12 @@ a.navItem[aria-current="page"] .navIcon { opacity: 1; }
 .rmList button { border: 0; background: none; font: inherit; font-size: 12.5px; text-align: left; padding: 7px 10px; border-radius: 8px; cursor: pointer; color: var(--ink); }
 .rmList button:hover { background: var(--cream); }
 .rmList button.danger { color: var(--err); font-weight: 700; }
+
+/* Report page: the assets list in one card (title + inspection button, the assets, "Adaugă bun") */
+.abList { margin: 0; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.abListHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.abListHead h2 { margin: 0; font-size: 15px; }
+.abAdd { width: 100%; }
+.abList .abCard { box-shadow: none; }
+.dLocked { border-left: 4px solid var(--ok); background: var(--ok-bg); }
+.msgLocked { margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--cream-2); color: var(--muted); font-size: 12.5px; text-align: center; }

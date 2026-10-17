@@ -4,7 +4,8 @@ import { Fragment, useState } from "react";
 
 export type BoardItem = { id: string; card: React.ReactNode; panel: React.ReactNode };
 
-export function AssetBoard({ items, initial }: { items: BoardItem[]; initial?: string | null }) {
+/** `head` and `foot`: the title with the inspection buttons, and "Adaugă bun", around the list of assets. */
+export function AssetBoard({ items, initial, head, foot }: { items: BoardItem[]; initial?: string | null; head?: React.ReactNode; foot?: React.ReactNode }) {
   const [sel, setSel] = useState(items.find((x) => x.id === initial)?.id ?? items[0]?.id ?? null);
   const pick = (id: string) => {
     setSel(id);
@@ -16,6 +17,8 @@ export function AssetBoard({ items, initial }: { items: BoardItem[]; initial?: s
   return (
     <div className="abBox">
     <div className="abWrap">
+      <section className="card abList">
+      {head}
       <div className="abCards">
         {items.map((x) => (
           <div key={x.id} className={`abCard${x.id === sel ? " on" : ""}`} onClick={(e) => { if (!(e.target as HTMLElement).closest("button, a, input, select, textarea, [role=dialog]")) pick(x.id); }}>
@@ -24,6 +27,8 @@ export function AssetBoard({ items, initial }: { items: BoardItem[]; initial?: s
           </div>
         ))}
       </div>
+      {foot}
+      </section>
       {cur && <aside className="abPanel" aria-label="Inspecția bunului selectat">{cur.panel}</aside>}
     </div>
     </div>

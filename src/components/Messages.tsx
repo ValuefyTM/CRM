@@ -26,8 +26,10 @@ const dayOf = (iso: string) => {
  * line; the list opens on the latest message. `full` is the big chat of the Mesaje tab (with the days between messages);
  * `limit` + `more` show only the latest few, with a link to the whole chat.
  */
-export function Messages({ entity, id, rows, title = "Mesaje", hint, full, limit, more }: {
+export function Messages({ entity, id, rows, title = "Mesaje", hint, full, limit, more, readOnly }: {
   entity: "report" | "order"; id: string; rows: Msg[]; title?: string; hint?: string; full?: boolean; limit?: number; more?: string;
+  /** Only read (a finished report): no new messages. */
+  readOnly?: string | null;
 }) {
   const router = useRouter();
   const [v, setV] = useState("");
@@ -78,14 +80,14 @@ export function Messages({ entity, id, rows, title = "Mesaje", hint, full, limit
           })}
         </ul>
       )}
-      <div className="msgCompose">
+      {readOnly ? <p className="msgLocked">{readOnly}</p> : <div className="msgCompose">
         <textarea className="textarea" rows={full ? 3 : 2} value={v} onChange={(e) => setV(e.target.value)} placeholder={full ? "Scrie un mesaj echipei… (Enter trimite, Shift+Enter rând nou)" : "Scrie un mesaj…"} aria-label="Mesaj nou"
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }} />
         <button type="button" className="btn btnNavy btnSm msgSend" disabled={busy || !v.trim()} onClick={send} aria-label="Trimite mesajul">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4 20-7z" /><path d="M22 2 11 13" /></svg>
           {busy ? "…" : "Trimite"}
         </button>
-      </div>
+      </div>}
       {err && <div role="alert" className="error">{err}</div>}
     </section>
   );

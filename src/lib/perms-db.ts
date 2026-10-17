@@ -31,7 +31,7 @@ export async function reportRoles(db: D1Database, reportId: string, userId: stri
 /** Finished: done or delivered. */
 export const isFinished = (r: { status: string; delivered_at?: string | null }) => r.status === "done" || !!r.delivered_at;
 
-export type ReportAccess = { view: boolean; can: Record<TeamRight, boolean>; fee: FeeView; roles: TeamRole[]; all: boolean };
+export type ReportAccess = { view: boolean; can: Record<TeamRight, boolean>; fee: FeeView; roles: TeamRole[]; all: boolean; locked: boolean };
 const FEE_RANK: Record<FeeView, number> = { none: 0, share: 1, all: 2 };
 
 /**
@@ -73,7 +73,10 @@ export async function reportAccess(db: D1Database, u: Viewer, r: { id: string; s
   // Onorarii turned off in the user rights: no amounts at all, not even their own share.
   if (!can(u, "fees")) fee = "none";
   if (!view) for (const k of Object.keys(right)) right[k] = false;
-  return { view, can: right as Record<TeamRight, boolean>, fee, roles, all };
+  // A finished report is closed: nothing changes in it (documents, assets, inspections, team, messages) except its status,
+  // which can be set back to "În lucru" with a reason.
+  if (done) for (const k of Object.keys(right)) if (k !== "status") right[k] = false;
+  return { view, can: right as Record<TeamRight, boolean>, fee, roles, all, locked: done };
 }
 
 /**

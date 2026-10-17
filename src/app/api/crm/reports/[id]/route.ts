@@ -7,6 +7,7 @@ import { STAGE_LABEL } from "@/lib/dossier";
 import { esc, layout, sendEmail } from "@/lib/email";
 import { appUrl } from "@/lib/site";
 import { addMessage } from "@/lib/messages";
+import { isFinished } from "@/lib/perms-db";
 import type { TeamRight } from "@/lib/perms";
 
 /** Report changes from its page: `{ status, suspend_reason? }`, `{ stage }`, `{ notes }` or `{ delivered: true, number, report_date, notify }`. */
@@ -14,7 +15,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params;
   const a = await reportApi(id, "view", true);
   if ("res" in a) return a.res;
-  const r = await a.db.prepare("SELECT id, status FROM reports WHERE id = ?").bind(id).first<{ id: string; status: string }>();
+  const r = await a.db.prepare("SELECT id, status, delivered_at FROM reports WHERE id = ?").bind(id).first<{ id: string; status: string; delivered_at: string | null }>();
   if (!r) return err("Raportul nu există.", 404);
   const b = await json(req);
   const actor = `user:${a.user.id}`;
@@ -29,8 +30,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   ];
   for (const [when, right, msg] of need) if (when && !a.access.can[right]) return err(msg, 403);
 
+  const closed = isFinished(r);
+  if (closed && typeof b.status !== "string" && typeof b.collected !== "boolean") return err("Raportul este finalizat și nu se mai modifică. Redeschide-l din „Schimbă status”.", 409);
   if (typeof b.status === "string") {
     if (!REPORT_STATUS[b.status]) return err("Status necunoscut.");
+    // Reopening a finished report: back to "În lucru" with the reason; it is delivered again when it is ready.
+    if (closed) {
+      if (b.status !== "in_progress") return err("Un raport finalizat poate fi doar redeschis (În lucru).");
+      const why = String(b.reason ?? "").trim().slice(0, 500);
+      if (!why) return err("Scrie motivul redeschiderii.");
+      await a.db.prepare("UPDATE reports SET status = 'in_progress', suspend_reason = NULL, delivered_at = NULL, stage = 'drafting', updated_at = ? WHERE id = ?").bind(now(), id).run();
+      await audit(a.db, actor, "report.status", "report", id, `${REPORT_STATUS[r.status]?.[0] ?? r.status} → ${REPORT_STATUS.in_progress[0]} (redeschis: ${why})`);
+      await addMessage(a.db, "report", id, a.user, `Raport redeschis: ${why}`);
+      return Response.json({ ok: true });
+    }
     // Suspending or cancelling needs the reason: kept on the report (suspend_reason) and posted in the team's messages.
     const raw = typeof b.reason === "string" ? b.reason : typeof b.suspend_reason === "string" ? b.suspend_reason : "";
     const reason = raw.trim().slice(0, 500);

@@ -5,7 +5,7 @@ import { appUrl } from "./site";
 import { audit } from "./auth";
 import { esc, layout, sendEmail } from "./email";
 import { type User } from "./users";
-import { reportAccess } from "./perms-db";
+import { isFinished, reportAccess } from "./perms-db";
 import { can } from "./perms";
 import { FORMS, guessSheetType, sheetTypeLabel, type SheetType } from "./insp-forms";
 import { photoUrl, presenceOf } from "./presence";
@@ -13,9 +13,11 @@ import { missingDocs, missingText, type DocType } from "./insp-docs";
 
 /** Who gives the inspector of a report: whoever allocates its team (the main evaluator), or "Inspecții: alocă inspectorul". */
 export async function canAssign(db: D1Database, user: User, reportId: string) {
-  if (can(user, "inspections:assign")) return true;
   const r = await db.prepare("SELECT id, status, delivered_at FROM reports WHERE id = ?").bind(reportId).first<{ id: string; status: string; delivered_at: string | null }>();
-  return !!r && (await reportAccess(db, user, r)).can.members;
+  // Nothing is given on a finished report (it is reopened first).
+  if (!r || isFinished(r)) return false;
+  if (can(user, "inspections:assign")) return true;
+  return (await reportAccess(db, user, r)).can.members;
 }
 
 /** Who can receive an inspection: every active team member (evaluators also inspect). */

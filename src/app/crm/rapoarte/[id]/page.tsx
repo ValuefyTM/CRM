@@ -222,6 +222,25 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
     ].filter((x): x is { name: string; path: string; kind: string } => !!x).map((f): DocItem => ({ id: f.path, name: f.name, kind: f.kind, asset_id: a.id, status: "uploaded", origin: "glide", href: null, size: null, at: null, by: null }))),
   ];
   const sheets = assets.filter((a) => a.sheet_type && (a.sheet_photo || a.sheet_person || a.inspection_status === "done"));
+  // The list of assets: its title with the inspection button (allocate while some asset has none, else reallocate the open
+  // ones), and "Adaugă bun" at its end.
+  const freeAssets = assets.filter((a) => inspState(a) === "free").length;
+  const openAssets = assets.filter((a) => inspState(a) === "open").length;
+  const allocRows = assets.map((a): AllocRow => ({
+    asset: a.id, label: `${cap(a.type) || "Bun"}${a.is_main && assets.length > 1 ? " (principal)" : ""}`, address: a.full_address ?? a.city, state: inspState(a),
+    inspector: a.inspector_id, none: a.no_inspection, sheet_type: guessSheetType(a.category, a.type), docs: docState(a.id), ...contactOf(a),
+  }));
+  const boardHead = (
+    <div className="abListHead">
+      <h2>Bunuri evaluate <span className="muted">· {assets.length} {assets.length === 1 ? "bun" : "bunuri"}{assetsTotal || r.result_value ? <> · total <span className="mono num">{lei(assetsTotal || r.result_value, cur)}</span></> : null}</span></h2>
+      {mayAssign && freeAssets > 0 && <AllocateAll report={r.id} me={user.id} people={inspectors} docs={accessDocs} rows={allocRows} autoOpen={alocare === "1"} />}
+      {mayAssign && freeAssets === 0 && openAssets > 0 && <AllocateAll realloc report={r.id} me={user.id} people={inspectors} docs={accessDocs} rows={allocRows} autoOpen={false} />}
+    </div>
+  );
+  const addAsset = c.assets ? (
+    <AssetEditor report={r.id} label="+ Adaugă bun" className="addAsset abAdd" client={{ name: r.client_name, phone: r.client_phone }}
+      initial={{ ...emptyAsset({ county: main?.county, city: main?.city }), is_main: assets.length === 0, contact_name: r.client_name ?? "", contact_phone: r.client_phone ?? "" }} />
+  ) : null;
   const orderChip = order && (
     <><i className="rcLogo">CO</i>Comandă {order}{r.ordered_at && <small>· {short(r.ordered_at)}</small>}</>
   );
@@ -260,8 +279,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
               Mesaje{messages.length > 0 && <b>{messages.length}</b>}
             </a>
             {c.docs && <a className="btn btnGold btnSm" href={href("documente")}>{final ? "Livrare raport" : "Încarcă raportul final"}</a>}
-            {c.status && <StatusButton id={r.id} status={r.status} reason={r.suspend_reason} />}
-            {c.status && !r.glide_id && r.status !== "cancelled" && <StageActions id={r.id} stage={stage} hasVerifier={!!verifier} />}
+            {c.status && <StatusButton id={r.id} status={r.status} reason={r.suspend_reason} locked={acc.locked} />}
+            {c.status && !acc.locked && !r.glide_id && r.status !== "cancelled" && <StageActions id={r.id} stage={stage} hasVerifier={!!verifier} />}
           </div>
         </div>
         {r.status !== "cancelled" && (
@@ -276,6 +295,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
         )}
         {c.verify && stage === "review" && <div className="dVerify"><span>Raportul așteaptă verificarea.</span><VerifyActions id={r.id} verified={r.verified_at ? fmtDate(r.verified_at, true) : null} /></div>}
       </section>
+      {acc.locked && <div className="note dLocked"><b>Raport finalizat · blocat.</b> Actele, bunurile, inspecțiile, echipa și mesajele nu se mai modifică. Pentru modificări, redeschide-l din „Schimbă status” (cu motivul).</div>}
       {(r.status === "suspended" || r.status === "cancelled") && r.suspend_reason && <div className="note"><b>{r.status === "suspended" ? "Suspendat" : "Anulat"}:</b> {r.suspend_reason}</div>}
 
       <nav className="pillTabs dTabs" aria-label="Secțiuni raport">
@@ -406,25 +426,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
 
       {tab === "bunuri" && (
         <>
-          <section className="card abHeadCard">
-            <div className="cardHead">
-              <h2>Bunuri evaluate <span className="muted">· {assets.length} {assets.length === 1 ? "bun" : "bunuri"}{assetsTotal || r.result_value ? <> · total <span className="mono num">{lei(assetsTotal || r.result_value, cur)}</span></> : null}</span></h2>
-              <span className="actions">
-                {mayAssign && assets.length > 0 && (
-                  <AllocateAll report={r.id} me={user.id} people={inspectors} docs={accessDocs} autoOpen={alocare === "1" && assets.some((a) => inspState(a) === "free")}
-                    rows={assets.map((a): AllocRow => ({
-                      asset: a.id, label: `${cap(a.type) || "Bun"}${a.is_main && assets.length > 1 ? " (principal)" : ""}`, address: a.full_address ?? a.city, state: inspState(a),
-                      inspector: a.inspector_id, none: a.no_inspection, sheet_type: guessSheetType(a.category, a.type), docs: docState(a.id), ...contactOf(a),
-                    }))} />
-                )}
-                {c.assets && <AssetEditor report={r.id} label="+ Adaugă bun" client={{ name: r.client_name, phone: r.client_phone }}
-                  initial={{ ...emptyAsset({ county: main?.county, city: main?.city }), is_main: assets.length === 0, contact_name: r.client_name ?? "", contact_phone: r.client_phone ?? "" }} />}
-              </span>
-            </div>
-            {assets.length > 0 && <p className="hint">Alege un bun ca să vezi în dreapta inspecția lui: cine o face, când, contactul și actele pe care le vede inspectorul.</p>}
-          </section>
-          {assets.length === 0 ? <section className="card"><p className="hint">Raportul nu are bunuri înregistrate.</p></section> : (
-            <AssetBoard initial={bun} items={assets.map((a, n) => {
+          {assets.length === 0 ? <section className="card abList">{boardHead}<p className="hint">Raportul nu are bunuri înregistrate.</p>{addAsset}</section> : (
+            <AssetBoard initial={bun} head={boardHead} foot={addAsset} items={assets.map((a, n) => {
               const [pt, pc] = inspPill(a);
               const fromApp = !!a.inspection_id && !a.inspection_from_glide;
               const active = isActive(a);
@@ -529,6 +532,12 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                             docs: docState(a.id),
                           }} />
                         )}
+                        {a.inspection_status === "done" && (
+                          <AssignInspection reinspect report={r.id} me={user.id} people={inspectors} docs={accessDocs} access={null} initial={{
+                            asset: a.id, label, inspection: null, inspector: a.inspector_id, sheet_type: a.sheet_type || guessSheetType(a.category, a.type),
+                            due_on: null, ...ct, instructions: null, scheduled: false, docs: docState(a.id),
+                          }} />
+                        )}
                         {a.inspection_status !== "done" && !none && <MarkInspectionDone report={r.id} asset={a.id} label={label} />}
                         {none && <NeedsInspection report={r.id} asset={a.id} />}
                         {active && <CancelInspection report={r.id} inspection={a.inspection_id!} who={a.inspector ?? "inspector"} />}
@@ -584,7 +593,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
       )}
 
       {tab === "mesaje" && (
-        <Messages full entity="report" id={r.id} rows={messages} title="Chat echipă" hint="Discuția echipei pe acest raport: evaluator, verificator, inspector, operatori. Clientul nu vede mesajele." />
+        <Messages full entity="report" id={r.id} rows={messages} readOnly={c.messages ? null : acc.locked ? "Raportul este finalizat: conversația e închisă. Redeschide raportul ca să poți scrie." : "Nu poți scrie în conversația acestui raport."} title="Chat echipă" hint="Discuția echipei pe acest raport: evaluator, verificator, inspector, operatori. Clientul nu vede mesajele." />
       )}
       </div>
       {tab !== "documente" && <aside className="dSide">
@@ -610,7 +619,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             </ul>
           )}
         </section>
-        {tab !== "mesaje" && <Messages entity="report" id={r.id} rows={messages} title="Mesaje echipă" limit={3} more={href("mesaje")} />}
+        {tab !== "mesaje" && <Messages entity="report" id={r.id} rows={messages} title="Mesaje echipă" limit={3} more={href("mesaje")} readOnly={c.messages ? null : acc.locked ? "Raport finalizat: conversația e închisă." : "Nu poți scrie în conversația acestui raport."} />}
         {tab === "general" && <section className="card">
           <h2>Date cheie</h2>
           <dl className="kv dKv">

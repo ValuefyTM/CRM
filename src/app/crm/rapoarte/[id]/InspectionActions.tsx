@@ -27,9 +27,10 @@ async function send(url: string, init: RequestInit) {
 }
 
 /** "Alocă inspecția" / "Realocă": the inspection task of one asset, given to the evaluator themselves or to a colleague. */
-export function AssignInspection({ report, me, people, initial, docs = [], access }: { report: string; me: string; people: Person[]; initial: TaskInitial; docs?: AccessDoc[]; access?: string[] | null }) {
+/** `reinspect`: the asset was inspected already; a new inspection is given (the message goes to the inspector by email and in the app). */
+export function AssignInspection({ report, me, people, initial, docs = [], access, reinspect = false }: { report: string; me: string; people: Person[]; initial: TaskInitial; docs?: AccessDoc[]; access?: string[] | null; reinspect?: boolean }) {
   const [open, setOpen] = useState(false);
-  const realloc = !!initial.inspection;
+  const realloc = !!initial.inspection && !reinspect;
   const [f, setF] = useState({
     inspector: initial.inspector ?? (people.some((p) => p.id === me) ? me : ""),
     sheet_type: initial.sheet_type, due_on: initial.due_on ?? "", contact_kind: initial.contact_kind ?? "", contact_name: initial.contact_name ?? "",
@@ -55,11 +56,12 @@ export function AssignInspection({ report, me, people, initial, docs = [], acces
 
   return (
     <>
-      <button type="button" className={realloc ? "linkBtn" : "btn btnNavy btnSm"} onClick={() => setOpen(true)}>{realloc ? "Realocă" : "Alocă inspecția"}</button>
+      <button type="button" className={realloc ? "linkBtn" : reinspect ? "btn btnGhost btnSm" : "btn btnNavy btnSm"} onClick={() => setOpen(true)}>{realloc ? "Realocă" : reinspect ? "↻ Inspecție nouă" : "Alocă inspecția"}</button>
       {open && createPortal(
         <div className="vfModal" role="dialog" aria-modal="true" aria-labelledby="assignTitle" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
           <form className="vfModalBox" onSubmit={submit}>
-            <h2 id="assignTitle">{realloc ? "Realocă inspecția" : "Alocă inspecția"}</h2>
+            <h2 id="assignTitle">{realloc ? "Realocă inspecția" : reinspect ? "Inspecție nouă (reinspecție)" : "Alocă inspecția"}</h2>
+            {reinspect && <div className="note">Bunul a fost deja inspectat. Se creează o inspecție nouă; fișa veche rămâne salvată în CRM.</div>}
             <p className="hint">{initial.label}. Inspectorul primește un email și vede inspecția în aplicația de inspecții la „De programat”; programarea o face el.</p>
             <div className="field">Cine face inspecția
               <PersonPicker label="Cine face inspecția" value={f.inspector} onChange={(v) => setF({ ...f, inspector: v })} people={picks(people)} me={me} />
@@ -81,12 +83,12 @@ export function AssignInspection({ report, me, people, initial, docs = [], acces
               <label className="field">Nume<input className="input" value={f.contact_name} onChange={set("contact_name")} /></label>
               <label className="field">Telefon<input className="input" type="tel" value={f.contact_phone} onChange={set("contact_phone")} /></label>
             </div>
-            <label className="field">Instrucțiuni pentru inspector
-              <textarea className="textarea" rows={3} value={f.instructions} onChange={set("instructions")} placeholder="ex. măsurători la toate încăperile, fotografii la acoperiș, cheia la vecinul de la ap. 4" />
+            <label className="field">{reinspect ? <span className="fLabel">Mesaj pentru inspector <small>(opțional · îl primește pe email și îl vede în aplicație)</small></span> : "Instrucțiuni pentru inspector"}
+              <textarea className="textarea" rows={3} value={f.instructions} onChange={set("instructions")} placeholder={reinspect ? "ex. refă fotografiile la bucătărie, banca cere și măsurătorile balconului" : "ex. măsurători la toate încăperile, fotografii la acoperiș, cheia la vecinul de la ap. 4"} />
             </label>
             {msg && <div role="alert" className="error">{msg}</div>}
             <div className="actions">
-              <button type="submit" className="btn btnNavy" disabled={busy}>{busy ? "Se salvează…" : realloc ? "Salvează" : "Alocă"}</button>
+              <button type="submit" className="btn btnNavy" disabled={busy}>{busy ? "Se salvează…" : realloc ? "Salvează" : reinspect ? "Alocă inspecția nouă" : "Alocă"}</button>
               <button type="button" className="btn btnGhost" onClick={() => setOpen(false)}>Renunță</button>
             </div>
           </form>
@@ -118,12 +120,15 @@ export type AllocRow = {
  * "Alocă inspecțiile": every asset of the report in one window — an inspector, "Fără inspecție" (with the reason) or
  * later. Opens by itself right after the report is created; it can be closed without giving anything.
  */
-export function AllocateAll({ report, me, people, rows, autoOpen, docs = [] }: { report: string; me: string; people: Person[]; rows: AllocRow[]; autoOpen: boolean; docs?: AccessDoc[] }) {
+/** `realloc`: every inspection is given already; the open ones (not done yet) can be moved to someone else. */
+export function AllocateAll({ report, me, people, rows, autoOpen, docs = [], realloc = false }: { report: string; me: string; people: Person[]; rows: AllocRow[]; autoOpen: boolean; docs?: AccessDoc[]; realloc?: boolean }) {
   // Opened after mounting: the window is a portal into document.body, which the server render does not have.
   const [open, setOpen] = useState(false);
   useEffect(() => { if (autoOpen) setOpen(true); }, [autoOpen]);
-  const free = rows.filter((r) => r.state === "free" || r.state === "none");
-  const [pick, setPick] = useState<Record<string, string>>(() => Object.fromEntries(free.map((r) => [r.asset, r.state === "none" ? "none" : ""])));
+  const canEdit = (r: AllocRow) => r.state === "free" || r.state === "none" || (realloc && r.state === "open");
+  const free = rows.filter(canEdit);
+  const start = (r: AllocRow) => (r.state === "none" ? "none" : r.state === "open" ? r.inspector ?? "" : "");
+  const [pick, setPick] = useState<Record<string, string>>(() => Object.fromEntries(free.map((r) => [r.asset, start(r)])));
   const [reason, setReason] = useState<Record<string, string>>(() => Object.fromEntries(free.map((r) => [r.asset, r.none ?? NO_INSPECTION_REASONS[0]])));
   const [due, setDue] = useState("");
   const [instructions, setInstructions] = useState("");
@@ -136,10 +141,10 @@ export function AllocateAll({ report, me, people, rows, autoOpen, docs = [] }: {
     const u = new URL(location.href);
     if (u.searchParams.has("alocare")) { u.searchParams.delete("alocare"); history.replaceState(null, "", u); }
   };
-  const given = free.filter((r) => pick[r.asset] && pick[r.asset] !== "none");
+  const given = free.filter((r) => pick[r.asset] && pick[r.asset] !== "none" && pick[r.asset] !== start(r));
   // Ticked by default: the documents of the assets given now and the ones of the whole report.
   const access = refs ?? defaultAccess(docs, given.map((r) => r.asset));
-  const changes = free.filter((r) => (pick[r.asset] || "") !== (r.state === "none" ? "none" : "") || (r.state === "none" && pick[r.asset] === "none" && reason[r.asset] !== r.none));
+  const changes = free.filter((r) => (pick[r.asset] || "") !== start(r) || (r.state === "none" && pick[r.asset] === "none" && reason[r.asset] !== r.none));
 
   const submit = async () => {
     setBusy(true); setMsg("");
@@ -149,7 +154,7 @@ export function AllocateAll({ report, me, people, rows, autoOpen, docs = [] }: {
       const body = !v || v === "none"
         ? { asset: r.asset, none: v === "none" ? reason[r.asset] : null }
         : { asset: r.asset, inspector: v, sheet_type: r.sheet_type, due_on: due, contact_kind: r.contact_kind ?? "client", contact_name: r.contact_name ?? "", contact_phone: r.contact_phone ?? "", instructions, confirm_missing: true,
-          ...(docs.length ? { doc_refs: access.filter((id) => { const d = docs.find((x) => x.id === id); return !d?.asset_id || d.asset_id === r.asset || given.length === 1; }) } : {}) };
+          ...(docs.length && r.state !== "open" ? { doc_refs: access.filter((id) => { const d = docs.find((x) => x.id === id); return !d?.asset_id || d.asset_id === r.asset || given.length === 1; }) } : {}) };
       const e = await send(`/api/crm/reports/${report}/inspections`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       if (e) errors.push(`${r.label}: ${e}`);
     }
@@ -162,11 +167,11 @@ export function AllocateAll({ report, me, people, rows, autoOpen, docs = [] }: {
 
   return (
     <>
-      <button type="button" className="btn btnNavy btnSm" onClick={() => setOpen(true)}>Alocă inspecțiile</button>
+      <button type="button" className={realloc ? "btn btnGhost btnSm" : "btn btnNavy btnSm"} onClick={() => setOpen(true)}>{realloc ? "Realocă inspecțiile" : "Alocă inspecțiile"}</button>
       {open && createPortal(
         <div className="vfModal" role="dialog" aria-modal="true" aria-labelledby="allocTitle" onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
           <div className="vfModalBox wide">
-            <h2 id="allocTitle">Alocă inspecțiile</h2>
+            <h2 id="allocTitle">{realloc ? "Realocă inspecțiile" : "Alocă inspecțiile"}</h2>
             <p className="hint">Pentru fiecare bun din raport alegi cine face inspecția, „Fără inspecție” (evaluare fără vizită în CRM) sau lași pentru mai târziu. Inspectorul primește email și vede inspecția în aplicație.</p>
             {free.length > 1 && (
               <div className="field">Același inspector pentru toate bunurile
@@ -176,7 +181,7 @@ export function AllocateAll({ report, me, people, rows, autoOpen, docs = [] }: {
             )}
             <ul className="allocList">
               {rows.map((r) => {
-                const editable = r.state === "free" || r.state === "none";
+                const editable = canEdit(r);
                 const v = pick[r.asset] ?? "";
                 return (
                   <li key={r.asset}>
@@ -190,7 +195,7 @@ export function AllocateAll({ report, me, people, rows, autoOpen, docs = [] }: {
                     {editable ? (
                       <div className="allocPick">
                         <PersonPicker label={`Inspecția: ${r.label}`} value={v} onChange={(x) => setPick({ ...pick, [r.asset]: x })} people={picks(people)} me={me} placeholder="Mai târziu"
-                          extras={[{ value: "", label: "Mai târziu", hint: "rămâne nealocată" }, { value: "none", label: "Fără inspecție", hint: "evaluare fără vizită în CRM", after: true }]} />
+                          extras={r.state === "open" ? [] : [{ value: "", label: "Mai târziu", hint: "rămâne nealocată" }, { value: "none", label: "Fără inspecție", hint: "evaluare fără vizită în CRM", after: true }]} />
                         {v === "none" && (
                           <select className="select" aria-label={`Motiv: ${r.label}`} value={reason[r.asset]} onChange={(e) => setReason({ ...reason, [r.asset]: e.target.value })}>
                             {[...new Set([...NO_INSPECTION_REASONS, reason[r.asset]])].map((x) => <option key={x} value={x}>{x}</option>)}
