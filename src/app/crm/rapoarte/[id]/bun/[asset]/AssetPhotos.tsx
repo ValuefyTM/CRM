@@ -79,6 +79,7 @@ export function AssetPhotos({ report, inspections, photos, covers, edit, name }:
     if (!r?.ok) { setMsg({ ok: false, t: ((await r?.json().catch(() => ({}))) as { error?: string })?.error ?? "Nu am putut alege coperta." }); return; }
     setCover((c) => ({ ...c, [p.inspection]: p.id }));
     setMsg({ ok: true, t: "Coperta bunului a fost schimbată." });
+    setSel(new Set());
     router.refresh();
   };
   const toggle = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -122,68 +123,60 @@ export function AssetPhotos({ report, inspections, photos, covers, edit, name }:
 
   if (!photos.length) return <section className="card"><h2>Fotografii</h2><p className="hint">Bunul nu are fotografii de la inspecție încă.</p></section>;
   const shown = view != null ? flat[view] : null;
+  const one = sel.size === 1 ? flat.find((p) => sel.has(p.id)) : null;
   return (
-    <section className="card apCard">
+    <section className="apCard">
       <div className="apBar">
-        <div className="apBarL">
-          <h2>Fotografii <span className="muted">· {mine.length}</span></h2>
-          {inspections.length > 1 && (
-            <select className="select selectSm" value={ins} onChange={(e) => { setIns(e.target.value); setSel(new Set()); setExtra([]); }} aria-label="Inspecția">
-              {inspections.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
-            </select>
-          )}
-        </div>
-        <div className="apBarR">
-          {sel.size > 0 ? <>
-            <span className="muted">{sel.size} selectate</span>
-            <button type="button" className="linkBtn" onClick={() => setSel(new Set())}>Deselectează</button>
-            <button type="button" className="btn btnNavy btnSm" disabled={!!zip} onClick={() => download(true)}>Descarcă selecția (ZIP)</button>
-          </> : <button type="button" className="linkBtn" onClick={() => setSel(new Set(flat.map((p) => p.id)))}>Selectează tot</button>}
-          <button type="button" className="btn btnGhost btnSm" disabled={!!zip} onClick={() => download(false)}>Descarcă tot (ZIP)</button>
-        </div>
+        <h2>Fotografii</h2>
+        {inspections.length > 1 ? (
+          <select className="select selectSm" value={ins} onChange={(e) => { setIns(e.target.value); setSel(new Set()); setExtra([]); }} aria-label="Inspecția">
+            {inspections.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+          </select>
+        ) : <span className="muted">{inspections[0]?.label} · {mine.length} fotografii</span>}
+        <span className="apGrow" />
+        <button type="button" className="btn btnGhost btnSm" onClick={() => setSel(sel.size === flat.length ? new Set() : new Set(flat.map((p) => p.id)))}>{sel.size === flat.length ? "Deselectează tot" : "Selectează tot"}</button>
+        <button type="button" className="btn btnNavy btnSm" disabled={!!zip} onClick={() => download(false)}>Descarcă tot (ZIP)</button>
       </div>
-      {edit && <p className="hint">Trage fotografiile ca să le muți în alt grup sau să le schimbi ordinea. ★ alege coperta bunului.</p>}
+      {edit && <p className="hint apHint">Fiecare coloană e un grup. Trage fotografiile dintr-o coloană în alta sau în sus și în jos ca să le schimbi ordinea; ★ alege coperta.</p>}
       {zip && <p className="hint" role="status">{zip}</p>}
       {msg && <p className={msg.ok ? "okTxt" : "errTxt"} role="status">{msg.t}</p>}
 
-      <div className="apGroups">
+      <div className="apLanes">
       {groups.map((g) => {
         const items = mine.filter((p) => p.group === g);
         return (
-          <div key={g} className={`apGroup${over === `g:${g}` ? " over" : ""}`}
+          <div key={g} className={`apLane${over === `g:${g}` ? " over" : ""}`}
             onDragOver={edit ? (e) => { e.preventDefault(); if (over !== `g:${g}` && !over?.startsWith("p:")) setOver(`g:${g}`); } : undefined}
             onDragLeave={edit ? (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(null); } : undefined}
             onDrop={edit ? (e) => { e.preventDefault(); drop(g, null); } : undefined}>
-            <div className="apGroupHead">
-              <b>{g}</b><small>{items.length}</small>
-              {edit && <button type="button" className="linkBtn" onClick={() => rename(g)}>redenumește</button>}
-              {items.length > 0 && <button type="button" className="linkBtn" onClick={() => setSel((s) => { const n = new Set(s); const all = items.every((p) => n.has(p.id)); for (const p of items) if (all) n.delete(p.id); else n.add(p.id); return n; })}>
-                {items.every((p) => sel.has(p.id)) ? "deselectează" : "selectează"}</button>}
+            <div className="apLaneHead">
+              <b title={g}>{g}</b><small>{items.length}</small>
+              {items.length > 0 && <button type="button" className="apMini" title={items.every((p) => sel.has(p.id)) ? "Deselectează grupul" : "Selectează grupul"} aria-label="Selectează grupul"
+                onClick={() => setSel((s) => { const n = new Set(s); const all = items.every((p) => n.has(p.id)); for (const p of items) if (all) n.delete(p.id); else n.add(p.id); return n; })}>✓</button>}
+              {edit && <button type="button" className="apMini" title="Redenumește grupul" aria-label="Redenumește grupul" onClick={() => rename(g)}>✎</button>}
             </div>
-            <div className="apGrid">
-              {items.map((p) => {
-                const isCover = cover[p.inspection] === p.id;
-                return (
-                  <figure key={p.id} className={`apTile${sel.has(p.id) ? " sel" : ""}${drag === p.id ? " drag" : ""}${over === `p:${p.id}` ? " before" : ""}`}
-                    draggable={edit} onDragStart={(e) => { setDrag(p.id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", p.id); }}
-                    onDragEnd={() => { setDrag(null); setOver(null); }}
-                    onDragOver={edit ? (e) => { e.preventDefault(); e.stopPropagation(); if (over !== `p:${p.id}`) setOver(`p:${p.id}`); } : undefined}
-                    onDrop={edit ? (e) => { e.preventDefault(); e.stopPropagation(); drop(g, p.id); } : undefined}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={p.src} alt={p.label} loading="lazy" draggable={false} onClick={() => setView(flat.indexOf(p))} />
-                    <label className="apCheck" title="Selectează"><input type="checkbox" checked={sel.has(p.id)} onChange={() => toggle(p.id)} /></label>
-                    {isCover ? <span className="apCover on" title="Coperta bunului">★ Copertă</span>
-                      : edit && <button type="button" className="apCover" title="Alege ca copertă" onClick={() => makeCover(p)}>★</button>}
-                    <figcaption>{p.label !== g ? p.label : ""}{p.taken_at && <small>{when(p.taken_at)}</small>}</figcaption>
-                  </figure>
-                );
-              })}
-              {items.length === 0 && <p className="apEmpty">Trage fotografii aici</p>}
-            </div>
+            {items.map((p) => {
+              const isCover = cover[p.inspection] === p.id;
+              return (
+                <figure key={p.id} className={`apTile${sel.has(p.id) ? " sel" : ""}${drag === p.id ? " drag" : ""}${over === `p:${p.id}` ? " before" : ""}`}
+                  draggable={edit} onDragStart={(e) => { setDrag(p.id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", p.id); }}
+                  onDragEnd={() => { setDrag(null); setOver(null); }}
+                  onDragOver={edit ? (e) => { e.preventDefault(); e.stopPropagation(); if (over !== `p:${p.id}`) setOver(`p:${p.id}`); } : undefined}
+                  onDrop={edit ? (e) => { e.preventDefault(); e.stopPropagation(); drop(g, p.id); } : undefined}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={p.src} alt={p.label} loading="lazy" draggable={false} onClick={() => setView(flat.indexOf(p))} />
+                  <label className="apCheck" title="Selectează"><input type="checkbox" checked={sel.has(p.id)} onChange={() => toggle(p.id)} /></label>
+                  {isCover ? <span className="apCover on" title="Coperta bunului">★ Copertă</span>
+                    : edit && <button type="button" className="apCover" title="Alege ca copertă" onClick={() => makeCover(p)}>★</button>}
+                  <figcaption>{p.label !== g ? p.label : ""}{p.taken_at && <small>{when(p.taken_at)}</small>}</figcaption>
+                </figure>
+              );
+            })}
+            {over === `g:${g}` && <div className="apDrop">Lasă aici</div>}
+            {items.length === 0 && over !== `g:${g}` && <p className="apEmpty">Trage fotografii aici</p>}
           </div>
         );
       })}
-      </div>
       {edit && (
         <div className={`apNew${over === "new" ? " over" : ""}`} onDragOver={(e) => { e.preventDefault(); setOver("new"); }} onDragLeave={() => setOver(null)}
           onDrop={(e) => {
@@ -194,6 +187,16 @@ export function AssetPhotos({ report, inspections, photos, covers, edit, name }:
             if (n && p) void save([...list.filter((x) => x.id !== p.id), { ...p, group: n }]);
           }}>
           <button type="button" className="linkBtn" onClick={newGroup}>+ Grup nou</button><small>sau trage o fotografie aici</small>
+        </div>
+      )}
+      </div>
+
+      {sel.size > 0 && (
+        <div className="apSelBar" role="toolbar" aria-label="Fotografiile selectate">
+          <b>{sel.size} {sel.size === 1 ? "selectată" : "selectate"}</b>
+          <button type="button" className="btn btnGold btnSm" disabled={!!zip} onClick={() => download(true)}>Descarcă selecția (ZIP)</button>
+          {edit && one && cover[one.inspection] !== one.id && <button type="button" className="btn btnSm apSelGhost" onClick={() => makeCover(one)}>Fă copertă</button>}
+          <button type="button" className="apSelX" aria-label="Renunță la selecție" onClick={() => setSel(new Set())}>✕</button>
         </div>
       )}
 

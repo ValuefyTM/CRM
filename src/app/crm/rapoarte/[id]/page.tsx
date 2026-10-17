@@ -334,7 +334,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
               </dl>
             </section>
             <section className="card">
-              <div className="cardHead"><h2>Bunul principal</h2>{main && <a className="link" href={href("bunuri")}>bunuri & inspecții →</a>}</div>
+              <div className="cardHead"><h2>Bunul principal</h2>{main && <span className="dAssetLinks"><a className="btn btnGhost btnSm" href={`${base}/rapoarte/${r.id}/bun/${main.id}`}>Fișa bunului →</a><a className="link" href={href("bunuri")}>bunuri & inspecții</a></span>}</div>
               {!main ? <p className="hint">Raportul nu are bunuri înregistrate.</p> : (
                 <>
                   <div className="dAsset">
@@ -472,7 +472,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                       <small>{none ? a.no_inspection : a.inspection_status === "done" ? [a.done_at && fmtDate(a.done_at), a.inspector && firstName(a.inspector)].filter(Boolean).join(" · ")
                         : active ? [a.scheduled_at ? fmtDate(a.scheduled_at, true) : a.due_on ? `termen ${fmtDate(a.due_on)}` : null, a.inspector && firstName(a.inspector)].filter(Boolean).join(" · ") : ""}</small>
                       <span className="abVal">{a.value != null ? <b className="mono num">{lei(a.value, cur)}</b> : <small className="muted">fără valoare</small>}{a.approach && <small> · {APPROACH[a.approach]}</small>}</span>
-                      <a className="link abDetail" href={`${base}/rapoarte/${r.id}/bun/${a.id}`}>Detalii bun →</a>
+                      <a className="btn btnGhost btnSm abDetail" href={`${base}/rapoarte/${r.id}/bun/${a.id}`}>Fișa bunului →</a>
                       {c.assets && (
                         <span className="abActs">
                           <AssetEditor report={r.id} label="Modifică" shared={a.other_reports} client={{ name: r.client_name, phone: r.client_phone }} initial={assetForm(a)} />
