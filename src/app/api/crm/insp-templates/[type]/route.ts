@@ -4,6 +4,7 @@ import { err, json, staffApi } from "@/lib/api";
 import { SHEET_TYPES, sheetTypeLabel, type SheetType } from "@/lib/insp-forms";
 import { cleanTemplate } from "@/lib/insp-templates";
 import { saveTemplate, templateOf } from "@/lib/insp-templates-db";
+import { inspChannel, later, syncTemplates } from "@/lib/uvalo";
 
 type P = { params: Promise<{ type: string }> };
 const typeOf = async (p: P) => { const { type } = await p.params; return SHEET_TYPES.some(([t]) => t === type) ? (type as SheetType) : null; };
@@ -18,6 +19,8 @@ export async function PUT(req: Request, p: P) {
   if (!r.ok) return err(r.error);
   await saveTemplate(a.db, t, r.tpl, a.user.id);
   await audit(a.db, `user:${a.user.id}`, "insp.template", "insp_template", t, `Fișa ${sheetTypeLabel(t)} modificată`);
+  // inspections through UVALO: the sheet is sent there too (the UVALO copy is changed only from here)
+  if ((await inspChannel(a.db)) === "uvalo") await later(syncTemplates(a.db, t));
   return NextResponse.json({ ok: true, ...(await templateOf(a.db, t)) });
 }
 
@@ -29,5 +32,6 @@ export async function DELETE(_req: Request, p: P) {
   if (!t) return err("Fișă necunoscută.", 404);
   await saveTemplate(a.db, t, null, a.user.id);
   await audit(a.db, `user:${a.user.id}`, "insp.template", "insp_template", t, `Fișa ${sheetTypeLabel(t)} readusă la modelul VALUEFY`);
+  if ((await inspChannel(a.db)) === "uvalo") await later(syncTemplates(a.db, t));
   return NextResponse.json({ ok: true, ...(await templateOf(a.db, t)) });
 }

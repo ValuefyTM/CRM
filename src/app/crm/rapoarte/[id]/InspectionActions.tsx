@@ -286,3 +286,17 @@ export function MarkInspectionDone({ report, asset, label }: { report: string; a
     </>
   );
 }
+
+/** UVALO: send the inspection again (after an error) or bring the finished sheet now (if the webhook did not). */
+export function UvaloAction({ report, inspection, action }: { report: string; inspection: string; action: "push" | "import" }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button type="button" className="btn btnGhost btnSm" disabled={busy} onClick={async () => {
+      setBusy(true);
+      const error = await send("/api/crm/uvalo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, report, inspection }) });
+      setBusy(false);
+      if (error) return alert(error);
+      location.reload();
+    }}>{busy ? "Se trimite…" : action === "push" ? "↻ Retrimite în UVALO" : "⤓ Preia fișa din UVALO"}</button>
+  );
+}

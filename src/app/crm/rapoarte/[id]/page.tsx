@@ -11,7 +11,7 @@ import { orderCode, SOURCE_LABEL } from "@/lib/order-labels";
 import { SPECIALIZATIONS } from "@/lib/labels";
 import { CrmShell } from "@/components/CrmShell";
 import { ReportList } from "@/components/ReportList";
-import { AllocateAll, AssignInspection, CancelInspection, MarkInspectionDone, NeedsInspection, type AllocRow } from "./InspectionActions";
+import { AllocateAll, AssignInspection, CancelInspection, MarkInspectionDone, NeedsInspection, UvaloAction, type AllocRow } from "./InspectionActions";
 import { AssetBoard } from "./AssetBoard";
 import { SheetModal } from "./SheetModal";
 import { ReportDocs, type DocItem } from "./ReportDocs";
@@ -43,6 +43,7 @@ const KIND: Record<string, string> = { person: "Persoană fizică", company: "Pe
 const CONTACT: Record<string, string> = { client: "Clientul", owner: "Proprietarul", agent: "Agent imobiliar", other: "Altă persoană" };
 const APPROACH: Record<string, string> = { market: "Piață", income: "Venit", cost: "Cost" };
 const VAL_TYPE: Record<string, string> = { EPI: "EPI — proprietăți imobiliare", EBM: "EBM — bunuri mobile", EI: "EI — întreprinderi", EIF: "EIF — instrumente financiare" };
+const UVALO_STATUS: Record<string, string> = { prog: "de programat în UVALO", plan: "programată în UVALO", lucru: "în lucru pe telefon", gata: "finalizată în UVALO", pred: "finalizată în UVALO", deleted: "scoasă din UVALO" };
 const ROLE_NAME: Record<string, string> = { owner: "Proprietar", admin: "Administrator", evaluator: "Evaluator", operator: "Operator", inspector: "Inspector" };
 const TABS = [["general", "General"], ["bunuri", "Bunuri & inspecții"], ["documente", "Acte & livrare"], ["mesaje", "Mesaje"]] as const;
 // Old links: the inspections are now with the assets, the users of the report in General.
@@ -493,7 +494,15 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                       {active && <Row k="Acte în aplicație">{seen ? `${seen} ${seen === 1 ? "act" : "acte"}` : <span className="muted">niciun act</span>}</Row>}
                       {fromApp && a.sheet_status === "draft" && active && <Row k="Fișă">în lucru</Row>}
                       {cancelled && !none && <Row k="Stare">inspecția a fost anulată</Row>}
+                      {(a.uvalo_id || a.uvalo_error) && !cancelled && (
+                        <Row k="UVALO">
+                          {a.uvalo_code ? <span className="mono">{a.uvalo_code}</span> : null}{a.uvalo_code && " · "}{UVALO_STATUS[a.uvalo_status ?? ""] ?? (a.uvalo_id ? "trimisă" : "netrimisă")}
+                          {a.uvalo_error && <span className="errTxt block">{a.uvalo_error}</span>}
+                        </Row>
+                      )}
                     </dl>
+                    {mayAssign && active && a.uvalo_error && <UvaloAction report={r.id} inspection={a.inspection_id!} action="push" />}
+                    {mayAssign && a.uvalo_id && (a.uvalo_status === "gata" || a.uvalo_status === "pred") && a.inspection_status !== "done" && <UvaloAction report={r.id} inspection={a.inspection_id!} action="import" />}
                     {hasSheet && (
                       <div className="abSheetBox">
                         {thumb ? <SafeImg src={thumb} alt="" className="abSheetPh" fallback={<span className="abSheetPh" />} /> : <span className="abSheetPh" />}

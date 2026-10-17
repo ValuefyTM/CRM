@@ -182,7 +182,7 @@ export type Sheet = {
 };
 export type Photo = { id: string; category: string; caption: string | null; url: string; taken_at: string | null; width: number | null; height: number | null };
 
-const sheetId = (inspectionId: string) => `app-${inspectionId}`;
+export const sheetId = (inspectionId: string) => `app-${inspectionId}`;
 export const fileUrl = (key: string) => `/api/insp/files/${key.split("/").map(encodeURIComponent).join("/")}`;
 
 export async function sheetOf(db: D1Database, inspectionId: string): Promise<Sheet | null> {

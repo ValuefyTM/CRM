@@ -1,4 +1,5 @@
 import { err, json, reportApi } from "@/lib/api";
+import { later, pushInspection } from "@/lib/uvalo";
 import { assignInspection, canAssign, cancelInspection, markInspectionDone, markNoInspection } from "@/lib/insp-assign";
 
 /**
@@ -36,6 +37,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const ids = Array.isArray(b.doc_refs) ? (b.doc_refs as unknown[]).filter((x): x is string => typeof x === "string").slice(0, 100) : [];
   const ok = ids.length ? (await a.db.prepare(`SELECT id FROM report_documents WHERE report_id = ? AND id IN (${ids.map(() => "?").join(", ")})`).bind(id, ...ids).all<{ id: string }>()).results.map((x) => x.id) : [];
   await a.db.prepare("UPDATE inspections SET doc_refs = ? WHERE report_id = ? AND status IN ('to_schedule', 'scheduled')").bind(JSON.stringify(ok), id).run();
+  // sent to UVALO already (e.g. a new work: the inspection is given before its documents are uploaded): the documents follow
+  const sent = (await a.db.prepare("SELECT id FROM inspections WHERE report_id = ? AND status IN ('to_schedule', 'scheduled') AND uvalo_id IS NOT NULL").bind(id).all<{ id: string }>()).results;
+  for (const x of sent) await later(pushInspection(a.db, x.id));
   return Response.json({ ok: true });
 }
 

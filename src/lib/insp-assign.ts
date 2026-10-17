@@ -10,6 +10,7 @@ import { can } from "./perms";
 import { FORMS, guessSheetType, sheetTypeLabel, type SheetType } from "./insp-forms";
 import { photoUrl, presenceOf } from "./presence";
 import { missingDocs, missingText, type DocType } from "./insp-docs";
+import { cancelInUvalo, inspChannel, inspectorByLegit, later, pushInspection, uvaloAppUrl } from "./uvalo";
 
 /** Who gives the inspector of a report: whoever allocates its team (the main evaluator), or "Inspecții: alocă inspectorul". */
 export async function canAssign(db: D1Database, user: User, reportId: string) {
@@ -43,7 +44,7 @@ const CONTACT_KINDS = ["client", "owner", "agent", "other"];
  * without them the task is given only when `confirm_missing` is true (otherwise `missing` lists what is not uploaded).
  */
 export async function assignInspection(db: D1Database, user: User, reportId: string, b: Record<string, unknown>)
-  : Promise<{ ok: true; id: string; missing: DocType[] } | { ok: false; error: string; missing?: DocType[] }> {
+  : Promise<{ ok: true; id: string; missing: DocType[]; uvalo?: string | null } | { ok: false; error: string; missing?: DocType[] }> {
   const asset = await db
     .prepare(`SELECT a.id, a.report_id, p.category, p.type, COALESCE(p.full_address, p.city) AS address, r.order_id, r.number, o.property_type AS order_type
       FROM assets a JOIN crm_properties p ON p.id = a.property_id JOIN reports r ON r.id = a.report_id LEFT JOIN orders o ON o.id = r.order_id
@@ -52,10 +53,18 @@ export async function assignInspection(db: D1Database, user: User, reportId: str
     .first<{ id: string; report_id: string; category: string | null; type: string | null; address: string | null; order_id: string | null; number: string | null; order_type: string | null }>();
   if (!asset) return { ok: false as const, error: "Bunul nu aparține acestui raport." };
   const inspector = await db
-    .prepare(`SELECT id, email, COALESCE(NULLIF(name, ''), email) AS name, role, duties FROM users WHERE id = ? AND kind = 'internal' AND status NOT IN ('disabled', 'deleted')`)
+    .prepare(`SELECT id, email, COALESCE(NULLIF(name, ''), email) AS name, role, duties, anevar_no FROM users WHERE id = ? AND kind = 'internal' AND status NOT IN ('disabled', 'deleted')`)
     .bind(str(b.inspector, 80))
-    .first<{ id: string; email: string; name: string; role: string; duties: string | null }>();
+    .first<{ id: string; email: string; name: string; role: string; duties: string | null; anevar_no: string | null }>();
   if (!inspector) return { ok: false as const, error: "Alege inspectorul: tu sau un coleg din echipă." };
+  // Inspections through UVALO: the inspector needs a UVALO account with the same ANEVAR card (checked before anything is saved).
+  const viaUvalo = (await inspChannel(db)) === "uvalo";
+  if (viaUvalo) {
+    if (!inspector.anevar_no?.trim()) return { ok: false as const, error: `${inspector.name} nu are legitimația ANEVAR completată în CRM (Utilizatori); fără ea nu primește inspecția în UVALO.` };
+    const found = await inspectorByLegit(inspector.anevar_no).catch((e: Error & { status?: number }) => (e.status === 404 ? null : e));
+    if (found instanceof Error) return { ok: false as const, error: `UVALO: ${found.message}` };
+    if (!found) return { ok: false as const, error: `${inspector.name} nu are cont UVALO activ cu legitimația ${inspector.anevar_no}. Fără cont nu poate primi inspecția (sau treci pe aplicația CRM din Setări → Fișe de inspecție).` };
+  }
   const type = (FORMS as Record<string, unknown>)[str(b.sheet_type, 20)] ? (str(b.sheet_type, 20) as SheetType) : guessSheetType(asset.category, asset.type, asset.order_type);
   const due = str(b.due_on, 10);
   if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) return { ok: false as const, error: "Termenul nu este o dată validă." };
@@ -104,14 +113,16 @@ export async function assignInspection(db: D1Database, user: User, reportId: str
   await audit(db, `user:${user.id}`, "inspection.assign", "inspection", id, inspector.id);
   if (missing.length) await audit(db, `user:${user.id}`, "report.inspection_without_docs", "report", reportId, `fără ${missingText(missing)}`);
 
+  // UVALO: the inspection goes to the inspector's phone there (a send that fails stays on the inspection, with "Retrimite").
+  const uvalo = viaUvalo ? await pushInspection(db, id) : null;
   if (inspector.id !== user.id) {
-    const link = await appUrl("insp", "/");
+    const link = viaUvalo ? await uvaloAppUrl() : await appUrl("insp", "/");
     const where = asset.address ?? "proprietatea din raport";
     const dueText = due ? ` până la ${due.split("-").reverse().join(".")}` : "";
     await sendEmail({
       to: inspector.email,
       subject: `Inspecție nouă de programat: ${where}`,
-      text: `${user.name || "Evaluatorul"} ți-a alocat inspecția pentru ${where}${asset.number ? ` (raport ${asset.number})` : ""}${dueText}. Fișă: ${sheetTypeLabel(type)}.${name ? ` Contact: ${name} ${phone ?? ""}.` : ""}${instructions ? `\nInstrucțiuni: ${instructions}` : ""}${missing.length ? `\nÎncă nu sunt încărcate ${missingText(missing)}.` : "\nActele pentru inspecție sunt în aplicație, la inspecție."}\nProgramează inspecția din aplicație: ${link}`,
+      text: `${user.name || "Evaluatorul"} ți-a alocat inspecția pentru ${where}${asset.number ? ` (raport ${asset.number})` : ""}${dueText}. Fișă: ${sheetTypeLabel(type)}.${name ? ` Contact: ${name} ${phone ?? ""}.` : ""}${instructions ? `\nInstrucțiuni: ${instructions}` : ""}${missing.length ? `\nÎncă nu sunt încărcate ${missingText(missing)}.` : `\nActele pentru inspecție sunt în aplicația${viaUvalo ? " UVALO" : ""}, la inspecție.`}\nProgramează inspecția din aplicația${viaUvalo ? " UVALO" : ""}: ${link}`,
       html: layout({
         eyebrow: "Inspecții VALUEFY",
         title: "Ai o inspecție nouă de programat",
@@ -119,12 +130,12 @@ export async function assignInspection(db: D1Database, user: User, reportId: str
 <p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A4A">Fișă: ${esc(sheetTypeLabel(type))}${name ? ` · Contact: ${esc(name)} ${esc(phone ?? "")}` : ""}</p>
 ${instructions ? `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A4A;white-space:pre-wrap">${esc(instructions)}</p>` : ""}
 ${missing.length ? `<p style="margin:0;font-size:15px;line-height:1.65;color:#9A3412">Încă nu sunt încărcate ${esc(missingText(missing))}; le găsești în aplicație când apar.</p>` : `<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A4A">Actele pentru inspecție sunt în aplicație, la inspecție.</p>`}`,
-        button: { label: "Programează din aplicație →", url: link },
-        foot: "Inspecția apare în aplicația de inspecții la „De programat”.",
+        button: { label: viaUvalo ? "Deschide aplicația UVALO →" : "Programează din aplicație →", url: link },
+        foot: viaUvalo ? "Inspecția apare în aplicația UVALO, la inspecțiile tale de programat." : "Inspecția apare în aplicația de inspecții la „De programat”.",
       }),
     });
   }
-  return { ok: true as const, id, missing };
+  return { ok: true as const, id, missing, uvalo: uvalo && !uvalo.ok ? uvalo.error : null };
 }
 
 /**
@@ -162,6 +173,7 @@ export async function markInspectionDone(db: D1Database, user: User, reportId: s
   const open = await openTask(db, a.id);
   if (open) {
     await db.prepare("UPDATE inspections SET status = 'done', done_at = ?, updated_at = ? WHERE id = ?").bind(at, t, open.id).run();
+    await later(cancelInUvalo(db, open.id, "inspecția a fost făcută fără aplicație (marcată realizată în CRM)"));
   } else {
     const order = await db.prepare("SELECT order_id FROM reports WHERE id = ?").bind(reportId).first<{ order_id: string | null }>();
     await db.prepare(`INSERT INTO inspections (id, asset_id, report_id, order_id, inspector_id, status, done_at, assigned_by, assigned_at, updated_at)
@@ -169,16 +181,17 @@ export async function markInspectionDone(db: D1Database, user: User, reportId: s
   }
   await db.prepare("UPDATE assets SET no_inspection = NULL, no_inspection_at = NULL, no_inspection_by = NULL WHERE id = ?").bind(a.id).run();
   await audit(db, `user:${user.id}`, "report.inspection_done", "report", reportId, `${a.type ? a.type.toLowerCase() : "bun"} · inspecție realizată ${m[1].split("-").reverse().join(".")} (marcată în CRM)`);
-  // Nothing left to inspect: on to drafting.
+  return { ok: true as const, advanced: await advanceIfInspected(db, `user:${user.id}`, reportId) };
+}
+
+/** Nothing left to inspect on the report (every asset inspected or without an inspection): on to drafting. */
+export async function advanceIfInspected(db: D1Database, actor: string, reportId: string) {
   const left = await db.prepare(`SELECT COUNT(*) AS n FROM assets x WHERE x.report_id = ? AND x.no_inspection IS NULL
       AND NOT EXISTS (SELECT 1 FROM inspections i WHERE i.asset_id = x.id AND i.status = 'done')`).bind(reportId).first<{ n: number }>();
-  let advanced = false;
-  if (!left?.n) {
-    const r = await db.prepare("UPDATE reports SET stage = 'drafting', updated_at = ? WHERE id = ? AND COALESCE(stage, 'inspection') = 'inspection'").bind(t, reportId).run();
-    advanced = !!r.meta.changes;
-    if (advanced) await audit(db, `user:${user.id}`, "report.stage", "report", reportId, "Redactare");
-  }
-  return { ok: true as const, advanced };
+  if (left?.n) return false;
+  const r = await db.prepare("UPDATE reports SET stage = 'drafting', updated_at = ? WHERE id = ? AND COALESCE(stage, 'inspection') = 'inspection'").bind(now(), reportId).run();
+  if (r.meta.changes) await audit(db, actor, "report.stage", "report", reportId, "Redactare");
+  return !!r.meta.changes;
 }
 
 /** Cancels a task that is not done yet (the inspection disappears from the inspector's app). */
@@ -191,5 +204,6 @@ export async function cancelInspection(db: D1Database, user: User, reportId: str
   const t = now();
   await db.prepare("UPDATE inspections SET status = 'cancelled', cancelled_at = ?, cancelled_by = ?, updated_at = ? WHERE id = ?").bind(t, user.id, t, i.id).run();
   await audit(db, `user:${user.id}`, "report.inspection_cancel", "report", reportId, i.inspector ?? "");
+  await later(cancelInUvalo(db, i.id, `anulată din CRM de ${user.name || user.email}`));
   return { ok: true as const };
 }

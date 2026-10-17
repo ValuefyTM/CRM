@@ -6,6 +6,8 @@ import { templateStats } from "@/lib/insp-templates";
 import { templateOf } from "@/lib/insp-templates-db";
 import { CrmShell } from "@/components/CrmShell";
 import { SettingsTabs } from "../SettingsTabs";
+import { UvaloPanel } from "./UvaloPanel";
+import { origin } from "@/lib/site";
 
 export const metadata: Metadata = { title: "Fișe de inspecție | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -19,6 +21,7 @@ export default async function SheetTemplatesPage() {
   return (
     <CrmShell user={user} base={base} active="settings" title="Setări · Fișe de inspecție" subtitle="Ce completează inspectorii pe telefon, pe tipuri de proprietate">
       <SettingsTabs base={base} active="fise" user={user} />
+      <UvaloPanel edit={can(user, "templates.E")} webhook={`${await origin()}/api/integrations/uvalo/webhook`} />
       <section className="card">
         <p className="hint">
           Fiecare fișă pornește de la modelul VALUEFY. Poți redenumi și reordona grupurile, ascunde întrebări și adăuga întrebări proprii, cu
