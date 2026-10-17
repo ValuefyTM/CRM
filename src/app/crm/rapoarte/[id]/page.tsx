@@ -334,13 +334,13 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
               </dl>
             </section>
             <section className="card">
-              <div className="cardHead"><h2>Bunul principal</h2>{main && <span className="dAssetLinks"><a className="btn btnGhost btnSm" href={`${base}/rapoarte/${r.id}/bun/${main.id}`}>Fișa bunului →</a><a className="link" href={href("bunuri")}>bunuri & inspecții</a></span>}</div>
+              <div className="cardHead"><h2>Bunul principal</h2>{main && <a className="link" href={href("bunuri")}>bunuri & inspecții →</a>}</div>
               {!main ? <p className="hint">Raportul nu are bunuri înregistrate.</p> : (
                 <>
-                  <div className="dAsset">
+                  <a className="dAsset dAssetLink" href={`${base}/rapoarte/${r.id}/bun/${main.id}`}>
                     {(() => { const ph = fileSrc(main.sheet_photo) ?? fileSrc(main.image_url); return ph ? <SafeImg src={ph} className="dPh" fallback={<span className="dPh" />} /> : <span className="dPh" />; })()}
                     <span className="who">
-                      <b><a className="rowLink" href={`${base}/rapoarte/${r.id}/bun/${main.id}`}>{cap(main.type) || "Bun"}</a>{main.construction === "under_construction" ? " · în construcție" : ""}</b>
+                      <b>{cap(main.type) || "Bun"}{main.construction === "under_construction" ? " · în construcție" : ""}</b>
                       <small>{[main.full_address ?? main.city, main.cf_number && `CF ${main.cf_number}`, main.usable_area && `${main.usable_area.toLocaleString("ro-RO")} mp`].filter(Boolean).join(" · ") || "—"}</small>
                     </span>
                     {(() => {
@@ -348,7 +348,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                       const [t, k] = st === "none" ? ["Fără inspecție", ""] : st === "done" ? ["Inspectat", "pillOk"] : st === "open" ? [main.inspection_status === "scheduled" ? "Programat" : "De programat", "pillInfo"] : ["Nealocat", "pillWarn"];
                       return <span className={`pill ${k}`}><i />{t}</span>;
                     })()}
-                  </div>
+                  </a>
                   <dl className="kv">
                     <Row k="Valoare rezultat">{r.result_value || assetsTotal ? <span className="mono num">{lei(r.result_value || assetsTotal, cur)}</span> : null}</Row>
                     <Row k="Abordare">{main.approach ? APPROACH[main.approach] : null}</Row>
@@ -455,6 +455,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
               const thumb = a.inspection_status === "done" ? photos[0] ?? null : null;
               return {
                 id: a.id,
+                href: `${base}/rapoarte/${r.id}/bun/${a.id}`,
                 card: (
                   <div className="abRow">
                     <span className="abThumb">{thumb ? <SafeImg src={thumb} alt="" fallback={<span className="abNo">{n + 1}</span>} /> : <span className="abNo">{n + 1}</span>}</span>
@@ -472,7 +473,6 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                       <small>{none ? a.no_inspection : a.inspection_status === "done" ? [a.done_at && fmtDate(a.done_at), a.inspector && firstName(a.inspector)].filter(Boolean).join(" · ")
                         : active ? [a.scheduled_at ? fmtDate(a.scheduled_at, true) : a.due_on ? `termen ${fmtDate(a.due_on)}` : null, a.inspector && firstName(a.inspector)].filter(Boolean).join(" · ") : ""}</small>
                       <span className="abVal">{a.value != null ? <b className="mono num">{lei(a.value, cur)}</b> : <small className="muted">fără valoare</small>}{a.approach && <small> · {APPROACH[a.approach]}</small>}</span>
-                      <a className="btn btnGhost btnSm abDetail" href={`${base}/rapoarte/${r.id}/bun/${a.id}`}>Fișa bunului →</a>
                       {c.assets && (
                         <span className="abActs">
                           <AssetEditor report={r.id} label="Modifică" shared={a.other_reports} client={{ name: r.client_name, phone: r.client_phone }} initial={assetForm(a)} />

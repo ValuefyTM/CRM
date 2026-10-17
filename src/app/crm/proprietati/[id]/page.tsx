@@ -6,6 +6,7 @@ import { catKey, parseGeo, registryProperty } from "@/lib/registry";
 import { REPORT_STATUS } from "@/lib/reports";
 import { niceName } from "@/lib/labels";
 import { CrmShell } from "@/components/CrmShell";
+import { ClickRow } from "@/components/ClickRow";
 import { geolocateEnabled } from "@/lib/geolocate";
 import { LocateOne } from "../LocateActions";
 import { RegistryMap } from "../RegistryMap";
@@ -17,6 +18,9 @@ export const dynamic = "force-dynamic";
 const cap = (s: string | null) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : "");
 const lei = (v: number | null) => (v ? `${Math.round(v).toLocaleString("ro-RO")} lei` : "—");
 const APPROACH: Record<string, string> = { market: "Piață", income: "Venit", cost: "Cost" };
+
+/** A valuation row: opens the asset page when the user may see the report. */
+const Row2 = ({ href, children }: { href: string | null; children: React.ReactNode }) => (href ? <ClickRow href={href}>{children}</ClickRow> : <tr>{children}</tr>);
 
 function Row({ k, children }: { k: string; children: React.ReactNode }) {
   return <div><dt>{k}</dt><dd>{children ?? "—"}</dd></div>;
@@ -34,15 +38,12 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
     open: !v.report_id || (await reportAccess(db, user, { id: v.report_id, status: v.status ?? "", delivered_at: v.delivered_at })).view,
   })));
   const series = vals.filter((v) => v.val && v.date).reverse();
-  // The asset page of the newest valuation the user may open (its photos, inspections and the other valuations).
-  const latest = vals.find((v) => v.report_id && v.open);
   const first = series[0]?.val, last = series[series.length - 1]?.val;
   const change = first && last && series.length > 1 ? Math.round(((last - first) / first) * 100) : null;
 
   return (
     <CrmShell user={user} base={base} active="properties" title={cap(p.type) || "Proprietate"} subtitle={`Registru proprietăți · ${p.full_address ?? p.city ?? ""}`}
       actions={<>
-        {latest && <a className="btn btnGold btnSm" href={`${base}/rapoarte/${latest.report_id}/bun/${latest.id}`}>Fișa bunului →</a>}
         <a className="btn btnNavy btnSm" href={`${base}/proprietati/${p.id}/comparabile`}>Comparabile în zonă</a>
         <a className="btn btnGhost btnSm" href={`${base}/proprietati`}>← Proprietăți</a>
       </>}>
@@ -94,14 +95,13 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
         <div className="cardHead"><h2>Istoric evaluări</h2><span className="muted">{vals.length} {vals.length === 1 ? "evaluare" : "evaluări"}</span></div>
         <div className="tableWrap">
           <table className="table">
-            <thead><tr><th>Raport</th><th>Bun</th><th>Data</th><th>Client</th><th>Bancă / utilizator</th><th>Evaluator</th><th>Abordare</th><th className="r">Valoare</th><th className="r">Lei / m²</th><th>Status</th></tr></thead>
+            <thead><tr><th>Raport</th><th>Data</th><th>Client</th><th>Bancă / utilizator</th><th>Evaluator</th><th>Abordare</th><th className="r">Valoare</th><th className="r">Lei / m²</th><th>Status</th></tr></thead>
             <tbody>
               {vals.map((v) => {
                 const [label, cls] = REPORT_STATUS[v.status ?? ""] ?? [v.status ?? "—", ""];
                 return (
-                  <tr key={v.id}>
+                  <Row2 key={v.id} href={v.report_id && v.open ? `${base}/rapoarte/${v.report_id}/bun/${v.id}` : null}>
                     <td>{v.report_id ? (v.open ? <a className="ref rowLink" href={`${base}/rapoarte/${v.report_id}`}>{v.number ?? "fără nr."}</a> : <span className="ref muted" title="Raportul îl vede doar echipa lui">{v.number ?? "fără nr."}</span>) : "—"}{v.assets > 1 && <div className="muted">{v.assets} bunuri</div>}</td>
-                    <td>{v.report_id && v.open ? <a className="link" href={`${base}/rapoarte/${v.report_id}/bun/${v.id}`}>fișa bunului →</a> : <span className="muted">—</span>}</td>
                     <td>{fmtDate(v.date)}</td>
                     <td>{v.open ? niceName(v.client) || "—" : <span className="muted">confidențial</span>}{v.purpose && <div className="muted">{v.purpose}</div>}</td>
                     <td>{v.open ? niceName(v.bank) || "—" : <span className="muted">—</span>}</td>
@@ -110,7 +110,7 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
                     <td className="r">{lei(v.val)}</td>
                     <td className="r">{v.val && p.usable_area ? Math.round(v.val / p.usable_area).toLocaleString("ro-RO") : "—"}</td>
                     <td>{v.status ? <span className={`pill ${cls}`}><i />{label}</span> : "—"}</td>
-                  </tr>
+                  </Row2>
                 );
               })}
             </tbody>
