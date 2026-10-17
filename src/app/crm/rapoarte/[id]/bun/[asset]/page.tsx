@@ -50,7 +50,7 @@ function Kv({ rows }: { rows: readonly (readonly [string, React.ReactNode])[] })
 
 /** The value of each valuation as a bar (the one looked at in gold), with its date under it. */
 function ValueBars({ points, cur }: { points: { v: number; label: string; on: boolean }[]; cur: string }) {
-  const W = 560, H = 230, B = 34, T = 28, slot = (W - 20) / points.length, bw = Math.min(72, slot * 0.55);
+  const W = 520, H = 170, B = 26, T = 22, slot = (W - 20) / points.length, bw = Math.min(56, slot * 0.5);
   const hi = Math.max(...points.map((p) => p.v)), lo = Math.min(...points.map((p) => p.v));
   const floor = Math.max(0, lo - (hi - lo || hi * 0.2) * 1.2);
   const h = (v: number) => ((v - floor) / (hi - floor || 1)) * (H - B - T) + 6;
@@ -338,7 +338,7 @@ export default async function AssetPage({ params, searchParams }: {
               {valueCard(false)}
               <section className="card flush">
                 <div className="cardHead"><h2>Localizare</h2>{ll && <a className="link" href={`https://www.google.com/maps?q=${ll[0]},${ll[1]}`} target="_blank" rel="noopener">Deschide în Google Maps ↗</a>}</div>
-                {ll ? <MiniMap point={{ lat: ll[0], lng: ll[1], source: "adresa" }} height={360} /> : <p className="hint pad">Bunul nu are coordonate. Se completează din adresă sau din cadastru, la proprietate.</p>}
+                {ll ? <MiniMap point={{ lat: ll[0], lng: ll[1], source: "adresa" }} height={260} /> : <p className="hint pad">Bunul nu are coordonate. Se completează din adresă sau din cadastru, la proprietate.</p>}
               </section>
             </>
           )}
