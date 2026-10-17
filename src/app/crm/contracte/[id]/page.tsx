@@ -11,6 +11,7 @@ import { CONTRACT_PURPOSES, getContract, REPORT_KINDS } from "@/lib/contracts";
 import { CrmShell } from "@/components/CrmShell";
 import { History } from "@/components/History";
 import { ContractEdit } from "./ContractEdit";
+import { CloseContract } from "./CloseContract";
 import { ContractTermsEdit } from "./ContractTermsEdit";
 import { SendSign } from "./SendSign";
 import { billingMissing, signContractById, signLink } from "@/lib/contract-sign";
@@ -41,11 +42,12 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
 
   return (
     <CrmShell user={user} base={base} active="contracts" title={`Contract ${framework ? "cadru" : "clasic"} nr. ${k.number ?? "—"}`}
-      subtitle={`${niceName(k.client) || "Fără client"} · semnat ${fmtDate(k.signed_on)}${k.glide_id ? " · importat din Glide" : ""}`}
+      subtitle={`${niceName(k.client) || "Fără client"} · semnat ${fmtDate(k.signed_on)}${k.closed_on ? ` · închis la ${fmtDate(k.closed_on)}` : ""}${k.glide_id ? " · importat din Glide" : ""}`}
       actions={<>
         <a href={`${base}/contracte`} className="btn btnGhost btnSm">← Contracte</a>
+        {framework && can(user, "contracts.E") && <CloseContract id={k.id} closed={k.closed_on ?? null} signedOn={k.signed_on} />}
         {framework
-          ? <a href={`${base}/comenzi/noua?contract=${k.id}`} className="btn btnGold btnSm">+ Comandă pe acest contract</a>
+          ? !k.closed_on && <a href={`${base}/comenzi/noua?contract=${k.id}`} className="btn btnGold btnSm">+ Comandă pe acest contract</a>
           : <>
             <a href={`${base}/contracte/${k.id}/document`} className="btn btnNavy btnSm">{signed ? "Contract semnat (PDF)" : "Document contract (PDF)"}</a>
             <a href={`${base}/contracte/nou?contract=${k.id}`} className="btn btnGold btnSm">+ Raport nou pe acest contract</a>
@@ -69,7 +71,8 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
                 initial={{ number: k.number ?? "", signed_on: k.signed_on ?? "", fee: k.fee != null ? String(k.fee) : "", report_type: k.report_type ?? "", purpose: k.purpose ?? "", notes: k.notes ?? "" }} />}
             </div>
             <dl className="dl">
-              <div><dt>Tip</dt><dd><span className={`ctKind ${k.kind}`}>{framework ? "Cadru" : "Clasic"}</span></dd></div>
+              <div><dt>Tip</dt><dd><span className={`ctKind ${k.kind}`}>{framework ? "Cadru" : "Clasic"}</span>{k.closed_on && <span className="pill pillErr" style={{ marginLeft: 8 }}><i />Închis</span>}</dd></div>
+              {k.closed_on && <div><dt>Închis la</dt><dd>{fmtDate(k.closed_on)}{k.closed_by_name ? ` · ${k.closed_by_name}` : ""}{k.closed_note ? ` · ${k.closed_note}` : ""}</dd></div>}
               <div><dt>Număr</dt><dd className="mono">{k.number ?? "—"}</dd></div>
               <div><dt>Data semnării</dt><dd>{fmtDate(k.signed_on)}</dd></div>
               <div><dt>Prestator</dt><dd>VALUEFY</dd></div>

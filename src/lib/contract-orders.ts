@@ -12,7 +12,7 @@ export type CollabChoice = { id: string; number: string | null; firm: string; sh
 export async function contractChoices(db: D1Database) {
   const [contracts, collabs] = await Promise.all([
     db.prepare(`SELECT k.id, k.number, k.client_id AS bank_id, COALESCE(e.name, 'Fără bancă') AS bank, e.code AS bank_code, k.fee, k.report_type, k.purpose, e.logo_url AS logo
-      FROM contracts k LEFT JOIN entities e ON e.id = k.client_id WHERE k.kind = 'framework' ORDER BY e.name, k.signed_on DESC`).all<ContractChoice>(),
+      FROM contracts k LEFT JOIN entities e ON e.id = k.client_id WHERE k.kind = 'framework' AND k.closed_on IS NULL ORDER BY e.name, k.signed_on DESC`).all<ContractChoice>(),
     db.prepare(`SELECT c.id, c.number, e.name AS firm, c.share, e.logo_url AS logo FROM collaborations c JOIN entities e ON e.id = c.firm_id ORDER BY e.name`).all<CollabChoice>(),
   ]);
   return { contracts: contracts.results, collabs: collabs.results };
@@ -74,8 +74,8 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
 
   if (kind === "bank") {
     contract = await db.prepare(`SELECT k.id, k.number, k.client_id AS bank_id, COALESCE(e.name, '') AS bank, e.code AS bank_code, k.fee, k.report_type, k.purpose
-      FROM contracts k LEFT JOIN entities e ON e.id = k.client_id WHERE k.id = ? AND k.kind = 'framework'`).bind(str(b.contract_id, 80)).first<ContractChoice>();
-    if (!contract) return { ok: false as const, error: "Alege contractul cadru." };
+      FROM contracts k LEFT JOIN entities e ON e.id = k.client_id WHERE k.id = ? AND k.kind = 'framework' AND k.closed_on IS NULL`).bind(str(b.contract_id, 80)).first<ContractChoice>();
+    if (!contract) return { ok: false as const, error: "Alege contractul cadru (unul deschis)." };
     fee ??= contract.fee || null; // 0 in Glide = no fee set on the contract
   } else {
     collab = await db.prepare("SELECT c.id, c.number, e.name AS firm, c.share FROM collaborations c JOIN entities e ON e.id = c.firm_id WHERE c.id = ?")

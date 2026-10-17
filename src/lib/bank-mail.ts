@@ -89,7 +89,7 @@ export async function ingestBankEmail(db: D1Database, m: { from?: string | null;
     if (dup) { status = "duplicate"; orderId = dup.id; }
     else {
       const contract = bank
-        ? await db.prepare("SELECT id, fee FROM contracts WHERE kind = 'framework' AND client_id = ? ORDER BY signed_on DESC LIMIT 1").bind(bank.id).first<{ id: string; fee: number | null }>()
+        ? await db.prepare("SELECT id, fee FROM contracts WHERE kind = 'framework' AND client_id = ? AND closed_on IS NULL ORDER BY signed_on DESC LIMIT 1").bind(bank.id).first<{ id: string; fee: number | null }>()
         : null;
       orderId = uuid();
       const t = now();

@@ -62,7 +62,7 @@ export default async function ContractsPage({ searchParams }: { searchParams: Pr
                     <ClickRow key={k.id} href={href}>
                       <td>
                         <a className="ref rowLink" href={href}>{k.number ? `Nr. ${k.number}` : "fără număr"}</a>
-                        <div className="muted"><span className={`ctKind ${k.kind}`}>{k.kind === "framework" ? "Cadru" : "Clasic"}</span> {fmtDate(k.signed_on)}</div>
+                        <div className="muted"><span className={`ctKind ${k.kind}`}>{k.kind === "framework" ? "Cadru" : "Clasic"}</span> {fmtDate(k.signed_on)}{k.closed_on && <> · <span style={{ color: "var(--err)", fontWeight: 700 }}>închis {fmtDate(k.closed_on)}</span></>}</div>
                         {k.signed_at ? <span className="ctSig ok">✓ semnat online</span> : k.sign_sent_at ? <span className="ctSig">trimis la semnat</span> : null}
                       </td>
                       <td>{k.client_id ? <a className="rowLink" href={`${base}/clienti/${k.client_id}`}>{niceName(k.client) || "—"}</a> : "—"}<div className="muted">{k.client_kind === "company" ? "Persoană juridică" : k.client_kind === "person" ? "Persoană fizică" : k.client_kind === "bank" ? "Bancă" : ""}</div></td>

@@ -9,7 +9,7 @@ import { fileSrc } from "./files";
 export type Contract = {
   id: string; glide_id: string | null; kind: "classic" | "framework"; number: string | null; signed_on: string | null; client_id: string | null; currency: string | null;
   fee: number | null; services: string | null; valuation_types: string | null; report_type: string | null; purpose: string | null; notes: string | null;
-  created_at: string; updated_at: string; sign_sent_at?: string | null; signed_at?: string | null;
+  created_at: string; updated_at: string; sign_sent_at?: string | null; signed_at?: string | null; closed_on?: string | null; closed_note?: string | null;
 };
 export type ContractRow = Contract & {
   client: string | null; client_kind: string | null; reports: number; open: number; done: number; report_id: string | null; report_number: string | null;
@@ -21,7 +21,7 @@ export type ContractFilters = { tip?: string; an?: string; stare?: string; q?: s
 export const CONTRACT_PAGE = 50;
 export const CONTRACT_KINDS: [string, string][] = [["", "Toate"], ["clasic", "Clasice"], ["cadru", "Cadru"]];
 export const CONTRACT_STATES: [string, string][] = [["", "Oricare"], ["fara-raport", "Fără raport"], ["in-lucru", "Cu rapoarte în lucru"], ["finalizat", "Finalizate"],
-  ["de-semnat", "Trimise la semnat, nesemnate"], ["semnate", "Semnate online"]];
+  ["de-semnat", "Trimise la semnat, nesemnate"], ["semnate", "Semnate online"], ["inchise", "Contracte cadru închise"]];
 export const CONTRACT_PURPOSES = ["Garantare bancară", "Impozitare", "Informare", "Vânzare / cumpărare", "Raportare financiară", "Succesiune / partaj", "Expertiză / litigiu",
   "Eșalonare datorii", "Insolvență", "Alt scop"];
 export const REPORT_KINDS = ["Raport de evaluare", "Notă de opinie", "Notă de inspecție", "Notă de informare"];
@@ -67,6 +67,13 @@ export async function createFrameworkContract(db: D1Database, actor: string, v: 
   return id;
 }
 
+/** Closes a framework contract on a date (it keeps its reports, takes no new orders), or opens it again (`on` null). */
+export async function closeContract(db: D1Database, actor: string, id: string, on: string | null, note: string | null) {
+  await db.prepare("UPDATE contracts SET closed_on = ?, closed_by = ?, closed_note = ?, updated_at = ? WHERE id = ? AND kind = 'framework'")
+    .bind(on, on ? actor : null, on ? note : null, now(), id).run();
+  await audit(db, `user:${actor}`, on ? "contract.close" : "contract.reopen", "contract", id, on ? `închis la ${on}${note ? ` · ${note}` : ""}` : "redeschis");
+}
+
 export async function updateContract(db: D1Database, actor: string, id: string, v: { number: string; signed_on: string | null; fee: number | null; report_type: string | null; purpose: string | null; notes: string | null }) {
   await db.prepare("UPDATE contracts SET number = ?, signed_on = ?, fee = ?, report_type = ?, purpose = ?, notes = ?, updated_at = ? WHERE id = ?")
     .bind(v.number, v.signed_on, v.fee, v.report_type, v.purpose, v.notes, now(), id).run();
@@ -84,6 +91,9 @@ function where(f: ContractFilters) {
   if (f.stare === "semnate") w.push("k.signed_at IS NOT NULL");
   if (f.stare === "fara-raport") w.push("NOT EXISTS (SELECT 1 FROM reports r WHERE r.contract_id = k.id)");
   if (f.stare === "in-lucru") w.push(`EXISTS (SELECT 1 FROM reports r WHERE r.contract_id = k.id AND ${OPEN})`);
+  // Closed framework contracts leave the list; they show only with the "Închise" state.
+  if (f.stare === "inchise") w.push("k.closed_on IS NOT NULL");
+  else w.push("k.closed_on IS NULL");
   if (f.stare === "finalizat") w.push(`EXISTS (SELECT 1 FROM reports r WHERE r.contract_id = k.id) AND NOT EXISTS (SELECT 1 FROM reports r WHERE r.contract_id = k.id AND NOT ${DONE})`);
   const q = f.q?.trim();
   if (q) {
@@ -99,7 +109,7 @@ export async function listContracts(db: D1Database, f: ContractFilters) {
   const page = Math.max(1, f.page ?? 1);
   const month = bucharestDay().slice(0, 7);
   const [rows, total] = await Promise.all([
-    db.prepare(`SELECT k.id, k.glide_id, k.kind, k.number, k.signed_on, k.client_id, k.currency, k.fee, k.services, k.valuation_types, k.report_type, k.purpose, k.notes, k.created_at, k.updated_at, k.sign_sent_at, k.signed_at, e.name AS client, e.kind AS client_kind,
+    db.prepare(`SELECT k.id, k.glide_id, k.kind, k.number, k.signed_on, k.client_id, k.currency, k.fee, k.services, k.valuation_types, k.report_type, k.purpose, k.notes, k.created_at, k.updated_at, k.sign_sent_at, k.signed_at, k.closed_on, e.name AS client, e.kind AS client_kind,
         (SELECT COUNT(*) FROM reports r WHERE r.contract_id = k.id) AS reports,
         (SELECT COUNT(*) FROM reports r WHERE r.contract_id = k.id AND ${OPEN}) AS open,
         (SELECT COUNT(*) FROM reports r WHERE r.contract_id = k.id AND ${DONE}) AS done,
@@ -122,7 +132,7 @@ export async function contractStats(db: D1Database) {
     db.prepare(`SELECT SUM(kind = 'classic' AND substr(signed_on, 1, 4) = ?1) AS year, SUM(kind = 'classic' AND substr(signed_on, 1, 7) = ?2) AS month,
         SUM(CASE WHEN kind = 'classic' AND substr(signed_on, 1, 4) = ?1 THEN fee END) AS value,
         SUM(kind = 'classic' AND substr(signed_on, 1, 4) = ?1 AND NOT EXISTS (SELECT 1 FROM reports r WHERE r.contract_id = k.id)) AS empty,
-        SUM(kind = 'framework') AS framework,
+        SUM(kind = 'framework' AND closed_on IS NULL) AS framework,
         (SELECT COUNT(*) FROM reports r JOIN contracts f ON f.id = r.contract_id WHERE f.kind = 'framework' AND substr(COALESCE(r.received_on, r.created_at), 1, 7) = ?2) AS framework_month,
         MAX(CASE WHEN kind = 'classic' THEN CAST(number AS INTEGER) END) AS last,
         SUM(sign_sent_at IS NOT NULL AND signed_at IS NULL) AS unsigned
@@ -142,9 +152,10 @@ export type ContractReport = {
 };
 
 export async function getContract(db: D1Database, id: string) {
-  const c = await db.prepare(`SELECT k.id, k.glide_id, k.kind, k.number, k.signed_on, k.client_id, k.currency, k.fee, k.services, k.valuation_types, k.report_type, k.purpose, k.notes, k.created_at, k.updated_at, k.sign_sent_at, k.signed_at, e.name AS client, e.kind AS client_kind, e.cui AS client_cui, e.phone AS client_phone, e.email AS client_email, e.city AS client_city
+  const c = await db.prepare(`SELECT k.id, k.glide_id, k.kind, k.number, k.signed_on, k.client_id, k.currency, k.fee, k.services, k.valuation_types, k.report_type, k.purpose, k.notes, k.created_at, k.updated_at, k.sign_sent_at, k.signed_at, k.closed_on, k.closed_note,
+      (SELECT COALESCE(NULLIF(u.name, ''), u.email) FROM users u WHERE u.id = k.closed_by) AS closed_by_name, e.name AS client, e.kind AS client_kind, e.cui AS client_cui, e.phone AS client_phone, e.email AS client_email, e.city AS client_city
       FROM contracts k LEFT JOIN entities e ON e.id = k.client_id WHERE k.id = ?`).bind(id)
-    .first<Contract & { client: string | null; client_kind: string | null; client_cui: string | null; client_phone: string | null; client_email: string | null; client_city: string | null }>();
+    .first<Contract & { closed_by_name: string | null; client: string | null; client_kind: string | null; client_cui: string | null; client_phone: string | null; client_email: string | null; client_city: string | null }>();
   if (!c) return null;
   const [reports, totals, order] = await Promise.all([
     db.prepare(`SELECT r.id, r.number, r.label, r.status, r.delivered_at, r.received_on, r.report_date, r.fee, r.result_value, r.order_id,
