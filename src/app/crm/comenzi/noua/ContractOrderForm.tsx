@@ -5,7 +5,8 @@ import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PURPOSES } from "@/lib/order-labels";
 import { assetProfile, capType, emptyAsset, type AssetForm } from "@/lib/asset-labels";
-import { AssetsEditor } from "@/components/AssetsEditor";
+import { AssetsEditor, newUid } from "@/components/AssetsEditor";
+import type { DraftDoc } from "@/components/AssetDocs";
 import { SafeImg } from "@/app/crm/rapoarte/[id]/ReportActions";
 
 type Contract = { id: string; number: string | null; bank: string; bank_code: string | null; fee: number | null; report_type: string | null; purpose: string | null; logo?: string | null };
@@ -132,7 +133,9 @@ export function ContractOrderForm(p: {
     inspection_notes: "", notes: "", evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "", verifier_id: "", inspector_id: "", due_on: inThreeDays(), urgent: false,
   });
   const [picked, setPicked] = useState<Hit | null>(null);
-  const [assets, setAssets] = useState<AssetForm[]>([{ ...emptyAsset(), full_address: "", is_main: true }]);
+  const [assets, setAssets] = useState<AssetForm[]>([{ ...emptyAsset(), uid: newUid(), full_address: "", is_main: true }]);
+  const [drafts, setDrafts] = useState<Record<string, DraftDoc[]>>({});
+  const [phase, setPhase] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
@@ -189,9 +192,21 @@ export function ContractOrderForm(p: {
     const r = await fetch("/api/crm/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, kind, assets: assets.map((a, i) => ({
       ...a, is_main: i === 0, ...(a.contact_kind === "client" ? { contact_name: f.client_name, contact_phone: f.client_phone } : {}),
     })) }) }).catch(() => null);
-    const d = (await r?.json().catch(() => ({}))) as { report?: string; error?: string; inspections?: number } | undefined;
+    const d = (await r?.json().catch(() => ({}))) as { report?: string; error?: string; inspections?: number; assets?: string[] } | undefined;
+    if (!r?.ok || !d?.report) { setBusy(false); setMsg(d?.error || "Nu am putut salva. Încearcă din nou."); return; }
+    // The documents dropped under each asset go to the new report, on the asset they belong to.
+    const queue = assets.flatMap((a, i) => (drafts[a.uid ?? ""] ?? []).map((x) => ({ ...x, asset: d.assets?.[i] ?? "" })));
+    const failed: string[] = [];
+    for (const [n, x] of queue.entries()) {
+      setPhase(`Se încarcă actele ${n + 1} / ${queue.length}…`);
+      const body = new FormData();
+      body.set("file", x.file); body.set("kind", "source"); body.set("doc_type", x.kind);
+      if (x.asset) body.set("asset", x.asset);
+      const u = await fetch(`/api/crm/reports/${d.report}/documents`, { method: "POST", body }).catch(() => null);
+      if (!u?.ok) failed.push(x.file.name);
+    }
     setBusy(false);
-    if (!r?.ok || !d?.report) { setMsg(d?.error || "Nu am putut salva. Încearcă din nou."); return; }
+    if (failed.length) alert(`Raportul a fost creat, dar nu s-au încărcat: ${failed.join(", ")}. Le poți adăuga din raport, la Documente.`);
     location.href = `${p.base}/rapoarte/${d.report}?tab=inspectii${d.inspections ? "" : "&alocare=1"}`;
   };
 
@@ -279,7 +294,7 @@ export function ContractOrderForm(p: {
       <section className="card nwCard">
         <Step n={3} title="Bunuri evaluate" sub="Fiecare bun separat: are valoarea și inspecția lui. Primul e bunul principal." done={assetsDone} />
         <AssetsEditor assets={assets} setAssets={(a) => { setAssets(a); setErrors((x) => Object.fromEntries(Object.entries(x).filter(([k]) => !k.startsWith("asset")))); }}
-          client={{ name: f.client_name, phone: f.client_phone }} />
+          client={{ name: f.client_name, phone: f.client_phone }} docs={{ files: drafts, set: (uid, files) => setDrafts((d) => ({ ...d, [uid]: files })) }} />
         {assets.map((_, i) => <span key={i} style={{ display: "contents" }}>{err(`asset${i}`)}</span>)}
         <label className="field"><span className="fLabel">Observații pentru inspecție <small>(opțional · le vede inspectorul)</small></span>
           <textarea className="textarea" rows={2} value={f.inspection_notes} onChange={set("inspection_notes")} placeholder="ex. cheia la administrator, sunați cu o zi înainte" /></label>
@@ -322,7 +337,7 @@ export function ContractOrderForm(p: {
         </div>
         <div className="actions">
           <a className="btn btnGhost" href={`${p.base}/comenzi?tab=banci`}>Renunță</a>
-          <button type="submit" className="btn btnGold" disabled={busy}>{busy ? "Se înregistrează…" : "Înregistrează și creează raportul"}</button>
+          <button type="submit" className="btn btnGold" disabled={busy}>{busy ? phase || "Se înregistrează…" : "Înregistrează și creează raportul"}</button>
         </div>
       </div>
     </form>

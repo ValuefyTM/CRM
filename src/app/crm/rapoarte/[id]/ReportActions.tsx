@@ -1,5 +1,6 @@
 "use client";
 
+import { DOC_KINDS } from "@/lib/doc-kinds";
 import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -177,10 +178,10 @@ export function DocTypeSelect({ id, doc, value, assets }: { id: string; doc: str
       const error = await send(`/api/crm/reports/${id}/documents`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ doc, doc_type: type, asset: asset || null }) });
       if (error) { setV(value); alert(error); }
     }}>
-      <option value="other">Alt document</option>
-      {(["cf", "rlv"] as const).flatMap((t) => [
-        <option key={t} value={`${t}:`}>{t === "cf" ? "Extras CF" : "Releveu"}{assets && assets.length > 1 ? " · toate bunurile" : ""}</option>,
-        ...(assets && assets.length > 1 ? assets.map((x) => <option key={`${t}${x.id}`} value={`${t}:${x.id}`}>{t === "cf" ? "Extras CF" : "Releveu"} · {x.label}</option>) : []),
+      {!value.includes(":") && <option value="other">Alte acte</option>}
+      {DOC_KINDS.flatMap(([t, l]) => [
+        <option key={t} value={`${t}:`}>{l}{assets && assets.length > 1 ? " · toate bunurile" : ""}</option>,
+        ...(assets && assets.length > 1 ? assets.map((x) => <option key={`${t}${x.id}`} value={`${t}:${x.id}`}>{l} · {x.label}</option>) : []),
       ])}
     </select>
   );

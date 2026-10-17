@@ -16,7 +16,8 @@ import { AssetEditor, RemoveAsset } from "./AssetEditor";
 import { emptyAsset, type AssetForm } from "@/lib/asset-labels";
 import { canAssign, inspectorChoices } from "@/lib/insp-assign";
 import { guessSheetType } from "@/lib/insp-forms";
-import { docsByAsset, guessDocType } from "@/lib/insp-docs";
+import { docsByAsset } from "@/lib/insp-docs";
+import { DOC_KIND_KEYS, guessDocKind } from "@/lib/doc-kinds";
 import { Avatar, PersonLine } from "@/components/Avatar";
 import { Messages } from "@/components/Messages";
 import { messagesOf } from "@/lib/messages";
@@ -115,7 +116,10 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const stage = stageOf(r, { total: tasks.length, done: tasks.filter((a) => a.inspection_status === "done").length, none: assets.filter((a) => a.no_inspection).length });
   const inspectedOn = tasks.map((a) => a.done_at).filter((d): d is string => !!d).sort().pop()?.slice(0, 10) ?? null;
   const due = dueOf(r, inspectedOn);
-  const late = !!due && stage !== "delivered" && due < new Date().toISOString().slice(0, 10);
+  // The deadline may carry an hour ("2026-10-20T14:30", Bucharest time): late once that moment has passed.
+  const nowLocal = new Date().toLocaleString("sv-SE", { timeZone: "Europe/Bucharest", hour12: false }).replace(" ", "T").slice(0, 16);
+  const late = !!due && stage !== "delivered" && (due.length > 10 ? due < nowLocal : due < nowLocal.slice(0, 10));
+  const dueText = (d: string) => (d.length > 10 ? `${fmtDate(d.slice(0, 10))}, ora ${d.slice(11, 16)}` : fmtDate(d));
   const [label, cls] = REPORT_STATUS[r.status] ?? [r.status, ""];
   const cur = r.currency === "EUR" ? "EUR" : "lei";
   const evaluator = team.find((m) => m.role === "evaluator");
@@ -174,7 +178,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
     r.verified_at ? `verificat ${short(r.verified_at)}` : stage === "review" ? `la verificare${verifier ? ` · ${firstName(verifier.name)}` : ""}` : verifier ? firstName(verifier.name) : "verificator nealocat",
     finished
       ? [r.report_date && `raport ${short(r.report_date)}`, r.delivered_at && `predat ${short(r.delivered_at)}`, repInvoices.length ? "facturat" : "nefacturat"].filter(Boolean).join(" · ")
-      : due ? `termen ${short(due)}` : `termen ${d.term} zile de la comandă`,
+      : due ? `termen ${short(due)}${due.length > 10 ? `, ${due.slice(11, 16)}` : ""}` : `termen ${d.term} zile de la comandă`,
   ];
   // The client is also the designated user: one chip, "client / utilizator desemnat".
   const clientIsUser = !r.recipient_id || r.recipient_id === r.client_id;
@@ -201,6 +205,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
               <h2>{r.number ? `Nr. ${r.number}` : "Fără număr"}</h2>
               <span className={`pill ${cls}`}><i />{label}{finished && r.report_date ? ` · ${fmtDate(r.report_date)}` : ""}</span>
               {r.status !== "cancelled" && <span className={`pill ${stage === "delivered" ? "pillOk" : "pillWarn"}`}><i />{STAGE_LABEL[stage]}</span>}
+              {!!r.urgent && !finished && <span className="dUrgent" title="Comanda a fost marcată urgentă"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" /></svg>Urgent</span>}
             </div>
             <div className="rChips">
               {r.client_name && (() => {
@@ -590,7 +595,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                     <span className="ext">{ext(d.filename)}</span>
                     <span className="who"><b>{d.filename}</b><small>încărcat {fmtDate(d.created_at)}{d.size_bytes ? ` · ${fmtSize(d.size_bytes)}` : ""}{d.uploaded_by_name ? ` · ${d.uploaded_by_name}` : ""}</small></span>
                     {c.docs && <DocTypeSelect id={r.id} doc={d.id} assets={assets.length > 1 ? assets.map((x, n) => ({ id: x.id, label: `${cap(x.type) || "Bun"}${assets.filter((y) => y.type === x.type).length > 1 ? ` ${n + 1}` : ""}` })) : null}
-                      value={(() => { const t = d.doc_type ?? guessDocType(d.filename); return t === "cf" || t === "rlv" ? `${t}:${d.asset_id ?? ""}` : "other"; })()} />}
+                      value={(() => { const t = d.doc_type ?? guessDocKind(d.filename); return DOC_KIND_KEYS.includes(t) ? `${t}:${d.asset_id ?? ""}` : "other"; })()} />}
                     <a className="link" href={`/api/crm/reports/${r.id}/documents/${d.id}`} target="_blank" rel="noopener">Descarcă</a>
                     {c.docsDelete && <DeleteDoc id={r.id} doc={d.id} name={d.filename} />}
                   </li>
@@ -664,7 +669,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
           <dl className="kv dKv">
             <Row k="Comandă">{r.ordered_at ? fmtDate(r.ordered_at) : r.received_on ? fmtDate(r.received_on) : fmtDate(r.created_at)}</Row>
             <Row k="Inspecție">{inspectedOn ? fmtDate(inspectedOn) : nextVisit ? <>programată {fmtDate(nextVisit, true)}</> : null}</Row>
-            <Row k="Termen predare">{due ? <span className={late ? "errTxt" : ""}>{fmtDate(due)}{late ? " · depășit" : ""}</span> : <span className={d.late && !d.delivered ? "errTxt" : ""}>{d.term} zile de la comandă</span>}</Row>
+            <Row k="Termen predare">{due ? <span className={late ? "errTxt" : ""}>{dueText(due)}{late ? " · depășit" : ""}</span> : <span className={d.late && !d.delivered ? "errTxt" : ""}>{d.term} zile de la comandă</span>}</Row>
             <Row k="Data raport">{r.report_date ? fmtDate(r.report_date) : <span className="muted">în așteptare</span>}</Row>
             {r.delivered_at && <Row k="Predat">{fmtDate(r.delivered_at)}{r.delivered_by_name ? ` · ${r.delivered_by_name}` : ""}</Row>}
             {fees && <Row k="Onorariu">{r.fee != null ? <span className="mono num">{lei(r.fee, "RON")}</span> : null}</Row>}

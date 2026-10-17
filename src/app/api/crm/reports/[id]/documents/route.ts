@@ -4,6 +4,7 @@ import { err, json, reportApi } from "@/lib/api";
 import { bucket } from "@/lib/orders";
 import { fileType } from "@/lib/file-response";
 import { MAX_FILE_MB } from "@/lib/order-labels";
+import { DOC_KIND_KEYS, docKindLabel } from "@/lib/doc-kinds";
 
 const OK = /\.(pdf|jpe?g|png|heic|heif|webp|docx?|xlsx?|zip)$/i;
 
@@ -43,10 +44,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const docId = uuid();
   const safe = file.name.replace(/[^\w.\-() ăâîșțĂÂÎȘȚ]/g, "_").slice(-120) || "document";
   const key = `reports/${id}/${docId}-${safe}`;
-  await r2.put(key, file.stream(), { httpMetadata: { contentType: fileType(safe) }, customMetadata: { report: id, kind } });
+  // The whole file (at most MAX_FILE_MB): a stream without a known length is refused by R2 outside the worker.
+  await r2.put(key, await file.arrayBuffer(), { httpMetadata: { contentType: fileType(safe) }, customMetadata: { report: id, kind } });
 
   const requested = typeof form?.get("doc") === "string" ? (form.get("doc") as string) : "";
-  const docType = kind === "source" && ["cf", "rlv", "other"].includes(String(form?.get("doc_type") ?? "")) ? String(form?.get("doc_type")) : null;
+  const docType = kind === "source" && DOC_KIND_KEYS.includes(String(form?.get("doc_type") ?? "")) ? String(form?.get("doc_type")) : null;
   const assetId = kind === "source" && form?.get("asset")
     ? (await a.db.prepare("SELECT id FROM assets WHERE id = ? AND report_id = ?").bind(String(form.get("asset")), id).first<{ id: string }>())?.id ?? null
     : null;
@@ -70,9 +72,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await a.db.prepare("INSERT INTO report_documents (id, report_id, kind, filename, content_type, size_bytes, r2_key, uploaded_by, doc_type, asset_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
       .bind(docId, id, kind, safe, file.type || null, file.size, key, a.user.id, docType, assetId).run();
   }
+  const savedId = missing?.id ?? docId;
   await a.db.prepare("UPDATE reports SET updated_at = ?, uploaded_on = CASE WHEN ? = 'final' THEN ? ELSE uploaded_on END WHERE id = ?").bind(now(), kind, now().slice(0, 10), id).run();
   await audit(a.db, actor, kind === "final" ? "report.final" : "report.document", "report", id, safe);
-  return Response.json({ ok: true });
+  return Response.json({ ok: true, id: savedId });
 }
 
 /** Marks a source document as the CF extract / floor survey (or neither): `{ doc, doc_type: cf | rlv | other, asset }`. */
@@ -83,11 +86,22 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const b = await json(req);
   const d = await a.db.prepare("SELECT id, filename FROM report_documents WHERE id = ? AND report_id = ? AND kind = 'source'").bind(String(b.doc ?? ""), id).first<{ id: string; filename: string }>();
   if (!d) return err("Documentul nu există.", 404);
-  const type = ["cf", "rlv", "other"].includes(String(b.doc_type)) ? String(b.doc_type) : null;
+  const type = DOC_KIND_KEYS.includes(String(b.doc_type)) ? String(b.doc_type) : null;
   const asset = b.asset ? (await a.db.prepare("SELECT id FROM assets WHERE id = ? AND report_id = ?").bind(String(b.asset), id).first<{ id: string }>())?.id ?? null : null;
   await a.db.prepare("UPDATE report_documents SET doc_type = ?, asset_id = CASE WHEN ? THEN ? ELSE asset_id END WHERE id = ?").bind(type, "asset" in b ? 1 : 0, asset, d.id).run();
-  await audit(a.db, `user:${a.user.id}`, "report.document_type", "report", id, `${d.filename}: ${type === "cf" ? "Extras CF" : type === "rlv" ? "Releveu" : "alt document"}`);
+  await audit(a.db, `user:${a.user.id}`, "report.document_type", "report", id, `${d.filename}: ${docKindLabel(type)}`);
   return Response.json({ ok: true });
+}
+
+/** The documents of one asset (`?asset=`), for the drop zone of the asset form. */
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const a = await reportApi(id, "view");
+  if ("res" in a) return a.res;
+  const asset = new URL(req.url).searchParams.get("asset") ?? "";
+  const { results } = await a.db.prepare(`SELECT id, filename, size_bytes, doc_type FROM report_documents WHERE report_id = ? AND kind = 'source' AND status = 'uploaded' AND asset_id = ? ORDER BY created_at`)
+    .bind(id, asset).all<{ id: string; filename: string; size_bytes: number | null; doc_type: string | null }>();
+  return Response.json({ docs: results });
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {

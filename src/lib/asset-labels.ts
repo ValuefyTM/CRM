@@ -27,7 +27,8 @@ export type AssetInput = {
 
 /** Values of the asset form (strings, as typed). */
 export type AssetForm = {
-  id?: string; category: string; type: string; construction: string; county: string; city: string; full_address: string; cf_number: string;
+  // uid: the asset's key in a form not saved yet (its documents wait under it).
+  id?: string; uid?: string; category: string; type: string; construction: string; county: string; city: string; full_address: string; cf_number: string;
   cad_building: string; cad_land: string; usable_area: string; year_built: string; description: string; is_main: boolean; value: string; approach: string; notes: string;
   contact_kind: string; contact_name: string; contact_phone: string;
   land_area: string; rooms: string; floor: string; height_regime: string; vehicle_make: string; vehicle_model: string; reg_number: string; vin: string; mileage: string;

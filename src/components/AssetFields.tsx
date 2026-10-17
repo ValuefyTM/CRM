@@ -7,6 +7,7 @@ import { ASSET_CATEGORIES, assetProfile, capType, FIELD_HINTS, FIELD_LABELS, typ
 import { extractPlace, loadPlaces, type Places } from "@/lib/places";
 import { Combo } from "./Combo";
 import { MiniMap, type MiniPoint } from "./MiniMap";
+import { AssetDocs, type AssetDocsProps } from "./AssetDocs";
 
 type Loc = { state: "idle" | "loading" | "found" | "none"; point: MiniPoint | null; note: string };
 const SOURCE_TEXT: Record<MiniPoint["source"], string> = { cadastru: "Localizat din geoportal (plan cadastral)", adresa: "Localizat după adresă", localitate: "Aproximativ: centrul localității" };
@@ -14,7 +15,7 @@ const SOURCE_TEXT: Record<MiniPoint["source"], string> = { cadastru: "Localizat 
 const NUMERIC: ProfileField[] = ["usable_area", "land_area", "rooms", "year_built", "mileage"];
 const MONO: ProfileField[] = ["cf_number", "cad_building", "cad_land", "reg_number", "vin"];
 
-export function AssetFields({ value: f, onChange }: { value: AssetForm; onChange: (patch: Partial<AssetForm>) => void }) {
+export function AssetFields({ value: f, onChange, docs }: { value: AssetForm; onChange: (patch: Partial<AssetForm>) => void; docs?: AssetDocsProps }) {
   const [places, setPlaces] = useState<Places>({});
   const [auto, setAuto] = useState(false);
   const last = useRef<{ county: string; city: string } | null>(null);
@@ -138,6 +139,7 @@ export function AssetFields({ value: f, onChange }: { value: AssetForm; onChange
           : loc.state === "found" && loc.point ? <><b>{SOURCE_TEXT[loc.point.source]}</b><small>{loc.note}</small></>
           : loc.note}
       </p>
+      {docs && <AssetDocs {...docs} />}
     </aside>
     </div>
   );

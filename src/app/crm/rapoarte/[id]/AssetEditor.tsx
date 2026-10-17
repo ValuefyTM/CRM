@@ -92,7 +92,7 @@ export function AssetEditor({ report, initial, shared = 0, label, className, cli
               </>
             ) : (
               <>
-                <AssetFields value={f} onChange={(p) => setF({ ...f, ...p })} />
+                <AssetFields value={f} onChange={(p) => setF({ ...f, ...p })} docs={f.id ? { mode: "report", report, asset: f.id } : undefined} />
                 {!editing && <p className="hint">Dacă nr. CF sau nr. cadastral există deja în CRM, bunul se leagă de proprietatea existentă (cu istoricul ei).</p>}
               </>
             )}

@@ -29,17 +29,18 @@ export async function POST(req: Request) {
     const f = await fillReportAssets(a.db, a.user.id, r.id, r.assetId, assets.assets, { name: str(b.client_name, 160), phone: str(b.client_phone, 40) });
     if (!f.ok) return err(f.error);
   }
+  // The report's assets, in the order of the form (the documents dropped under each go to it).
+  const { results } = await a.db.prepare("SELECT a.id, a.contact_kind, a.contact_name, a.contact_phone FROM assets a WHERE a.report_id = ? ORDER BY a.is_main DESC, a.rowid")
+    .bind(r.id).all<{ id: string; contact_kind: string | null; contact_name: string | null; contact_phone: string | null }>();
   // One inspector for all the assets (optional): the inspections are given right away, with each asset's contact.
   const inspector = id_(b.inspector_id);
   let given = 0;
   if (r.created && inspector) {
-    const { results } = await a.db.prepare("SELECT a.id, a.contact_kind, a.contact_name, a.contact_phone FROM assets a WHERE a.report_id = ? ORDER BY a.is_main DESC, a.rowid")
-      .bind(r.id).all<{ id: string; contact_kind: string | null; contact_name: string | null; contact_phone: string | null }>();
     for (const x of results) {
       const g = await assignInspection(a.db, a.user, r.id, { asset: x.id, inspector, contact_kind: x.contact_kind, contact_name: x.contact_name, contact_phone: x.contact_phone,
         instructions: str(b.inspection_notes, 1000), confirm_missing: true });
       if (g.ok) given++;
     }
   }
-  return Response.json({ ok: true, order: o.id, report: r.id, inspections: given });
+  return Response.json({ ok: true, order: o.id, report: r.id, inspections: given, assets: results.map((x) => x.id) });
 }

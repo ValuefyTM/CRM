@@ -206,7 +206,7 @@ export type Report = ReportRow & {
   stage: string | null; term_days: number | null; due_on: string | null; offer_id: string | null; client_notified_at: string | null;
   order_seq: number | null; order_bank_ref: string | null; order_source: string | null; statement_number: string | null; client_code: string | null;
   recipient_kind: string | null; recipient_email: string | null; recipient_phone: string | null; recipient_code: string | null; issuer_logo: string | null;
-  issuer_color: string | null; issuer_short: string | null; bank_logo: string | null; client_logo: string | null; ordered_at: string | null;
+  issuer_color: string | null; issuer_short: string | null; bank_logo: string | null; client_logo: string | null; ordered_at: string | null; urgent: number;
 };
 
 export async function getReport(db: D1Database, id: string) {
@@ -214,7 +214,7 @@ export async function getReport(db: D1Database, id: string) {
     .prepare(
       `SELECT r.*, c.name AS client_name, c.kind AS client_kind, c.phone AS client_phone, c.email AS client_email, c.cui AS client_cui, c.billing_address AS client_address,
         COALESCE(b.code, b.name) AS bank_code, b.name AS bank_name, i.name AS issuer_name, i.logo_url AS issuer_logo, i.color AS issuer_color,
-        COALESCE(NULLIF(i.code, ''), i.name) AS issuer_short, b.logo_url AS bank_logo, c.logo_url AS client_logo, o.created_at AS ordered_at,
+        COALESCE(NULLIF(i.code, ''), i.name) AS issuer_short, b.logo_url AS bank_logo, c.logo_url AS client_logo, o.created_at AS ordered_at, COALESCE(o.urgent, 0) AS urgent,
         k.number AS contract_number, k.kind AS contract_kind, k.signed_on AS contract_date, k.fee AS contract_fee,
         ru.name AS referral_name, ru.id AS referral_id, COALESCE(NULLIF(du.name, ''), du.email) AS delivered_by_name,
         o.seq AS order_seq, o.bank_ref AS order_bank_ref, o.source AS order_source, st.number AS statement_number, c.code AS client_code,
