@@ -4,30 +4,42 @@ import { now } from "./db";
 import { SHEET_TYPES, type Section, type SheetType } from "./insp-forms";
 import { baseTemplate, effectiveForms, mergeTemplate, templateSections, type Template } from "./insp-templates";
 
-export type TplInfo = { key: string; name: string; base: SheetType; builtin: boolean; deleted: boolean };
+export type TplInfo = { key: string; name: string; base: SheetType; builtin: boolean; deleted: boolean;
+  /** asset types the sheet is for ("CATEGORIE" or "CATEGORIE|TIP"); empty: every asset */
+  assets: string[] };
+
+/** The sheet of an inspection given with "the standard sheet" (UVALO's of the type, in the CRM app the VALUEFY model). */
+export const STD = "std";
 
 const isType = (t: string | null | undefined): t is SheetType => SHEET_TYPES.some(([k]) => k === t);
 
 /** Every sheet: the built-in ones first (with the name the firm gave them), then the firm's own (deleted ones only on request). */
 export async function templateList(db: D1Database, withDeleted = false): Promise<TplInfo[]> {
-  const { results } = await db.prepare("SELECT key, name, base, deleted_at FROM insp_template_meta ORDER BY created_at")
-    .all<{ key: string; name: string | null; base: string; deleted_at: string | null }>().catch(() => ({ results: [] as { key: string; name: string | null; base: string; deleted_at: string | null }[] }));
+  type M = { key: string; name: string | null; base: string; deleted_at: string | null; asset_types: string | null };
+  const { results } = await db.prepare("SELECT key, name, base, deleted_at, asset_types FROM insp_template_meta ORDER BY created_at")
+    .all<M>().catch(() => ({ results: [] as M[] }));
   const meta = new Map(results.map((r) => [r.key, r]));
-  const builtin = SHEET_TYPES.map(([t, label]): TplInfo => ({ key: t, name: meta.get(t)?.name?.trim() || label, base: t, builtin: true, deleted: false }));
-  const own = results.filter((r) => !isType(r.key) && isType(r.base) && (withDeleted || !r.deleted_at))
-    .map((r): TplInfo => ({ key: r.key, name: r.name?.trim() || "Fișă fără nume", base: r.base as SheetType, builtin: false, deleted: !!r.deleted_at }));
-  return [...builtin, ...own];
+  const assets = (r?: M) => { try { const v: unknown = JSON.parse(r?.asset_types ?? "[]"); return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []; } catch { return []; } };
+  const builtin = SHEET_TYPES.map(([t, label]): TplInfo => ({ key: t, name: meta.get(t)?.name?.trim() || label, base: t, builtin: true, deleted: !!meta.get(t)?.deleted_at, assets: assets(meta.get(t)) }));
+  const own = results.filter((r) => !isType(r.key) && isType(r.base))
+    .map((r): TplInfo => ({ key: r.key, name: r.name?.trim() || "Fișă fără nume", base: r.base as SheetType, builtin: false, deleted: !!r.deleted_at, assets: assets(r) }));
+  return [...builtin, ...own].filter((x) => withDeleted || !x.deleted);
 }
 
-/** The template key an inspection uses (its own sheet, else its type). */
-export const tplKey = (i: { template?: string | null; sheet_type?: string | null }) => i.template || i.sheet_type || "apartament";
+/** The sheet an inspection uses: the one it was given with; null for the standard sheet; older inspections: the sheet of their type. */
+export const tplKey = (i: { template?: string | null; sheet_type?: string | null }) => (i.template === STD ? null : i.template || i.sheet_type || "apartament");
+
+/** Whether a sheet is meant for an asset (a sheet linked to no asset type is for every asset). */
+export const sheetFits = (x: TplInfo, a: { category: string | null; type: string | null }) =>
+  !x.assets.length || x.assets.includes(`${a.category ?? ""}|${a.type ?? ""}`) || (!!a.category && x.assets.includes(a.category));
 
 /** The built-in type behind a key (a built-in key is its own type). */
 export const baseOfKey = (list: TplInfo[], key: string | null | undefined): SheetType =>
   isType(key) ? key : list.find((x) => x.key === key)?.base ?? "apartament";
 
 /** The name of each sheet, by key (deleted ones included, for the inspections that used them). */
-export const templateNames = async (db: D1Database): Promise<Record<string, string>> => Object.fromEntries((await templateList(db, true)).map((x) => [x.key, x.name]));
+export const templateNames = async (db: D1Database): Promise<Record<string, string>> =>
+  ({ ...Object.fromEntries((await templateList(db, true)).map((x) => [x.key, x.name])), [STD]: "Fișa standard" });
 
 export async function savedTemplates(db: D1Database): Promise<Record<string, Template>> {
   const { results } = await db.prepare("SELECT sheet_type, groups FROM insp_templates").all<{ sheet_type: string; groups: string }>();
@@ -61,22 +73,39 @@ export async function saveTemplate(db: D1Database, key: string, tpl: Template | 
   ).bind(key, JSON.stringify(tpl), now(), userId).run();
 }
 
-/** A new sheet, as a copy of another one (its current questions, or the VALUEFY model of a type when `model`). */
-export async function createTemplate(db: D1Database, name: string, from: string, model: boolean, userId: string) {
-  const src = (await templateList(db)).find((x) => x.key === from);
-  if (!src) return null;
+/**
+ * A new sheet: `from` = "blank" (one empty group), "model:<type>" (the VALUEFY model of a type) or a sheet's key (a copy of
+ * its questions). `base`: the built-in type behind it (CRM columns, rooms, required photos), for a blank sheet.
+ */
+export async function createTemplate(db: D1Database, name: string, from: string, base: SheetType, assets: string[], userId: string) {
+  let tpl: Template, type: SheetType = base;
+  if (from === "blank") tpl = [{ id: `g_${crypto.randomUUID().slice(0, 5)}`, title: "Date generale", custom: true, questions: [] }];
+  else if (from.startsWith("model:") && isType(from.slice(6))) { type = from.slice(6) as SheetType; tpl = baseTemplate(type); }
+  else {
+    const src = (await templateList(db)).find((x) => x.key === from);
+    if (!src) return null;
+    type = src.base;
+    tpl = (await templateOf(db, src.key, src.base)).tpl;
+  }
   const key = `c-${crypto.randomUUID().slice(0, 8)}`;
-  const tpl = model ? baseTemplate(src.base) : (await templateOf(db, src.key, src.base)).tpl;
-  await db.prepare("INSERT INTO insp_template_meta (key, name, base, created_at, created_by) VALUES (?, ?, ?, ?, ?)").bind(key, name, src.base, now(), userId).run();
+  await db.prepare("INSERT INTO insp_template_meta (key, name, base, created_at, created_by, asset_types) VALUES (?, ?, ?, ?, ?, ?)")
+    .bind(key, name, type, now(), userId, JSON.stringify(assets)).run();
   await saveTemplate(db, key, tpl, userId);
-  return { key, base: src.base };
+  return { key, base: type };
 }
+
+export const setTemplateAssets = (db: D1Database, key: string, base: SheetType, assets: string[]) =>
+  db.prepare("INSERT INTO insp_template_meta (key, base, created_at, asset_types) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET asset_types = excluded.asset_types")
+    .bind(key, base, now(), JSON.stringify(assets)).run();
 
 export async function renameTemplate(db: D1Database, key: string, base: SheetType, name: string) {
   await db.prepare("INSERT INTO insp_template_meta (key, name, base, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET name = excluded.name")
     .bind(key, name, base, now()).run();
 }
 
-/** Takes a sheet made in the CRM off the list (inspections that used it keep it). */
-export const removeTemplate = (db: D1Database, key: string) =>
-  db.prepare("UPDATE insp_template_meta SET deleted_at = ? WHERE key = ? AND key LIKE 'c-%'").bind(now(), key).run();
+/** Takes a sheet off the list (inspections that used it keep it); a built-in one goes back to the VALUEFY model for them. */
+export async function removeTemplate(db: D1Database, key: string, base: SheetType) {
+  await db.prepare("INSERT INTO insp_template_meta (key, base, created_at, deleted_at) VALUES (?1, ?2, ?3, ?3) ON CONFLICT(key) DO UPDATE SET deleted_at = excluded.deleted_at")
+    .bind(key, base, now()).run();
+  if (isType(key)) await saveTemplate(db, key, null, "");
+}

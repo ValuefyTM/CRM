@@ -11,7 +11,7 @@ import {
   type Answers, type Section, type SheetType,
 } from "./insp-forms";
 import { cleanForm } from "./insp-templates";
-import { currentForms, templateNames } from "./insp-templates-db";
+import { currentForms, STD, templateNames } from "./insp-templates-db";
 
 /** A signed-in inspector or evaluator. */
 export async function inspApi(): Promise<{ db: D1Database; user: User } | { res: NextResponse }> {
@@ -272,7 +272,7 @@ export async function saveSheet(db: D1Database, user: User, ins: Insp, b: Record
   const id = sheetId(ins.id);
   // The form: the one the sheet was started with on the phone, else the firm's current template.
   const forms = await currentForms(db);
-  const form = cleanForm(b.form) ?? current?.form ?? forms[ins.template ?? type] ?? forms[type];
+  const form = cleanForm(b.form) ?? current?.form ?? (ins.template && ins.template !== STD ? forms[ins.template] : null) ?? (ins.template === STD ? FORMS[type] : forms[type]);
 
   // Signature: PNG data URL from the phone → R2.
   let signature: string | null = null;

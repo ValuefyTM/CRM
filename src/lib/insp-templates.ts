@@ -40,35 +40,26 @@ export const baseTemplate = (t: SheetType): Template =>
   FORMS[t].map((s) => ({ id: s.id, title: s.title, questions: s.fields.map(toQuestion) }));
 
 /**
- * The firm's template checked against the built-in form: built-in questions keep their kind (the CRM columns depend
- * on it), questions the code added since are put back in their group, removed ones are dropped.
+ * The firm's template checked against the built-in form. The firm owns its sheets: groups and questions may be deleted,
+ * renamed and changed. A built-in question whose kind was changed is no longer the built-in one (it gets its own key, so
+ * the CRM column it filled is not written with another kind of answer).
  */
 export function mergeTemplate(t: SheetType, saved: Template | null | undefined): Template {
-  const base = baseTemplate(t);
-  if (!saved?.length) return base;
-  const baseQ = new Map(base.flatMap((g) => g.questions.map((q) => [q.k, { q, group: g.id }] as const)));
+  if (!saved) return baseTemplate(t);
+  const baseQ = new Map(baseTemplate(t).flatMap((g) => g.questions.map((q) => [q.k, q] as const)));
   const seen = new Set<string>();
-  const groups: Template = saved.map((g) => ({
+  return saved.map((g) => ({
     ...g,
-    questions: g.questions.flatMap((q) => {
+    questions: g.questions.flatMap((q): TplQuestion[] => {
       if (seen.has(q.k)) return [];
-      const b = baseQ.get(q.k);
-      if (!b && !q.custom) return [];
       seen.add(q.k);
-      if (!b) return [q];
-      // Built-in: label, options, flags may change; kind and unit stay.
-      const kind = b.q.kind === "one" && q.kind === "yn" ? "yn" : b.q.kind;
-      return [{ ...q, kind, unit: b.q.unit, custom: false, opts: b.q.opts ? (q.opts?.length ? q.opts : b.q.opts) : undefined }];
+      const b = baseQ.get(q.k);
+      if (!b || q.custom) return [{ ...q, custom: true }];
+      const sameKind = b.kind === q.kind || (b.kind === "one" && q.kind === "yn") || (b.kind === "yn" && q.kind === "one");
+      if (!sameKind) return [{ ...q, k: `q_${q.k}`, custom: true }];
+      return [{ ...q, unit: b.unit, custom: false, opts: b.opts ? (q.opts?.length ? q.opts : b.opts) : q.opts }];
     }),
   }));
-  for (const bg of base) {
-    const missing = bg.questions.filter((q) => !seen.has(q.k));
-    if (!missing.length) continue;
-    const g = groups.find((x) => x.id === bg.id);
-    if (g) g.questions.push(...missing);
-    else groups.push({ ...bg, questions: missing });
-  }
-  return groups;
 }
 
 /** A template question as the field the app renders. */
@@ -180,3 +171,7 @@ export function cleanForm(raw: unknown): Section[] | null {
 
 /** A new key for a question added by the firm (never one of the built-in keys). */
 export const newQuestionKey = () => `q_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+/** The asset types a sheet is linked to, as sent by the editor ("CATEGORIE" or "CATEGORIE|TIP"). */
+export const cleanAssets = (v: unknown): string[] =>
+  Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string").map((x) => x.trim().toUpperCase().slice(0, 100)).filter(Boolean))].slice(0, 60) : [];

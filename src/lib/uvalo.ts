@@ -109,6 +109,11 @@ export async function syncTemplates(db: D1Database, only?: string) {
     .bind(JSON.stringify(state), now()).run();
   return out;
 }
+/** A sheet deleted in the CRM: its copy in UVALO goes too (UVALO's own standard sheets stay). */
+export async function dropTemplateInUvalo(key: string) {
+  try { await call(`/templates/${tplRef(key)}`, { method: "DELETE" }); } catch { /* not there */ }
+}
+
 export async function templateSync(db: D1Database): Promise<Record<string, { at: string; error?: string }>> {
   const r = await db.prepare("SELECT value FROM settings WHERE key = 'uvalo_templates'").first<{ value: string }>().catch(() => null);
   return parseJson(r?.value, {});
@@ -143,15 +148,18 @@ export async function pushInspection(db: D1Database, id: string) {
   const r = await rowOf(db, id);
   if (!r) return { ok: false as const, error: "Inspecția nu există." };
   if (!r.legit?.trim()) return fail(db, id, new UvaloError(`${r.inspector ?? "Inspectorul"} nu are legitimația ANEVAR completată în CRM (Utilizatori).`));
-  const key = tplKey(r), type = baseOfKey(await templateList(db, true), key);
+  const sheets = await templateList(db);
+  // the firm's sheet (sent first); none (the standard sheet, or one deleted since): UVALO's own sheet of the type
+  const wanted = tplKey(r), key = sheets.some((x) => x.key === wanted) ? wanted : null;
+  const type = key ? baseOfKey(sheets, key) : baseOfKey(sheets, r.sheet_type);
   const geo = r.geo ? parseJson<{ lat?: number; lng?: number }>(r.geo, {}) : {};
   try {
-    await syncTemplates(db, key);
+    if (key) await syncTemplates(db, key);
     const d = await call<{ id: string; code: string }>("/inspections", { method: "POST", body: JSON.stringify({
       ref: r.id, legit: r.legit, address: r.full_address || [r.city, r.county].filter(Boolean).join(", ") || "Adresă necompletată",
       cad_nr: r.cad_building || r.cad_land || null, cf_nr: r.cf_number, county: r.county, uat: r.city, lat: geo.lat ?? null, lng: geo.lng ?? null,
       prop_type: PROP[type], area_util: r.usable_area, area_land: r.land_area, contact_name: r.contact_name, contact_phone: r.contact_phone,
-      contact_role: r.contact_kind ? CONTACT_ROLE[r.contact_kind] ?? null : null, instructions: r.instructions, due_on: r.due_on, template_ref: tplRef(key),
+      contact_role: r.contact_kind ? CONTACT_ROLE[r.contact_kind] ?? null : null, instructions: r.instructions, due_on: r.due_on, ...(key ? { template_ref: tplRef(key) } : {}),
     }) });
     // the documents the inspector may open, each sent once
     const sent = new Set(parseJson<string[]>(r.uvalo_docs, []));
@@ -257,8 +265,9 @@ export async function importSheet(db: D1Database, id: string, u?: UInsp) {
   try {
     const x = u ?? (await call<{ inspection: UInsp }>(`/inspections/${encodeURIComponent(id)}`)).inspection;
     if (x.status !== "gata" && x.status !== "pred") return { ok: false as const, error: "Fișa nu e finalizată în UVALO." };
-    const key = tplKey(ins), type = baseOfKey(await templateList(db, true), key);
-    const form = (await currentForms(db))[key] ?? (await currentForms(db))[type];
+    const key = tplKey(ins), type = baseOfKey(await templateList(db, true), key ?? ins.sheet_type);
+    const forms = await currentForms(db);
+    const form = (key ? forms[key] : null) ?? forms[type];
     const answers = toCrmAnswers(form, x);
     const r2 = await bucket();
     if (!r2) throw new UvaloError("Stocarea fișierelor nu este disponibilă.");

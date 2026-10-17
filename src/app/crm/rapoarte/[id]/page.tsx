@@ -21,8 +21,7 @@ import type { AccessDoc } from "@/components/DocAccess";
 import { AssetEditor, RemoveAsset } from "./AssetEditor";
 import { assetProfile, emptyAsset, FIELD_LABELS, type AssetForm, type ProfileField } from "@/lib/asset-labels";
 import { canAssign, inspectorChoices } from "@/lib/insp-assign";
-import { templateList } from "@/lib/insp-templates-db";
-import { guessSheetType } from "@/lib/insp-forms";
+import { sheetFits, STD, templateList } from "@/lib/insp-templates-db";
 import { docsByAsset } from "@/lib/insp-docs";
 import { guessDocKind } from "@/lib/doc-kinds";
 import { Avatar, PersonLine } from "@/components/Avatar";
@@ -103,8 +102,10 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const [repInvoices, perOrder] = await Promise.all([invoicesFor(db, { report: id }), can(user, "billing") ? draftForReport(db, id) : Promise.resolve({ error: "" })]);
   const main = assets.find((a) => a.is_main) ?? assets[0];
   const [mayAssign, inspectors, inspDocs, sheetList] = await Promise.all([canAssign(db, user, id), inspectorChoices(db, user.id), docsByAsset(db, id, assets.map((a) => a.id)), templateList(db)]);
-  // The sheets an inspection can be given with: the built-in ones (with the firm's names) and the firm's own.
-  const sheetOpts = sheetList.map((x): [string, string] => [x.key, x.name]);
+  // The sheets an inspection of an asset can be given with: the firm's sheets meant for its type of asset, and the standard one
+  // (UVALO's of the type; the VALUEFY model in the CRM app).
+  const sheetsFor = (a: { category: string | null; type: string | null }): [string, string][] =>
+    [...sheetList.filter((x) => sheetFits(x, a)).map((x): [string, string] => [x.key, x.name]), [STD, "Fișa standard"]];
   const docState = (assetId: string) => ({ cf: !!inspDocs[assetId]?.cf.length, rlv: !!inspDocs[assetId]?.rlv.length });
   type A = (typeof assets)[number];
   const isActive = (a: A) => !!a.inspection_id && !a.inspection_from_glide && (a.inspection_status === "to_schedule" || a.inspection_status === "scheduled");
@@ -234,7 +235,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const openAssets = assets.filter((a) => inspState(a) === "open").length;
   const allocRows = assets.map((a): AllocRow => ({
     asset: a.id, label: `${cap(a.type) || "Bun"}${a.is_main && assets.length > 1 ? " (principal)" : ""}`, address: a.full_address ?? a.city, state: inspState(a),
-    inspector: a.inspector_id, none: a.no_inspection, sheet_type: guessSheetType(a.category, a.type), docs: docState(a.id), ...contactOf(a),
+    inspector: a.inspector_id, none: a.no_inspection, sheet_type: sheetsFor(a)[0][0], docs: docState(a.id), ...contactOf(a),
   }));
   const boardHead = (
     <div className="abListHead">
@@ -525,16 +526,16 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                     {mayAssign && (
                       <div className="abPanelActs">
                         {(canGive || active) && (
-                          <AssignInspection report={r.id} me={user.id} people={inspectors} docs={accessDocs} sheets={sheetOpts} access={active ? refs : null} initial={{
+                          <AssignInspection report={r.id} me={user.id} people={inspectors} docs={accessDocs} sheets={sheetsFor(a)} access={active ? refs : null} initial={{
                             asset: a.id, label, inspection: active ? a.inspection_id : null,
-                            inspector: active ? a.inspector_id : null, sheet_type: (active && (a.sheet_template || a.sheet_type)) || guessSheetType(a.category, a.type),
+                            inspector: active ? a.inspector_id : null, sheet_type: (active && (a.sheet_template || a.sheet_type)) || sheetsFor(a)[0][0],
                             due_on: active ? a.due_on : null, ...ct, instructions: active ? a.instructions : null, scheduled: a.inspection_status === "scheduled",
                             docs: docState(a.id),
                           }} />
                         )}
                         {a.inspection_status === "done" && (
-                          <AssignInspection reinspect report={r.id} me={user.id} people={inspectors} docs={accessDocs} sheets={sheetOpts} access={null} initial={{
-                            asset: a.id, label, inspection: null, inspector: a.inspector_id, sheet_type: a.sheet_template || a.sheet_type || guessSheetType(a.category, a.type),
+                          <AssignInspection reinspect report={r.id} me={user.id} people={inspectors} docs={accessDocs} sheets={sheetsFor(a)} access={null} initial={{
+                            asset: a.id, label, inspection: null, inspector: a.inspector_id, sheet_type: a.sheet_template || sheetsFor(a)[0][0],
                             due_on: null, ...ct, instructions: null, scheduled: false, docs: docState(a.id),
                           }} />
                         )}

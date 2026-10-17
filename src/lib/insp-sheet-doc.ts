@@ -80,7 +80,7 @@ export async function inspectionSheetDoc(db: D1Database, reportId: string, asset
   try { geo = row.geo ? JSON.parse(row.geo as string) : {}; } catch { /* no pin */ }
   // The form the sheet was filled in with; older sheets: the current template (same keys).
   const forms = await currentForms(db);
-  const fields = form ?? (row.template ? forms[row.template as string] : null) ?? forms[type] ?? FORMS[type];
+  const fields = form ?? (row.template && row.template !== "std" ? forms[row.template as string] : null) ?? (row.template === "std" ? FORMS[type] : forms[type]) ?? FORMS[type];
 
   const sections = fields.map((s) => ({
     title: s.title,

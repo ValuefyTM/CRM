@@ -2766,3 +2766,14 @@ a.dAssetLink { color: inherit; text-decoration: none; border-radius: 12px; trans
 .seTplPen { margin-left: 8px; width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--line); background: #fff; color: var(--muted-2); cursor: pointer; font-size: 13px; vertical-align: middle; }
 .seTplPen:hover { border-color: var(--acc); color: var(--ink); }
 .bvStrip { grid-template-rows: 84px; flex-shrink: 0; overflow: hidden; } .bvStrip img, .bvStrip i { height: 84px; min-height: 0; }
+.seLinked { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted-2); }
+.seLinked > span { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.seChip { padding: 2px 8px; border-radius: 999px; background: var(--acc-soft); border: 1px solid var(--acc-line); color: var(--ink); font-size: 11.5px; font-weight: 700; }
+.seLinkBox { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 14px; background: var(--bg, #faf7f0); border: 1px solid var(--line); }
+.seAssets { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 14px; }
+.seAssets fieldset { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 3px; }
+.seAssetCat small { color: var(--muted-2); font-size: 11px; }
+.seAssetTypes { display: flex; flex-direction: column; gap: 2px; padding-left: 20px; }
+.seAssetTypes .check { font-size: 12px; }
+.seNewAssets summary { cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--acc-text); }
+.seNewAssets .seAssets { grid-template-columns: 1fr; margin-top: 8px; max-height: 260px; overflow: auto; }

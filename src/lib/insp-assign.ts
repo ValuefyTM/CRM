@@ -8,7 +8,7 @@ import { type User } from "./users";
 import { isFinished, reportAccess } from "./perms-db";
 import { can } from "./perms";
 import { guessSheetType, sheetTypeLabel, type SheetType } from "./insp-forms";
-import { templateList } from "./insp-templates-db";
+import { STD, templateList } from "./insp-templates-db";
 import { photoUrl, presenceOf } from "./presence";
 import { missingDocs, missingText, type DocType } from "./insp-docs";
 import { cancelInUvalo, deleteInUvalo, inspChannel, inspectorByLegit, later, pushInspection, uvaloAppUrl } from "./uvalo";
@@ -66,12 +66,13 @@ export async function assignInspection(db: D1Database, user: User, reportId: str
     if (found instanceof Error) return { ok: false as const, error: `UVALO: ${found.message}` };
     if (!found) return { ok: false as const, error: `${inspector.name} nu are cont UVALO activ cu legitimația ${inspector.anevar_no}. Fără cont nu poate primi inspecția (sau treci pe aplicația CRM din Setări → Fișe de inspecție).` };
   }
-  // The sheet: a built-in type or one made in the CRM (its built-in type goes in sheet_type, the sheet itself in template).
+  // The sheet: one of the firm's (its built-in type goes in sheet_type, the sheet itself in template), else the standard one
+  // (UVALO's sheet of the type; in the CRM app the VALUEFY model).
   const sheets = await templateList(db);
   const picked = sheets.find((x) => x.key === str(b.sheet_type, 40));
   const type: SheetType = picked?.base ?? guessSheetType(asset.category, asset.type, asset.order_type);
-  const template = picked && !picked.builtin ? picked.key : null;
-  const sheetName = picked?.name ?? sheets.find((x) => x.key === type)?.name ?? sheetTypeLabel(type);
+  const template = picked?.key ?? STD;
+  const sheetName = picked?.name ?? `standard (${sheetTypeLabel(type).toLowerCase()})`;
   const due = str(b.due_on, 10);
   if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) return { ok: false as const, error: "Termenul nu este o dată validă." };
   const kind = CONTACT_KINDS.includes(str(b.contact_kind, 20)) ? str(b.contact_kind, 20) : null;
