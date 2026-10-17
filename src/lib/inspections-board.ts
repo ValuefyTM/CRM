@@ -86,10 +86,11 @@ export async function inspectionBoard(db: D1Database, f: BoardFilters) {
       ORDER BY COALESCE(i.scheduled_at, i.done_at)`).bind(wk, addDays(wk, 6), ...(f.inspector ? [f.inspector] : []), ...(f.lead ? [f.lead, f.lead] : [])).all<Raw>(),
     db.prepare(`SELECT SUM(${ACTIVE} AND i.status = 'to_schedule') AS to_schedule, SUM(${ACTIVE} AND i.status = 'scheduled') AS scheduled,
         SUM(${ACTIVE} AND i.status = 'scheduled' AND substr(i.scheduled_at, 1, 10) = ?1) AS today, SUM(${ACTIVE} AND (i.due_on < ?1 OR (i.status = 'scheduled' AND substr(i.scheduled_at, 1, 10) < ?1))) AS late,
-        SUM(i.status = 'done' AND substr(i.done_at, 1, 7) = substr(?1, 1, 7)) AS done_month
+        SUM(i.status = 'done' AND substr(i.done_at, 1, 7) = substr(?1, 1, 7)) AS done_month,
+        SUM(${ACTIVE}) AS active, SUM(i.status = 'done') AS done, SUM(i.status <> 'cancelled') AS total
       FROM inspections i LEFT JOIN reports r ON r.id = i.report_id ${f.inspector ? "WHERE i.inspector_id = ?2" : f.lead ? `WHERE (i.inspector_id = ?2 OR ${leadSql("i.report_id").replace("lm.user_id = ?", "lm.user_id = ?2")})` : ""}`)
       .bind(t, ...(f.inspector ? [f.inspector] : f.lead ? [f.lead] : []))
-      .first<{ to_schedule: number | null; scheduled: number | null; today: number | null; late: number | null; done_month: number | null }>(),
+      .first<{ to_schedule: number | null; scheduled: number | null; today: number | null; late: number | null; done_month: number | null; active: number | null; done: number | null; total: number | null }>(),
     db.prepare(`SELECT u.id, COALESCE(NULLIF(u.name, ''), u.email) AS name, u.last_seen_at, u.avatar_at,
         (SELECT COUNT(*) FROM inspections i LEFT JOIN reports r ON r.id = i.report_id WHERE i.inspector_id = u.id AND ${ACTIVE}) AS active
       FROM users u WHERE u.kind = 'internal' AND u.status NOT IN ('disabled', 'deleted')
@@ -99,6 +100,8 @@ export async function inspectionBoard(db: D1Database, f: BoardFilters) {
   return {
     today: t, week: wk, rows: rows.results.map((r) => shape(r, t)), weekRows: week.results.map((r) => shape(r, t)),
     counts: { toSchedule: counts?.to_schedule ?? 0, scheduled: counts?.scheduled ?? 0, today: counts?.today ?? 0, late: counts?.late ?? 0, doneMonth: counts?.done_month ?? 0 },
+    // How many in each state tab (with the inspector filter, not the period or the search).
+    tabs: { "": counts?.active ?? 0, deprogramat: counts?.to_schedule ?? 0, programate: counts?.scheduled ?? 0, intarziate: counts?.late ?? 0, realizate: counts?.done ?? 0, toate: counts?.total ?? 0 } as Record<string, number>,
     people: people.results.map((p) => ({ id: p.id, name: p.name, active: p.active, ...presenceOf(p.last_seen_at), photo: photoUrl(p.id, p.avatar_at) })),
   };
 }

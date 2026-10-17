@@ -42,7 +42,7 @@ export default async function InspectionsPage({ searchParams }: { searchParams: 
         ))}
       </div>
       <InspectionBoard base={base} current={sp} rows={d.rows} weekRows={d.weekRows} week={d.week} today={d.today}
-        people={d.people} states={BOARD_STATES} periods={BOARD_PERIODS} />
+        people={d.people} states={BOARD_STATES} tabs={d.tabs} periods={BOARD_PERIODS} />
     </CrmShell>
   );
 }

@@ -2214,3 +2214,18 @@ a.navItem[aria-current="page"] .navIcon { opacity: 1; }
 .fLabel small { margin-left: 4px; }
 .nwAuto { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px; border: 1px dashed var(--line); border-radius: 10px; background: var(--cream); font-size: 14px; font-weight: 700; color: var(--ink); }
 .nwAuto small { font-family: var(--font); font-weight: 500; font-size: 11.5px; color: var(--muted-2); }
+/* Inspecții: numărul de pe fiecare tab de stare (cele întârziate în roșu). */
+.ibStates a small { margin-left: 2px; font: 600 11px var(--mono); padding: 1px 7px; border-radius: 999px; background: rgba(17, 17, 17, 0.07); color: var(--muted); }
+.ibStates a[aria-pressed="true"] small { background: var(--acc-soft); color: var(--acc-text); }
+.ibStates a.ibLate small { background: var(--err-bg); color: var(--err); }
+/* Bunul în formular: câmpurile în stânga, harta mică în dreapta. */
+.afWrap { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 0; align-items: start; }
+.afMap { padding: 14px 16px 14px 0; display: flex; flex-direction: column; gap: 8px; position: sticky; top: calc(var(--topH, 64px) + 12px); }
+.miniMap { width: 100%; border-radius: 12px; border: 1px solid var(--line); overflow: hidden; background: var(--cream); z-index: 0; }
+.afMapNote { margin: 0; font-size: 11.5px; color: var(--muted-2); line-height: 1.4; display: flex; flex-direction: column; gap: 2px; }
+.afMapNote b { font-size: 12px; }
+.afMapNote small { font-size: 11px; color: var(--muted-2); overflow-wrap: anywhere; }
+.afMapNote.cadastru b { color: var(--ok-text); } .afMapNote.adresa b { color: #2f55b0; } .afMapNote.localitate b { color: var(--acc-text); }
+.afMapNote.none { color: var(--err); }
+@media (max-width: 900px) { .afWrap { grid-template-columns: 1fr; } .afMap { position: static; padding: 0 16px 14px; } }
+.ibMap { position: relative; } .ibPlacing { position: absolute; left: 12px; bottom: 12px; z-index: 500; padding: 6px 10px; border-radius: 8px; background: rgba(17,17,17,.82); color: #fff; font-size: 12px; font-weight: 600; }

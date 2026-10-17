@@ -1,7 +1,7 @@
 "use client";
 // The team's inspections: filters, and a list, a week calendar or a map (linked on hover in the list + map view).
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { FilterSelect } from "@/components/FilterSelect";
 import { Avatar } from "@/components/Avatar";
 import type { BoardFilters, BoardRow } from "@/lib/inspections-board";
@@ -23,9 +23,29 @@ const addDays = (iso: string, n: number) => { const d = new Date(`${iso}T12:00:0
 
 export function InspectionBoard(p: {
   base: string; current: BoardFilters & { vezi?: string }; rows: BoardRow[]; weekRows: BoardRow[]; week: string; today: string;
-  people: { id: string; name: string; active: number }[]; states: [string, string][]; periods: [string, string][];
+  people: { id: string; name: string; active: number }[]; states: [string, string][]; periods: [string, string][]; tabs?: Record<string, number>;
 }) {
   const router = useRouter();
+  // Open inspections without a point on the map: placed in the background (geoportal plans, else the address).
+  const unplaced = p.rows.filter((r) => (r.status === "to_schedule" || r.status === "scheduled") && (r.lat == null || r.lng == null)).length;
+  const [placing, setPlacing] = useState(false);
+  useEffect(() => {
+    if (!unplaced) return;
+    let off = false;
+    (async () => {
+      setPlacing(true);
+      let found = 0;
+      for (let round = 0; round < 4 && !off; round++) {
+        const r = await fetch("/api/crm/inspections/locate", { method: "POST" }).catch(() => null);
+        const d = (await r?.json().catch(() => null)) as { tried?: number; located?: number } | null;
+        if (!r?.ok || !d) break;
+        found += d.located ?? 0;
+        if ((d.tried ?? 0) < 6) break;
+      }
+      if (!off) { setPlacing(false); if (found) router.refresh(); }
+    })();
+    return () => { off = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const c = p.current;
   const view = c.vezi === "calendar" || c.vezi === "harta" ? c.vezi : "lista";
   const [q, setQ] = useState(c.q ?? "");
@@ -137,7 +157,8 @@ export function InspectionBoard(p: {
           </a>
         ))}
       </div>
-      <div className="ibMap"><RegistryMap points={points} base={p.base} hover={hover} onPick={onPick} onHover={setHover} legend={legend} empty="Nicio inspecție cu localizare pentru filtrele alese." /></div>
+      <div className="ibMap"><RegistryMap points={points} base={p.base} hover={hover} onPick={onPick} onHover={setHover} legend={legend} empty="Nicio inspecție cu localizare pentru filtrele alese." />
+        {placing && <span className="ibPlacing">Localizez {unplaced} {unplaced === 1 ? "inspecție" : "inspecții"} după geoportal sau adresă…</span>}</div>
     </div>
   );
 
@@ -145,7 +166,11 @@ export function InspectionBoard(p: {
     <section className="card">
       <form className="filterBar" onSubmit={(e) => { e.preventDefault(); go({ q: q.trim() || undefined }); }}>
         <span className="segment ibStates" role="group" aria-label="Stare">
-          {p.states.map(([k, l]) => <a key={k || "active"} href={href({ stare: k || undefined })} aria-pressed={(c.stare ?? "") === k}>{l}</a>)}
+          {p.states.map(([k, l]) => (
+            <a key={k || "active"} href={href({ stare: k || undefined })} aria-pressed={(c.stare ?? "") === k} className={k === "intarziate" && (p.tabs?.[k] ?? 0) > 0 ? "ibLate" : undefined}>
+              {l}{p.tabs && <small>{(p.tabs[k] ?? 0).toLocaleString("ro-RO")}</small>}
+            </a>
+          ))}
         </span>
         <FilterSelect label="Inspector" value={c.inspector ?? ""} options={p.people.map((x) => [x.id, x.name, x.active])} onChange={(v) => go({ inspector: v || undefined })} all="Toți" />
         {view !== "calendar" && <FilterSelect label="Perioadă" value={c.perioada ?? ""} options={p.periods.filter(([k]) => k)} onChange={(v) => go({ perioada: v || undefined })} all="Oricând" />}

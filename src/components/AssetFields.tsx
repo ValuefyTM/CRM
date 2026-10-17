@@ -6,6 +6,10 @@ import { useEffect, useRef, useState } from "react";
 import { ASSET_CATEGORIES, assetProfile, capType, FIELD_HINTS, FIELD_LABELS, type AssetForm, type ProfileField } from "@/lib/asset-labels";
 import { extractPlace, loadPlaces, type Places } from "@/lib/places";
 import { Combo } from "./Combo";
+import { MiniMap, type MiniPoint } from "./MiniMap";
+
+type Loc = { state: "idle" | "loading" | "found" | "none"; point: MiniPoint | null; note: string };
+const SOURCE_TEXT: Record<MiniPoint["source"], string> = { cadastru: "Localizat din geoportal (plan cadastral)", adresa: "Localizat după adresă", localitate: "Aproximativ: centrul localității" };
 
 const NUMERIC: ProfileField[] = ["usable_area", "land_area", "rooms", "year_built", "mileage"];
 const MONO: ProfileField[] = ["cf_number", "cad_building", "cad_land", "reg_number", "vin"];
@@ -20,6 +24,25 @@ export function AssetFields({ value: f, onChange }: { value: AssetForm; onChange
   const p = assetProfile(f.category, f.type);
   const counties = Object.keys(places);
   const localities = f.county && places[f.county] ? places[f.county] : [];
+
+  // The small map: the geoportal by the cadastral / CF number first, else the address (looked up a moment after typing).
+  const [loc, setLoc] = useState<Loc>({ state: "idle", point: null, note: "" });
+  const hasCad = !!(f.cad_building.trim() || f.cad_land.trim() || f.cf_number.trim());
+  const where = f.full_address.trim() || f.city.trim();
+  useEffect(() => {
+    if (!hasCad && !where) { setLoc({ state: "idle", point: null, note: "" }); return; }
+    const ctl = new AbortController();
+    const t = setTimeout(async () => {
+      setLoc((x) => ({ ...x, state: "loading" }));
+      const r = await fetch("/api/crm/geo/lookup", { method: "POST", signal: ctl.signal, headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cad_building: f.cad_building, cad_land: f.cad_land, cf_number: f.cf_number, city: f.city, county: f.county, address: f.full_address }) }).catch(() => null);
+      if (ctl.signal.aborted) return;
+      const d = (await r?.json().catch(() => null)) as { hit?: (MiniPoint & { note: string }) | null; cadastreTried?: boolean } | null;
+      if (d?.hit) setLoc({ state: "found", point: { lat: d.hit.lat, lng: d.hit.lng, source: d.hit.source }, note: d.hit.note });
+      else setLoc({ state: "none", point: null, note: d?.cadastreTried ? "Nici geoportalul, nici adresa nu au dat un punct." : "Adresa nu a fost găsită pe hartă." });
+    }, 900);
+    return () => { clearTimeout(t); ctl.abort(); };
+  }, [f.cad_building, f.cad_land, f.cf_number, f.full_address, f.city, f.county]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The address names the place: fill in county and locality, unless they were chosen by hand.
   const fromAddress = (address: string) => {
@@ -58,6 +81,7 @@ export function AssetFields({ value: f, onChange }: { value: AssetForm; onChange
   const ids = p.fields.filter((k) => ["cf_number", "cad_building", "cad_land"].includes(k));
 
   return (
+    <div className="afWrap">
     <div className="afGrid">
       <div className="formRow">
         <label className="field">Categorie
@@ -105,6 +129,16 @@ export function AssetFields({ value: f, onChange }: { value: AssetForm; onChange
         <input className="input" value={f.description} onChange={(e) => onChange({ description: e.target.value })}
           placeholder={p.key === "vehicle" ? "ex. motorină, cutie automată, stare bună" : p.key === "land" ? "ex. formă regulată, front stradal 20 m, utilități la limită" : "ex. compartimentare, finisaje, stare"} />
       </label>
+    </div>
+    <aside className="afMap" aria-label="Localizare pe hartă">
+      <MiniMap point={loc.point} />
+      <p className={`afMapNote ${loc.state === "found" ? loc.point?.source ?? "" : loc.state}`}>
+        {loc.state === "idle" ? "Harta se completează din nr. cadastral / CF (geoportal) sau din adresă."
+          : loc.state === "loading" ? "Caut pe hartă…"
+          : loc.state === "found" && loc.point ? <><b>{SOURCE_TEXT[loc.point.source]}</b><small>{loc.note}</small></>
+          : loc.note}
+      </p>
+    </aside>
     </div>
   );
 }

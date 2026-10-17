@@ -1,6 +1,8 @@
 // Server-only: places properties on the map from their cadastral number, through the cadastral locator of VALUEFY Tools
 // (/api/localizare/centroid: centre of the parcel in the Timiș plans). Units ("…-C1-U20") are located by their parcel.
 import { now } from "./db";
+import { geocodeAddress } from "./geocode";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 const API = () => (process.env.LOCATOR_API_URL || "https://tools.valuefy.ro").replace(/\/$/, "") + "/api/localizare/centroid";
 export const geolocateEnabled = () => !!process.env.LOCATOR_API_TOKEN;
@@ -86,7 +88,7 @@ export async function locate(db: D1Database, props: Prop[]) {
     const hit = mine.find((r) => r.lat != null && r.lng != null);
     if (hit) {
       located++;
-      writes.push(db.prepare("UPDATE crm_properties SET geo = ?, geo_source = 'cadastru', geo_note = ?, geo_checked_at = ? WHERE id = ? AND (geo IS NULL OR geo = '' OR geo_source = 'cadastru')")
+      writes.push(db.prepare("UPDATE crm_properties SET geo = ?, geo_source = 'cadastru', geo_note = ?, geo_checked_at = ? WHERE id = ? AND (geo IS NULL OR geo = '' OR geo_source IN ('cadastru', 'adresa', 'localitate'))")
         .bind(`${hit.lat}, ${hit.lng}`, `plan UAT ${hit.uat}, nr. ${hit.nr}`, t, p.id));
     } else {
       writes.push(db.prepare("UPDATE crm_properties SET geo_note = ?, geo_checked_at = ? WHERE id = ?")
@@ -100,13 +102,86 @@ export async function locate(db: D1Database, props: Prop[]) {
 const NEEDS = `(p.geo IS NULL OR p.geo = '') AND (p.county IS NULL OR p.county = '' OR p.county LIKE 'Timi%')
   AND COALESCE(p.cad_building, p.cad_land, p.cf_number) GLOB '*[0-9]*'`;
 
-/** One property, after it is saved (quietly: the map is a convenience, saving must not fail because of it). */
-export async function locateProperty(db: D1Database, propertyId: string) {
-  if (!geolocateEnabled()) return;
+/** The plans of the Tools locator cover Timiș: other counties go straight to the address. */
+const inPlans = (county: string | null) => !county || /^timi/i.test(county.trim());
+
+/** A point from the cadastral number (geoportal plans), for a form not saved yet. Null when the plans do not have it. */
+export async function lookupCadastre(p: { city: string | null; county: string | null; cad_building: string | null; cad_land: string | null; cf_number: string | null }) {
+  if (!geolocateEnabled() || !inPlans(p.county)) return null;
+  const nrs = numbersOf({ id: "x", ...p });
+  if (!nrs.length) return null;
   try {
-    const p = await db.prepare(`SELECT p.id, p.city, p.cad_building, p.cad_land, p.cf_number FROM crm_properties p WHERE p.id = ? AND ${NEEDS}`).bind(propertyId).first<Prop>();
-    if (p) await locate(db, [p]);
+    const hits = await ask(nrs.map((nr, i) => ({ id: `x|${i}`, nr, city: p.city })));
+    const hit = hits.sort((a, b) => Number(a.id.split("|")[1]) - Number(b.id.split("|")[1])).find((h) => h.lat != null && h.lng != null);
+    return hit ? { lat: hit.lat!, lng: hit.lng!, source: "cadastru" as const, note: `geoportal · plan UAT ${hit.uat}, nr. ${hit.nr}` } : null;
+  } catch { return null; }
+}
+
+/**
+ * Places one property after it is saved (quietly: the map is a convenience, saving must not fail because of it):
+ * from the geoportal plans by its cadastral number first, else from its address.
+ */
+export async function locateProperty(db: D1Database, propertyId: string) {
+  try {
+    const p = await db.prepare("SELECT id, county, city, full_address, cad_building, cad_land, cf_number, geo, geo_source FROM crm_properties WHERE id = ?").bind(propertyId)
+      .first<Prop & { county: string | null; full_address: string | null; geo: string | null; geo_source: string | null }>();
+    // A point from the address is replaced by the plans as soon as they have the parcel; other points are kept.
+    const fromAddress = p?.geo_source === "adresa" || p?.geo_source === "localitate";
+    if (!p || (p.geo?.trim() && !fromAddress)) return;
+    if (geolocateEnabled() && inPlans(p.county) && numbersOf(p).length) {
+      await locate(db, [p]);
+      const now_ = await db.prepare("SELECT geo FROM crm_properties WHERE id = ?").bind(propertyId).first<{ geo: string | null }>();
+      if (now_?.geo?.trim()) return;
+    }
+    if (!p.geo?.trim()) await locateByAddress(db, p);
   } catch (e) { console.error("geolocate", e); }
+}
+
+/** Same, after the answer is sent (the form does not wait for the maps). */
+export function locateLater(db: D1Database, propertyId: string) {
+  const job = locateProperty(db, propertyId);
+  try { getCloudflareContext().ctx.waitUntil(job); } catch { /* outside the worker: the promise still runs */ }
+}
+
+/** The open inspections without a point, placed after the answer is sent (the inspectors' app list). */
+export function locateOpenLater(db: D1Database, limit = 3) {
+  const job = locateOpenInspections(db, limit).catch(() => null);
+  try { getCloudflareContext().ctx.waitUntil(job); } catch { /* outside the worker: the promise still runs */ }
+}
+
+/** Saves the point of the address (never over a point from the plans or one set by hand). */
+export async function locateByAddress(db: D1Database, p: { id: string; full_address: string | null; city: string | null; county: string | null }) {
+  const hit = await geocodeAddress({ address: p.full_address, city: p.city, county: p.county });
+  const t = now();
+  if (hit) {
+    await db.prepare("UPDATE crm_properties SET geo = ?, geo_source = ?, geo_note = ?, geo_checked_at = ? WHERE id = ? AND (geo IS NULL OR geo = '')")
+      .bind(`${hit.lat}, ${hit.lng}`, hit.source, hit.note, t, p.id).run();
+    return true;
+  }
+  await db.prepare("UPDATE crm_properties SET geo_note = COALESCE(geo_note, 'Adresa nu a fost găsită pe hartă.'), geo_checked_at = ? WHERE id = ?").bind(t, p.id).run();
+  return false;
+}
+
+/**
+ * The properties of the inspections still to do that have no point yet (nor one from the inspector's phone): placed
+ * a few at a time, from the plans or the address. Not tried again within a week.
+ */
+export async function locateOpenInspections(db: D1Database, limit = 6) {
+  const week = new Date(Date.now() - 7 * 86400000).toISOString();
+  const { results } = await db.prepare(`SELECT DISTINCT p.id, p.county, p.city, p.full_address, p.cad_building, p.cad_land, p.cf_number, p.geo
+      FROM inspections i JOIN assets a ON a.id = i.asset_id JOIN crm_properties p ON p.id = a.property_id LEFT JOIN reports r ON r.id = i.report_id
+      WHERE i.status IN ('to_schedule', 'scheduled') AND (r.id IS NULL OR (r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL))
+        AND i.lat IS NULL AND (p.geo IS NULL OR p.geo = '') AND (p.geo_checked_at IS NULL OR p.geo_checked_at < ?)
+        AND (COALESCE(p.full_address, p.city, p.cad_building, p.cad_land, p.cf_number) IS NOT NULL)
+      LIMIT ?`).bind(week, limit).all<Prop & { county: string | null; full_address: string | null; geo: string | null }>();
+  let located = 0;
+  for (const [n, p] of results.entries()) {
+    if (n) await new Promise((r) => setTimeout(r, 1100)); // one address a second (Nominatim)
+    await locateProperty(db, p.id);
+    const g = await db.prepare("SELECT geo FROM crm_properties WHERE id = ?").bind(p.id).first<{ geo: string | null }>();
+    if (g?.geo?.trim()) located++;
+  }
+  return { tried: results.length, located };
 }
 
 /** How many properties could still be placed, and how many were already tried without result. */

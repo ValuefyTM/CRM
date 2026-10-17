@@ -3,7 +3,7 @@
 import { now, uuid } from "./db";
 import { audit } from "./auth";
 import { ASSET_CATEGORIES, assetProfile, capType, trimToProfile, type AssetInput } from "./asset-labels";
-import { locateProperty } from "./geolocate";
+import { locateLater } from "./geolocate";
 
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const opt = (v: unknown, max = 200) => str(v, max) || null;
@@ -90,7 +90,7 @@ export async function addAsset(db: D1Database, actor: string, reportId: string, 
     db.prepare("UPDATE reports SET updated_at = ? WHERE id = ?").bind(t, reportId),
   ]);
   await audit(db, `user:${actor}`, "report.asset_add", "report", reportId, `${capType(v.type) || "bun"}${linked ? " (proprietate existentă)" : ""}`);
-  await locateProperty(db, propertyId);
+  locateLater(db, propertyId);
   return { ok: true as const, id, linked };
 }
 
@@ -99,6 +99,9 @@ export async function updateAsset(db: D1Database, actor: string, reportId: strin
   if (!a) return { ok: false as const, error: "Bunul nu aparține acestui raport." };
   const t = now();
   await db.batch([
+    // A point placed from the old address is dropped when the address changes (it is looked up again).
+    db.prepare("UPDATE crm_properties SET geo = NULL, geo_checked_at = NULL WHERE id = ? AND geo_source IN ('adresa', 'localitate') AND (COALESCE(full_address, '') <> ? OR COALESCE(city, '') <> ?)")
+      .bind(a.property_id, v.full_address ?? "", v.city ?? ""),
     db.prepare(`UPDATE crm_properties SET ${PROP_COLS.map((c) => `${c} = ?`).join(", ")}, updated_at = ? WHERE id = ?`).bind(...propValues(v), t, a.property_id),
     ...(v.is_main ? [db.prepare("UPDATE assets SET is_main = 0 WHERE report_id = ? AND id <> ?").bind(reportId, assetId)] : []),
     db.prepare("UPDATE assets SET is_main = CASE WHEN ? THEN 1 ELSE is_main END, value = ?, approach = ?, notes = ?, contact_kind = ?, contact_name = ?, contact_phone = ? WHERE id = ?")
@@ -106,7 +109,7 @@ export async function updateAsset(db: D1Database, actor: string, reportId: strin
     db.prepare("UPDATE reports SET updated_at = ? WHERE id = ?").bind(t, reportId),
   ]);
   await audit(db, `user:${actor}`, "report.asset_edit", "report", reportId, capType(v.type) || "bun");
-  await locateProperty(db, a.property_id);
+  locateLater(db, a.property_id);
   return { ok: true as const };
 }
 
