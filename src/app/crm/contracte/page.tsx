@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { billingLabel } from "@/lib/billing-modes";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { niceName } from "@/lib/labels";
 import { cap, lei, REPORT_STATUS } from "@/lib/reports";
@@ -7,6 +8,10 @@ import { scopeFilter } from "@/lib/scope";
 import { CrmShell } from "@/components/CrmShell";
 import { ContractFilters } from "./ContractFilters";
 import { ClickRow } from "@/components/ClickRow";
+import { BillingModeEdit } from "@/components/BillingModePick";
+import { getBilling } from "@/lib/billing";
+import { fileSrc } from "@/lib/files";
+import { can } from "@/lib/perms";
 
 export const metadata: Metadata = { title: "Contracte | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -19,6 +24,14 @@ export default async function ContractsPage({ searchParams }: { searchParams: Pr
   const page = Math.max(1, Number(sp.page) || 1);
   const [data, s] = await Promise.all([listContracts(db, { ...sp, page, scope: scopeFilter(user, "contracts", "k") ?? undefined }), contractStats(db)]);
   const pages = Math.max(1, Math.ceil(data.total / CONTRACT_PAGE));
+  // The collaborations with other valuation firms (work they send us): each invoiced at the report or monthly on the statement.
+  const showCollabs = sp.tip !== "clasic";
+  const [collabs, billing] = showCollabs ? await Promise.all([
+    db.prepare(`SELECT c.id, c.number, c.signed_on, c.share, c.billing_mode, e.name AS firm, e.logo_url AS logo, (SELECT COUNT(*) FROM orders o WHERE o.collaboration_id = c.id) AS orders
+      FROM collaborations c JOIN entities e ON e.id = c.firm_id ORDER BY orders DESC, e.name`)
+      .all<{ id: string; number: string | null; signed_on: string | null; share: number | null; billing_mode: string | null; firm: string; logo: string | null; orders: number }>().then((x) => x.results),
+    getBilling(db),
+  ]) : [[], null];
   const year = new Date().getFullYear();
   const link = (change: Partial<SP>) => {
     const next = { ...sp, page: undefined, ...change };
@@ -62,7 +75,7 @@ export default async function ContractsPage({ searchParams }: { searchParams: Pr
                     <ClickRow key={k.id} href={href}>
                       <td>
                         <a className="ref rowLink" href={href}>{k.number ? `Nr. ${k.number}` : "fără număr"}</a>
-                        <div className="muted"><span className={`ctKind ${k.kind}`}>{k.kind === "framework" ? "Cadru" : "Clasic"}</span> {fmtDate(k.signed_on)}{k.closed_on && <> · <span style={{ color: "var(--err)", fontWeight: 700 }}>închis {fmtDate(k.closed_on)}</span></>}</div>
+                        <div className="muted"><span className={`ctKind ${k.kind}`}>{k.kind === "framework" ? "Cadru" : "Clasic"}</span> {fmtDate(k.signed_on)}{k.kind === "framework" && <> · <span className={k.billing_mode ? "" : "errTxt"}>{billingLabel(k.billing_mode)?.toLowerCase() ?? "facturare nesetată"}</span></>}{k.closed_on && <> · <span style={{ color: "var(--err)", fontWeight: 700 }}>închis {fmtDate(k.closed_on)}</span></>}</div>
                         {k.signed_at ? <span className="ctSig ok">✓ semnat online</span> : k.sign_sent_at ? <span className="ctSig">trimis la semnat</span> : null}
                       </td>
                       <td>{k.client_id ? <a className="rowLink" href={`${base}/clienti/${k.client_id}`}>{niceName(k.client) || "—"}</a> : "—"}<div className="muted">{k.client_kind === "company" ? "Persoană juridică" : k.client_kind === "person" ? "Persoană fizică" : k.client_kind === "bank" ? "Bancă" : ""}</div></td>
@@ -95,6 +108,25 @@ export default async function ContractsPage({ searchParams }: { searchParams: Pr
           </div>
         )}
       </section>
+      {showCollabs && collabs.length > 0 && (
+        <section className="card flush" id="colaborari">
+          <div className="cardHead" style={{ padding: "16px 22px 0" }}><h2>Colaborări</h2><span className="muted">firme de evaluare care ne trimit lucrări · cum se facturează</span></div>
+          <ul className="ctCollabs">
+            {collabs.map((k) => {
+              const logo = fileSrc(k.logo);
+              return (
+                <li key={k.id}>
+                  <span className="ctCollabWho">
+                    {logo ? <img src={logo} alt="" className="ctCollabLogo" /> : <i className="ctCollabLogo">{niceName(k.firm).slice(0, 2).toUpperCase()}</i>}
+                    <span><b>{niceName(k.firm)}</b><small>{[k.number && `nr. ${k.number}`, k.signed_on && fmtDate(k.signed_on), k.share != null && `cota VALUEFY ${Math.round(k.share * 100)}%`, `${k.orders} ${k.orders === 1 ? "comandă" : "comenzi"}`].filter(Boolean).join(" · ")}</small></span>
+                  </span>
+                  <BillingModeEdit target="collab" id={k.id} value={k.billing_mode} fallback={billing?.collabDefault ?? null} edit={can(user, "contracts.E")} />
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
     </CrmShell>
   );
 }

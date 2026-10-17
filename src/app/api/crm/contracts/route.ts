@@ -26,9 +26,11 @@ export async function POST(req: Request) {
     if (!number) return err("Completează numărul contractului cadru.");
     const signed = /^\d{4}-\d{2}-\d{2}$/.test(str(b.signed_on, 10)) ? str(b.signed_on, 10) : null;
     if (!signed) return err("Completează data semnării.");
+    const billing = ["per_order", "monthly", "none"].includes(str(b.billing_mode, 20)) ? str(b.billing_mode, 20) : null;
+    if (!billing) return err("Alege modul de facturare: la raport sau lunar, pe borderou.");
     const id = await createFrameworkContract(a.db, a.user.id, {
       client_id: bank, number, signed_on: signed, fee: amount(b.fee), report_type: str(b.report_type, 120) || "Raport de evaluare",
-      purpose: str(b.purpose, 120) || null, notes: str(b.notes, 2000) || null,
+      purpose: str(b.purpose, 120) || null, notes: str(b.notes, 2000) || null, billing_mode: billing,
     });
     return Response.json({ ok: true, contract: id });
   }

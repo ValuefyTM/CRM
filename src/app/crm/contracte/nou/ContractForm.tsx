@@ -1,5 +1,6 @@
 "use client";
 
+import { BillingModePick } from "@/components/BillingModePick";
 import { useEffect, useState } from "react";
 import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
 import { AssetsEditor } from "@/components/AssetsEditor";
@@ -125,7 +126,7 @@ export function ContractForm(p: {
     fee: p.existing?.fee ? String(p.existing.fee) : "", purpose: p.existing?.purpose ?? "", report_type: p.existing?.report_type ?? "Raport de evaluare", ordered_on: today(),
     evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "", verifier_id: "", due_on: "", urgent: false, send_contract: true, inspection_notes: "", notes: "",
   });
-  const [fw, setFw] = useState({ client_id: "", number: "", signed_on: today(), fee: "", report_type: "Raport de evaluare", purpose: "Garantare bancară", notes: "" });
+  const [fw, setFw] = useState({ client_id: "", number: "", signed_on: today(), fee: "", report_type: "Raport de evaluare", purpose: "Garantare bancară", notes: "", billing_mode: "" });
   const [assets, setAssets] = useState<AssetForm[]>([{ ...emptyAsset(), full_address: "", is_main: true }]);
   // On an existing contract the new report may value only properties already in it (inspected once, there).
   const [newAssets, setNewAssets] = useState(p.contractProps.length === 0);
@@ -190,6 +191,7 @@ export function ContractForm(p: {
     e.preventDefault();
     if (!fw.client_id) return setMsg("Alege banca.");
     if (!fw.number.trim()) return setMsg("Completează numărul contractului cadru.");
+    if (!fw.billing_mode) return setMsg("Alege modul de facturare: la raport sau lunar, pe borderou.");
     const d = await post({ kind: "framework", ...fw });
     if (d?.contract) location.href = `${p.base}/contracte/${typeof d.contract === "string" ? d.contract : d.contract.id}`;
   };
@@ -360,7 +362,11 @@ export function ContractForm(p: {
                 <select className="select" value={fw.purpose} onChange={setW("purpose")}>{p.purposes.map((x) => <option key={x} value={x}>{x}</option>)}</select>
               </label>
             </div>
-            <label className="field">Note <small>(opțional)</small><textarea className="textarea" rows={2} value={fw.notes} onChange={setW("notes")} placeholder="ex. facturare lunară pe borderou / individual la predare" /></label>
+            <div className="field">Facturare
+              <BillingModePick value={fw.billing_mode} onChange={(m) => { setFw({ ...fw, billing_mode: m }); setMsg(""); }} invalid={!!msg && !fw.billing_mode} />
+              <small className="muted">După asta se generează mai târziu facturile (câte una la fiecare raport) sau borderoul lunar.</small>
+            </div>
+            <label className="field">Note <small>(opțional)</small><textarea className="textarea" rows={2} value={fw.notes} onChange={setW("notes")} placeholder="ex. persoana de contact pentru facturare, referințe cerute pe factură" /></label>
             <p className="hint">Grila de tarife pe tip de proprietate (preluată automat la procesarea comenzilor) o adăugăm în pasul următor.</p>
           </section>
           {msg && <div role="alert" className="error">{msg}</div>}

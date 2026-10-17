@@ -2365,3 +2365,24 @@ a.navItem[aria-current="page"] .navIcon { opacity: 1; }
 .msgFull .msgBubble { padding: 9px 14px; }
 .msgFull .msgAv { width: 32px; }
 .msgFull .msgCompose { border-top: 1px solid var(--divider); padding-top: 12px; }
+
+/* Billing mode of a framework contract / collaboration */
+.bmPick { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; }
+.bmPick button { text-align: left; border: 1.5px solid var(--line); background: #fff; border-radius: 12px; padding: 9px 12px; font: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 2px; color: var(--ink); }
+.bmPick button b { font-size: 13px; } .bmPick button small { font-size: 11px; color: var(--muted-2); font-weight: 400; }
+.bmPick button:hover { border-color: var(--dashed); }
+.bmPick button[aria-checked="true"] { border-color: var(--acc); background: var(--acc-soft); box-shadow: 0 0 0 3px var(--acc-soft); }
+.bmPick button.bmMinor { max-width: 170px; } .bmPick button.bmMinor b { font-size: 12px; color: var(--muted); }
+.bmPick.invalid button { border-color: var(--err); }
+.bmEdit { display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+.dl .dlWide { grid-column: 1 / -1; }
+.okTxt { color: var(--ok-text); font-weight: 700; }
+@media (max-width: 640px) { .bmPick { grid-template-columns: 1fr; } .bmPick button.bmMinor { max-width: none; } }
+.ctCollabs { list-style: none; margin: 12px 0 0; padding: 0; border-top: 1px solid var(--divider); }
+.ctCollabs li { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 1.6fr); gap: 16px; align-items: center; padding: 12px 22px; border-bottom: 1px solid var(--divider); }
+.ctCollabs li:last-child { border-bottom: 0; }
+.ctCollabWho { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.ctCollabWho > span { display: flex; flex-direction: column; min-width: 0; }
+.ctCollabWho small { font-size: 11.5px; color: var(--muted-2); }
+.ctCollabLogo { width: 34px; height: 34px; border-radius: 9px; object-fit: contain; background: var(--cream-2); flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-style: normal; font-size: 11px; font-weight: 800; }
+@media (max-width: 900px) { .ctCollabs li { grid-template-columns: 1fr; } }

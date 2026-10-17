@@ -1,6 +1,7 @@
 "use client";
 // New work from a framework contract (bank) or a collaboration: 1 where it comes from, 2 the client (searched in the
 // CRM, or added), 3 the assets, 4 the report and its team. A bar at the bottom sums it up and says what is missing.
+import { billingLabel } from "@/lib/billing-modes";
 import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PURPOSES } from "@/lib/order-labels";
@@ -10,8 +11,8 @@ import type { DraftDoc } from "@/components/AssetDocs";
 import { docKindLabel } from "@/lib/doc-kinds";
 import { SafeImg } from "@/app/crm/rapoarte/[id]/ReportActions";
 
-type Contract = { id: string; number: string | null; bank: string; bank_code: string | null; fee: number | null; report_type: string | null; purpose: string | null; logo?: string | null };
-type Collab = { id: string; number: string | null; firm: string; share: number | null; logo?: string | null };
+type Contract = { id: string; number: string | null; bank: string; bank_code: string | null; fee: number | null; report_type: string | null; purpose: string | null; logo?: string | null; billing_mode?: string | null };
+type Collab = { id: string; number: string | null; firm: string; share: number | null; logo?: string | null; billing_mode?: string | null };
 type Hit = { id: string; kind: string; name: string; cui: string | null; phone: string | null; email: string | null; city: string | null; reports: number };
 type Opt = { id: string; title: string; sub: string; logo?: string | null; short: string };
 
@@ -275,6 +276,11 @@ export function ContractOrderForm(p: {
               {REPORT_KINDS.map((k) => <button key={k} type="button" aria-pressed={f.report_type === k} onClick={() => setF({ ...f, report_type: k })}>{k}</button>)}
             </div>
           </div>
+          {(kind === "collab" ? collab : contract) && (() => {
+            const m = billingLabel((kind === "collab" ? collab : contract)?.billing_mode);
+            const href = kind === "collab" ? `${p.base}/contracte#colaborari` : `${p.base}/contracte/${contract!.id}`;
+            return <p className="nwInfo">Facturare: {m ? <b>{m.toLowerCase()}</b> : <><b className="errTxt">nesetată</b>{href && <> · <a className="link" href={href} target="_blank" rel="noopener">setează pe {kind === "collab" ? "colaborare" : "contract"}</a></>}</>}</p>;
+          })()}
           {kind === "collab" && collab?.share != null && Number.isFinite(feeNum) && <p className="nwInfo">Cota VALUEFY: <b>{Math.round(collab.share * 100)}%</b> · {(feeNum * collab.share).toLocaleString("ro-RO", { maximumFractionDigits: 2 })} lei</p>}
         </section>
 

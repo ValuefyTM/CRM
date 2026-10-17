@@ -12,6 +12,7 @@ import { CrmShell } from "@/components/CrmShell";
 import { History } from "@/components/History";
 import { ContractEdit } from "./ContractEdit";
 import { CloseContract } from "./CloseContract";
+import { BillingModeEdit } from "@/components/BillingModePick";
 import { ContractTermsEdit } from "./ContractTermsEdit";
 import { SendSign } from "./SendSign";
 import { billingMissing, signContractById, signLink } from "@/lib/contract-sign";
@@ -34,7 +35,8 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
   const framework = k.kind === "framework";
   const [log, doc, sign, invoices] = await Promise.all([history(db, [id]), framework ? null : contractDoc(db, id), framework ? null : signContractById(db, id), invoicesFor(db, { contract: id })]);
   const admin = can(user, "billing");
-  const billing = framework ? null : await getBilling(db);
+  const billing = await getBilling(db);
+  const fwDefault = billing.frameworkDefault;
   const signed = !!sign?.signed_at;
   const link = sign?.sign_token ? await signLink(sign.sign_token) : null;
   const missing = doc && !signed ? billingMissing(doc) : [];
@@ -80,11 +82,11 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
               <div><dt>Tip evaluare</dt><dd>{k.valuation_types ?? "—"}</dd></div>
               <div><dt>Tip raport</dt><dd>{k.report_type ?? "—"}</dd></div>
               <div><dt>Scop</dt><dd>{k.purpose ?? "—"}</dd></div>
+              {framework && <div className="dlWide"><dt>Facturare</dt><dd><BillingModeEdit target="contract" id={k.id} value={k.billing_mode ?? null} fallback={fwDefault} edit={can(user, "contracts.E")} /></dd></div>}
               <div><dt>{framework ? "Tarif standard" : "Onorariu (fără TVA)"}</dt><dd>{k.fee ? lei(k.fee) : framework ? "grila de tarife a băncii" : "—"}</dd></div>
               {d.order && <div><dt>Provine din</dt><dd><a className="rowLink" href={`${base}/comenzi/${d.order.id}`}>{d.order.seq ? orderRef(d.order.seq) : "comanda"}</a> · {SOURCE_LABEL[d.order.source]?.toLowerCase() ?? d.order.source}{d.order.offer_number ? ` · oferta ${d.order.offer_number} acceptată ${fmtDate(d.order.accepted_at)}` : ""}</dd></div>}
               {k.notes && <div><dt>Note</dt><dd>{k.notes}</dd></div>}
             </dl>
-            {framework && <p className="hint">Comenzile băncii se lucrează pe acest contract și se facturează la final de lună pe borderou (sau individual, la predarea raportului, după bancă).</p>}
           </section>
 
           {doc && (
@@ -185,7 +187,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
               )}
             </div>
             {framework
-              ? <p className="hint" style={{ margin: 0 }}>Comenzile băncii se facturează după regula contractului (Setări → Facturare): per comandă din pagina raportului, sau lunar pe borderou.</p>
+              ? <p className="hint" style={{ margin: 0 }}>{k.billing_mode === "per_order" ? "Comenzile băncii se facturează la raport: câte o factură pentru fiecare raport predat." : k.billing_mode === "monthly" ? "Comenzile băncii se facturează lunar, pe borderou: o factură la final de lună cu rapoartele livrate." : k.billing_mode === "none" ? "Comenzile băncii nu se facturează din CRM." : "Alege în Detalii contract cum se facturează comenzile băncii: la raport sau lunar, pe borderou."}</p>
               : <InvoiceList rows={invoices} admin={admin} empty="Nicio factură sau proformă emisă. O factură cuprinde câte o linie pentru fiecare raport (ca în Anexa 2)." />}
           </section>
           <History log={log} />

@@ -20,7 +20,7 @@ export type BillingMode = "none" | "per_order" | "monthly";
 
 export const BILLING_MODES: [BillingMode, string, string][] = [
   ["none", "Nu se facturează din CRM", "factura se face în afara CRM-ului (sau o face partenerul)"],
-  ["per_order", "Per comandă, după aprobarea raportului", "câte o factură pentru fiecare raport livrat (ex. BRD)"],
+  ["per_order", "La raport", "câte o factură pentru fiecare raport predat (ex. BRD)"],
   ["monthly", "Lunar, pe borderou", "o factură la final de lună cu toate rapoartele livrate"],
 ];
 export const DIRECT_FLOWS: [BillingSettings["directFlow"], string][] = [
