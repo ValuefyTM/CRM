@@ -3,6 +3,7 @@ import { staffPage } from "@/lib/guard";
 import { registry, registryFacets, REGISTRY_PAGE, REGISTRY_SORTS } from "@/lib/registry";
 import { CrmShell } from "@/components/CrmShell";
 import { can } from "@/lib/perms";
+import { inspectorHidden } from "@/lib/perms-db";
 import { geolocateEnabled, locateCounts } from "@/lib/geolocate";
 import { LocateAll } from "./LocateActions";
 import { RegistryView, type RegistryQuery } from "./RegistryView";
@@ -20,7 +21,7 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
   const admin = can(user, "properties.E");
   const all = can(user, "reports.all");
   const [data, facets, locCounts] = await Promise.all([
-    registry(db, { ...sp, page }, { id: user.id, all, team: user.team }), registryFacets(db, sp.county, sp.cat), admin ? locateCounts(db) : Promise.resolve(null),
+    registry(db, { ...sp, page }, { id: user.id, all, team: user.team, noInspector: inspectorHidden(user) }), registryFacets(db, sp.county, sp.cat), admin ? locateCounts(db) : Promise.resolve(null),
   ]);
   const s = data.stats;
   const pages = Math.max(1, Math.ceil(s.n / REGISTRY_PAGE));

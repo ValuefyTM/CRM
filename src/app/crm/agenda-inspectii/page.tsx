@@ -16,7 +16,7 @@ export default async function InspectionsPage({ searchParams }: { searchParams: 
   const scope = scopeOf(user, "inspections");
   const all = scope === "all";
   const sp = all ? raw : scope === "lead" ? { ...raw, lead: user.id } : { ...raw, inspector: user.id };
-  const d = await inspectionBoard(db, sp);
+  const d = await inspectionBoard(db, sp, user);
   if (scope === "own") d.people = d.people.filter((p) => p.id === user.id);
   const k = d.counts;
   const link = (change: Record<string, string | undefined>) => {

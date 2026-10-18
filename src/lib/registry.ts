@@ -10,7 +10,8 @@ export type RegistryFilters = {
   tip?: string; smin?: string; smax?: string; amin?: string; amax?: string; luni?: string;
 };
 /** Who looks: without "reports.all", a report opens only for its team (see perms-db). */
-export type RegistryViewer = { id: string; all: boolean; team?: TeamMatrix };
+/** `noInspector`: the reports where the user is only inspector don't open (see inspectorHidden). */
+export type RegistryViewer = { id: string; all: boolean; team?: TeamMatrix; noInspector?: boolean };
 
 export type RegistryRow = {
   id: string; category: string | null; type: string | null; county: string | null; city: string | null; full_address: string | null; geo: string | null;
@@ -97,7 +98,7 @@ export function parseGeo(g: string | null): [number, number] | null {
 
 export async function registry(db: D1Database, f: RegistryFilters, viewer?: RegistryViewer) {
   const { sql, args } = where(f);
-  const open = viewer && !viewer.all ? `CASE WHEN p.report_id IS NULL OR ${reportVisibleSql(viewer.team ?? DEFAULT_CONFIG.team, "p.report_id")} THEN 1 ELSE 0 END` : "1";
+  const open = viewer && !viewer.all ? `CASE WHEN p.report_id IS NULL OR ${reportVisibleSql(viewer.team ?? DEFAULT_CONFIG.team, "p.report_id", viewer.noInspector)} THEN 1 ELSE 0 END` : "1";
   const openArgs = viewer && !viewer.all ? [viewer.id] : [];
   const page = Math.max(1, f.page ?? 1);
   const since = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);

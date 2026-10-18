@@ -57,7 +57,8 @@ export function InspectionBoard(p: {
     return `${p.base}/agenda-inspectii${qs ? `?${qs}` : ""}`;
   };
   const go = (change: Partial<BoardFilters & { vezi?: string }>) => router.push(href(change), { scroll: false });
-  const report = (r: BoardRow) => (r.report_id ? `${p.base}/rapoarte/${r.report_id}?tab=inspectii` : `${p.base}/rapoarte`);
+  // The report behind an inspection; none when the user may not open it (an inspector who only has the inspection).
+  const report = (r: BoardRow) => (!r.can_open ? undefined : r.report_id ? `${p.base}/rapoarte/${r.report_id}?tab=inspectii` : `${p.base}/rapoarte`);
   const color = (r: BoardRow) => (r.late ? LATE : STATE[r.status]?.[2] ?? "#7a7a7a");
 
   const points = useMemo<MapPoint[]>(() => p.rows.filter((r) => r.lat != null && r.lng != null).map((r) => ({
@@ -66,7 +67,7 @@ export function InspectionBoard(p: {
     popup: `<div class="rgPop"><span class="rgPopCat" style="--c:${color(r)}">${esc(r.late ? "Întârziată" : STATE[r.status]?.[0] ?? r.status)}</span>
       <b>${esc(cap(r.type) || "Inspecție")}</b><small>${esc(r.address ?? "")}</small>
       <span class="rgPopVal">${r.scheduled_at ? `${esc(fmtDay(r.scheduled_at))} ${esc(fmtTime(r.scheduled_at))}` : r.due_on ? `termen ${esc(fmtDay(r.due_on))}` : "neprogramată"}${r.inspector ? ` · ${esc(r.inspector)}` : ""}</span>
-      <a href="${report(r)}">Deschide raportul →</a></div>`,
+      ${report(r) ? `<a href="${report(r)}">Deschide raportul →</a>` : ""}</div>`,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   })), [p.rows]);
   const onPick = useCallback((id: string) => setHover(id), []);
@@ -93,12 +94,12 @@ export function InspectionBoard(p: {
             <tr key={r.id} onMouseEnter={() => setHover(r.id)} onMouseLeave={() => setHover(null)} className={hover === r.id ? "hl" : ""}>
               <td className="ibWhen">{when(r)}</td>
               <td className="ibProp">
-                <a href={report(r)}><b>{cap(r.type) || "Inspecție"}</b></a>
+                {report(r) ? <a href={report(r)}><b>{cap(r.type) || "Inspecție"}</b></a> : <b>{cap(r.type) || "Inspecție"}</b>}
                 <small>{r.address ?? "—"}</small>
               </td>
               <td>{who(r)}</td>
               <td>{r.contact_name ? <><span>{r.contact_name}</span>{r.contact_phone && <small className="block"><a href={`tel:${r.contact_phone.replace(/[^\d+]/g, "")}`}>{r.contact_phone}</a></small>}</> : <span className="muted">—</span>}</td>
-              <td>{r.report_id ? <a className="ref" href={report(r)}>{r.report_number ?? "fără nr."}</a> : "—"}{r.report_label && <small className="block muted ibEll">{r.report_label}</small>}</td>
+              <td>{!r.report_id ? "—" : report(r) ? <a className="ref" href={report(r)}>{r.report_number ?? "fără nr."}</a> : <span className="ref">{r.report_number ?? "fără nr."}</span>}{r.report_label && <small className="block muted ibEll">{r.report_label}</small>}</td>
               <td>{pill(r)}{r.sheet_status === "draft" && r.status !== "done" && <small className="block muted">fișă în lucru</small>}{r.glide && <small className="block muted">din Glide</small>}</td>
             </tr>
           ))}

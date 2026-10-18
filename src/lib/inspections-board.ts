@@ -1,13 +1,18 @@
 // Server-only: all the team's inspections for the CRM (list, week calendar, map), with filters and counts.
 import { photoUrl, presenceOf, type Presence } from "./presence";
 import { parseGeo } from "./registry";
-import { leadSql } from "./perms";
+import { can, leadSql, type WithPerms } from "./perms";
+import { mySql } from "./perms-db";
+import type { TeamMatrix } from "./perms";
 
 /** `lead`: the user id of someone who sees their own inspections plus those of the reports they lead or verify. */
 export type BoardFilters = { stare?: string; inspector?: string; perioada?: string; q?: string; saptamana?: string; lead?: string };
+export type BoardViewer = WithPerms & { id: string; team?: TeamMatrix };
 export type BoardRow = {
   id: string; status: string; scheduled_at: string | null; done_at: string | null; due_on: string | null; duration_min: number | null;
   report_id: string | null; report_number: string | null; report_label: string | null; type: string | null; category: string | null;
+  /** the viewer may open the report (an inspector who only has the inspection: no) */
+  can_open: boolean;
   address: string | null; city: string | null; lat: number | null; lng: number | null;
   inspector_id: string | null; inspector: string | null; presence: Presence | null; seen: string | null; photo: string | null;
   contact_name: string | null; contact_phone: string | null; sheet_status: string | null; late: boolean; glide: boolean;
@@ -33,14 +38,15 @@ const SELECT = `SELECT i.id, i.status, i.scheduled_at, i.done_at, i.due_on, i.du
   FROM inspections i JOIN assets a ON a.id = i.asset_id JOIN crm_properties p ON p.id = a.property_id
   LEFT JOIN reports r ON r.id = i.report_id LEFT JOIN users u ON u.id = i.inspector_id`;
 
-type Raw = Omit<BoardRow, "lat" | "lng" | "presence" | "seen" | "photo" | "late" | "glide"> & { i_lat: number | null; i_lng: number | null; geo: string | null; last_seen_at: string | null; avatar_at: string | null; glide: number };
+type Raw = Omit<BoardRow, "lat" | "lng" | "presence" | "seen" | "photo" | "late" | "glide" | "can_open"> & { i_lat: number | null; i_lng: number | null; geo: string | null; last_seen_at: string | null; avatar_at: string | null; glide: number };
 
-function shape(r: Raw, t: string): BoardRow {
+function shape(r: Raw, t: string, canOpen: (reportId: string | null) => boolean): BoardRow {
   const ll = r.i_lat != null && r.i_lng != null ? [r.i_lat, r.i_lng] : parseGeo(r.geo);
   const pr = r.inspector_id ? presenceOf(r.last_seen_at) : null;
   const open = r.status === "to_schedule" || r.status === "scheduled";
   return {
     ...r, lat: ll?.[0] ?? null, lng: ll?.[1] ?? null, presence: pr?.presence ?? null, seen: pr?.seen ?? null, photo: r.inspector_id ? photoUrl(r.inspector_id, r.avatar_at) : null,
+    can_open: canOpen(r.report_id),
     // Late: past its deadline, or its visit day has passed without the sheet being sent.
     late: open && ((!!r.due_on && r.due_on < t) || (r.status === "scheduled" && !!r.scheduled_at && r.scheduled_at.slice(0, 10) < t)), glide: !!r.glide,
   };
@@ -74,7 +80,19 @@ function where(f: BoardFilters, t: string) {
   return { sql: w.length ? `WHERE ${w.join(" AND ")}` : "", args: a };
 }
 
-export async function inspectionBoard(db: D1Database, f: BoardFilters) {
+/** The reports (among `ids`) the viewer may open: all with "Rapoarte: toate", otherwise the ones of their team work. */
+async function openable(db: D1Database, viewer: BoardViewer | undefined, ids: string[]): Promise<(reportId: string | null) => boolean> {
+  if (!viewer || can(viewer, "reports.all")) return () => true;
+  const ok = new Set<string>();
+  for (let i = 0; i < ids.length; i += 80) {
+    const part = ids.slice(i, i + 80);
+    const { results } = await db.prepare(`SELECT r.id FROM reports r WHERE r.id IN (${part.map(() => "?").join(",")}) AND ${mySql(viewer)}`).bind(...part, viewer.id).all<{ id: string }>();
+    for (const r of results) ok.add(r.id);
+  }
+  return (id) => !!id && ok.has(id);
+}
+
+export async function inspectionBoard(db: D1Database, f: BoardFilters, viewer?: BoardViewer) {
   const t = today();
   const { sql, args } = where(f, t);
   const wk = /^\d{4}-\d{2}-\d{2}$/.test(f.saptamana ?? "") ? weekStart(f.saptamana!) : weekStart(t);
@@ -97,8 +115,9 @@ export async function inspectionBoard(db: D1Database, f: BoardFilters) {
         AND (u.role IN ('evaluator', 'inspector') OR ',' || COALESCE(u.duties, '') || ',' LIKE '%,inspector,%' OR EXISTS (SELECT 1 FROM inspections i WHERE i.inspector_id = u.id AND i.glide_id IS NULL))
       ORDER BY active DESC, name`).all<{ id: string; name: string; last_seen_at: string | null; avatar_at: string | null; active: number }>(),
   ]);
+  const canOpen = await openable(db, viewer, [...new Set([...rows.results, ...week.results].map((r) => r.report_id).filter((x): x is string => !!x))]);
   return {
-    today: t, week: wk, rows: rows.results.map((r) => shape(r, t)), weekRows: week.results.map((r) => shape(r, t)),
+    today: t, week: wk, rows: rows.results.map((r) => shape(r, t, canOpen)), weekRows: week.results.map((r) => shape(r, t, canOpen)),
     counts: { toSchedule: counts?.to_schedule ?? 0, scheduled: counts?.scheduled ?? 0, today: counts?.today ?? 0, late: counts?.late ?? 0, doneMonth: counts?.done_month ?? 0 },
     // How many in each state tab (with the inspector filter, not the period or the search).
     tabs: { "": counts?.active ?? 0, deprogramat: counts?.to_schedule ?? 0, programate: counts?.scheduled ?? 0, intarziate: counts?.late ?? 0, realizate: counts?.done ?? 0, toate: counts?.total ?? 0 } as Record<string, number>,

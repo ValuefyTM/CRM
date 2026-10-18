@@ -35,11 +35,13 @@ export async function MyHome({ user, base, denied }: { user: User; base: string;
         SUM(r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL AND ${OVER_TERM_SQL}) AS late,
         SUM(r.status = 'done' AND substr(COALESCE(r.report_date, r.delivered_at), 1, 7) = substr(?, 1, 7)) AS done_month
       FROM reports r WHERE ${mySql(user)}`).bind(t, t, user.id).first<{ open: number | null; late: number | null; done_month: number | null }>(),
-    db.prepare(`SELECT i.id, i.status, i.scheduled_at, i.report_id, r.number, p.type, COALESCE(NULLIF(i.address, ''), p.full_address, p.city) AS address
+    // `can_open`: the report of the inspection is one of the user's (a report they only inspect for: no link to it)
+    db.prepare(`SELECT i.id, i.status, i.scheduled_at, i.report_id, r.number, p.type, COALESCE(NULLIF(i.address, ''), p.full_address, p.city) AS address,
+        ${can(user, "reports.all") ? "1" : `(r.id IS NOT NULL AND ${mySql(user)})`} AS can_open
       FROM inspections i JOIN assets a ON a.id = i.asset_id JOIN crm_properties p ON p.id = a.property_id LEFT JOIN reports r ON r.id = i.report_id
       WHERE i.inspector_id = ? AND i.status IN ('to_schedule', 'scheduled') AND (r.id IS NULL OR (r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL))
-      ORDER BY i.scheduled_at IS NULL, i.scheduled_at LIMIT 8`).bind(user.id)
-      .all<{ id: string; status: string; scheduled_at: string | null; report_id: string | null; number: string | null; type: string | null; address: string | null }>(),
+      ORDER BY i.scheduled_at IS NULL, i.scheduled_at LIMIT 8`).bind(...(can(user, "reports.all") ? [] : [user.id]), user.id)
+      .all<{ id: string; status: string; scheduled_at: string | null; report_id: string | null; number: string | null; type: string | null; address: string | null; can_open: number }>(),
     // All the inspections still to do (the list above shows the next 8).
     db.prepare(`SELECT COUNT(*) AS n FROM inspections i LEFT JOIN reports r ON r.id = i.report_id
       WHERE i.inspector_id = ? AND i.status IN ('to_schedule', 'scheduled') AND (r.id IS NULL OR (r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL))`)
@@ -85,7 +87,7 @@ export async function MyHome({ user, base, denied }: { user: User; base: string;
               {visits.results.map((v) => (
                 <li key={v.id} className="myVisit">
                   <b>{v.scheduled_at ? fmtDate(v.scheduled_at, true) : "De programat"}</b>
-                  <span>{cap(v.type) || "Proprietate"}{v.report_id && <> · <a className="link" href={`${base}/rapoarte/${v.report_id}?tab=inspectii`}>{v.number ? `raport ${v.number}` : "raport"}</a></>}</span>
+                  <span>{cap(v.type) || "Proprietate"}{v.report_id && (v.can_open ? <> · <a className="link" href={`${base}/rapoarte/${v.report_id}?tab=inspectii`}>{v.number ? `raport ${v.number}` : "raport"}</a></> : v.number ? <> · raport {v.number}</> : null)}</span>
                   <small className="muted">{v.address}</small>
                 </li>
               ))}

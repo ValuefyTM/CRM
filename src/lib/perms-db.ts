@@ -46,7 +46,7 @@ export async function reportAccess(db: D1Database, u: Viewer, r: { id: string; s
   const right: Record<string, boolean> = Object.fromEntries(TEAM_RIGHTS.map(([k]) => [k, false]));
   let fee: FeeView = "none";
   let view = false;
-  for (const role of roles) {
+  for (const role of inspectorHidden(u) ? roles.filter((x) => x !== "inspector") : roles) {
     const row = t[role];
     if (!row || !row.r.includes(done ? "viewDone" : "view")) continue;
     view = true;
@@ -80,23 +80,30 @@ export async function reportAccess(db: D1Database, u: Viewer, r: { id: string; s
 }
 
 /**
- * SQL condition (on reports r) for the reports a user without "Rapoarte: toate" sees: in the team, with a team role
- * that sees reports while worked on / after finishing. Binds the user id once.
+ * "Rapoarte: unde e evaluator / verificator": being the inspector of a report does not show it (the inspector has the
+ * inspection, in Inspecții, not the report). With "din echipa lui" the team matrix decides, inspector row included.
  */
-export function myReportsSql(team: PermConfig["team"]) {
-  const open = Object.entries(team).filter(([, v]) => v.r.includes("view")).map(([k]) => `'${k}'`);
-  const done = Object.entries(team).filter(([, v]) => v.r.includes("viewDone")).map(([k]) => `'${k}'`);
+export const inspectorHidden = (u: WithPerms | null | undefined) => !!u && u.role !== "owner" && can(u, "reports.lead") && !can(u, "reports.all");
+
+/**
+ * SQL condition (on reports r) for the reports a user without "Rapoarte: toate" sees: in the team, with a team role
+ * that sees reports while worked on / after finishing (`noInspector`: not as inspector). Binds the user id once.
+ */
+export function myReportsSql(team: PermConfig["team"], noInspector = false) {
+  const rows = Object.entries(team).filter(([k]) => !(noInspector && k === "inspector"));
+  const open = rows.filter(([, v]) => v.r.includes("view")).map(([k]) => `'${k}'`);
+  const done = rows.filter(([, v]) => v.r.includes("viewDone")).map(([k]) => `'${k}'`);
   const inList = (l: string[]) => (l.length ? `m.role IN (${l.join(", ")})` : "0");
   return `EXISTS (SELECT 1 FROM report_members m WHERE m.report_id = r.id AND m.user_id = ? AND
     CASE WHEN r.status = 'done' OR r.delivered_at IS NOT NULL THEN ${inList(done)} ELSE ${inList(open)} END)`;
 }
 
 /** The reports condition for a signed-in user (their team matrix comes with currentUser). */
-export const mySql = (u: { team?: PermConfig["team"] }) => myReportsSql(u.team ?? DEFAULT_CONFIG.team);
+export const mySql = (u: WithPerms & { team?: PermConfig["team"] }) => myReportsSql(u.team ?? DEFAULT_CONFIG.team, inspectorHidden(u));
 
 /** Same, for a report id column of another table (properties, search…). */
-export const reportVisibleSql = (team: PermConfig["team"], col: string) =>
-  `EXISTS (SELECT 1 FROM reports r WHERE r.id = ${col} AND ${myReportsSql(team)})`;
+export const reportVisibleSql = (team: PermConfig["team"], col: string, noInspector = false) =>
+  `EXISTS (SELECT 1 FROM reports r WHERE r.id = ${col} AND ${myReportsSql(team, noInspector)})`;
 
 /** The share of a report's fee a team member gets (fișa utilizatorului): main evaluator %, verifier %, inspector fixed or %. */
 export async function feeShare(db: D1Database, userId: string, roles: TeamRole[], fee: number | null) {
