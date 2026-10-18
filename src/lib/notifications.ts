@@ -15,7 +15,7 @@ export async function notificationsFor(db: D1Database, u: WithPerms & { id: stri
   const seen = me?.notif_seen_at ?? null;
   const rep = (id: string) => `${base}/rapoarte/${id}`;
 
-  const [msgs, log, insp, orders] = await Promise.all([
+  const [msgs, log, insp, done, orders] = await Promise.all([
     // Messages from the others on the reports the user is in the team of.
     db.prepare(`SELECT m.id, m.created_at AS at, r.id AS rid, r.number, COALESCE(NULLIF(au.name, ''), m.author_name, m.author_email, 'Cineva') AS who, substr(m.body, 1, 110) AS body
       FROM messages m JOIN reports r ON r.id = m.entity_id AND m.entity = 'report' LEFT JOIN users au ON au.id = m.author_id
@@ -33,11 +33,19 @@ export async function notificationsFor(db: D1Database, u: WithPerms & { id: stri
       ORDER BY a.at DESC LIMIT 20`).bind(u.id, since, `${(u.name || u.email).replace(/[%_]/g, "")} (%`)
       .all<{ id: number; at: string; action: string; details: string | null; rid: string; number: string | null; who: string | null }>().then((x) => x.results).catch(() => []),
     // Inspections given to the user by someone else.
-    db.prepare(`SELECT i.id, i.assigned_at AS at, i.report_id AS rid, r.number, COALESCE(NULLIF(i.address, ''), a.full_address, a.city) AS place,
+    db.prepare(`SELECT i.id, i.assigned_at AS at, i.report_id AS rid, r.number, COALESCE(NULLIF(i.address, ''), p.full_address, p.city) AS place,
         (SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE x.id = i.assigned_by) AS who
-      FROM inspections i LEFT JOIN reports r ON r.id = i.report_id LEFT JOIN assets a ON a.id = i.asset_id
+      FROM inspections i LEFT JOIN reports r ON r.id = i.report_id LEFT JOIN assets a ON a.id = i.asset_id LEFT JOIN crm_properties p ON p.id = a.property_id
       WHERE i.inspector_id = ?1 AND i.assigned_at > ?2 AND (i.assigned_by IS NULL OR i.assigned_by <> ?1) AND i.status <> 'cancelled'
       ORDER BY i.assigned_at DESC LIMIT 10`).bind(u.id, since)
+      .all<{ id: string; at: string; rid: string | null; number: string | null; place: string | null; who: string | null }>().then((x) => x.results).catch(() => []),
+    // Inspections finished by someone else: for the whole team of the report, and for the owners.
+    db.prepare(`SELECT i.id, i.done_at AS at, i.report_id AS rid, r.number, COALESCE(NULLIF(i.address, ''), p.full_address, p.city) AS place,
+        (SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE x.id = i.inspector_id) AS who
+      FROM inspections i LEFT JOIN reports r ON r.id = i.report_id LEFT JOIN assets a ON a.id = i.asset_id LEFT JOIN crm_properties p ON p.id = a.property_id
+      WHERE i.status = 'done' AND i.done_at > ?2 AND (i.inspector_id IS NULL OR i.inspector_id <> ?1)
+        AND (?3 = 1 OR EXISTS (SELECT 1 FROM report_members rm WHERE rm.report_id = i.report_id AND rm.user_id = ?1))
+      ORDER BY i.done_at DESC LIMIT 15`).bind(u.id, since, u.role === "owner" ? 1 : 0)
       .all<{ id: string; at: string; rid: string | null; number: string | null; place: string | null; who: string | null }>().then((x) => x.results).catch(() => []),
     // New orders nobody opened yet (for those who process orders).
     can(u, "orders")
@@ -62,6 +70,10 @@ export async function notificationsFor(db: D1Database, u: WithPerms & { id: stri
     ...insp.map((i): Notice => ({
       id: `i${i.id}`, at: i.at, kind: "inspection", title: `Inspecție nouă${i.number ? ` · raport ${num(i.number)}` : ""}`,
       sub: [i.place, i.who && `de la ${i.who}`].filter(Boolean).join(" · "), href: i.rid ? `${rep(i.rid)}?tab=inspectii` : `${base}/agenda-inspectii`,
+    })),
+    ...done.map((i): Notice => ({
+      id: `d${i.id}`, at: i.at, kind: "inspection", title: `Inspecție realizată${i.number ? ` · raport ${num(i.number)}` : ""}`,
+      sub: [i.place, i.who && `de ${i.who}`].filter(Boolean).join(" · "), href: i.rid ? `${rep(i.rid)}?tab=inspectii` : `${base}/agenda-inspectii`,
     })),
     ...orders.map((o): Notice => ({
       id: `o${o.id}`, at: o.at, kind: "order", title: `Comandă nouă ${orderCode({ id: o.id, seq: o.seq, bank_ref: o.bank_ref, bank: o.bank, source: o.source ?? undefined })}`,
