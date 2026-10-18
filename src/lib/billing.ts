@@ -182,13 +182,14 @@ export async function sampleValues(db: D1Database, kind: "contract" | "collab", 
 /** Per-order billing under a framework contract / collaboration: one approved (delivered) report, with that partner's own invoice text. */
 export async function draftForReport(db: D1Database, reportId: string): Promise<Draft | { error: string }> {
   const b = await getBilling(db);
-  const r = await db.prepare(`SELECT r.id, r.fee, r.delivered_at, r.status, r.glide_id, r.invoice_id, r.contract_id, k.kind AS contract_kind, k.client_id AS party_id, k.billing_mode, k.billing_text,
+  const r = await db.prepare(`SELECT r.id, r.fee, r.delivered_at, r.status, r.glide_id, r.invoice_id, r.billed_outside_at, r.contract_id, k.kind AS contract_kind, k.client_id AS party_id, k.billing_mode, k.billing_text,
       o.collaboration_id, o.fee_net, c.billing_mode AS collab_mode, c.billing_text AS collab_text, c.firm_id
     FROM reports r LEFT JOIN contracts k ON k.id = r.contract_id LEFT JOIN orders o ON o.id = r.order_id LEFT JOIN collaborations c ON c.id = o.collaboration_id WHERE r.id = ?`).bind(reportId)
-    .first<{ id: string; fee: number | null; delivered_at: string | null; status: string; glide_id: string | null; invoice_id: string | null; contract_id: string | null; contract_kind: string | null; party_id: string | null;
+    .first<{ id: string; fee: number | null; delivered_at: string | null; status: string; glide_id: string | null; invoice_id: string | null; billed_outside_at: string | null; contract_id: string | null; contract_kind: string | null; party_id: string | null;
       billing_mode: BillingMode | null; billing_text: string | null; collaboration_id: string | null; fee_net: number | null; collab_mode: BillingMode | null; collab_text: string | null; firm_id: string | null }>();
   if (!r) return { error: "Raportul nu există." };
   if (r.invoice_id) return { error: "Raportul este deja facturat." };
+  if (r.billed_outside_at) return { error: "Raportul a fost facturat direct din Oblio." };
   const collab = !!r.collaboration_id;
   const mode = collab ? r.collab_mode ?? b.collabDefault : r.contract_kind === "framework" ? r.billing_mode ?? b.frameworkDefault : null;
   if (mode !== "per_order") return { error: "Acest raport nu se facturează per comandă (vezi Setări → Facturare)." };

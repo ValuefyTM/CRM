@@ -2820,3 +2820,5 @@ a.dAssetLink { color: inherit; text-decoration: none; border-radius: 12px; trans
 .bellFoot b { font-size: 12.5px; }
 .bellFoot small { font-size: 11px; color: var(--muted-2); line-height: 1.35; }
 .bellFoot .bellFootMsg { flex-basis: 100%; color: var(--ink); }
+/* Menu items for phones only (the inspections app): hidden in the desktop sidebar. */
+@media (min-width: 980px) { .navMobileOnly { display: none !important; } }

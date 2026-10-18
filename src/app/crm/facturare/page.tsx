@@ -8,6 +8,7 @@ import { ownBillingOnly, toBill } from "@/lib/billing-tasks";
 import { CrmShell } from "@/components/CrmShell";
 import { ClickRow } from "@/components/ClickRow";
 import { IssueInvoice } from "@/components/Invoices";
+import { BilledOutside } from "@/components/BilledOutside";
 
 export const metadata: Metadata = { title: "Facturare | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -65,7 +66,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
                     {!own && <td>{x.evaluator ?? <span className="muted">—</span>}</td>}
                     <td>{day(x.finished_at)}</td>
                     <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{x.fee ? lei(x.fee) : <span className="pill pillErr"><i />fără onorariu</span>}</td>
-                    <td>{canIssue ? <IssueInvoice report={x.id} label="Previzualizează și emite" /> : <span className="muted">fără drept de emitere</span>}</td>
+                    <td>{canIssue ? <span className="actions" style={{ flexWrap: "nowrap" }}><IssueInvoice report={x.id} label="Previzualizează și emite" /><BilledOutside report={x.id} /></span> : <span className="muted">fără drept de emitere</span>}</td>
                   </ClickRow>
                 ))}
               </tbody>

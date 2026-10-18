@@ -35,6 +35,7 @@ import { can, type Perm } from "@/lib/perms";
 import { feeShare } from "@/lib/perms-db";
 import { reportAccess } from "@/lib/perms-db";
 import { IssueInvoice, InvoiceList } from "@/components/Invoices";
+import { BilledOutside } from "@/components/BilledOutside";
 import { issuerColor } from "@/lib/issuer-color";
 import { daysOf, SEGMENTS, segmentsOf } from "@/lib/report-stage";
 
@@ -99,7 +100,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
     reportTeam(db, id), reportAssets(db, id), reportDocuments(db, id), reportOrderDocuments(db, r.order_id), teamCandidates(db),
   ]);
   // Billing: the invoices of this report, and whether it can be invoiced per order now (framework / collaboration rule).
-  const [repInvoices, perOrder] = await Promise.all([invoicesFor(db, { report: id }), can(user, "billing") ? draftForReport(db, id) : Promise.resolve({ error: "" })]);
+  const [repInvoices, perOrder, outside] = await Promise.all([invoicesFor(db, { report: id }), can(user, "billing") ? draftForReport(db, id) : Promise.resolve({ error: "" }),
+    db.prepare("SELECT billed_outside_at, billed_outside_ref FROM reports WHERE id = ?").bind(id).first<{ billed_outside_at: string | null; billed_outside_ref: string | null }>().catch(() => null)]);
   const main = assets.find((a) => a.is_main) ?? assets[0];
   const [mayAssign, inspectors, inspDocs, sheetList] = await Promise.all([canAssign(db, user, id), inspectorChoices(db, user.id), docsByAsset(db, id, assets.map((a) => a.id)), templateList(db)]);
   // The sheets an inspection of an asset can be given with: the firm's sheets meant for its type of asset, and the standard one
@@ -407,9 +409,10 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
               </li>
             </ul>
           </section>
-          {fees && (repInvoices.length > 0 || !("error" in perOrder)) && (
+          {fees && (repInvoices.length > 0 || !("error" in perOrder) || outside?.billed_outside_at) && (
             <section className="card">
-              <div className="cardHead"><h2>Facturi</h2>{!("error" in perOrder) && <IssueInvoice report={r.id} label="Emite factura" />}</div>
+              <div className="cardHead"><h2>Facturi</h2>{!("error" in perOrder) && can(user, "billing:issue") && <span className="actions"><IssueInvoice report={r.id} label="Emite factura" /><BilledOutside report={r.id} /></span>}</div>
+              {outside?.billed_outside_at && <p className="hint" style={{ margin: 0 }}>Facturat direct din Oblio{outside.billed_outside_ref ? `: ${outside.billed_outside_ref}` : ""}, la {fmtDate(outside.billed_outside_at)}.</p>}
               <InvoiceList rows={repInvoices} admin={can(user, "billing")} />
             </section>
           )}

@@ -350,6 +350,7 @@ const REPORT_ACTION: Record<string, (d: string | null) => string> = {
   "report.asset_remove": (d) => `Bun scos din raport${d ? `: ${d}` : ""}`,
   "report.opened": (d) => `Raport creat${d ? ` ${d}` : ""}`,
   "report.stage": (d) => `Etapă: ${d ?? ""}`.trim(),
+  "invoice.outside": (d) => `Facturat direct din Oblio${d ? ` (${d})` : ""}`,
   "report.client_notified": (d) => `Clientul a fost anunțat că raportul e gata${d ? ` (${d})` : ""}`,
   "report.member": (d) => `Echipă: adăugat ${d ?? ""}`.trim(),
   "report.inspection_assign": (d) => `Inspecție alocată${d ? `: ${d}` : ""}`,

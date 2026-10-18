@@ -3,6 +3,8 @@
 // and issued in Oblio from there. Nothing is stored: a report leaves the list when its invoice is issued.
 import { getBilling } from "./billing";
 import { can, type WithPerms } from "./perms";
+import { audit } from "./auth";
+import { now } from "./db";
 
 export type BillTask = {
   id: string; number: string | null; label: string | null; fee: number | null; finished_at: string | null; report_type: string | null;
@@ -20,7 +22,19 @@ const SELECT = `SELECT r.id, r.number, r.label, r.fee, COALESCE(r.delivered_at, 
 const PER_ORDER = `(
     (k.kind = 'framework' AND COALESCE(k.billing_mode, ?1) = 'per_order')
     OR (o.collaboration_id IS NOT NULL AND COALESCE(c.billing_mode, ?2) = 'per_order'))`;
-const OPEN = `r.invoice_id IS NULL AND r.glide_id IS NULL AND r.status <> 'cancelled' AND (r.delivered_at IS NOT NULL OR r.status = 'done')`;
+const OPEN = `r.invoice_id IS NULL AND r.billed_outside_at IS NULL AND r.glide_id IS NULL AND r.status <> 'cancelled' AND (r.delivered_at IS NOT NULL OR r.status = 'done')`;
+
+/** "Facturat din Oblio": the invoice was issued straight in Oblio; the task closes, with the invoice's number when given. */
+export async function markBilledOutside(db: D1Database, actor: string, reportId: string, ref: string) {
+  const r = await db.prepare("SELECT id, invoice_id, billed_outside_at FROM reports WHERE id = ?").bind(reportId).first<{ id: string; invoice_id: string | null; billed_outside_at: string | null }>();
+  if (!r) return { ok: false as const, error: "Raportul nu există." };
+  if (r.invoice_id) return { ok: false as const, error: "Raportul are deja factură emisă din CRM." };
+  if (r.billed_outside_at) return { ok: false as const, error: "Raportul e deja marcat ca facturat din Oblio." };
+  const t = now();
+  await db.prepare("UPDATE reports SET billed_outside_at = ?, billed_outside_by = ?, billed_outside_ref = ?, updated_at = ? WHERE id = ?").bind(t, actor, ref || null, t, reportId).run();
+  await audit(db, `user:${actor}`, "invoice.outside", "report", reportId, ref || undefined);
+  return { ok: true as const };
+}
 
 /** The reports to invoice; `evaluatorId`: only those the person is the main evaluator of. */
 export async function toBill(db: D1Database, evaluatorId?: string | null): Promise<BillTask[]> {

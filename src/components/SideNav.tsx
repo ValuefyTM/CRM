@@ -3,7 +3,9 @@
 // remembered on this computer. Pages not built yet are listed and marked "în curând".
 import { useEffect, useState } from "react";
 
-export type NavItem = { label: string; href?: string; soon?: boolean; badge?: number; hot?: boolean; key: string };
+export type NavItem = { label: string; href?: string; soon?: boolean; badge?: number; hot?: boolean; key: string;
+  /** shown only on phones (the menu drawer), not in the desktop sidebar */
+  mobile?: boolean };
 export type NavGroup = { group: string; key: string; items: NavItem[] };
 export type NavEntry = NavItem | NavGroup;
 
@@ -63,7 +65,7 @@ function Item({ i, active }: { i: NavItem; active: string }) {
   if (!i.href || i.soon) {
     return <span className="navItem soon" aria-disabled="true" title="Pagina vine în curând"><Icon k={i.key} /><span className="navLabel">{i.label}</span><span className="navSoon">în curând</span></span>;
   }
-  return <a className="navItem" href={i.href} title={i.label} aria-current={active === i.key ? "page" : undefined}><Icon k={i.key} /><span className="navLabel">{i.label}</span>{badge}</a>;
+  return <a className={`navItem${i.mobile ? " navMobileOnly" : ""}`} href={i.href} title={i.label} aria-current={active === i.key ? "page" : undefined}><Icon k={i.key} /><span className="navLabel">{i.label}</span>{badge}</a>;
 }
 
 export function SideNav({ nav, active }: { nav: NavEntry[]; active: string }) {

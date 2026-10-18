@@ -16,6 +16,7 @@ import { countNewInquiries } from "@/lib/listings";
 import { basePath } from "@/lib/site";
 import { scopeFilter } from "@/lib/scope";
 import { ownBillingOnly, toBillCount } from "@/lib/billing-tasks";
+import { inspChannel } from "@/lib/uvalo";
 
 export async function CrmShell(props: { user: User; base: string; active: string; title: string; subtitle?: string; actions?: React.ReactNode; bare?: boolean; dateTitle?: boolean; children: React.ReactNode }) {
   const b = props.base;
@@ -52,6 +53,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
   };
   const settings = settingsHome(b, u);
   const inspApp = await basePath("insp");
+  const inspViaApp = db ? (await inspChannel(db).catch(() => "app")) === "app" : true;
   // Facturare: how many reports wait for their invoice (the person's own, with "Doar ale lui").
   const toBillN = db && may("billing") ? await toBillCount(db, ownBillingOnly(u) ? u.id : null).catch(() => 0) : 0;
   return (
@@ -76,8 +78,9 @@ export async function CrmShell(props: { user: User; base: string; active: string
           may("reports") && { key: "reports", label: allReports ? "Rapoarte" : "Rapoartele mele", href: `${b}/rapoarte`, badge: myOpen },
           may("inspections") && { key: "inspections", label: may("inspections.all") ? "Inspecții" : "Inspecțiile mele", href: `${b}/agenda-inspectii` },
           may("properties") && { key: "properties", label: "Proprietăți", href: `${b}/proprietati` },
-          // The inspections app (phone: sheets, photos, signature), with the same sign-in.
-          may("inspections") && { key: "inspapp", label: "Aplicația de inspecții", href: inspApp || "/" },
+          // The inspections app (phone: sheets, photos, signature), with the same sign-in: on phones only, and only
+          // when the firm's inspections go through it (not through UVALO).
+          may("inspections") && inspViaApp && { key: "inspapp", label: "Aplicația de inspecții", href: inspApp || "/", mobile: true },
         ]),
         ...group("Financiar", "g-fin", [
           may("billing") && { key: "invoicing", label: may("billing.all") || u.role === "owner" ? "Facturare" : "Facturile mele", href: `${b}/facturare`, badge: toBillN, hot: true },
