@@ -91,7 +91,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
         {can(user, "orders.D") && <DeleteOrder id={o.id} label={orderCode(o)} back={backTo} links={await orderLinks(db, o.id)} />}
       </>}
     >
-      {o.glide_id && <div className="note">Comandă importată din Glide.</div>}
+      {o.glide_id && <div className="note">Comandă importată din vechiul CRM.</div>}
       <div className="cols">
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
           {o.source === "site" ? (

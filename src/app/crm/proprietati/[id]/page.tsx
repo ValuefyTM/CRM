@@ -75,7 +75,7 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
             <Row k="Nr. cadastral teren">{p.cad_land && <span className="mono">{p.cad_land}</span>}</Row>
             <Row k="Zonă">{p.zone}</Row>
             <Row k="Coordonate">{ll ? <span className="mono">{ll[0].toFixed(6)}, {ll[1].toFixed(6)}</span> : null}</Row>
-            <Row k="Sursa coordonatelor">{ll ? (p.geo_source === "cadastru" ? `centrul parcelei din cadastru${p.geo_note ? ` (${p.geo_note})` : ""}` : p.geo_source === "glide" ? "introduse în Glide" : p.geo_source === "gps" ? "GPS la inspecție" : p.geo_source ?? null) : null}</Row>
+            <Row k="Sursa coordonatelor">{ll ? (p.geo_source === "cadastru" ? `centrul parcelei din cadastru${p.geo_note ? ` (${p.geo_note})` : ""}` : p.geo_source === "glide" ? "din vechiul CRM" : p.geo_source === "gps" ? "GPS la inspecție" : p.geo_source ?? null) : null}</Row>
           </dl>
           {p.description && <p className="prose">{p.description}</p>}
         </section>

@@ -100,7 +100,7 @@ export function InspectionBoard(p: {
               <td>{who(r)}</td>
               <td>{r.contact_name ? <><span>{r.contact_name}</span>{r.contact_phone && <small className="block"><a href={`tel:${r.contact_phone.replace(/[^\d+]/g, "")}`}>{r.contact_phone}</a></small>}</> : <span className="muted">—</span>}</td>
               <td>{!r.report_id ? "—" : report(r) ? <a className="ref" href={report(r)}>{r.report_number ?? "fără nr."}</a> : <span className="ref">{r.report_number ?? "fără nr."}</span>}{r.report_label && <small className="block muted ibEll">{r.report_label}</small>}</td>
-              <td>{pill(r)}{r.sheet_status === "draft" && r.status !== "done" && <small className="block muted">fișă în lucru</small>}{r.glide && <small className="block muted">din Glide</small>}</td>
+              <td>{pill(r)}{r.sheet_status === "draft" && r.status !== "done" && <small className="block muted">fișă în lucru</small>}{r.glide && <small className="block muted">din vechiul CRM</small>}</td>
             </tr>
           ))}
         </tbody>

@@ -65,7 +65,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       </section>
       <section className="card repCard">
         {data.rows.length === 0 ? (
-          <div className="empty">{data.total === 0 && !sp.q ? "Nu există încă rapoarte. Proprietarul le poate aduce din Glide, din meniul Import Glide." : "Niciun raport pentru filtrele alese."}</div>
+          <div className="empty">{data.total === 0 && !sp.q ? "Nu există încă rapoarte. Proprietarul le poate aduce din vechiul CRM, din Setări → Import istoric." : "Niciun raport pentru filtrele alese."}</div>
         ) : (
           <ReportTable rows={data.rows} base={base} today={today} sort={sp.sort} sortHref={(sort) => link({ sort })} />
         )}

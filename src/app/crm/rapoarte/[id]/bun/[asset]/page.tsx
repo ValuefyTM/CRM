@@ -206,7 +206,7 @@ export default async function AssetPage({ params, searchParams }: {
             {strip.length > 0 && <a className="bvStrip" href={self("fotografii")}>{strip.map((x) => <SafeImg key={x.id} src={x.src} alt="" fallback={<i />} />)}</a>}
             <div className="bvInspBody">
               <div className="bvInspTop"><b>{i.status === "done" ? fmtDate(i.done_at ?? i.created_at) : i.status === "scheduled" && i.scheduled_at ? `Programată ${fmtDate(i.scheduled_at, true)}` : `Alocată ${fmtDate(i.created_at)}`}</b><span className={`pill ${k}`}><i />{t}</span></div>
-              <small>{[i.inspector, i.uvalo_code ? `UVALO ${i.uvalo_code}` : i.uvalo_id ? "UVALO" : i.glide_id ? "din Glide" : "aplicația CRM", i.photos ? `${i.photos} fotografii` : null,
+              <small>{[i.inspector, i.uvalo_code ? `UVALO ${i.uvalo_code}` : i.uvalo_id ? "UVALO" : i.glide_id ? "din vechiul CRM" : "aplicația CRM", i.photos ? `${i.photos} fotografii` : null,
                 i.signature_url ? "semnată" : null, i.present_person && `prezent: ${i.present_person}`].filter(Boolean).join(" · ")}</small>
               {doc ? <InspSheet doc={doc} firm={firm} pdf={`${base}/rapoarte/${id}/fisa/${a.id}`} label="Deschide fișa de inspecție →" />
                 : i.status === "done" && i.sheet_id ? <a className="btn btnGold" href={`${base}/rapoarte/${id}/fisa/${a.id}`}>Deschide fișa →</a> : null}

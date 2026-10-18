@@ -546,8 +546,8 @@ export function transform(files: Record<string, string>): ImportPlan {
       contact_phone: t(b["TELEFON CONTACT INSPECTIE"]) ?? t(b["TELEFON CONTACT"]),
     });
   }
-  if (lateDone) flag("inspections", "—", "Inspecții nemarcate în Glide, la rapoarte finalizate (marcate efectuate la data evaluării)", `${lateDone} inspecții`);
-  if (orphanAssets) flag("assets", "—", "Bunuri ale unor rapoarte care nu mai sunt în Glide (importate doar ca proprietăți)", `${orphanAssets} bunuri`);
+  if (lateDone) flag("inspections", "—", "Inspecții nemarcate în vechiul CRM, la rapoarte finalizate (marcate efectuate la data evaluării)", `${lateDone} inspecții`);
+  if (orphanAssets) flag("assets", "—", "Bunuri ale unor rapoarte care nu mai sunt în vechiul CRM (importate doar ca proprietăți)", `${orphanAssets} bunuri`);
   const reportsWithAssets = new Set(out.assets.map((a) => a.report_id));
   const noAssets = [...reports].filter((r) => !reportsWithAssets.has(r)).length;
   if (noAssets) flag("reports", "—", "Rapoarte fără niciun bun", `${noAssets} rapoarte`);
@@ -614,5 +614,5 @@ export function transform(files: Record<string, string>): ImportPlan {
 /** Anomalies as CSV (Excel-friendly: BOM + semicolons), to download from the import page. */
 export function anomaliesCsv(list: Anomaly[]) {
   const q = (s: string) => `"${s.replace(/"/g, '""')}"`;
-  return "﻿" + ["Tabel;ID Glide;Problemă;Detalii", ...list.map((a) => [a.table, a.id, a.issue, a.detail].map(q).join(";"))].join("\r\n");
+  return "﻿" + ["Tabel;ID vechi;Problemă;Detalii", ...list.map((a) => [a.table, a.id, a.issue, a.detail].map(q).join(";"))].join("\r\n");
 }

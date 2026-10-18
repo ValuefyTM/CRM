@@ -193,7 +193,7 @@ export async function draftForReport(db: D1Database, reportId: string): Promise<
   const mode = collab ? r.collab_mode ?? b.collabDefault : r.contract_kind === "framework" ? r.billing_mode ?? b.frameworkDefault : null;
   if (mode !== "per_order") return { error: "Acest raport nu se facturează per comandă (vezi Setări → Facturare)." };
   // Reports brought from Glide were invoiced outside the CRM; new ones once finished (approved / delivered).
-  if (r.glide_id) return { error: "Raport importat din Glide: a fost facturat în afara CRM-ului." };
+  if (r.glide_id) return { error: "Raport importat din vechiul CRM: a fost facturat în afara acestui CRM." };
   if (!r.delivered_at && r.status !== "done") return { error: "Factura se emite după finalizarea raportului." };
   const party = await partyOf(db, collab ? r.firm_id : r.party_id);
   if (!party) return { error: "Nu știu cui se facturează: contractul nu are bancă / firmă." };

@@ -6,7 +6,7 @@ import { err, json, staffApi } from "@/lib/api";
 async function owner() {
   const a = await staffApi("settings.E");
   if ("res" in a) return a;
-  if (a.user.role !== "owner") return { res: err("Doar proprietarul poate șterge datele din Glide.", 403) };
+  if (a.user.role !== "owner") return { res: err("Doar proprietarul poate șterge datele importate.", 403) };
   return a;
 }
 

@@ -7,7 +7,7 @@ const tabsOf = (user: WithPerms): [string, string, string, boolean][] => [
   ["fise", "Fișe de inspecție", "/fise", can(user, "templates")],
   ["facturare", "Facturare · Oblio", "/facturare", can(user, "billing")],
   ["claude", "Conexiuni Claude", "/claude", can(user, "settings")],
-  ["import", "Import Glide", "/import", user.role === "owner"],
+  ["import", "Import istoric", "/import", user.role === "owner"],
 ];
 
 /** The first tab of Setări the user may open (the menu item leads there), or null: no Setări for them. */

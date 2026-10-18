@@ -112,7 +112,7 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
                     {d.status === "missing" ? <>solicitat {day(d.at)} · <span className="errTxt">blochează predarea</span></> : <>
                       <span className="rdKind">{docKindLabel(k)}</span>
                       {many && <> · {d.asset_id ? labelOf(d.asset_id) : "tot raportul"}</>}
-                      {d.origin === "order" && " · din comandă"}{d.origin === "glide" && " · în Glide, nemutat încă"}
+                      {d.origin === "order" && " · din comandă"}{d.origin === "glide" && " · în vechiul CRM, nemutat încă"}
                       {d.at && ` · ${day(d.at)}`}{d.size ? ` · ${size(d.size)}` : ""}{d.by ? ` · ${d.by}` : ""}
                     </>}
                   </small>

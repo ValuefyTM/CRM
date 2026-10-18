@@ -35,7 +35,7 @@ export function BankOrdersTable({ rows, base, initial = "all" }: { rows: CrmOrde
         <h2>Comenzi de la bănci</h2>
         <div className="empty">
           Aici apar comenzile primite prin aplicațiile băncilor, pe baza contractelor cadru.<br />
-          Istoricul se poate aduce din Glide (Import Glide), iar comenzile noi vor fi preluate automat din emailurile de notificare ale băncilor.
+          Istoricul se poate aduce din vechiul CRM (Setări → Import istoric), iar comenzile noi vor fi preluate automat din emailurile de notificare ale băncilor.
         </div>
       </section>
     );

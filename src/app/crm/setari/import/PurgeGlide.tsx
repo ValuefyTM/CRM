@@ -35,22 +35,22 @@ export function PurgeGlide() {
   const crm = plan?.tables.reduce((s, t) => s + t.crm, 0) ?? 0;
   return (
     <section className="card">
-      <h2>Șterge datele din Glide</h2>
+      <h2>Șterge datele importate</h2>
       <p className="hint">
-        Șterge tot ce a venit din Glide: clienți, contracte, comenzi, rapoarte, bunuri, proprietăți, inspecții, fișe și notițe, ca să poți importa
+        Șterge tot ce a venit din vechiul CRM: clienți, contracte, comenzi, rapoarte, bunuri, proprietăți, inspecții, fișe și notițe, ca să poți importa
         din nou un export curat. Rămân conturile (echipa, colaboratorii), setările, site-ul și ce ați creat direct în CRM. Fotografiile deja mutate în R2
         se leagă la loc la următorul import. Cloudflare păstrează 30 de zile copii ale bazei, din care se poate reveni.
       </p>
-      {done !== null && <div className="okMsg">Am șters {n(done)} rânduri. Apasă „Vezi ce se șterge” ca să verifici că nu a mai rămas nimic din Glide.</div>}
+      {done !== null && <div className="okMsg">Am șters {n(done)} rânduri. Apasă „Vezi ce se șterge” ca să verifici că nu a mai rămas nimic din vechiul CRM.</div>}
       {!plan ? (
         <button type="button" className="btn btnGhost" style={{ alignSelf: "flex-start" }} disabled={busy} onClick={preview}>{busy ? "Se calculează…" : "Vezi ce se șterge"}</button>
       ) : glide + crm === 0 ? (
-        <div className="okMsg">Nu mai există date din Glide în CRM.</div>
+        <div className="okMsg">Nu mai există date importate din vechiul CRM.</div>
       ) : (
         <>
           <div className="tableWrap">
             <table className="table">
-              <thead><tr><th>Tabel</th><th style={{ textAlign: "right" }}>Din Glide</th><th style={{ textAlign: "right" }}>Create în CRM, legate de ele</th></tr></thead>
+              <thead><tr><th>Tabel</th><th style={{ textAlign: "right" }}>Din vechiul CRM</th><th style={{ textAlign: "right" }}>Create în CRM, legate de ele</th></tr></thead>
               <tbody>
                 {plan.tables.map((t) => (
                   <tr key={t.table}><td>{t.label}</td><td style={{ textAlign: "right" }}>{n(t.glide)}</td><td style={{ textAlign: "right" }}>{t.crm ? <b style={{ color: "var(--err)" }}>{n(t.crm)}</b> : <span className="muted">—</span>}</td></tr>
@@ -59,7 +59,7 @@ export function PurgeGlide() {
               </tbody>
             </table>
           </div>
-          {crm > 0 && <p className="hint">Rândurile din coloana a doua au fost create în CRM (de exemplu fotografii sau fișe făcute în aplicația de inspecții, documente încărcate) pentru rapoarte sau inspecții din Glide. Nu pot exista fără ele, așa că se șterg și ele.</p>}
+          {crm > 0 && <p className="hint">Rândurile din coloana a doua au fost create în CRM (de exemplu fotografii sau fișe făcute în aplicația de inspecții, documente încărcate) pentru rapoarte sau inspecții din vechiul CRM. Nu pot exista fără ele, așa că se șterg și ele.</p>}
           {plan.kept.length > 0 && (
             <p className="hint">Rămân, pentru că sunt folosite de date create în CRM (la următorul import se actualizează, nu se dublează): {plan.kept.map((k) => `${k.label.toLowerCase()} ${n(k.n)}`).join(", ")}.</p>
           )}

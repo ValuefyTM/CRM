@@ -27,7 +27,7 @@ export function ImportGlide({ base }: { base: string }) {
           for (const [name, data] of Object.entries(entries)) csv[name] = dec.decode(data);
         } else if (/\.csv$/i.test(f.name)) csv[f.name] = await f.text();
       }
-      if (!Object.keys(csv).length) throw new Error("Nu am găsit fișiere CSV. Încarcă arhiva .zip exportată din Glide sau fișierele .csv.");
+      if (!Object.keys(csv).length) throw new Error("Nu am găsit fișiere CSV. Încarcă arhiva .zip exportată din vechiul CRM sau fișierele .csv.");
       setBusy("Se analizează datele…");
       await new Promise((r) => setTimeout(r, 30));
       setPlan(transform(csv));
@@ -41,7 +41,7 @@ export function ImportGlide({ base }: { base: string }) {
     if (!plan) return;
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([anomaliesCsv(plan.anomalies)], { type: "text/csv;charset=utf-8" }));
-    a.download = "anomalii-import-glide.csv";
+    a.download = "anomalii-import.csv";
     a.click();
   };
 
@@ -77,7 +77,7 @@ export function ImportGlide({ base }: { base: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 980 }}>
       <section className="card">
-        <h2>1. Alege exportul din Glide</h2>
+        <h2>1. Alege exportul din vechiul CRM</h2>
         <p className="hint">Arhiva .zip cu tabelele VFY_* sau fișierele .csv. Datele sunt analizate în browserul tău; nimic nu se trimite până nu confirmi importul.</p>
         <label className="btn btnNavy" style={{ alignSelf: "flex-start" }}>
           {busy || "↑ Alege fișierul"}
