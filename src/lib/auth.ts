@@ -68,6 +68,8 @@ export async function requestSignIn(db: D1Database, kind: Kind, rawEmail: string
   if ((recent?.n ?? 0) >= MAX_CODES_PER_HOUR) return;
 
   const u = await accountFor(db, kind, email);
+  // An inspector who signs in from the CRM's page (the one app on the phone) gets into the inspections app.
+  if (u && toApp === "crm" && u.role === "inspector") toApp = "insp";
   if (!u || !canSignIn(u) || !(await allowedIn(db, toApp, u))) return;
   if (mustAcceptInvite(u)) {
     await sendInvite(db, u.id, "system");
@@ -241,7 +243,9 @@ export const canImpersonate = (me: User, u: User) =>
 /** The signed-in, active user of an app, or null. In the CRM: with the permissions of the role, or the user looked at with "Vezi ca…". */
 export async function currentUser(db: D1Database, app: App): Promise<User | null> {
   const jar = await cookies();
-  const token = jar.get(APP[app].cookie)?.value;
+  // One sign-in for the team: the CRM and the inspections app accept each other's session (same accounts).
+  const other: App | null = app === "crm" ? "insp" : app === "insp" ? "crm" : null;
+  const token = jar.get(APP[app].cookie)?.value || (other ? jar.get(APP[other].cookie)?.value : undefined);
   if (!token) return null;
   const row = await db
     .prepare(`SELECT user_id FROM sessions WHERE token_hash = ? AND audience IN (${kindsSql(app)}) AND expires_at > ?`)

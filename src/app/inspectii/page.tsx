@@ -14,7 +14,8 @@ export default async function InspectiiHome() {
   if (!user) redirect(`${base}/login`);
   return (
     <>
-      <link rel="manifest" href={`${base}/manifest.webmanifest`} />
+      {/* Its own install only on its own address; opened from the CRM it is part of the CRM app (one icon). */}
+      {!base && <link rel="manifest" href="/manifest.webmanifest" />}
       <InspApp base={base} me={{ id: user.id, name: user.name || user.email, email: user.email, role: user.role }} />
     </>
   );

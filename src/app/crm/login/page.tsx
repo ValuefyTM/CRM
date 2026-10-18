@@ -16,6 +16,9 @@ export default async function CrmLogin({ searchParams }: { searchParams: Promise
   const next = sp.next?.startsWith("/api/mcp/oauth/authorize?") ? sp.next : undefined;
   const db = await getDb();
   if (db && (await currentUser(db, "crm"))) redirect(next ?? (base || "/"));
+  // An inspector already signed in (the inspections app shares the sign-in): straight to their app.
+  const inspApp = (await basePath("insp")) || "/";
+  if (db && (await currentUser(db, "insp"))?.role === "inspector") redirect(inspApp);
   return (
     <div className="authPage">
       <aside className="authSide">
@@ -35,6 +38,7 @@ export default async function CrmLogin({ searchParams }: { searchParams: Promise
           <h1>Intră în CRM</h1>
           <p>Introdu adresa de email a contului tău din echipa VALUEFY.</p>
           <LoginForm kind="internal" base={base} next={next} expired={sp.link === "expired"} />
+          <p className="hint" style={{ marginTop: 14 }}>Inspector? Intri tot de aici: codul te duce în <a href={inspApp}>aplicația de inspecții</a>.</p>
         </div>
       </main>
       <Pwa base={base} />

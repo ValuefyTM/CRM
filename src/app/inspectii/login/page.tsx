@@ -14,7 +14,7 @@ export default async function InspLogin({ searchParams }: { searchParams: Promis
   if (db && (await currentUser(db, "insp"))) redirect(base || "/");
   return (
     <main className="inspLogin">
-      <link rel="manifest" href={`${base}/manifest.webmanifest`} />
+      {!base && <link rel="manifest" href="/manifest.webmanifest" />}
       <header>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/icon-insp-192.png" alt="" width={56} height={56} />

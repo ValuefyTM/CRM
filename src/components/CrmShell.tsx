@@ -13,6 +13,7 @@ import { Pwa } from "./Pwa";
 import { TableLabels } from "./TableLabels";
 import { photoUrl } from "@/lib/presence";
 import { countNewInquiries } from "@/lib/listings";
+import { basePath } from "@/lib/site";
 
 export async function CrmShell(props: { user: User; base: string; active: string; title: string; subtitle?: string; actions?: React.ReactNode; bare?: boolean; dateTitle?: boolean; children: React.ReactNode }) {
   const b = props.base;
@@ -47,6 +48,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
     return !list.length ? [] : flat ? list : [{ group: g, key, items: list }];
   };
   const settings = settingsHome(b, u);
+  const inspApp = await basePath("insp");
   return (
     <Shell
       // "Vezi ca…" is picked on the dashboard only; elsewhere the banner just says whose CRM it is and leads back.
@@ -69,6 +71,8 @@ export async function CrmShell(props: { user: User; base: string; active: string
           may("reports") && { key: "reports", label: allReports ? "Rapoarte" : "Rapoartele mele", href: `${b}/rapoarte`, badge: myOpen },
           may("inspections") && { key: "inspections", label: may("inspections.all") ? "Inspecții" : "Inspecțiile mele", href: `${b}/agenda-inspectii` },
           may("properties") && { key: "properties", label: "Proprietăți", href: `${b}/proprietati` },
+          // The inspections app (phone: sheets, photos, signature), with the same sign-in.
+          may("inspections") && { key: "inspapp", label: "Aplicația de inspecții", href: inspApp || "/" },
         ]),
         ...group("Financiar", "g-fin", [
           may("billing") && { key: "invoicing", label: "Facturare", href: `${b}/facturare` },

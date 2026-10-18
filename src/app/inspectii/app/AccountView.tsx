@@ -74,6 +74,7 @@ export function AccountView({ ctx }: { ctx: Ctx }) {
           <button type="button" className="iBtn ghost" onClick={() => ctx.sync()} disabled={ctx.syncing}><Icon.refresh />Sincronizează acum</button>
         </section>
         <Statement />
+        {ctx.me.role !== "inspector" && <a className="iBtn ghost" href={ctx.base ? ctx.base.replace(/\/inspectii$/, "") || "/" : "/"} style={{ textDecoration: "none" }}>Deschide CRM-ul</a>}
         <button type="button" className="iBtn ghost danger-text" onClick={() => ctx.logout()}>Ieși din cont</button>
         <p className="hint center">VALUEFY Inspecții</p>
       </div>

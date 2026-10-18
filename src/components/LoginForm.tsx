@@ -15,7 +15,7 @@ export function LoginForm({ kind, base, expired, app, next }: { kind: "internal"
   const post = (url: string, body: object) =>
     fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, app, ...body }) }).then(async (r) => ({
       ok: r.ok,
-      data: (await r.json().catch(() => ({}))) as { error?: string },
+      data: (await r.json().catch(() => ({}))) as { error?: string; to?: string },
     }));
 
   const sendCode = async (e?: React.FormEvent) => {
@@ -34,7 +34,8 @@ export function LoginForm({ kind, base, expired, app, next }: { kind: "internal"
     setBusy(true); setMsg("");
     const r = await post("/api/auth/verify", { email, code });
     if (!r.ok) { setBusy(false); return setMsg(r.data.error || "Codul nu este corect."); }
-    location.href = next ?? (base || "/");
+    // `to`: the sign-in landed in another app (an inspector from the CRM's page → the inspections app).
+    location.href = r.data.to ?? next ?? (base || "/");
   };
 
   if (step === "code") {
