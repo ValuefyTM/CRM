@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { staffPage } from "@/lib/guard";
-import { DUE_FILTERS, listReports, PAGE_SIZE, REPORT_SORTS, REPORT_TABS, reportFacets, reportTabCounts, STAGE_FILTERS } from "@/lib/reports";
+import { DEFAULT_TAB, DUE_FILTERS, listReports, PAGE_SIZE, REPORT_SORTS, REPORT_TABS, reportFacets, reportTabCounts, STAGE_FILTERS } from "@/lib/reports";
 import { CancelNoAsset } from "./CancelNoAsset";
 import { ReportTable } from "./ReportTable";
 import { STAGE_LABEL } from "@/lib/dossier";
@@ -22,13 +22,15 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   // Without "reports.all": only the reports of the user's team work. With it, "Ale mele" narrows the list the same way.
   const all = can(user, "reports.all");
   const mine = !all || sp.ale === "1" ? { id: user.id, sql: mySql(user) } : undefined;
-  const f = { ...sp, page, mine };
+  // Without a status: the reports in progress ("toate": every status).
+  const status = sp.status || DEFAULT_TAB;
+  const f = { ...sp, status, page, mine };
   const [data, facets, counts] = await Promise.all([listReports(db, f), reportFacets(db, mine), reportTabCounts(db, f)]);
   // "Fără bun": the open ones can be cancelled in one go (by someone who sees all reports and changes statuses).
   const openNoAsset = sp.bunuri === "fara" && all && can(user, "reports:status")
     ? (await db.prepare("SELECT COUNT(*) AS n FROM reports r WHERE r.status NOT IN ('done', 'cancelled') AND NOT EXISTS (SELECT 1 FROM assets x WHERE x.report_id = r.id)").first<{ n: number }>())?.n ?? 0
     : 0;
-  const tab = sp.status === "draft" ? "in_progress" : sp.status ?? "";
+  const tab = status === "draft" ? "in_progress" : status;
   const pages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
   const link = (change: Partial<SP>) => {
     const next = { ...sp, page: undefined, ...change };
@@ -52,7 +54,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           issuers={facets.issuers.map((i) => [i.id, i.name, i.n])}
           evaluators={facets.evaluators.map((e) => [e.id, e.name, e.n])}
           sorts={Object.entries(REPORT_SORTS).map(([k, [l]]) => [k, l])}
-          tab={tab} tabs={REPORT_TABS.map(([k, label]) => [k, label, counts[k] ?? 0, link({ status: k || undefined })])}
+          tab={tab} tabs={REPORT_TABS.map(([k, label]) => [k, label, counts[k] ?? 0, link({ status: k === DEFAULT_TAB ? undefined : k })])}
         />
         {(STAGE_FILTERS[sp.etapa ?? ""] || DUE_FILTERS[sp.termen ?? ""] || sp.status === "deschise") && (
           <div className="activeFilters">

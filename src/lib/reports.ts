@@ -158,8 +158,9 @@ export async function listReports(db: D1Database, f: ReportFilters) {
   return { rows: rows.results, total: sum?.n ?? 0, fees: sum?.fees ?? 0, done: sum?.done ?? 0, open: sum?.open ?? 0, suspended: sum?.suspended ?? 0 };
 }
 
-/** Status tabs of the list: "" = all; drafts count as "În lucru". */
-export const REPORT_TABS: [string, string][] = [["", "Toate"], ["in_progress", "În lucru"], ["done", "Finalizate"], ["suspended", "Suspendate"], ["cancelled", "Anulate"]];
+/** Status tabs of the list: "În lucru" first and chosen by default; "toate" = every status; drafts count as "În lucru". */
+export const REPORT_TABS: [string, string][] = [["in_progress", "În lucru"], ["toate", "Toate"], ["done", "Finalizate"], ["suspended", "Suspendate"], ["cancelled", "Anulate"]];
+export const DEFAULT_TAB = "in_progress";
 
 /** How many reports each status tab has under the other filters. */
 export async function reportTabCounts(db: D1Database, f: ReportFilters) {
@@ -168,7 +169,7 @@ export async function reportTabCounts(db: D1Database, f: ReportFilters) {
       FROM reports r LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id ${sql} GROUP BY s`)
     .bind(...params).all<{ s: string; n: number }>();
   const by = Object.fromEntries(results.map((x) => [x.s, x.n])) as Record<string, number>;
-  return { ...by, "": results.reduce((t, x) => t + x.n, 0) } as Record<string, number>;
+  return { ...by, toate: results.reduce((t, x) => t + x.n, 0) } as Record<string, number>;
 }
 
 /** Inspection state of a report row: done when every inspection has a completion date. */
