@@ -275,9 +275,10 @@ export async function storePdf(db: D1Database, id: string, link: string | null |
 export type InvoiceRow = { id: string; kind: string; series: string; number: string; issue_date: string; due_date: string | null; client_id: string | null; client_name: string | null;
   contract_id: string | null; contract_number: string | null; total: number | null; status: string; paid_at: string | null; r2_key: string | null; oblio_link: string | null };
 
-export async function invoicesFor(db: D1Database, f: { contract?: string; report?: string; status?: string; kind?: string; q?: string; limit?: number }) {
+export async function invoicesFor(db: D1Database, f: { contract?: string; report?: string; status?: string; kind?: string; q?: string; limit?: number; createdBy?: string }) {
   const w: string[] = [], a: (string | number)[] = [];
   if (f.contract) { w.push("i.contract_id = ?"); a.push(f.contract); }
+  if (f.createdBy) { w.push("i.created_by = ?"); a.push(f.createdBy); }
   if (f.report) { w.push("EXISTS (SELECT 1 FROM json_each(i.report_ids) j WHERE j.value = ?)"); a.push(f.report); }
   if (f.kind) { w.push("i.kind = ?"); a.push(f.kind); }
   if (f.status === "neincasate") w.push("i.kind = 'invoice' AND i.status = 'issued'");

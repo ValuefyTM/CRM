@@ -15,6 +15,7 @@ import { photoUrl } from "@/lib/presence";
 import { countNewInquiries } from "@/lib/listings";
 import { basePath } from "@/lib/site";
 import { scopeFilter } from "@/lib/scope";
+import { ownBillingOnly, toBillCount } from "@/lib/billing-tasks";
 
 export async function CrmShell(props: { user: User; base: string; active: string; title: string; subtitle?: string; actions?: React.ReactNode; bare?: boolean; dateTitle?: boolean; children: React.ReactNode }) {
   const b = props.base;
@@ -51,6 +52,8 @@ export async function CrmShell(props: { user: User; base: string; active: string
   };
   const settings = settingsHome(b, u);
   const inspApp = await basePath("insp");
+  // Facturare: how many reports wait for their invoice (the person's own, with "Doar ale lui").
+  const toBillN = db && may("billing") ? await toBillCount(db, ownBillingOnly(u) ? u.id : null).catch(() => 0) : 0;
   return (
     <Shell
       // "Vezi ca…" is picked on the dashboard only; elsewhere the banner just says whose CRM it is and leads back.
@@ -77,7 +80,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
           may("inspections") && { key: "inspapp", label: "Aplicația de inspecții", href: inspApp || "/" },
         ]),
         ...group("Financiar", "g-fin", [
-          may("billing") && { key: "invoicing", label: "Facturare", href: `${b}/facturare` },
+          may("billing") && { key: "invoicing", label: may("billing.all") || u.role === "owner" ? "Facturare" : "Facturile mele", href: `${b}/facturare`, badge: toBillN, hot: true },
         ]),
         ...group("Administrare", "g-admin", [
           may("users") && { key: "users", label: "Utilizatori", href: `${b}/utilizatori` },
