@@ -10,6 +10,8 @@ export type CrmOrderRow = {
   from: string; fromId: string | null; firm: string | null; firmId: string | null; source: string; purpose: string; bank: string | null;
   bankRef: string | null; branch: string | null; reportType: string | null; fee: number | null; contract: string | null;
   urgent: boolean; unread: boolean; docs: number; docsMissing: boolean; status: [string, string]; today: boolean; pending: boolean;
+  /** bank orders: the bank's logo and the order's report */
+  bankLogo?: string | null; reportId?: string | null; reportNumber?: string | null;
 };
 
 const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");

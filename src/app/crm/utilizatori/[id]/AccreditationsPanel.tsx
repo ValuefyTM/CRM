@@ -25,7 +25,7 @@ export function AccreditationsPanel(props: { userId: string; contracts: AccredCo
   return (
     <section className="card">
       <div className="cardHead"><h2>Agreeri pe contracte cadru</h2>{saved.size > 0 && <span className="pill pillOk"><i />{saved.size} {saved.size === 1 ? "contract" : "contracte"}</span>}</div>
-      <p className="hint" style={{ margin: 0 }}>Pe contractele bifate, persoana poate înregistra comenzile băncii (buton „Adaugă comandă” pe tabloul de bord), le poate procesa și le poate duce rapoartele, indiferent de drepturile rolului pe modulul Comenzi.</p>
+      <p className="hint" style={{ margin: 0 }}>Pe contractele bifate, persoana poate înregistra comenzile băncii (buton „Adaugă comandă” pe tabloul de bord), le poate procesa și le poate duce rapoartele. Lista Comenzi o vede doar dacă rolul ei are modulul bifat în Permisiuni, și atunci doar comenzile de la bănci: cele de pe aceste contracte și cele unde e evaluator sau verificator.</p>
       {list.length === 0 ? <p className="hint">Nu există contracte cadru deschise.</p> : (
         <ul className="accList">
           {list.map((c) => (

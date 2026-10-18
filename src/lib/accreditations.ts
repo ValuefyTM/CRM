@@ -3,8 +3,11 @@
 // them and runs their reports, whatever the Comenzi module says for their role.
 import { now } from "./db";
 
-/** What an accreditation adds to the permissions of the role ("orders.contract": the orders of those contracts). */
-export const ACCREDITED_PERMS = ["orders", "orders.A", "orders.E", "orders:process", "orders.contract"] as const;
+/**
+ * What an accreditation adds to the permissions of the role: registering and processing the bank's orders on those
+ * contracts ("orders.contract" marks them). Not the Comenzi module itself: the list shows only when the role has it.
+ */
+export const ACCREDITED_PERMS = ["orders.A", "orders.E", "orders:process", "orders.contract"] as const;
 
 /** SQL: the order (table aliased `alias`) is on a framework contract the user is accredited on. Binds the user id once. */
 export const accreditedSql = (alias: string) =>

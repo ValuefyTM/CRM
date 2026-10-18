@@ -59,9 +59,15 @@ export function BankOrdersTable({ rows, base, initial = "all" }: { rows: CrmOrde
               {shown.slice(0, limit).map((r) => (
                 <ClickRow key={r.id} href={`${base}/comenzi/${r.id}`} className={r.unread ? "unread" : undefined}>
                   <td><a className="ref rowLink" href={`${base}/comenzi/${r.id}`}>{r.bankRef ?? r.ref}</a><div className="muted">{r.created}</div></td>
-                  <td>{r.bank ?? "—"}{r.branch && <div className="muted">{r.branch}</div>}</td>
+                  <td>
+                    <span className="bankCell">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      {r.bankLogo ? <img src={r.bankLogo} alt="" /> : <b aria-hidden="true">{(r.bank ?? "?").slice(0, 2).toUpperCase()}</b>}
+                      <span>{r.bank ?? "—"}{r.branch && <div className="muted">{r.branch}</div>}</span>
+                    </span>
+                  </td>
                   <td><b>{niceName(r.client)}</b>{r.clientPhone && <div className="muted" style={{ whiteSpace: "nowrap" }}>{r.clientPhone}</div>}</td>
-                  <td>{r.reportType ?? r.type}</td>
+                  <td>{r.reportType ?? r.type}{r.reportId && <div><a className="rowLink" href={`${base}/rapoarte/${r.reportId}`}>raport {r.reportNumber ?? "fără nr."} →</a></div>}</td>
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{lei(r.fee)}</td>
                   <td><span className="actions" style={{ gap: 6 }}>{r.unread && <span className="pill pillInfo"><i />Nouă</span>}<span className={`pill ${r.status[1]}`}><i />{r.status[0]}</span></span></td>
                 </ClickRow>

@@ -23,7 +23,10 @@ export function scopeFilter(u: Viewer, mod: Mod, alias: string): ScopeFilter {
     if (mod === "orders" && can(u, "orders.contract")) return { sql: `(${alias}.created_by = ? OR ${accreditedSql(alias)})`, binds: [u.id, u.id] };
     return { sql: `${alias}.created_by = ?`, binds: [u.id] };
   }
-  return { sql: `EXISTS (SELECT 1 FROM reports sr WHERE ${LINK[mod]("sr")} = ${alias}.id AND ${leadSql("sr.id")})`, binds: [u.id] };
+  const lead = `EXISTS (SELECT 1 FROM reports sr WHERE ${LINK[mod]("sr")} = ${alias}.id AND ${leadSql("sr.id")})`;
+  // Accredited (agreeri): the bank's orders on those contracts as well, before they have a report.
+  if (mod === "orders" && can(u, "orders.contract")) return { sql: `(${lead} OR ${accreditedSql(alias)})`, binds: [u.id, u.id] };
+  return { sql: lead, binds: [u.id] };
 }
 
 const TABLE: Record<Mod, string> = { clients: "entities", orders: "orders", contracts: "contracts" };
