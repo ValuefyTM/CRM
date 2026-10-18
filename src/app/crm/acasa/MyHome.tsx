@@ -5,6 +5,7 @@ import { cap, listReports } from "@/lib/reports";
 import { ReportTable } from "../rapoarte/ReportTable";
 import { OVER_TERM_SQL } from "@/lib/reports";
 import { mySql } from "@/lib/perms-db";
+import { BillingTasksCard } from "@/components/BillingTasksCard";
 import { can } from "@/lib/perms";
 import type { User } from "@/lib/users";
 
@@ -77,6 +78,8 @@ export async function MyHome({ user, base, denied }: { user: User; base: string;
         <a className="dbKpi" href={`${base}/rapoarte?status=done`}><span className="dbKpiLabel"><i style={{ background: "var(--ok)" }} />Finalizate luna aceasta</span><b>{counts?.done_month ?? 0}</b></a>
         <a className="dbKpi" href={`${base}/agenda-inspectii`}><span className="dbKpiLabel"><i style={{ background: "var(--ink)" }} />Inspecții de făcut</span><b>{left}</b></a>
       </div>
+      {/* "Emite factura" without the Facturare module: the reports to invoice, right here. */}
+      {can(user, "billing:issue") && !can(user, "billing") && <BillingTasksCard user={user} base={base} />}
       <div className="cols myCols">
         <section className="card repCard">
           <div className="cardHead repCardHead"><h2>Rapoartele mele în lucru</h2><a className="link" href={`${base}/rapoarte`}>Toate →</a></div>

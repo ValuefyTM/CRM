@@ -17,6 +17,8 @@ const hintOf = (m: Mod) => ("hint" in m ? m.hint : "");
 
 /** One cell, in short: V A E Ș lit or dim, "ale lui" for own records, +n special actions. */
 function CellView({ m, c }: { m: Mod; c: Cell }) {
+  // Module off with a special action kept (billing: "Emite factura" without the menu entry).
+  if (!c.on && c.sp.length) return <span className="pmMeta"><b>fără meniu</b> · +{c.sp.length}{c.scope && c.scope !== "all" ? ` · ${SCOPE_SHORT[c.scope]}` : ""}</span>;
   if (!c.on) return <span className="pmOff">—</span>;
   const scope = scopeOf(m);
   const sc = c.scope ?? "all";
@@ -166,6 +168,10 @@ export function PermMatrix(props: { initial: PermConfig; defaults: PermConfig; c
                     <label key={k} className="check"><input type="checkbox" checked={cell.r.includes(k as Right)} onChange={() => setCell({ r: toggle(cell.r, k as Right) })} /> {l}</label>
                   ))}
                 </div>
+              </fieldset>
+              {/* The scope and the special actions: also without the module, where the module allows it (billing). */}
+              <fieldset className="pmFields" disabled={ro || (!cell.on && !("offSp" in mod))}>
+                {!cell.on && "offSp" in mod && <p className="hint" style={{ margin: 0 }}>Fără modulul în meniu, „Emite factura” pune lista „De facturat” pe tabloul de bord, pe scopul ales mai jos.</p>}
                 {scopeOf(mod) && (
                   <div className="pmBlock">
                     <b>Pe ce date</b>

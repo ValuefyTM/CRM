@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { staffPage } from "@/lib/guard";
 import { can } from "@/lib/perms";
 import { MyHome } from "./acasa/MyHome";
+import { BillingTasksCard } from "@/components/BillingTasksCard";
 import { dashboard, type Alert } from "@/lib/dashboard";
 import { OVER_TERM_SQL } from "@/lib/reports";
 import { STAGE_LABEL } from "@/lib/dossier";
@@ -137,6 +138,8 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
           ))}
         </nav>
       </section>
+      {/* "Emite factura" without the Facturare module: the reports to invoice, right here. */}
+      {can(user, "billing:issue") && !can(user, "billing") && <BillingTasksCard user={user} base={base} />}
 
       <div className="dbKpis">
         <a className="dbKpi" href={`${base}/rapoarte?status=done&year=${year}`}>

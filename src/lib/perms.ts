@@ -11,7 +11,9 @@ export const RIGHTS: [Right | "V", string][] = [["V", "Vede"], ["A", "Adaugă"],
 /** On which records a role works in a module: all, the user's own (created / team / assigned), or where the user is
  * main evaluator or verifier of the report they belong to (managers who answer only for their reports). */
 export type Scope = "all" | "own" | "lead";
-type ModDef = { k: string; l: string; group: string; rights: Right[]; scope?: readonly (readonly [Scope, string])[]; sp?: [string, string][]; hint?: string };
+type ModDef = { k: string; l: string; group: string; rights: Right[]; scope?: readonly (readonly [Scope, string])[]; sp?: [string, string][]; hint?: string;
+  /** the special actions (and the scope) can be given without the module itself (no menu entry) */
+  offSp?: true };
 const LEAD = ["lead", "Unde e evaluator / verificator"] as const;
 
 export const MODULES = [
@@ -29,8 +31,8 @@ export const MODULES = [
   { k: "properties", l: "Proprietăți", group: "Operațional", rights: ["E"], scope: [["all", "Toate"], ["own", "Din echipa lui"], LEAD],
     hint: "Proprietățile evaluate în rapoartele pe care le vede (din echipa lui) sau pe care le conduce / verifică; comparabilele se caută tot printre ele. Raportul unei proprietăți se deschide doar dacă îl vede." },
   { k: "fees", l: "Onorarii și sume", group: "Financiar", rights: [], scope: [["all", "Toate sumele"], ["own", "Doar cota lui"], ["lead", "Toate sumele unde e evaluator / verificator"]] },
-  { k: "billing", l: "Facturare", group: "Financiar", rights: ["A", "E", "D"], scope: [["all", "Toate"], ["own", "Doar ale lui"]], sp: [["issue", "Emite factura"]],
-    hint: "„Doar ale lui”: lista „De facturat” cu rapoartele unde e evaluator principal și facturile emise de el (evaluatorii care își fac singuri facturile). „Emite factura”: poate emite în Oblio." },
+  { k: "billing", l: "Facturare", group: "Financiar", rights: ["A", "E", "D"], scope: [["all", "Toate"], ["own", "Doar ale lui"]], sp: [["issue", "Emite factura"]], offSp: true,
+    hint: "„Doar ale lui”: rapoartele de facturat unde e evaluator principal și facturile emise de el (evaluatorii care își fac singuri facturile). „Emite factura” merge și fără modulul din meniu: atunci lista „De facturat” apare pe tabloul de bord, pe scopul ales." },
   { k: "statements", l: "Borderouri", group: "Financiar", rights: ["A", "E", "D"], scope: [["all", "Toate"], ["own", "Doar al lui"]] },
   { k: "dashboard", l: "Tablou de bord", group: "Administrare", rights: [], scope: [["all", "Al firmei"], ["own", "Personal"]] },
   { k: "users", l: "Utilizatori", group: "Administrare", rights: ["A", "E", "D"] },
@@ -116,10 +118,12 @@ export function cleanConfig(raw: unknown): PermConfig {
     const cells: Role["cells"] = {};
     for (const m of MODULES) {
       const c = cellsIn[m.k];
-      if (!c?.on) continue;
       const sps = "sp" in m ? m.sp.map(([s]) => s as string) : [];
+      // A module off with a special action kept (billing: "Emite factura" without the menu entry).
+      const offSp = !!c && !c.on && "offSp" in m && sps.some((s) => c.sp?.includes(s));
+      if (!c?.on && !offSp) continue;
       cells[m.k] = {
-        on: true, r: (m.rights as readonly Right[]).filter((x) => c.r?.includes(x)),
+        on: !!c.on, r: c.on ? (m.rights as readonly Right[]).filter((x) => c.r?.includes(x)) : [],
         // Saved before "lead" existed: own = true.
         scope: "scope" in m ? (m.scope.some(([v]) => v === (c.scope ?? (c.own ? "own" : "all"))) ? (c.scope ?? (c.own ? "own" : "all")) : "all") : undefined,
         sp: sps.filter((s) => c.sp?.includes(s)),
@@ -144,8 +148,11 @@ export function permsFor(cfg: PermConfig, role: string): string[] {
   const out: string[] = [];
   for (const m of MODULES) {
     const c: Cell | undefined = role === "owner" ? fullCell(m) : cfg.roles.find((r) => r.id === role)?.cells[m.k];
-    if (!c?.on) continue;
-    out.push(m.k, ...c.r.map((x) => `${m.k}.${x}`), ...c.sp.map((s) => `${m.k}:${s}`));
+    if (!c) continue;
+    // Module off, special actions kept (billing's "Emite factura"): the actions and the scope, not the module.
+    if (!c.on) { if (!c.sp.length) continue; }
+    else out.push(m.k, ...c.r.map((x) => `${m.k}.${x}`));
+    out.push(...c.sp.map((s) => `${m.k}:${s}`));
     const scope = c.scope ?? "all";
     if (scope === "all") out.push(`${m.k}.all`);
     if (scope === "lead") out.push(`${m.k}.lead`);
