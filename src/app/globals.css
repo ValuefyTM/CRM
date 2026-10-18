@@ -2779,3 +2779,10 @@ a.dAssetLink { color: inherit; text-decoration: none; border-radius: 12px; trans
 .seAssetTypes .check { font-size: 12px; }
 .seNewAssets summary { cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--acc-text); }
 .seTplNew .seAssetGrid { grid-template-columns: 1fr; max-height: 300px; overflow: auto; padding-right: 4px; }
+.seOptsBox { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: #fff; font-size: 12.5px; }
+.seOptsBox small { color: var(--muted-2); font-size: 11.5px; }
+.sePhGroups { display: flex; flex-direction: column; gap: 6px; }
+.sePhList { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.sePhList .seChip button { border: 0; background: none; color: var(--muted-2); cursor: pointer; padding: 0 0 0 2px; }
+.seOptsBox .seTplNewActs { align-items: center; flex-wrap: wrap; }
+.seOptsBox .seTplNewActs .input { max-width: 240px; }

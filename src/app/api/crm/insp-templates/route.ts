@@ -23,5 +23,6 @@ export async function POST(req: Request) {
   await audit(a.db, `user:${a.user.id}`, "insp.template", "insp_template", made.key, `Fișă nouă: ${name}`);
   if ((await inspChannel(a.db)) === "uvalo") await later(syncTemplates(a.db, made.key));
   const cur = await templateOf(a.db, made.key, made.base);
-  return NextResponse.json({ ok: true, key: made.key, base: made.base, name, assets, tpl: cur.tpl, model: baseTemplate(made.base) });
+  const info = (await templateList(a.db)).find((x) => x.key === made.key);
+  return NextResponse.json({ ok: true, key: made.key, base: made.base, name, assets, rooms: info?.rooms ?? false, tpl: cur.tpl, model: baseTemplate(made.base) });
 }

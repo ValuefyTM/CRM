@@ -9,7 +9,15 @@ export type TplInfo = { key: string; name: string; base: SheetType; builtin: boo
   /** asset types the sheet is for ("CATEGORIE|TIP", or a whole "CATEGORIE"; "*": every asset) */
   assets: string[];
   /** a built-in sheet never linked by hand: for the asset types whose sheet it is (by the type of the asset) */
-  auto: boolean };
+  auto: boolean;
+  /** the finishes of each room are asked; the photo groups suggested (empty: the groups of the asset type) */
+  rooms: boolean; photos: string[] };
+
+/** A sheet linked only to movable goods (cars, machines). */
+export const movableOnly = (assets: string[]) => assets.length > 0 && assets.every((x) => x.startsWith("BUN MOBIL"));
+
+/** Rooms are asked by default on the sheets of buildings. */
+export const roomsByDefault = (t: SheetType) => t === "apartament" || t === "casa" || t === "comercial";
 
 /** The sheet of an inspection given with "the standard sheet" (UVALO's of the type, in the CRM app the VALUEFY model). */
 export const STD = "std";
@@ -18,18 +26,24 @@ const isType = (t: string | null | undefined): t is SheetType => SHEET_TYPES.som
 
 /** Every sheet: the built-in ones first (with the name the firm gave them), then the firm's own (deleted ones only on request). */
 export async function templateList(db: D1Database, withDeleted = false): Promise<TplInfo[]> {
-  type M = { key: string; name: string | null; base: string; deleted_at: string | null; asset_types: string | null };
-  const { results } = await db.prepare("SELECT key, name, base, deleted_at, asset_types FROM insp_template_meta ORDER BY created_at")
+  type M = { key: string; name: string | null; base: string; deleted_at: string | null; asset_types: string | null; options: string | null };
+  const { results } = await db.prepare("SELECT key, name, base, deleted_at, asset_types, options FROM insp_template_meta ORDER BY created_at")
     .all<M>().catch(() => ({ results: [] as M[] }));
   const meta = new Map(results.map((r) => [r.key, r]));
   const assets = (r?: M) => { try { const v: unknown = JSON.parse(r?.asset_types ?? "[]"); return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []; } catch { return []; } };
+  // a sheet only for movable goods asks no rooms by default
+  const opts = (r: M | undefined, t: SheetType, a: string[]) => {
+    let o: { rooms?: unknown; photos?: unknown } = {};
+    try { o = JSON.parse(r?.options ?? "{}") ?? {}; } catch { /* defaults */ }
+    return { rooms: typeof o.rooms === "boolean" ? o.rooms : roomsByDefault(t) && !movableOnly(a), photos: Array.isArray(o.photos) ? o.photos.filter((x): x is string => typeof x === "string") : [] };
+  };
   const nomen = ASSET_CATEGORIES.map(([c, , types]): [string, string[]] => [c, types]);
   const builtin = SHEET_TYPES.map(([t, label]): TplInfo => {
-    const m = meta.get(t), auto = m?.asset_types == null;
-    return { key: t, name: m?.name?.trim() || label, base: t, builtin: true, deleted: !!m?.deleted_at, assets: auto ? defaultSheetAssets(t, nomen) : assets(m), auto };
+    const m = meta.get(t), auto = m?.asset_types == null, a = auto ? defaultSheetAssets(t, nomen) : assets(m);
+    return { key: t, name: m?.name?.trim() || label, base: t, builtin: true, deleted: !!m?.deleted_at, assets: a, auto, ...opts(m, t, a) };
   });
   const own = results.filter((r) => !isType(r.key) && isType(r.base))
-    .map((r): TplInfo => ({ key: r.key, name: r.name?.trim() || "Fișă fără nume", base: r.base as SheetType, builtin: false, deleted: !!r.deleted_at, assets: assets(r), auto: false }));
+    .map((r): TplInfo => ({ key: r.key, name: r.name?.trim() || "Fișă fără nume", base: r.base as SheetType, builtin: false, deleted: !!r.deleted_at, assets: assets(r), auto: false, ...opts(r, r.base as SheetType, assets(r)) }));
   return [...builtin, ...own].filter((x) => withDeleted || !x.deleted);
 }
 
@@ -102,6 +116,10 @@ export async function createTemplate(db: D1Database, name: string, from: string,
   await saveTemplate(db, key, tpl, userId);
   return { key, base: type };
 }
+
+export const setTemplateOptions = (db: D1Database, key: string, base: SheetType, o: { rooms: boolean; photos: string[] }) =>
+  db.prepare("INSERT INTO insp_template_meta (key, base, created_at, options) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET options = excluded.options")
+    .bind(key, base, now(), JSON.stringify(o)).run();
 
 export const setTemplateAssets = (db: D1Database, key: string, base: SheetType, assets: string[]) =>
   db.prepare("INSERT INTO insp_template_meta (key, base, created_at, asset_types) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET asset_types = excluded.asset_types")

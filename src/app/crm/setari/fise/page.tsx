@@ -30,7 +30,7 @@ export default async function SheetTemplatesPage({ searchParams }: { searchParam
   }
   const items = await Promise.all((await templateList(db)).map(async (x) => {
     const cur = await templateOf(db, x.key, x.base);
-    return { t: x.key, base: x.base, builtin: x.builtin, assets: x.auto ? defaultSheetAssets(x.base, nomen.map(([c, , t]) => [c, t])) : x.assets, label: x.name, tpl: cur.tpl, model: baseTemplate(x.base), custom: cur.custom, synced: sync[x.key]?.at ?? null, syncError: sync[x.key]?.error ?? null };
+    return { t: x.key, base: x.base, builtin: x.builtin, rooms: x.rooms, photos: x.photos, assets: x.auto ? defaultSheetAssets(x.base, nomen.map(([c, , t]) => [c, t])) : x.assets, label: x.name, tpl: cur.tpl, model: baseTemplate(x.base), custom: cur.custom, synced: sync[x.key]?.at ?? null, syncError: sync[x.key]?.error ?? null };
   }));
   return (
     <CrmShell user={user} base={base} active="settings" title="Setări · Fișe de inspecție" subtitle="Ce completează inspectorii pe telefon, pe tipuri de proprietate">

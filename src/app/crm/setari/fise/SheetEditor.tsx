@@ -10,11 +10,16 @@ import { useRouter } from "next/navigation";
 import { ALL_ASSETS, SHEET_TYPES, defaultSheetAssets, type SheetType, type SubField, type SubKind } from "@/lib/insp-forms";
 import { newQuestionKey, QKINDS, qKindLabel, SUBKINDS, templateStats, type QKind, type Template, type TplQuestion } from "@/lib/insp-templates";
 
-export type SheetItem = { t: string; base: SheetType; builtin: boolean; assets: string[]; label: string; tpl: Template; model: Template; custom: boolean; synced: string | null; syncError: string | null };
+export type SheetItem = { t: string; base: SheetType; builtin: boolean; assets: string[]; rooms: boolean; photos: string[]; label: string; tpl: Template; model: Template; custom: boolean; synced: string | null; syncError: string | null };
 
 const hasOpts = (k: QKind) => k === "one" || k === "many" || k === "comp";
 const rid = () => Math.random().toString(36).slice(2, 7);
 const when = (iso: string) => new Date(iso).toLocaleString("ro-RO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).replace(".", "");
+
+/** Photo groups to start from, by the kind of asset. */
+const PHOTOS_BUILDING = ["Exterior / fațadă", "Interior", "Bucătărie", "Baie", "Accesorii (parcare, garaj, boxă)", "Instalații", "Contoare / branșamente", "Degradări", "Vecinătăți / acces", "Documente", "Altele"];
+const PHOTOS_LAND = ["Teren – vedere generală", "Front stradal", "Limite / împrejmuire", "Acces", "Vecinătăți", "Utilități în zonă", "Documente", "Altele"];
+const PHOTOS_MOVABLE = ["Exterior – față", "Exterior – spate", "Lateral stânga", "Lateral dreapta", "Interior / bord", "Kilometraj / ore", "Serie șasiu (VIN)", "Compartiment motor", "Anvelope / jante", "Degradări", "Documente (talon, CIV)", "Altele"];
 
 /** The asset types to link sheets to: [category, its label, its types]. */
 export type Nomen = [string, string, string[]][];
@@ -30,7 +35,9 @@ export function SheetEditor({ items: given, start, edit, uvalo, nomen }: { items
     : items.find((x) => x.t === from)?.assets ?? [ALL_ASSETS];
   const [naming, setNaming] = useState<string | null>(null);
   const [linking, setLinking] = useState<string[] | null>(null);
-  const cur: SheetItem = items.find((x) => x.t === sel) ?? { t: "", base: "apartament", builtin: false, assets: [], label: "", tpl: [], model: [], custom: false, synced: null, syncError: null };
+  const [photoEdit, setPhotoEdit] = useState<string[] | null>(null);
+  const [newPh, setNewPh] = useState("");
+  const cur: SheetItem = items.find((x) => x.t === sel) ?? { t: "", base: "apartament", builtin: false, assets: [], rooms: false, photos: [], label: "", tpl: [], model: [], custom: false, synced: null, syncError: null };
   const [tpl, setTpl] = useState<Template>(cur.tpl);
   const [custom, setCustom] = useState(cur.custom);
   const [open, setOpen] = useState(0);
@@ -62,10 +69,10 @@ export function SheetEditor({ items: given, start, edit, uvalo, nomen }: { items
     if (!making) return;
     setBusy(true); setMsg(null);
     const r = await fetch("/api/crm/insp-templates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(making) }).catch(() => null);
-    const d = (await r?.json().catch(() => null)) as { key?: string; base?: SheetType; name?: string; assets?: string[]; tpl?: Template; model?: Template; error?: string } | null;
+    const d = (await r?.json().catch(() => null)) as { key?: string; base?: SheetType; name?: string; assets?: string[]; rooms?: boolean; tpl?: Template; model?: Template; error?: string } | null;
     setBusy(false);
     if (!r?.ok || !d?.key || !d.tpl || !d.model || !d.base) return setMsg({ ok: false, t: d?.error ?? "Fișa nu s-a putut crea." });
-    const item: SheetItem = { t: d.key, base: d.base, builtin: false, assets: d.assets ?? [], label: d.name ?? making.name, tpl: d.tpl, model: d.model, custom: true, synced: null, syncError: null };
+    const item: SheetItem = { t: d.key, base: d.base, builtin: false, assets: d.assets ?? [], rooms: d.rooms ?? false, photos: [], label: d.name ?? making.name, tpl: d.tpl, model: d.model, custom: true, synced: null, syncError: null };
     setItems((l) => [...l, item]);
     setMaking(null);
     setSel(item.t); setTpl(item.tpl); setCustom(true); setOpen(0); setQ(null); setChanged(false);
@@ -83,6 +90,16 @@ export function SheetEditor({ items: given, start, edit, uvalo, nomen }: { items
     setItems((l) => l.map((x) => (x.t === sel ? { ...x, label: d?.name ?? name } : x)));
     setNaming(null);
     setMsg({ ok: true, t: "Fișa a fost redenumită." });
+  }
+  async function saveOptions(o: { rooms: boolean; photos: string[] }) {
+    setBusy(true); setMsg(null);
+    const r = await fetch(`/api/crm/insp-templates/${sel}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ options: o }) }).catch(() => null);
+    const d = (await r?.json().catch(() => null)) as { rooms?: boolean; photos?: string[]; error?: string } | null;
+    setBusy(false);
+    if (!r?.ok) return setMsg({ ok: false, t: d?.error ?? "Nu s-a putut salva." });
+    setItems((l) => l.map((x) => (x.t === sel ? { ...x, rooms: !!d?.rooms, photos: d?.photos ?? [] } : x)));
+    setPhotoEdit(null);
+    setMsg({ ok: true, t: `Setările fișei au fost salvate${uvalo ? " și trimise în UVALO" : ""}.` });
   }
   async function link() {
     if (!linking) return;
@@ -185,6 +202,41 @@ export function SheetEditor({ items: given, start, edit, uvalo, nomen }: { items
             </span>
           </div>
         )}
+        <div className="seOptsBox">
+          <label className="check"><input type="checkbox" checked={cur.rooms} disabled={ro || busy} onChange={(e) => saveOptions({ rooms: e.target.checked, photos: cur.photos })} />
+            <b>Finisaje pe încăperi</b> <small>pardoseală, pereți, plafon și stare pentru fiecare cameră</small></label>
+          <div className="sePhGroups">
+            <span><b>Grupuri de fotografii</b> <small>{cur.photos.length ? "ale fișei" : "după tipul bunului (imobil sau bun mobil)"}</small></span>
+            {photoEdit == null ? (
+              <span className="sePhList">
+                {(cur.photos.length ? cur.photos : []).map((x) => <b key={x} className="seChip">{x}</b>)}
+                {!ro && <button type="button" className="linkBtn" onClick={() => setPhotoEdit(cur.photos.length ? cur.photos : [])}>{cur.photos.length ? "modifică" : "alege grupurile fișei"}</button>}
+              </span>
+            ) : (
+              <div className="seLinkBox">
+                <span className="sePhList">
+                  {photoEdit.map((x, i) => <b key={x} className="seChip">{x} <button type="button" aria-label={`Scoate ${x}`} onClick={() => setPhotoEdit(photoEdit.filter((_, j) => j !== i))}>×</button></b>)}
+                  {!photoEdit.length && <small className="hint">Niciun grup: se folosesc cele ale tipului de bun.</small>}
+                </span>
+                <span className="seTplNewActs">
+                  <input className="input" value={newPh} placeholder="Grup nou, ex. Bord" onChange={(e) => setNewPh(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && newPh.trim()) { setPhotoEdit([...new Set([...photoEdit, newPh.trim()])]); setNewPh(""); } }} />
+                  <button type="button" className="btn btnGhost btnSm" disabled={!newPh.trim()} onClick={() => { setPhotoEdit([...new Set([...photoEdit, newPh.trim()])]); setNewPh(""); }}>Adaugă</button>
+                </span>
+                <span className="seTplNewActs">
+                  <small>Propune:</small>
+                  <button type="button" className="linkBtn" onClick={() => setPhotoEdit(PHOTOS_BUILDING)}>imobil</button>
+                  <button type="button" className="linkBtn" onClick={() => setPhotoEdit(PHOTOS_LAND)}>teren</button>
+                  <button type="button" className="linkBtn" onClick={() => setPhotoEdit(PHOTOS_MOVABLE)}>bun mobil</button>
+                </span>
+                <span className="seTplNewActs">
+                  <button type="button" className="btn btnGold btnSm" disabled={busy} onClick={() => saveOptions({ rooms: cur.rooms, photos: photoEdit })}>Salvează grupurile</button>
+                  <button type="button" className="btn btnGhost btnSm" onClick={() => setPhotoEdit(null)}>Renunță</button>
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
         <p className="hint">{stats.groups} grupuri · {stats.questions} întrebări{stats.hidden ? ` · ${stats.hidden} ascunse` : ""}. Tot ce e în fișă se poate schimba sau șterge. O întrebare din modelul VALUEFY completează și coloanele CRM ale bunului; dacă îi schimbi tipul, devine o întrebare a voastră.</p>
 
         {tpl.map((g, gi) => (

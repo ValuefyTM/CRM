@@ -9,7 +9,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { now, parseJson } from "./db";
 import { audit } from "./auth";
 import { bucket } from "./orders";
-import { baseOfKey, currentForms, templateList, tplKey } from "./insp-templates-db";
+import { baseOfKey, currentForms, movableOnly, templateList, tplKey } from "./insp-templates-db";
 import { docsForInspection } from "./insp-docs";
 import { FEATURE_COLUMNS, FORM_VERSION, ROOMS_KEY, featureColumns, type Answers, type Field, type Room, type Section, type SheetType } from "./insp-forms";
 import { sheetId } from "./insp";
@@ -62,6 +62,8 @@ export const inspectorByLegit = (legit: string) => call<{ inspector: { id: strin
 
 /* ---------- sheets: the CRM's form as a UVALO sheet (same keys) ---------- */
 
+/** UVALO's property type of a movable good (its own standard sheet and photo groups). */
+const MOVABLE = "Bun mobil (autovehicul, utilaj)";
 const PROP: Record<SheetType, string> = { apartament: "Apartament", casa: "Casă", teren: "Teren", comercial: "Spațiu comercial / Hală", accesoriu: "Accesoriu (parcare, garaj, boxă)" };
 type UQ = { id: string; t: string; kind: "one" | "many" | "text" | "number" | "comp"; options?: string[]; def?: string; unit?: string; req?: boolean; pdf?: boolean; photo?: boolean;
   sub?: Record<string, { id: string; t: string; kind: "one" | "many" | "text" | "number"; options?: string[]; unit?: string }[]> };
@@ -85,8 +87,8 @@ function toUvaloQ(f: Field): UQ | null {
     default: return null; // photo questions: the photos are taken by category in UVALO
   }
 }
-export const toUvaloTemplate = (t: SheetType, form: Section[]) => ({
-  ...(t === "apartament" || t === "casa" || t === "comercial" ? { rooms: true } : {}),
+export const toUvaloTemplate = (form: Section[], o: { rooms: boolean; photos: string[] }) => ({
+  ...(o.rooms ? { rooms: true } : {}), ...(o.photos.length ? { photos: o.photos } : {}),
   groups: form.map((s) => ({ id: s.id, name: s.title, qs: s.fields.map(toUvaloQ).filter((q): q is UQ => !!q) })).filter((g) => g.qs.length),
 });
 export const tplRef = (key: string) => `crm-${key}`;
@@ -98,7 +100,7 @@ export async function syncTemplates(db: D1Database, only?: string) {
   for (const x of list) {
     if (only && x.key !== only) continue;
     try {
-      await call(`/templates/${tplRef(x.key)}`, { method: "PUT", body: JSON.stringify({ name: `Fișa firmei · ${x.name}`, prop_type: PROP[x.base], template: toUvaloTemplate(x.base, forms[x.key]), enforced: true }) });
+      await call(`/templates/${tplRef(x.key)}`, { method: "PUT", body: JSON.stringify({ name: `Fișa firmei · ${x.name}`, prop_type: movableOnly(x.assets) ? MOVABLE : PROP[x.base], template: toUvaloTemplate(forms[x.key], x), enforced: true }) });
       out.push({ type: x.key, ok: true });
     } catch (e) { out.push({ type: x.key, ok: false, error: (e as Error).message }); }
   }
@@ -125,13 +127,13 @@ type Row = {
   id: string; report_id: string | null; asset_id: string; status: string; sheet_type: string | null; template: string | null; due_on: string | null; instructions: string | null;
   contact_kind: string | null; contact_name: string | null; contact_phone: string | null; inspector_id: string | null; uvalo_id: string | null; uvalo_docs: string | null;
   legit: string | null; inspector: string | null; full_address: string | null; city: string | null; county: string | null; cad_building: string | null; cad_land: string | null;
-  cf_number: string | null; usable_area: number | null; land_area: number | null; geo: string | null; type: string | null;
+  cf_number: string | null; usable_area: number | null; land_area: number | null; geo: string | null; type: string | null; category: string | null;
 };
 const CONTACT_ROLE: Record<string, string> = { client: "Client", owner: "Proprietar", agent: "Agent imobiliar", other: "Altă persoană" };
 
 const rowOf = (db: D1Database, id: string) => db.prepare(`SELECT i.id, i.report_id, i.asset_id, i.status, i.sheet_type, i.template, i.due_on, i.instructions, i.contact_kind, i.contact_name, i.contact_phone,
     i.inspector_id, i.uvalo_id, i.uvalo_docs, u.anevar_no AS legit, COALESCE(NULLIF(u.name, ''), u.email) AS inspector,
-    p.full_address, p.city, p.county, p.cad_building, p.cad_land, p.cf_number, p.usable_area, p.land_area, p.geo, p.type
+    p.full_address, p.city, p.county, p.cad_building, p.cad_land, p.cf_number, p.usable_area, p.land_area, p.geo, p.type, p.category
   FROM inspections i JOIN assets a ON a.id = i.asset_id JOIN crm_properties p ON p.id = a.property_id LEFT JOIN users u ON u.id = i.inspector_id WHERE i.id = ?`).bind(id).first<Row>();
 
 const fail = async (db: D1Database, id: string, e: unknown) => {
@@ -158,7 +160,7 @@ export async function pushInspection(db: D1Database, id: string) {
     const d = await call<{ id: string; code: string }>("/inspections", { method: "POST", body: JSON.stringify({
       ref: r.id, legit: r.legit, address: r.full_address || [r.city, r.county].filter(Boolean).join(", ") || "Adresă necompletată",
       cad_nr: r.cad_building || r.cad_land || null, cf_nr: r.cf_number, county: r.county, uat: r.city, lat: geo.lat ?? null, lng: geo.lng ?? null,
-      prop_type: PROP[type], area_util: r.usable_area, area_land: r.land_area, contact_name: r.contact_name, contact_phone: r.contact_phone,
+      prop_type: (r.category ?? "").toUpperCase() === "BUN MOBIL" ? MOVABLE : PROP[type], area_util: r.usable_area, area_land: r.land_area, contact_name: r.contact_name, contact_phone: r.contact_phone,
       contact_role: r.contact_kind ? CONTACT_ROLE[r.contact_kind] ?? null : null, instructions: r.instructions, due_on: r.due_on, ...(key ? { template_ref: tplRef(key) } : {}),
     }) });
     // the documents the inspector may open, each sent once

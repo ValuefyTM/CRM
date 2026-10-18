@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { audit } from "@/lib/auth";
 import { err, json, staffApi } from "@/lib/api";
 import { cleanTemplate } from "@/lib/insp-templates";
-import { removeTemplate, renameTemplate, saveTemplate, setTemplateAssets, templateList, templateOf } from "@/lib/insp-templates-db";
+import { removeTemplate, renameTemplate, saveTemplate, setTemplateAssets, setTemplateOptions, templateList, templateOf } from "@/lib/insp-templates-db";
 import { cleanAssets } from "@/lib/insp-templates";
 import { dropTemplateInUvalo, inspChannel, later, syncTemplates } from "@/lib/uvalo";
 
@@ -31,6 +31,15 @@ export async function PATCH(req: Request, p: P) {
   const s = await sheetOf(a.db, p);
   if (!s) return err("Fișă necunoscută.", 404);
   const b = await json(req);
+  if (b.options && typeof b.options === "object") {
+    const o = b.options as { rooms?: unknown; photos?: unknown };
+    const photos = Array.isArray(o.photos) ? [...new Set(o.photos.filter((x): x is string => typeof x === "string").map((x) => x.trim().replace(/\s+/g, " ").slice(0, 60)).filter(Boolean))].slice(0, 30) : [];
+    const opts = { rooms: o.rooms === true, photos };
+    await setTemplateOptions(a.db, s.key, s.base, opts);
+    await audit(a.db, `user:${a.user.id}`, "insp.template", "insp_template", s.key, `Fișa ${s.name}: ${opts.rooms ? "cu" : "fără"} finisaje pe încăperi, ${photos.length ? `${photos.length} grupuri de fotografii` : "fotografii după tipul bunului"}`);
+    if ((await inspChannel(a.db)) === "uvalo") await later(syncTemplates(a.db, s.key));
+    return NextResponse.json({ ok: true, ...opts });
+  }
   if (Array.isArray(b.assets)) {
     const assets = cleanAssets(b.assets);
     await setTemplateAssets(a.db, s.key, s.base, assets);
