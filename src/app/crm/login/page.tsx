@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db";
 import { currentUser } from "@/lib/auth";
 import { basePath } from "@/lib/site";
 import { LoginForm } from "@/components/LoginForm";
+import { Pwa } from "@/components/Pwa";
 
 export const metadata: Metadata = { title: "Autentificare CRM | VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -36,6 +37,7 @@ export default async function CrmLogin({ searchParams }: { searchParams: Promise
           <LoginForm kind="internal" base={base} next={next} expired={sp.link === "expired"} />
         </div>
       </main>
+      <Pwa base={base} />
     </div>
   );
 }

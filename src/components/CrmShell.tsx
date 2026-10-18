@@ -9,6 +9,7 @@ import { Shell, type NavEntry, type NavItem } from "./Shell";
 import { GlobalSearch } from "./GlobalSearch";
 import { Bell } from "./Bell";
 import { Heartbeat } from "./Heartbeat";
+import { Pwa } from "./Pwa";
 import { TableLabels } from "./TableLabels";
 import { photoUrl } from "@/lib/presence";
 import { countNewInquiries } from "@/lib/listings";
@@ -87,6 +88,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
       <Heartbeat url="/api/crm/presence" />
       <TableLabels />
       {props.children}
+      <Pwa base={b} />
     </Shell>
   );
 }

@@ -2787,3 +2787,19 @@ a.dAssetLink { color: inherit; text-decoration: none; border-radius: 12px; trans
 .sePhList .seChip button { border: 0; background: none; color: var(--muted-2); cursor: pointer; padding: 0 0 0 2px; }
 .seOptsBox .seTplNewActs { align-items: center; flex-wrap: wrap; }
 .seOptsBox .seTplNewActs .input { max-width: 240px; }
+
+/* ---------- The CRM as an app (PWA) ---------- */
+/* The offer to install: a small dark bar at the bottom; above the bottom menu on phones. */
+.pwaBar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 12px; width: max-content; max-width: calc(100% - 32px); padding: 10px 12px; border-radius: 16px; background: var(--navy, #17173a); color: #fff; box-shadow: 0 18px 40px -18px rgba(17, 17, 17, 0.6); animation: vfIn 0.3s ease-out; }
+.pwaBar img { width: 36px; height: 36px; border-radius: 9px; flex-shrink: 0; }
+.pwaBar > span { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.pwaBar b { font-size: 13px; }
+.pwaBar small { font-size: 11.5px; color: rgba(255, 255, 255, 0.72); }
+.pwaBar .btnGhost { color: #fff; border-color: rgba(255, 255, 255, 0.3); }
+@media (max-width: 979px) { .pwaBar { bottom: calc(72px + env(safe-area-inset-bottom)); flex-wrap: wrap; } .pwaBar > span { flex: 1 1 160px; } }
+/* Without signal: the page kept on the device by the service worker. */
+.offlinePage { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 32px 20px; text-align: center; background: var(--cream, #f6f2ea); color: var(--ink, #111); }
+.offlinePage img { border-radius: 18px; }
+.offlinePage h1 { margin: 8px 0 0; font-size: 22px; letter-spacing: -0.02em; }
+.offlinePage p { margin: 0; max-width: 420px; font-size: 14px; line-height: 1.55; color: var(--muted, #626771); }
+.offlinePage small { font-size: 12px; color: var(--muted-2, #8a8a99); }
