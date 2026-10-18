@@ -43,6 +43,8 @@ export function UvaloPanel({ edit, webhook }: { edit: boolean; webhook: string }
         {!s.webhook_secret && <span className="uvDot bad">fără webhook</span>}
         <span className="uvGrow" />
         {edit && ready && <button type="button" className="linkBtn" disabled={busy} onClick={() => post({ action: "sync" }, "Fișele au fost trimise în UVALO.")}>Trimite fișele în UVALO</button>}
+        {edit && ready && s.channel === "uvalo" && <button type="button" className="linkBtn" disabled={busy} title="Inspecțiile deschise primesc din nou datele bunului, contactul și actele; fișele începute își păstrează răspunsurile."
+          onClick={() => post({ action: "resend" }, "Inspecțiile deschise au fost retrimise în UVALO, cu datele bunurilor.")}>Retrimite inspecțiile deschise</button>}
         <details className="uvMore">
           <summary>Detalii</summary>
           <dl className="kv uvKv">

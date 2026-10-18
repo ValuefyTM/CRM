@@ -33,6 +33,14 @@ export async function POST(req: Request) {
     const bad = out.filter((x) => !x.ok);
     return bad.length ? err(`Nu s-au trimis: ${bad.map((x) => `${x.type} (${x.error})`).join(", ")}`, 502) : Response.json({ ok: true, sent: out.length });
   }
+  // the open inspections already in UVALO sent again (their asset's details, contact, documents); started sheets keep their answers
+  if (action === "resend") {
+    if (!can(a.user, "templates.E")) return err("Doar cine modifică fișele de inspecție poate face asta.", 403);
+    const { results } = await a.db.prepare("SELECT id FROM inspections WHERE uvalo_id IS NOT NULL AND status IN ('to_schedule', 'scheduled') LIMIT 200").all<{ id: string }>();
+    let bad = 0;
+    for (const x of results) if (!(await pushInspection(a.db, x.id)).ok) bad++;
+    return Response.json({ ok: true, sent: results.length - bad, failed: bad });
+  }
   if (action === "push" || action === "import") {
     const report = String(b.report ?? ""), id = String(b.inspection ?? "");
     if (!(await canAssign(a.db, a.user, report))) return err("Doar evaluatorul principal al raportului poate face asta.", 403);
