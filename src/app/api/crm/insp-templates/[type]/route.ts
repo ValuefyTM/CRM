@@ -62,7 +62,7 @@ export async function DELETE(req: Request, p: P) {
   const s = await sheetOf(a.db, p);
   if (!s) return err("Fișă necunoscută.", 404);
   if (new URL(req.url).searchParams.get("sterge") === "1") {
-    await removeTemplate(a.db, s.key, s.base);
+    if (!(await removeTemplate(a.db, s.key, s.base))) return err("Fișa nu s-a putut șterge: după ștergere încă apare în listă. Scrie-ne ca să verificăm baza de date.", 500);
     if ((await inspChannel(a.db)) === "uvalo") await later(dropTemplateInUvalo(s.key));
     await audit(a.db, `user:${a.user.id}`, "insp.template", "insp_template", s.key, `Fișa ${s.name} ștearsă`);
     return NextResponse.json({ ok: true, removed: true });

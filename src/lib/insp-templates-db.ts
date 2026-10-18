@@ -27,8 +27,9 @@ const isType = (t: string | null | undefined): t is SheetType => SHEET_TYPES.som
 /** Every sheet: the built-in ones first (with the name the firm gave them), then the firm's own (deleted ones only on request). */
 export async function templateList(db: D1Database, withDeleted = false): Promise<TplInfo[]> {
   type M = { key: string; name: string | null; base: string; deleted_at: string | null; asset_types: string | null; options: string | null };
+  // a missing table or column (a migration not applied) must show, not pass as "no sheets of the firm"
   const { results } = await db.prepare("SELECT key, name, base, deleted_at, asset_types, options FROM insp_template_meta ORDER BY created_at")
-    .all<M>().catch(() => ({ results: [] as M[] }));
+    .all<M>().catch((e: Error) => { throw new Error(`Baza de date nu e la zi pentru fișele de inspecție (migrările 1042–1044): ${e.message}`); });
   const meta = new Map(results.map((r) => [r.key, r]));
   const assets = (r?: M) => { try { const v: unknown = JSON.parse(r?.asset_types ?? "[]"); return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []; } catch { return []; } };
   // a sheet only for movable goods asks no rooms by default
@@ -132,7 +133,10 @@ export async function renameTemplate(db: D1Database, key: string, base: SheetTyp
 
 /** Takes a sheet off the list (inspections that used it keep it); a built-in one goes back to the VALUEFY model for them. */
 export async function removeTemplate(db: D1Database, key: string, base: SheetType) {
-  await db.prepare("INSERT INTO insp_template_meta (key, base, created_at, deleted_at) VALUES (?1, ?2, ?3, ?3) ON CONFLICT(key) DO UPDATE SET deleted_at = excluded.deleted_at")
-    .bind(key, base, now()).run();
+  const t = now();
+  await db.prepare("INSERT INTO insp_template_meta (key, base, created_at, deleted_at) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET deleted_at = excluded.deleted_at")
+    .bind(key, base, t, t).run();
   if (isType(key)) await saveTemplate(db, key, null, "");
+  // checked: the sheet is really off the list
+  return !(await templateList(db)).some((x) => x.key === key);
 }

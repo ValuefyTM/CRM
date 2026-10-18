@@ -114,10 +114,13 @@ export function SheetEditor({ items: given, start, edit, uvalo, nomen }: { items
   }
   async function remove() {
     if (!confirm(`Ștergi fișa „${cur.label}”? Inspecțiile care au folosit-o o păstrează; nu se mai poate alege la inspecții noi.${uvalo ? " În UVALO rămân fișele standard ale UVALO." : ""}`)) return;
-    setBusy(true);
+    setBusy(true); setMsg(null);
     const r = await fetch(`/api/crm/insp-templates/${sel}?sterge=1`, { method: "DELETE" }).catch(() => null);
     setBusy(false);
-    if (!r?.ok) return setMsg({ ok: false, t: ((await r?.json().catch(() => null)) as { error?: string } | null)?.error ?? "Nu s-a putut șterge." });
+    if (!r?.ok) {
+      const d = (await r?.json().catch(() => null)) as { error?: string } | null;
+      return setMsg({ ok: false, t: `Nu s-a putut șterge${r ? ` (${r.status})` : ""}: ${d?.error ?? "serverul nu a răspuns."}` });
+    }
     const rest = items.filter((x) => x.t !== sel);
     setItems(rest);
     const x = rest[0];
