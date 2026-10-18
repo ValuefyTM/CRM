@@ -1,6 +1,7 @@
 import { err, json, reportApi } from "@/lib/api";
 import { later, pushInspection } from "@/lib/uvalo";
 import { assignInspection, canAssign, cancelInspection, deleteInspection, mailAssigned, markInspectionDone, markNoInspection } from "@/lib/insp-assign";
+import { pushLater } from "@/lib/push";
 
 /**
  * Gives the inspection of an asset to an inspector: `{ asset, inspector, sheet_type, due_on, contact_kind, contact_name, contact_phone, instructions,
@@ -10,6 +11,7 @@ import { assignInspection, canAssign, cancelInspection, deleteInspection, mailAs
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const a = await reportApi(id, "view", true);
+  if (!("res" in a)) pushLater(a.db);
   if ("res" in a) return a.res;
   if (!(await canAssign(a.db, a.user, id))) return err("Doar evaluatorul principal al raportului poate aloca inspecția.", 403);
   const b = await json(req);

@@ -1,5 +1,6 @@
 import { err, json, staffApi } from "@/lib/api";
 import { ingestBankEmail } from "@/lib/bank-mail";
+import { pushLater } from "@/lib/push";
 
 /** A bank notice pasted in the CRM (subject + text of the email): creates the bank order, like the intake address. */
 export async function POST(req: Request) {
@@ -10,5 +11,6 @@ export async function POST(req: Request) {
   if (text.trim().length < 20) return err("Lipește textul emailului de la bancă (subiect și conținut).");
   const r = await ingestBankEmail(a.db, { subject: typeof b.subject === "string" ? b.subject : null, text, from: null }, "paste", a.user.id);
   if (r.status === "unrecognised") return err("Nu am recunoscut emailul. Funcționează cu notificările BCR („ID de cerere: EV…”) și BRD („evaluari REV…, client …”).");
+  pushLater(a.db);
   return Response.json({ ok: true, status: r.status, order: r.orderId, bank: r.notice?.bank, ref: r.notice?.ref, client: r.notice?.client });
 }

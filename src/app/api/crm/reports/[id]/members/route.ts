@@ -2,6 +2,7 @@ import { audit } from "@/lib/auth";
 import { now } from "@/lib/db";
 import { err, json, reportApi } from "@/lib/api";
 import { ROLE_LABEL } from "@/lib/reports";
+import { pushLater } from "@/lib/push";
 
 /** Adds a team member to the report: `{ user, role }`. */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -17,6 +18,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   await a.db.prepare("INSERT OR IGNORE INTO report_members (report_id, user_id, role) VALUES (?, ?, ?)").bind(id, u.id, role).run();
   await a.db.prepare("UPDATE reports SET updated_at = ? WHERE id = ?").bind(now(), id).run();
   await audit(a.db, `user:${a.user.id}`, "report.member", "report", id, `${u.name} (${ROLE_LABEL[role].toLowerCase()})`);
+  pushLater(a.db);
   return Response.json({ ok: true });
 }
 

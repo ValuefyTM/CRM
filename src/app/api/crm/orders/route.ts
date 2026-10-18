@@ -4,6 +4,7 @@ import { openDossier } from "@/lib/dossier";
 import { fillReportAssets, parseAssets } from "@/lib/process-order";
 import { assignInspection, mailAssigned } from "@/lib/insp-assign";
 import { accreditedContracts } from "@/lib/accreditations";
+import { pushLater } from "@/lib/push";
 import { can } from "@/lib/perms";
 
 const id_ = (v: unknown) => (typeof v === "string" && /^[\w-]{1,80}$/.test(v) ? v : null);
@@ -52,5 +53,6 @@ export async function POST(req: Request) {
     // one email for all the assets
     await mailAssigned(a.db, a.user, ids);
   }
+  pushLater(a.db);
   return Response.json({ ok: true, order: o.id, report: r.id, inspections: given, assets: results.map((x) => x.id) });
 }

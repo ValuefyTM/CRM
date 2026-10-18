@@ -9,6 +9,7 @@ import { appUrl } from "@/lib/site";
 import { addMessage } from "@/lib/messages";
 import { isFinished } from "@/lib/perms-db";
 import type { TeamRight } from "@/lib/perms";
+import { pushLater } from "@/lib/push";
 
 /** Report changes from its page: `{ status, suspend_reason? }`, `{ stage }`, `{ notes }` or `{ delivered: true, number, report_date, notify }`. */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -74,6 +75,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     await a.db.prepare(`UPDATE reports SET stage = ?, verified_at = ?, verified_by = ?, updated_at = ? WHERE id = ?`)
       .bind(back ? "drafting" : "review", back ? null : now(), back ? null : a.user.id, now(), id).run();
     await audit(a.db, actor, back ? "report.review_back" : "report.verified", "report", id, comment || undefined);
+    pushLater(a.db);
     if (comment) await addMessage(a.db, "report", id, a.user, `${back ? "Întors la evaluator" : "Verificare finalizată"}: ${comment}`);
     const lead = await a.db.prepare(`SELECT u.email, COALESCE(r.label, r.number, 'raport') AS what FROM report_members m JOIN users u ON u.id = m.user_id
         JOIN reports r ON r.id = m.report_id WHERE m.report_id = ? AND m.role = 'evaluator' AND u.id <> ? LIMIT 1`).bind(id, a.user.id).first<{ email: string; what: string }>();
@@ -98,6 +100,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     // Sent (again) to the verifier: a new review.
     await a.db.prepare("UPDATE reports SET stage = ?, verified_at = NULL, verified_by = NULL, updated_at = ? WHERE id = ?").bind(stage, now(), id).run();
     await audit(a.db, actor, "report.stage", "report", id, stage ? STAGE_LABEL[stage] : "Inspecție");
+    pushLater(a.db);
     if (stage === "review") {
       const v = await a.db.prepare(`SELECT u.email, COALESCE(NULLIF(u.name, ''), u.email) AS name, COALESCE(r.label, r.number, 'raport') AS what FROM report_members m
           JOIN users u ON u.id = m.user_id JOIN reports r ON r.id = m.report_id WHERE m.report_id = ? AND m.role = 'verifier' AND u.id <> ? LIMIT 1`)

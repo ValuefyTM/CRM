@@ -50,6 +50,28 @@ self.addEventListener("fetch", (e) => {
   }
   // Everything else (API, files, photos): the network, untouched.
 });
+
+// Push notifications: the message is a bell item (title, text, page). The same id replaces an earlier notification.
+self.addEventListener("push", (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { title: "CRM VALUEFY", body: e.data ? e.data.text() : "" }; }
+  e.waitUntil(self.registration.showNotification(d.title || "CRM VALUEFY", {
+    body: d.body || "", icon: "/icon-crm-192.png", badge: "/icon-crm-192.png", tag: d.id || undefined, data: { href: d.href || SHELL_HOME }, timestamp: d.at ? Date.parse(d.at) : Date.now(),
+  }));
+});
+const SHELL_HOME = BASE || "/";
+// A click opens the page in the CRM window already open, else in a new one.
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const href = (e.notification.data && e.notification.data.href) || SHELL_HOME;
+  const url = new URL(href, self.location.origin).href;
+  e.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const win = all.find((c) => "focus" in c);
+    if (win) { await win.focus(); if ("navigate" in win) await win.navigate(url); return; }
+    await self.clients.openWindow(url);
+  })());
+});
 `;
   return new Response(js, {
     headers: { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache", "Service-Worker-Allowed": base || "/" },
