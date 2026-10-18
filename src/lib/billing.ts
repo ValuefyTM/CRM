@@ -180,9 +180,13 @@ export async function sampleValues(db: D1Database, kind: "contract" | "collab", 
 }
 
 /** Per-order billing under a framework contract / collaboration: one approved (delivered) report, with that partner's own invoice text. */
-/** Finished in the CRM (on reports r): made here, or imported and then delivered / closed from the CRM (not finished before the import). */
-export const FINISHED_HERE = `(r.glide_id IS NULL OR r.delivered_by IS NOT NULL
-  OR EXISTS (SELECT 1 FROM audit_log al WHERE al.entity = 'report' AND al.entity_id = r.id AND al.action IN ('report.delivered', 'report.status')))`;
+/**
+ * Finished from the CRM since "De facturat" exists (on reports r): delivered, or its status changed, after the moment
+ * kept in settings (billing_tasks_since, set at that deploy). What was already closed before was invoiced the old way.
+ */
+export const FINISHED_HERE = `(r.delivered_at >= (SELECT COALESCE(MAX(value), '9999') FROM settings WHERE key = 'billing_tasks_since')
+  OR EXISTS (SELECT 1 FROM audit_log al WHERE al.entity = 'report' AND al.entity_id = r.id AND al.action IN ('report.delivered', 'report.status')
+    AND al.at >= (SELECT COALESCE(MAX(value), '9999') FROM settings WHERE key = 'billing_tasks_since')))`;
 
 export async function draftForReport(db: D1Database, reportId: string): Promise<Draft | { error: string }> {
   const b = await getBilling(db);
@@ -198,8 +202,8 @@ export async function draftForReport(db: D1Database, reportId: string): Promise<
   const collab = !!r.collaboration_id;
   const mode = collab ? r.collab_mode ?? b.collabDefault : r.contract_kind === "framework" ? r.billing_mode ?? b.frameworkDefault : null;
   if (mode !== "per_order") return { error: "Acest raport nu se facturează per comandă (vezi Setări → Facturare)." };
-  // Reports finished before the import were invoiced outside the CRM; the ones finished here (imported or not) once finished.
-  if (r.glide_id && !r.finished_here) return { error: "Raport finalizat în vechiul CRM: a fost facturat în afara acestui CRM." };
+  // Reports closed before "De facturat" existed were invoiced the old way; the ones finished from the CRM since then, once finished.
+  if (!r.finished_here) return { error: "Raport închis înainte de pornirea facturării din CRM: a fost facturat în afara CRM-ului." };
   if (!r.delivered_at && r.status !== "done") return { error: "Factura se emite după finalizarea raportului." };
   const party = await partyOf(db, collab ? r.firm_id : r.party_id);
   if (!party) return { error: "Nu știu cui se facturează: contractul nu are bancă / firmă." };
