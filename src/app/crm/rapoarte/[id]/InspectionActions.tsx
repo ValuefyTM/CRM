@@ -148,16 +148,20 @@ export function AllocateAll({ report, me, people, rows, autoOpen, docs = [], rea
 
   const submit = async () => {
     setBusy(true); setMsg("");
-    const errors: string[] = [];
+    const errors: string[] = [], ids: string[] = [];
     for (const r of changes) {
       const v = pick[r.asset];
+      // one email to each inspector for all the assets, after the loop
       const body = !v || v === "none"
         ? { asset: r.asset, none: v === "none" ? reason[r.asset] : null }
-        : { asset: r.asset, inspector: v, sheet_type: r.sheet_type, due_on: due, contact_kind: r.contact_kind ?? "client", contact_name: r.contact_name ?? "", contact_phone: r.contact_phone ?? "", instructions, confirm_missing: true,
+        : { asset: r.asset, inspector: v, sheet_type: r.sheet_type, due_on: due, contact_kind: r.contact_kind ?? "client", contact_name: r.contact_name ?? "", contact_phone: r.contact_phone ?? "", instructions, confirm_missing: true, notify: false,
           ...(docs.length && r.state !== "open" ? { doc_refs: access.filter((id) => { const d = docs.find((x) => x.id === id); return !d?.asset_id || d.asset_id === r.asset || given.length === 1; }) } : {}) };
-      const e = await send(`/api/crm/reports/${report}/inspections`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (e) errors.push(`${r.label}: ${e}`);
+      const res = await fetch(`/api/crm/reports/${report}/inspections`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+      const d = (await res?.json().catch(() => null)) as { id?: string; error?: string } | null;
+      if (!res?.ok) errors.push(`${r.label}: ${d?.error ?? "nu s-a putut salva"}`);
+      else if (d?.id) ids.push(d.id);
     }
+    if (ids.length) await fetch(`/api/crm/reports/${report}/inspections`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ notify: ids }) }).catch(() => null);
     setBusy(false);
     if (errors.length) return setMsg(errors.join(" · "));
     const u = new URL(location.href);

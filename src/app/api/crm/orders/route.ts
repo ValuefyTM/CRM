@@ -2,7 +2,7 @@ import { err, json, staffApi } from "@/lib/api";
 import { createContractOrder } from "@/lib/contract-orders";
 import { openDossier } from "@/lib/dossier";
 import { fillReportAssets, parseAssets } from "@/lib/process-order";
-import { assignInspection } from "@/lib/insp-assign";
+import { assignInspection, mailAssigned } from "@/lib/insp-assign";
 
 const id_ = (v: unknown) => (typeof v === "string" && /^[\w-]{1,80}$/.test(v) ? v : null);
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -36,11 +36,14 @@ export async function POST(req: Request) {
   const inspector = id_(b.inspector_id);
   let given = 0;
   if (r.created && inspector) {
+    const ids: string[] = [];
     for (const x of results) {
       const g = await assignInspection(a.db, a.user, r.id, { asset: x.id, inspector, contact_kind: x.contact_kind, contact_name: x.contact_name, contact_phone: x.contact_phone,
-        instructions: str(b.inspection_notes, 1000), confirm_missing: true });
-      if (g.ok) given++;
+        instructions: str(b.inspection_notes, 1000), confirm_missing: true, notify: false });
+      if (g.ok) { given++; ids.push(g.id); }
     }
+    // one email for all the assets
+    await mailAssigned(a.db, a.user, ids);
   }
   return Response.json({ ok: true, order: o.id, report: r.id, inspections: given, assets: results.map((x) => x.id) });
 }

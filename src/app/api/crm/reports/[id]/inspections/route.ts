@@ -1,6 +1,6 @@
 import { err, json, reportApi } from "@/lib/api";
 import { later, pushInspection } from "@/lib/uvalo";
-import { assignInspection, canAssign, cancelInspection, deleteInspection, markInspectionDone, markNoInspection } from "@/lib/insp-assign";
+import { assignInspection, canAssign, cancelInspection, deleteInspection, mailAssigned, markInspectionDone, markNoInspection } from "@/lib/insp-assign";
 
 /**
  * Gives the inspection of an asset to an inspector: `{ asset, inspector, sheet_type, due_on, contact_kind, contact_name, contact_phone, instructions,
@@ -13,6 +13,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if ("res" in a) return a.res;
   if (!(await canAssign(a.db, a.user, id))) return err("Doar evaluatorul principal al raportului poate aloca inspecția.", 403);
   const b = await json(req);
+  // inspections given together with `notify: false`: one email for all of them
+  if (Array.isArray(b.notify)) {
+    const ids = (b.notify as unknown[]).filter((x): x is string => typeof x === "string").slice(0, 50);
+    const mine = ids.length ? (await a.db.prepare(`SELECT id FROM inspections WHERE report_id = ? AND id IN (${ids.map(() => "?").join(", ")})`).bind(id, ...ids).all<{ id: string }>()).results.map((x) => x.id) : [];
+    await mailAssigned(a.db, a.user, mine);
+    return Response.json({ ok: true });
+  }
   if (typeof b.done_at === "string") {
     const m = await markInspectionDone(a.db, a.user, id, typeof b.asset === "string" ? b.asset : "", b.done_at);
     return m.ok ? Response.json({ ok: true, advanced: m.advanced }) : err(m.error);

@@ -122,7 +122,8 @@ export async function assignInspection(db: D1Database, user: User, reportId: str
 
   // UVALO: the inspection goes to the inspector's phone there (a send that fails stays on the inspection, with "Retrimite").
   const uvalo = viaUvalo ? await pushInspection(db, id) : null;
-  if (inspector.id !== user.id) {
+  // `notify: false`: several assets given together; one email for all of them follows (mailAssigned)
+  if (inspector.id !== user.id && b.notify !== false) {
     const link = viaUvalo ? await uvaloAppUrl() : await appUrl("insp", "/");
     const where = asset.address ?? "proprietatea din raport";
     const dueText = due ? ` până la ${due.split("-").reverse().join(".")}` : "";
@@ -259,4 +260,41 @@ export async function cancelInspection(db: D1Database, user: User, reportId: str
   await audit(db, `user:${user.id}`, "report.inspection_cancel", "report", reportId, i.inspector ?? "");
   await later(cancelInUvalo(db, i.id, `anulată din CRM de ${user.name || user.email}`));
   return { ok: true as const };
+}
+
+/** One email per inspector for inspections given together (the assets of a report, or a new work with one inspector). */
+export async function mailAssigned(db: D1Database, user: User, ids: string[]) {
+  if (!ids.length) return;
+  const { results } = await db.prepare(`SELECT i.id, i.inspector_id, i.due_on, i.instructions, u.email, COALESCE(NULLIF(u.name, ''), u.email) AS inspector,
+      COALESCE(p.full_address, p.city) AS address, p.type, r.number
+    FROM inspections i JOIN users u ON u.id = i.inspector_id JOIN assets a ON a.id = i.asset_id JOIN crm_properties p ON p.id = a.property_id JOIN reports r ON r.id = i.report_id
+    WHERE i.id IN (${ids.map(() => "?").join(", ")})`).bind(...ids)
+    .all<{ id: string; inspector_id: string; due_on: string | null; instructions: string | null; email: string; inspector: string; address: string | null; type: string | null; number: string | null }>();
+  const viaUvalo = (await inspChannel(db)) === "uvalo";
+  const link = viaUvalo ? await uvaloAppUrl() : await appUrl("insp", "/");
+  for (const to of [...new Set(results.map((x) => x.inspector_id))]) {
+    if (to === user.id) continue;
+    const mine = results.filter((x) => x.inspector_id === to);
+    const what = (x: (typeof mine)[number]) => `${x.type ? x.type.charAt(0) + x.type.slice(1).toLowerCase() : "Bun"} · ${x.address ?? "adresă necompletată"}`;
+    const due = mine.map((x) => x.due_on).filter(Boolean).sort()[0];
+    const dueText = due ? ` până la ${due.split("-").reverse().join(".")}` : "";
+    const report = mine[0].number ? ` (raport ${mine[0].number})` : "";
+    const instructions = mine.find((x) => x.instructions)?.instructions ?? null;
+    const n = mine.length;
+    await sendEmail({
+      to: mine[0].email,
+      subject: n === 1 ? `Inspecție nouă de programat: ${mine[0].address ?? "bun"}` : `${n} inspecții noi de programat${report}`,
+      text: `${user.name || "Evaluatorul"} ți-a alocat ${n === 1 ? "inspecția" : `${n} inspecții`}${report}${dueText}:\n${mine.map((x) => `- ${what(x)}`).join("\n")}${instructions ? `\nInstrucțiuni: ${instructions}` : ""}\nActele sunt în aplicația${viaUvalo ? " UVALO" : ""}, la fiecare inspecție. Programează din aplicație: ${link}`,
+      html: layout({
+        eyebrow: "Inspecții VALUEFY",
+        title: n === 1 ? "Ai o inspecție nouă de programat" : `Ai ${n} inspecții noi de programat`,
+        body: `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A4A"><strong style="color:#111111">${esc(user.name || "Evaluatorul")}</strong> ți-a alocat ${n === 1 ? "inspecția" : `${n} inspecții`}${esc(report)}${esc(dueText)}:</p>
+<ul style="margin:0 0 10px;padding-left:18px;font-size:15px;line-height:1.65;color:#111111">${mine.map((x) => `<li>${esc(what(x))}</li>`).join("")}</ul>
+${instructions ? `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A4A;white-space:pre-wrap">${esc(instructions)}</p>` : ""}
+<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A4A">Actele sunt în aplicație, la fiecare inspecție.</p>`,
+        button: { label: viaUvalo ? "Deschide aplicația UVALO →" : "Programează din aplicație →", url: link },
+        foot: viaUvalo ? "Inspecțiile apar în aplicația UVALO, la inspecțiile tale de programat." : "Inspecțiile apar în aplicația de inspecții la „De programat”.",
+      }),
+    });
+  }
 }
