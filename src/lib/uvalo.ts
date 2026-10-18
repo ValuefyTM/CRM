@@ -14,6 +14,7 @@ import { docsForInspection } from "./insp-docs";
 import { FEATURE_COLUMNS, FORM_VERSION, ROOMS_KEY, featureColumns, type Answers, type Field, type Room, type Section, type SheetType } from "./insp-forms";
 import { sheetId } from "./insp";
 import { advanceIfInspected } from "./insp-assign";
+import { assetProfile, FIELD_LABELS, type ProfileField } from "./asset-labels";
 
 /** A worker variable or secret (the Cloudflare env; process.env as a fallback). */
 async function env(name: string) {
@@ -128,12 +129,38 @@ type Row = {
   contact_kind: string | null; contact_name: string | null; contact_phone: string | null; inspector_id: string | null; uvalo_id: string | null; uvalo_docs: string | null;
   legit: string | null; inspector: string | null; full_address: string | null; city: string | null; county: string | null; cad_building: string | null; cad_land: string | null;
   cf_number: string | null; usable_area: number | null; land_area: number | null; geo: string | null; type: string | null; category: string | null;
+  rooms: number | null; floor: string | null; height_regime: string | null; year_built: number | null; construction: string | null;
+  vehicle_make: string | null; vehicle_model: string | null; reg_number: string | null; vin: string | null; mileage: number | null;
 };
+
+/** The question ids (CRM sheets and UVALO's standard ones) that ask what an asset field holds: UVALO pre-fills them. */
+const FACT_KEYS: Partial<Record<ProfileField, string[]>> = {
+  usable_area: ["usable_area"], land_area: ["land_area"], rooms: ["rooms"], floor: ["floor"], height_regime: ["height_regime"],
+  year_built: ["year_built", "year"], vehicle_make: ["make", "vehicle_make"], vehicle_model: ["model", "vehicle_model"],
+  reg_number: ["plate", "reg_number"], vin: ["vin"], mileage: ["mileage"],
+};
+
+/** What the CRM knows about the asset, for UVALO: the details of its type (an apartment its rooms and floor, a car its make, model, VIN…). */
+function factsOf(r: Row) {
+  const p = assetProfile(r.category, r.type);
+  // plain numbers (no thousands dots): UVALO reads the digits into number questions
+  const num = (n: number | null) => (n != null ? String(n).replace(".", ",") : null);
+  const val: Partial<Record<ProfileField, string | null>> = {
+    usable_area: num(r.usable_area), land_area: num(r.land_area), rooms: num(r.rooms), floor: r.floor, height_regime: r.height_regime,
+    year_built: r.year_built != null ? String(r.year_built) : null, vehicle_make: r.vehicle_make, vehicle_model: r.vehicle_model,
+    reg_number: r.reg_number, vin: r.vin, mileage: num(r.mileage), construction: r.construction === "under_construction" ? "În construcție" : null,
+  };
+  const unit: Partial<Record<ProfileField, string>> = { usable_area: " mp", land_area: " mp", mileage: " km" };
+  const facts = p.fields.filter((k) => val[k] && !["cf_number", "cad_building", "cad_land"].includes(k))
+    .map((k) => ({ label: (p.labels[k] ?? FIELD_LABELS[k]).replace(/ \((mp|km)\)$/, ""), value: `${val[k]}${unit[k] && !/[a-z]$/i.test(val[k]!) ? unit[k] : ""}`, keys: FACT_KEYS[k] ?? [] }));
+  return [...(r.type ? [{ label: "Tip bun", value: r.type.charAt(0) + r.type.slice(1).toLowerCase(), keys: [] as string[] }] : []), ...facts];
+}
 const CONTACT_ROLE: Record<string, string> = { client: "Client", owner: "Proprietar", agent: "Agent imobiliar", other: "Altă persoană" };
 
 const rowOf = (db: D1Database, id: string) => db.prepare(`SELECT i.id, i.report_id, i.asset_id, i.status, i.sheet_type, i.template, i.due_on, i.instructions, i.contact_kind, i.contact_name, i.contact_phone,
     i.inspector_id, i.uvalo_id, i.uvalo_docs, u.anevar_no AS legit, COALESCE(NULLIF(u.name, ''), u.email) AS inspector,
-    p.full_address, p.city, p.county, p.cad_building, p.cad_land, p.cf_number, p.usable_area, p.land_area, p.geo, p.type, p.category
+    p.full_address, p.city, p.county, p.cad_building, p.cad_land, p.cf_number, p.usable_area, p.land_area, p.geo, p.type, p.category,
+    p.rooms, p.floor, p.height_regime, p.year_built, p.construction, p.vehicle_make, p.vehicle_model, p.reg_number, p.vin, p.mileage
   FROM inspections i JOIN assets a ON a.id = i.asset_id JOIN crm_properties p ON p.id = a.property_id LEFT JOIN users u ON u.id = i.inspector_id WHERE i.id = ?`).bind(id).first<Row>();
 
 const fail = async (db: D1Database, id: string, e: unknown) => {
@@ -161,7 +188,7 @@ export async function pushInspection(db: D1Database, id: string) {
       ref: r.id, legit: r.legit, address: r.full_address || [r.city, r.county].filter(Boolean).join(", ") || "Adresă necompletată",
       cad_nr: r.cad_building || r.cad_land || null, cf_nr: r.cf_number, county: r.county, uat: r.city, lat: geo.lat ?? null, lng: geo.lng ?? null,
       prop_type: (r.category ?? "").toUpperCase() === "BUN MOBIL" ? MOVABLE : PROP[type], area_util: r.usable_area, area_land: r.land_area, contact_name: r.contact_name, contact_phone: r.contact_phone,
-      contact_role: r.contact_kind ? CONTACT_ROLE[r.contact_kind] ?? null : null, instructions: r.instructions, due_on: r.due_on, ...(key ? { template_ref: tplRef(key) } : {}),
+      contact_role: r.contact_kind ? CONTACT_ROLE[r.contact_kind] ?? null : null, facts: factsOf(r), instructions: r.instructions, due_on: r.due_on, ...(key ? { template_ref: tplRef(key) } : {}),
     }) });
     // the documents the inspector may open, each sent once
     const sent = new Set(parseJson<string[]>(r.uvalo_docs, []));
