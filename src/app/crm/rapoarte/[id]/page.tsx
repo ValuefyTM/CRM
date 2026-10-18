@@ -29,7 +29,7 @@ import { Messages } from "@/components/Messages";
 import { messagesOf } from "@/lib/messages";
 import { AddMember, CollectedToggle, DeliverButton, FinalDrop, MissingDoc, NotesEditor, RemoveMember, SafeImg, StageActions, StatusButton, UploadButton, VerifyActions } from "./ReportActions";
 import { dueOf, STAGE_LABEL, stageOf } from "@/lib/dossier";
-import { nextReportNumber, noticeTarget } from "@/lib/delivery";
+import { hasValues, nextReportNumber, noticeTarget } from "@/lib/delivery";
 import { draftForReport, invoicesFor } from "@/lib/billing";
 import { can, type Perm } from "@/lib/perms";
 import { feeShare } from "@/lib/perms-db";
@@ -356,7 +356,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                     })()}
                   </a>
                   <dl className="kv">
-                    <Row k="Valoare rezultat">{r.result_value || assetsTotal ? <span className="mono num">{lei(r.result_value || assetsTotal, cur)}</span> : null}</Row>
+                    <Row k="Valoare rezultat">{r.result_value || assetsTotal ? <><span className="mono num">{lei(r.result_value || assetsTotal, cur)}</span>{r.result_eur ? <small className="muted"> · {lei(r.result_eur, "€")}</small> : null}</> : null}</Row>
                     <Row k="Abordare">{main.approach ? APPROACH[main.approach] : null}</Row>
                     {assets.length > 1 && <Row k="Alte bunuri"><a className="link" href={href("bunuri")}>{assets.length - 1} {assets.length === 2 ? "bun" : "bunuri"} →</a></Row>}
                   </dl>
@@ -479,7 +479,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                       <span className={`pill ${pc}`}><i />{pt}</span>
                       <small>{none ? a.no_inspection : a.inspection_status === "done" ? [a.done_at && fmtDate(a.done_at), a.inspector && firstName(a.inspector)].filter(Boolean).join(" · ")
                         : active ? [a.scheduled_at ? fmtDate(a.scheduled_at, true) : a.due_on ? `termen ${fmtDate(a.due_on)}` : null, a.inspector && firstName(a.inspector)].filter(Boolean).join(" · ") : ""}</small>
-                      <span className="abVal">{a.value != null ? <b className="mono num">{lei(a.value, cur)}</b> : <small className="muted">fără valoare</small>}{a.approach && <small> · {APPROACH[a.approach]}</small>}</span>
+                      <span className="abVal">{a.value != null ? <b className="mono num">{lei(a.value, cur)}</b> : <small className="muted">fără valoare</small>}{a.value_eur ? <small> · {lei(a.value_eur, "€")}</small> : null}{a.approach && <small> · {APPROACH[a.approach]}</small>}</span>
                       {c.assets && (
                         <span className="abActs">
                           <AssetEditor report={r.id} label="Modifică" shared={a.other_reports} client={{ name: r.client_name, phone: r.client_phone }} initial={assetForm(a)} />
@@ -590,9 +590,11 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                 <Row k="Transmis către">{recipients.length ? recipients.map((x) => x.name).join(" · ") : null}</Row>
                 <Row k="Borderou">{r.statement_number ? `B-${r.statement_number}` : <span className="muted">neinclus</span>}</Row>
                 {r.delivered_at && <Row k="Predat">{fmtDate(r.delivered_at, true)}{r.delivered_by_name ? ` · ${r.delivered_by_name}` : ""}</Row>}
+                {r.delivered_at && r.result_value ? <Row k="Rezultat evaluare"><span className="mono num">{lei(r.result_value, cur)}</span>{r.result_eur ? <> · <span className="mono num">{lei(r.result_eur, "€")}</span>{r.eur_rate ? <small className="muted"> · curs BNR {r.eur_rate.toLocaleString("ro-RO", { maximumFractionDigits: 4 })} la {fmtDate(r.report_date)}</small> : null}</> : null}</Row> : null}
               </dl>
               {r.client_notified_at && <p className="hint">Clientul a fost anunțat pe email la {fmtDate(r.client_notified_at, true)}.</p>}
-              {c.deliver && !r.delivered_at && <DeliverButton id={r.id} ready={!!final} number={r.number} suggested={suggested} notifyTo={notifyTo} />}
+              {c.deliver && !r.delivered_at && <DeliverButton id={r.id} ready={!!final} number={r.number} suggested={suggested} notifyTo={notifyTo} values={hasValues(r.report_type)}
+                assets={assets.map((a) => ({ id: a.id, label: assetShort(a), sub: a.full_address ?? a.city, value: a.value, approach: a.approach }))} />}
             </section>
           } />
       )}

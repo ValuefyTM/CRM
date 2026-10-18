@@ -4,15 +4,20 @@
 import { now, uuid } from "./db";
 import { audit } from "./auth";
 import { propertyType } from "./process-order";
-import type { AssetInput } from "./asset-labels";
+import { capType, type AssetInput } from "./asset-labels";
+import { feeKindOf, netFromGrid, parseFeeGrid } from "./fee-grid";
+import { getBilling } from "./billing";
 
-export type ContractChoice = { id: string; number: string | null; bank_id: string | null; bank: string; bank_code: string | null; fee: number | null; report_type: string | null; purpose: string | null; logo?: string | null; billing_mode?: string | null };
+export type ContractChoice = {
+  id: string; number: string | null; bank_id: string | null; bank: string; bank_code: string | null; fee: number | null; report_type: string | null; purpose: string | null;
+  logo?: string | null; billing_mode?: string | null; fee_grid?: string | null;
+};
 export type CollabChoice = { id: string; number: string | null; firm: string; share: number | null; logo?: string | null; billing_mode?: string | null };
 
 /** The open framework contracts and the collaborations; `onlyFor`: just the contracts that user is accredited on. */
 export async function contractChoices(db: D1Database, onlyFor?: string) {
   const [contracts, collabs] = await Promise.all([
-    db.prepare(`SELECT k.id, k.number, k.client_id AS bank_id, COALESCE(e.name, 'Fără bancă') AS bank, e.code AS bank_code, k.fee, k.report_type, k.purpose, k.billing_mode, e.logo_url AS logo
+    db.prepare(`SELECT k.id, k.number, k.client_id AS bank_id, COALESCE(e.name, 'Fără bancă') AS bank, e.code AS bank_code, k.fee, k.report_type, k.purpose, k.billing_mode, k.fee_grid, e.logo_url AS logo
       FROM contracts k LEFT JOIN entities e ON e.id = k.client_id WHERE k.kind = 'framework' AND k.closed_on IS NULL
       ${onlyFor ? "AND EXISTS (SELECT 1 FROM contract_accreditations ca WHERE ca.contract_id = k.id AND ca.user_id = ?)" : ""} ORDER BY e.name, k.signed_on DESC`)
       .bind(...(onlyFor ? [onlyFor] : [])).all<ContractChoice>(),
@@ -77,10 +82,16 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
   let contract: ContractChoice | null = null, collab: CollabChoice | null = null;
 
   if (kind === "bank") {
-    contract = await db.prepare(`SELECT k.id, k.number, k.client_id AS bank_id, COALESCE(e.name, '') AS bank, e.code AS bank_code, k.fee, k.report_type, k.purpose
+    contract = await db.prepare(`SELECT k.id, k.number, k.client_id AS bank_id, COALESCE(e.name, '') AS bank, e.code AS bank_code, k.fee, k.report_type, k.purpose, k.fee_grid
       FROM contracts k LEFT JOIN entities e ON e.id = k.client_id WHERE k.id = ? AND k.kind = 'framework' AND k.closed_on IS NULL`).bind(str(b.contract_id, 80)).first<ContractChoice>();
     if (!contract) return { ok: false as const, error: "Alege contractul cadru (unul deschis)." };
-    fee ??= contract.fee || null; // 0 in Glide = no fee set on the contract
+    // The fee: the one typed, else the contract's grid for the kind of the main asset (net of VAT), else the contract's standard fee.
+    // Without any: the fee is required, unless it is left for later ("Completez mai târziu").
+    const grid = parseFeeGrid(contract.fee_grid);
+    fee ??= netFromGrid(grid, feeKindOf(main.category, main.type), (await getBilling(db)).vatPercent) ?? (contract.fee || null); // 0 in the old CRM = no fee set
+    if (fee == null && b.fee_later !== true) {
+      return { ok: false as const, error: grid ? `Tipul bunului principal (${capType(main.type) || "—"}) nu e în grila de tarife a contractului: completează tariful sau bifează „Completez mai târziu”.` : "Completează tariful sau bifează „Completez mai târziu”." };
+    }
   } else {
     collab = await db.prepare("SELECT c.id, c.number, e.name AS firm, c.share FROM collaborations c JOIN entities e ON e.id = c.firm_id WHERE c.id = ?")
       .bind(str(b.collaboration_id, 80)).first<CollabChoice>();

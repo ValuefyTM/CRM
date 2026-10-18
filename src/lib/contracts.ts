@@ -5,11 +5,14 @@ import type { ScopeFilter } from "./scope";
 import { bucharestDay, now, uuid } from "./db";
 import { audit } from "./auth";
 import { fileSrc } from "./files";
+import { FEE_KINDS, type FeeGrid } from "./fee-grid";
 
 export type Contract = {
   id: string; glide_id: string | null; kind: "classic" | "framework"; number: string | null; signed_on: string | null; client_id: string | null; currency: string | null;
   fee: number | null; services: string | null; valuation_types: string | null; report_type: string | null; purpose: string | null; notes: string | null;
   created_at: string; updated_at: string; sign_sent_at?: string | null; signed_at?: string | null; closed_on?: string | null; closed_note?: string | null; billing_mode?: string | null;
+  /** Framework: the bank's fee grid by kind of main asset (JSON, see fee-grid.ts). */
+  fee_grid?: string | null;
 };
 export type ContractRow = Contract & {
   client: string | null; client_kind: string | null; reports: number; open: number; done: number; report_id: string | null; report_number: string | null;
@@ -78,6 +81,13 @@ export async function updateContract(db: D1Database, actor: string, id: string, 
   await db.prepare("UPDATE contracts SET number = ?, signed_on = ?, fee = ?, report_type = ?, purpose = ?, notes = ?, updated_at = ? WHERE id = ?")
     .bind(v.number, v.signed_on, v.fee, v.report_type, v.purpose, v.notes, now(), id).run();
   await audit(db, `user:${actor}`, "contract.edit", "contract", id, `nr. ${v.number}`);
+}
+
+/** The fee grid of a framework contract (`null` takes it off). */
+export async function updateFeeGrid(db: D1Database, actor: string, id: string, grid: FeeGrid | null) {
+  await db.prepare("UPDATE contracts SET fee_grid = ?, updated_at = ? WHERE id = ? AND kind = 'framework'").bind(grid ? JSON.stringify(grid) : null, now(), id).run();
+  const what = grid ? FEE_KINDS.filter(([k]) => grid.rates[k] != null).map(([k, l]) => `${l} ${grid.rates[k]!.toLocaleString("ro-RO")} lei`).join(", ") + (grid.vat ? " (cu TVA)" : " (fără TVA)") : "scoasă";
+  await audit(db, `user:${actor}`, "contract.fee_grid", "contract", id, what);
 }
 
 function where(f: ContractFilters) {
@@ -152,7 +162,7 @@ export type ContractReport = {
 };
 
 export async function getContract(db: D1Database, id: string) {
-  const c = await db.prepare(`SELECT k.id, k.glide_id, k.kind, k.number, k.signed_on, k.client_id, k.currency, k.fee, k.services, k.valuation_types, k.report_type, k.purpose, k.notes, k.created_at, k.updated_at, k.sign_sent_at, k.signed_at, k.closed_on, k.closed_note, k.billing_mode,
+  const c = await db.prepare(`SELECT k.id, k.glide_id, k.kind, k.number, k.signed_on, k.client_id, k.currency, k.fee, k.services, k.valuation_types, k.report_type, k.purpose, k.notes, k.created_at, k.updated_at, k.sign_sent_at, k.signed_at, k.closed_on, k.closed_note, k.billing_mode, k.fee_grid,
       (SELECT COALESCE(NULLIF(u.name, ''), u.email) FROM users u WHERE u.id = k.closed_by) AS closed_by_name, e.name AS client, e.kind AS client_kind, e.cui AS client_cui, e.phone AS client_phone, e.email AS client_email, e.city AS client_city
       FROM contracts k LEFT JOIN entities e ON e.id = k.client_id WHERE k.id = ?`).bind(id)
     .first<Contract & { closed_by_name: string | null; client: string | null; client_kind: string | null; client_cui: string | null; client_phone: string | null; client_email: string | null; client_city: string | null }>();

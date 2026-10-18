@@ -7,6 +7,7 @@ import { appUrl } from "./site";
 import { bucket, getOrder, orderCode, type Order } from "./orders";
 import { offerForOrder } from "./offers";
 import { dueOf, stageOf, type Stage } from "./dossier";
+import { capType } from "./asset-labels";
 
 export type Progress = {
   steps: { label: string; at: string | null }[];
@@ -57,6 +58,9 @@ export async function orderProgress(db: D1Database, o: Order): Promise<Progress>
   };
 }
 
+/** Whether a report of this type states values (an inspection or information note does not). */
+export const hasValues = (reportType: string | null | undefined) => !/inspec|informare/i.test(reportType ?? "");
+
 /** Number to suggest for a new report: the highest numeric one of the year, plus one. */
 export async function nextReportNumber(db: D1Database) {
   const year = new Date().getFullYear();
@@ -80,23 +84,44 @@ async function clientNotice(db: D1Database, o: Order) {
  * Hands over the report: number and date, "Finalizat", the order done, and — for portal and website orders — an email
  * to the client with the download link. `notify: false` keeps it quiet (e.g. delivered by hand).
  */
-export async function deliverReport(db: D1Database, user: { id: string }, reportId: string, b: { number?: unknown; report_date?: unknown; notify?: unknown }) {
-  const r = await db.prepare("SELECT id, number, report_date, order_id, delivered_at FROM reports WHERE id = ?").bind(reportId)
-    .first<{ id: string; number: string | null; report_date: string | null; order_id: string | null; delivered_at: string | null }>();
+export async function deliverReport(db: D1Database, user: { id: string }, reportId: string, b: { number?: unknown; report_date?: unknown; notify?: unknown; values?: unknown; eur_rate?: unknown }) {
+  const r = await db.prepare("SELECT id, number, report_date, order_id, delivered_at, report_type FROM reports WHERE id = ?").bind(reportId)
+    .first<{ id: string; number: string | null; report_date: string | null; order_id: string | null; delivered_at: string | null; report_type: string | null }>();
   if (!r) return { ok: false as const, error: "Raportul nu există." };
   const final = await db.prepare("SELECT id FROM report_documents WHERE report_id = ? AND kind = 'final' AND status = 'uploaded' LIMIT 1").bind(reportId).first();
   if (!final) return { ok: false as const, error: "Încarcă întâi fișierul final al raportului (PDF semnat)." };
   const number = typeof b.number === "string" ? b.number.trim().slice(0, 30) : "";
   const date = typeof b.report_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.report_date) ? b.report_date : null;
   if (!r.number && !number) return { ok: false as const, error: "Completează numărul raportului." };
+  // The result of the valuation: each asset's value (lei) and the approach that gave it, in euro at the BNR rate of the
+  // report's date; their sum is the report's result. Required for a valuation (not for an inspection / information note).
+  const { results: assets } = await db.prepare("SELECT a.id, p.type FROM assets a JOIN crm_properties p ON p.id = a.property_id WHERE a.report_id = ? ORDER BY a.is_main DESC, a.created_at").bind(reportId).all<{ id: string; type: string | null }>();
+  const valued = assets.length > 0 && hasValues(r.report_type);
+  const rate = typeof b.eur_rate === "number" && b.eur_rate > 0 ? b.eur_rate : null;
+  const sent = Array.isArray(b.values) ? (b.values as { id?: unknown; value?: unknown; approach?: unknown }[]) : [];
+  const values: { id: string; value: number; approach: string; eur: number }[] = [];
+  if (valued) {
+    if (!rate) return { ok: false as const, error: "Completează cursul BNR al euro din data raportului." };
+    for (const a of assets) {
+      const v = sent.find((x) => x.id === a.id);
+      const n = typeof v?.value === "number" && Number.isFinite(v.value) && v.value > 0 ? v.value : null;
+      if (n == null) return { ok: false as const, error: `Completează valoarea pentru ${capType(a.type) || "fiecare bun"}.` };
+      if (!["market", "income", "cost"].includes(String(v?.approach))) return { ok: false as const, error: `Alege abordarea care a dat valoarea pentru ${capType(a.type) || "fiecare bun"}.` };
+      values.push({ id: a.id, value: Math.round(n * 100) / 100, approach: String(v!.approach), eur: Math.round(n / rate) });
+    }
+  }
+  const total = values.reduce((s, v) => s + v.value, 0), totalEur = values.reduce((s, v) => s + v.eur, 0);
   const t = now();
   await db.batch([
+    ...values.map((v) => db.prepare("UPDATE assets SET value = ?, approach = ?, value_eur = ? WHERE id = ?").bind(v.value, v.approach, v.eur, v.id)),
     db.prepare(`UPDATE reports SET number = COALESCE(NULLIF(?, ''), number), report_date = COALESCE(?, report_date, ?), delivered_at = ?, delivered_by = ?, status = 'done', stage = NULL,
-      reporting_year = COALESCE(reporting_year, CAST(substr(COALESCE(?, report_date, ?), 1, 4) AS INTEGER)), updated_at = ? WHERE id = ?`)
-      .bind(number, date, t.slice(0, 10), t, user.id, date, t.slice(0, 10), t, reportId),
+      reporting_year = COALESCE(reporting_year, CAST(substr(COALESCE(?, report_date, ?), 1, 4) AS INTEGER)),
+      result_value = CASE WHEN ? THEN ? ELSE result_value END, result_eur = CASE WHEN ? THEN ? ELSE result_eur END, eur_rate = CASE WHEN ? THEN ? ELSE eur_rate END, updated_at = ? WHERE id = ?`)
+      .bind(number, date, t.slice(0, 10), t, user.id, date, t.slice(0, 10), valued ? 1 : 0, total, valued ? 1 : 0, totalEur, valued ? 1 : 0, rate, t, reportId),
     ...(r.order_id ? [db.prepare("UPDATE orders SET status = 'done', updated_at = ? WHERE id = ? AND status <> 'cancelled'").bind(t, r.order_id)] : []),
   ]);
-  await audit(db, `user:${user.id}`, "report.delivered", "report", reportId, number ? `nr. ${number}` : undefined);
+  const what = [number && `nr. ${number}`, valued && `rezultat ${total.toLocaleString("ro-RO")} lei · ${totalEur.toLocaleString("ro-RO")} € la ${rate}`].filter(Boolean).join(" · ");
+  await audit(db, `user:${user.id}`, "report.delivered", "report", reportId, what || undefined);
 
   let notified: string | null = null;
   const o = r.order_id && b.notify !== false ? await getOrder(db, r.order_id) : null;

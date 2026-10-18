@@ -202,6 +202,8 @@ export async function reportsForOrder(db: D1Database, orderId: string) {
 
 export type Report = ReportRow & {
   issuer_id: string | null; contract_id: string | null; order_id: string | null; client_id: string | null; recipient_id: string | null;
+  /** The result in euro at the BNR rate of the report's date (set on delivery). */
+  result_eur: number | null; eur_rate: number | null;
   bank_branch: string | null; valuation_types: string | null; purpose: string | null; value_type: string | null; valuation_date: string | null;
   received_on: string | null; uploaded_on: string | null; currency: string; collab_fee: number | null; suspend_reason: string | null;
   reporting_year: number | null; market_analysis: string | null; glide_id: string | null; created_at: string;
@@ -271,7 +273,7 @@ export async function reportOrderDocuments(db: D1Database, orderId: string | nul
 }
 
 export type AssetDetail = {
-  id: string; is_main: number; value: number | null; approach: string | null; property_id: string;
+  id: string; is_main: number; value: number | null; approach: string | null; value_eur: number | null; property_id: string;
   category: string | null; type: string | null; construction: string | null; county: string | null; city: string | null; full_address: string | null;
   geo: string | null; cf_number: string | null; cad_building: string | null; usable_area: number | null; year_built: number | null;
   description: string | null; image_url: string | null; cf_file: string | null; plan_file: string | null;
@@ -290,7 +292,7 @@ export type AssetDetail = {
 export async function reportAssets(db: D1Database, id: string) {
   return (await db
     .prepare(
-      `SELECT a.id, a.is_main, a.value, a.approach, p.id AS property_id, p.category, p.type, p.construction, p.county, p.city, p.full_address, p.geo, p.cf_number,
+      `SELECT a.id, a.is_main, a.value, a.approach, a.value_eur, p.id AS property_id, p.category, p.type, p.construction, p.county, p.city, p.full_address, p.geo, p.cf_number,
         p.cad_building, p.usable_area, p.year_built, p.description, p.image_url, p.cf_file, p.plan_file, p.cad_land,
         p.land_area, p.rooms, p.floor, p.height_regime, p.vehicle_make, p.vehicle_model, p.reg_number, p.vin, p.mileage, a.notes, a.contact_kind AS a_contact_kind, a.contact_name AS a_contact_name, a.contact_phone AS a_contact_phone,
         a.no_inspection, a.no_inspection_at,
@@ -345,6 +347,7 @@ const REPORT_ACTION: Record<string, (d: string | null) => string> = {
   "report.document_remove": (d) => `Document șters${d ? `: ${d}` : ""}`,
   "report.final": (d) => `Raport final încărcat${d ? `: ${d}` : ""}`,
   "report.delivered": (d) => `Raport predat${d ? ` (${d})` : ""}`,
+  "report.fee": (d) => `Onorariu modificat${d ? `: ${d}` : ""}`,
   "report.asset_add": (d) => `Bun adăugat${d ? `: ${d}` : ""}`,
   "report.asset_edit": (d) => `Bun modificat${d ? `: ${d}` : ""}`,
   "report.asset_remove": (d) => `Bun scos din raport${d ? `: ${d}` : ""}`,

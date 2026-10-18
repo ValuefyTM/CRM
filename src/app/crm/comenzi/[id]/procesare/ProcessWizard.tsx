@@ -3,6 +3,7 @@
 import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
 import { useEffect, useRef, useState } from "react";
 import { capType, emptyAsset, type AssetForm } from "@/lib/asset-labels";
+import { feeKindLabel, feeKindOf, gridRate, netFromGrid, parseFeeGrid } from "@/lib/fee-grid";
 import { PURPOSES } from "@/lib/order-labels";
 import { AssetsEditor } from "@/components/AssetsEditor";
 
@@ -30,7 +31,9 @@ const s = (v: unknown) => (v == null ? "" : String(v));
  */
 export function ProcessWizard(p: {
   order: OrderInfo; base: string; me: string; canRead: boolean; screens: { id: string; name: string; href: string }[];
-  contracts: { id: string; label: string; fee: number | null }[]; evaluators: Person[]; inspectors: Person[];
+  contracts: { id: string; label: string; fee: number | null; fee_grid?: string | null }[]; evaluators: Person[]; inspectors: Person[];
+  /** The firm's VAT: a grid "cu TVA" is turned into the net fee. */
+  vatPercent?: number;
 }) {
   const o = p.order;
   const [step, setStep] = useState(0);
@@ -41,9 +44,23 @@ export function ProcessWizard(p: {
   const [bank, setBank] = useState({ branch: o.branch ?? "", consultant: "", purpose: o.purpose ?? "Credit bancar", report_type: o.report_type ?? "", notes: "" });
   const [assets, setAssets] = useState<AssetForm[]>([{ ...emptyAsset({ city: o.city }), full_address: o.address ?? "", is_main: true }]);
   const [dos, setDos] = useState({
-    contract_id: o.contract_id ?? "", fee: o.fee ? String(o.fee) : "", urgent: o.urgent, evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "",
+    contract_id: o.contract_id ?? "", fee: o.fee ? String(o.fee) : "", fee_later: false, urgent: o.urgent, evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "",
     verifier_id: "", due_on: "",
   });
+  const [feeFree, setFeeFree] = useState(false);
+  // The fee from the contract's grid, by the kind of the main asset (see fee-grid.ts); locked while it comes from the grid.
+  const contract = p.contracts.find((c) => c.id === dos.contract_id);
+  const grid = o.source === "bank" ? parseFeeGrid(contract?.fee_grid) : null;
+  const mainKind = feeKindOf(assets[0]?.category, assets[0]?.type);
+  const gridNet = grid && assets[0]?.type ? netFromGrid(grid, mainKind, p.vatPercent ?? 21) : null;
+  const feeState = o.source !== "bank" || !contract ? "free" : !assets[0]?.type ? "wait" : gridNet != null ? "grid" : grid ? "missing" : "free";
+  const feeLocked = feeState === "wait" || (feeState === "grid" && !feeFree);
+  const gridSet = useRef<string | null>(null); // the fee last written from the grid (cleared when the kind leaves the grid)
+  useEffect(() => {
+    if (gridNet != null && !feeFree) { gridSet.current = String(gridNet); setDos((d) => ({ ...d, fee: String(gridNet), fee_later: false })); }
+    else if (gridNet == null && gridSet.current != null) { const last = gridSet.current; gridSet.current = null; setDos((d) => (d.fee === last ? { ...d, fee: "" } : d)); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contract?.id, mainKind, gridNet]);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -111,7 +128,10 @@ export function ProcessWizard(p: {
   const go = (to: number) => { const e = to > step ? check(step) : ""; if (e) return setMsg(e); setMsg(""); setStep(to); };
 
   const submit = async () => {
-    const e = check(3) || (!dos.evaluator_id ? "Alege evaluatorul principal." : "");
+    const feeNum = parseFloat(dos.fee.replace(",", "."));
+    const e = check(3) || (!dos.evaluator_id ? "Alege evaluatorul principal." : "")
+      || (o.source === "bank" && contract && !dos.fee_later && !(Number.isFinite(feeNum) && feeNum > 0)
+        ? (feeState === "missing" ? `Tipul „${capType(assets[0]?.type)}” nu e în grila contractului: completează onorariul sau bifează „Completez mai târziu”.` : "Completează onorariul sau bifează „Completez mai târziu”.") : "");
     if (e) return setMsg(e);
     setBusy(true); setMsg("");
     const r = await fetch(`/api/crm/orders/${o.id}/process`, {
@@ -218,12 +238,22 @@ export function ProcessWizard(p: {
             <div className="formRow">
               {o.source === "bank" && (
                 <label className="field">Contract cadru
-                  <select className="select" value={dos.contract_id} onChange={(e) => { const c = p.contracts.find((x) => x.id === e.target.value); setDos({ ...dos, contract_id: e.target.value, fee: dos.fee || (c?.fee ? String(c.fee) : "") }); }}>
+                  <select className="select" value={dos.contract_id} onChange={(e) => { const c = p.contracts.find((x) => x.id === e.target.value); setFeeFree(false); setDos({ ...dos, contract_id: e.target.value, fee_later: false, fee: parseFeeGrid(c?.fee_grid) ? "" : dos.fee || (c?.fee ? String(c.fee) : "") }); }}>
                     <option value="">Fără contract</option>{p.contracts.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
                   </select>
                 </label>
               )}
-              <label className="field">Onorariu fără TVA (lei)<input className="input" inputMode="decimal" value={dos.fee} onChange={(e) => setDos({ ...dos, fee: e.target.value })} /></label>
+              <div className="field">Onorariu fără TVA (lei)
+                <input className="input" inputMode="decimal" value={dos.fee} onChange={(e) => setDos({ ...dos, fee: e.target.value })} readOnly={feeLocked} disabled={dos.fee_later} aria-label="Onorariu fără TVA"
+                  placeholder={feeState === "wait" ? "după tipul bunului principal" : feeState === "missing" ? "tarif negociat" : ""} />
+                {feeState === "wait" && <small className="muted">Se preia din grila contractului după tipul bunului principal (pasul Bunuri).</small>}
+                {feeState === "grid" && !feeFree && <small className="muted">Din grila contractului: {feeKindLabel(mainKind).toLowerCase()}{grid?.vat ? ` · ${gridRate(grid, mainKind)?.toLocaleString("ro-RO")} lei cu TVA` : ""} · <button type="button" className="linkBtn" onClick={() => setFeeFree(true)}>alt tarif</button></small>}
+                {feeState === "grid" && feeFree && <small className="muted">Tarif diferit de grilă · <button type="button" className="linkBtn" onClick={() => { setFeeFree(false); setDos({ ...dos, fee: String(gridNet), fee_later: false }); }}>înapoi la grilă</button></small>}
+                {feeState === "missing" && <small className="muted">Tipul „{capType(assets[0]?.type)}” nu are tarif în grila contractului: scrie tariful convenit.</small>}
+                {o.source === "bank" && contract && feeState !== "wait" && feeState !== "grid" && (
+                  <label className="check" style={{ marginTop: 4 }}><input type="checkbox" checked={dos.fee_later} onChange={(e) => setDos({ ...dos, fee_later: e.target.checked, fee: e.target.checked ? "" : dos.fee })} /><span>Completez mai târziu <small className="muted">· la facturare</small></span></label>
+                )}
+              </div>
             </div>
             <div className="formRow">
               <div className="field">Evaluator principal

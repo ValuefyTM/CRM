@@ -6,7 +6,9 @@ import { audit } from "./auth";
 import { getOrder } from "./orders";
 import { openDossier } from "./dossier";
 import { addAsset, updateAsset, validateAsset } from "./assets";
-import type { AssetInput } from "./asset-labels";
+import { capType, type AssetInput } from "./asset-labels";
+import { feeKindOf, netFromGrid, parseFeeGrid } from "./fee-grid";
+import { getBilling } from "./billing";
 import type { User } from "./users";
 
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -56,6 +58,16 @@ export async function processBankOrder(db: D1Database, user: User, orderId: stri
 
   const main = assets[0];
   const contract = o.source === "bank" ? id_(d.contract_id) ?? o.contract_id : o.contract_id;
+  // The fee: the one typed, else the contract's grid for the kind of the main asset (net of VAT), else the one already on the order,
+  // else the contract's standard fee. Bank orders need one, unless it is left for later ("Completez mai târziu").
+  let fee = amount(d.fee);
+  if (contract && fee == null) {
+    const k = await db.prepare("SELECT fee, fee_grid FROM contracts WHERE id = ?").bind(contract).first<{ fee: number | null; fee_grid: string | null }>();
+    fee = netFromGrid(parseFeeGrid(k?.fee_grid), feeKindOf(main.category, main.type), (await getBilling(db)).vatPercent) ?? o.fee ?? (k?.fee || null);
+    if (fee == null && o.source === "bank" && d.fee_later !== true) {
+      return { ok: false as const, error: k?.fee_grid ? `Tipul bunului principal (${capType(main.type) || "—"}) nu e în grila de tarife a contractului: completează onorariul sau bifează „Completez mai târziu”.` : "Completează onorariul sau bifează „Completez mai târziu”." };
+    }
+  }
   const extra = [str(bk.consultant, 300) && `Consultant bancă: ${str(bk.consultant, 300)}`, str(bk.notes, 2000)].filter(Boolean).join("\n");
   await db.prepare(`UPDATE orders SET client_name = ?, client_phone = ?, client_email = ?, client_id = ?, contact_name = ?, contact_phone = ?, bank_branch = ?,
       purpose = COALESCE(NULLIF(?, ''), purpose), report_type = COALESCE(NULLIF(?, ''), report_type), fee = COALESCE(?, fee), urgent = ?, contract_id = ?,
@@ -63,7 +75,7 @@ export async function processBankOrder(db: D1Database, user: User, orderId: stri
       processed_at = ?, updated_at = ? WHERE id = ?`)
     .bind(name, str(c.phone, 40) || null, str(c.email, 160).toLowerCase() || null, clientId,
       main.contact_kind && main.contact_kind !== "client" ? main.contact_name : null, main.contact_kind && main.contact_kind !== "client" ? main.contact_phone : null,
-      str(bk.branch, 120) || o.bank_branch, str(bk.purpose, 120), str(bk.report_type, 120), amount(d.fee), d.urgent === true ? 1 : 0, contract,
+      str(bk.branch, 120) || o.bank_branch, str(bk.purpose, 120), str(bk.report_type, 120), fee, d.urgent === true ? 1 : 0, contract,
       propertyType(main), main.city, main.full_address, main.usable_area, extra, extra, t, t, orderId)
     .run();
 

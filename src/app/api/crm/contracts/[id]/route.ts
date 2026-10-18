@@ -1,6 +1,7 @@
 import { err, json, staffApi } from "@/lib/api";
 import { inScope } from "@/lib/scope";
-import { updateContract } from "@/lib/contracts";
+import { updateContract, updateFeeGrid } from "@/lib/contracts";
+import { cleanFeeGrid } from "@/lib/fee-grid";
 
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const amount = (v: unknown) => {
@@ -8,7 +9,7 @@ const amount = (v: unknown) => {
   return Number.isFinite(n) && n >= 0 && n < 1e7 ? Math.round(n * 100) / 100 : null;
 };
 
-/** Edits a contract's details: number, date, fee, report type, purpose, notes. */
+/** Edits a contract's details: number, date, fee, report type, purpose, notes — or, alone, the fee grid of a framework contract. */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const a = await staffApi("contracts.E", true);
   if ("res" in a) return a.res;
@@ -19,6 +20,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   // A signed contract is changed only by an addendum.
   if (await a.db.prepare("SELECT 1 AS x FROM contracts WHERE id = ? AND signed_at IS NOT NULL").bind(id).first()) return err("Contractul este semnat de client: modificările se fac prin act adițional.", 409);
   const b = await json(req);
+  // Only the fee grid (framework contracts): `{ fee_grid: { vat, rates } | null }`.
+  if ("fee_grid" in b && b.number === undefined) {
+    if (k.kind !== "framework") return err("Grila de tarife există doar la contractele cadru.");
+    await updateFeeGrid(a.db, a.user.id, id, cleanFeeGrid(b.fee_grid));
+    return Response.json({ ok: true });
+  }
   const number = str(b.number, 40);
   if (!number) return err("Completează numărul contractului.");
   if (k.kind === "classic" && await a.db.prepare("SELECT 1 AS x FROM contracts WHERE kind = 'classic' AND number = ? AND id <> ?").bind(number, id).first())

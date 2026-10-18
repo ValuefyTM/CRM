@@ -21,6 +21,8 @@ import { DELIVERABLES, VALUE_TYPES } from "@/lib/contract-terms";
 import { IssueInvoice, InvoiceList } from "@/components/Invoices";
 import { getBilling, invoicesFor } from "@/lib/billing";
 import { accreditedUsers } from "@/lib/accreditations";
+import { parseFeeGrid } from "@/lib/fee-grid";
+import { FeeGridCard } from "./FeeGridEdit";
 
 export const metadata: Metadata = { title: "Contract | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -85,7 +87,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
               <div><dt>Tip raport</dt><dd>{k.report_type ?? "—"}</dd></div>
               <div><dt>Scop</dt><dd>{k.purpose ?? "—"}</dd></div>
               {framework && <div className="dlWide"><dt>Facturare</dt><dd><BillingModeEdit target="contract" id={k.id} value={k.billing_mode ?? null} fallback={fwDefault} edit={can(user, "contracts.E")} /></dd></div>}
-              <div><dt>{framework ? "Tarif standard" : "Onorariu (fără TVA)"}</dt><dd>{k.fee ? lei(k.fee) : framework ? "grila de tarife a băncii" : "—"}</dd></div>
+              <div><dt>{framework ? "Tarif standard" : "Onorariu (fără TVA)"}</dt><dd>{k.fee ? lei(k.fee) : framework ? (k.fee_grid ? "după grila de tarife" : "se cere la comandă") : "—"}</dd></div>
               {d.order && <div><dt>Provine din</dt><dd><a className="rowLink" href={`${base}/comenzi/${d.order.id}`}>{d.order.seq ? orderRef(d.order.seq) : "comanda"}</a> · {SOURCE_LABEL[d.order.source]?.toLowerCase() ?? d.order.source}{d.order.offer_number ? ` · oferta ${d.order.offer_number} acceptată ${fmtDate(d.order.accepted_at)}` : ""}</dd></div>}
               {k.notes && <div><dt>Note</dt><dd>{k.notes}</dd></div>}
             </dl>
@@ -179,6 +181,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
               </dl>
             ) : <p className="hint">Contractul nu are client legat.</p>}
           </section>
+          {framework && <FeeGridCard id={k.id} grid={parseFeeGrid(k.fee_grid)} edit={can(user, "contracts.E") && !k.closed_on} vatPercent={billing.vatPercent} />}
           {framework && (
             <section className="card">
               <div className="cardHead"><h2>Evaluatori agreați</h2>{can(user, "users") && <a className="link" href={`${base}/utilizatori?tab=interni`}>Utilizatori →</a>}</div>

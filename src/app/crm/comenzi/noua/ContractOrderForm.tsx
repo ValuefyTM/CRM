@@ -6,12 +6,13 @@ import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PURPOSES } from "@/lib/order-labels";
 import { assetProfile, capType, emptyAsset, type AssetForm } from "@/lib/asset-labels";
+import { feeKindLabel, feeKindOf, gridRate, netFromGrid, parseFeeGrid } from "@/lib/fee-grid";
 import { AssetsEditor, newUid } from "@/components/AssetsEditor";
 import type { DraftDoc } from "@/components/AssetDocs";
 import { docKindLabel } from "@/lib/doc-kinds";
 import { SafeImg } from "@/app/crm/rapoarte/[id]/ReportActions";
 
-type Contract = { id: string; number: string | null; bank: string; bank_code: string | null; fee: number | null; report_type: string | null; purpose: string | null; logo?: string | null; billing_mode?: string | null };
+type Contract = { id: string; number: string | null; bank: string; bank_code: string | null; fee: number | null; report_type: string | null; purpose: string | null; logo?: string | null; billing_mode?: string | null; fee_grid?: string | null };
 type Collab = { id: string; number: string | null; firm: string; share: number | null; logo?: string | null; billing_mode?: string | null };
 type Hit = { id: string; kind: string; name: string; cui: string | null; phone: string | null; email: string | null; city: string | null; reports: number };
 type Opt = { id: string; title: string; sub: string; logo?: string | null; short: string };
@@ -127,15 +128,19 @@ export function ContractOrderForm(p: {
   nextOrder: number;
   /** Only bank orders (someone accredited on contracts, without the whole Comenzi module). */
   bankOnly?: boolean;
+  /** The firm's VAT (Setări → Facturare): a grid "cu TVA" is turned into the net fee. */
+  vatPercent?: number;
 }) {
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
   const [kind, setKind] = useState(p.initialKind);
   const preset = p.contracts.find((c) => c.id === p.initialContract) ?? (p.contracts.length === 1 ? p.contracts[0] : null);
   const [f, setF] = useState({
     contract_id: preset?.id ?? "", collaboration_id: "", bank_ref: "", bank_branch: "", ordered_on: today, report_type: kindOf(preset?.report_type), purpose: preset?.purpose || "Garantare bancară",
-    fee: preset?.fee ? String(preset.fee) : "", client_id: "", client_kind: "person" as "person" | "company", client_name: "", client_phone: "", client_email: "", client_cui: "",
+    fee: preset?.fee ? String(preset.fee) : "", fee_later: false, client_id: "", client_kind: "person" as "person" | "company", client_name: "", client_phone: "", client_email: "", client_cui: "",
     inspection_notes: "", notes: "", evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "", verifier_id: "", inspector_id: "", due_on: inThreeDays(), urgent: false,
   });
+  // The fee field unlocked by hand (an exception to the grid).
+  const [feeFree, setFeeFree] = useState(false);
   const [picked, setPicked] = useState<Hit | null>(null);
   const [assets, setAssets] = useState<AssetForm[]>([{ ...emptyAsset(), uid: newUid(), full_address: "", is_main: true }]);
   const [drafts, setDrafts] = useState<Record<string, DraftDoc[]>>({});
@@ -152,6 +157,21 @@ export function ContractOrderForm(p: {
   const contract = p.contracts.find((c) => c.id === f.contract_id);
   const collab = p.collabs.find((c) => c.id === f.collaboration_id);
   const feeNum = parseFloat(f.fee.replace(",", "."));
+  // The fee grid of the contract: the fee comes from the kind of the main asset. Locked until the type is chosen; a type
+  // the grid has no fee for opens the field and asks for the fee (or "Completez mai târziu").
+  const vat = p.vatPercent ?? 21;
+  const grid = kind === "bank" ? parseFeeGrid(contract?.fee_grid) : null;
+  const mainKind = feeKindOf(assets[0]?.category, assets[0]?.type);
+  const gridNet = grid && assets[0]?.type ? netFromGrid(grid, mainKind, vat) : null;
+  const feeLocked = kind === "bank" && !!contract && !feeFree && (!assets[0]?.type ? true : gridNet != null);
+  const feeState = kind !== "bank" || !contract ? "free" : !assets[0]?.type ? "wait" : gridNet != null ? "grid" : grid ? "missing" : "free";
+  const gridSet = useRef<string | null>(null); // the fee last written from the grid (cleared when the kind leaves the grid)
+  useEffect(() => {
+    if (kind !== "bank" || !contract) return;
+    if (gridNet != null && !feeFree) { gridSet.current = String(gridNet); setF((x) => ({ ...x, fee: String(gridNet), fee_later: false })); }
+    else if (gridNet == null && gridSet.current != null) { const last = gridSet.current; gridSet.current = null; setF((x) => (x.fee === last ? { ...x, fee: "" } : x)); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, contract?.id, mainKind, gridNet]);
 
   const bankOpts: Opt[] = useMemo(() => p.contracts.map((c) => ({ id: c.id, title: c.bank, logo: c.logo, short: (c.bank_code ?? initials(c.bank)).slice(0, 4).toUpperCase(),
     sub: [c.number && `contract ${c.number}`, c.fee ? `${c.fee.toLocaleString("ro-RO")} lei` : null, c.report_type].filter(Boolean).join(" · ") || "contract cadru" })), [p.contracts]);
@@ -160,8 +180,10 @@ export function ContractOrderForm(p: {
 
   const pickContract = (id: string) => {
     const c = p.contracts.find((x) => x.id === id);
-    setF({ ...f, contract_id: id, fee: c?.fee ? String(c.fee) : f.fee, report_type: c?.report_type ? kindOf(c.report_type) : f.report_type, purpose: c?.purpose || f.purpose });
-    setErrors((x) => ({ ...x, source: "" }));
+    // A contract with a grid: the fee comes from the main asset's kind (effect above); otherwise its standard fee.
+    setF({ ...f, contract_id: id, fee: parseFeeGrid(c?.fee_grid) ? "" : c?.fee ? String(c.fee) : f.fee, fee_later: false, report_type: c?.report_type ? kindOf(c.report_type) : f.report_type, purpose: c?.purpose || f.purpose });
+    setFeeFree(false);
+    setErrors((x) => ({ ...x, source: "", fee: "" }));
   };
   const pickClient = (h: Hit) => {
     setPicked(h);
@@ -175,6 +197,8 @@ export function ContractOrderForm(p: {
     if (kind === "bank" && !f.contract_id) e.source = "Alege banca și contractul cadru.";
     if (kind === "collab" && !f.collaboration_id) e.source = "Alege firma colaboratoare.";
     if (kind === "bank" && !f.bank_ref.trim()) e.bank_ref = "Completează numărul comenzii.";
+    // Bank orders: the fee is required (from the grid, or typed), unless left for later.
+    if (kind === "bank" && contract && !f.fee_later && !(Number.isFinite(feeNum) && feeNum > 0)) e.fee = feeState === "wait" ? "Alege tipul bunului principal: tariful se preia din grila contractului." : feeState === "missing" ? `Tipul „${capType(assets[0]?.type)}” nu e în grila contractului: completează tariful sau bifează „Completez mai târziu”.` : "Completează tariful sau bifează „Completez mai târziu”.";
     if (!f.client_name.trim()) e.client_name = "Completează numele clientului.";
     if (f.client_phone.replace(/\D/g, "").length < 9) e.client_phone = "Completează telefonul clientului.";
     assets.forEach((a, i) => {
@@ -226,7 +250,7 @@ export function ContractOrderForm(p: {
     location.href = `${p.base}/rapoarte/${d.report}?tab=inspectii${d.inspections ? "" : "&alocare=1"}`;
   };
 
-  const sourceDone = !now.source && !now.bank_ref;
+  const sourceDone = !now.source && !now.bank_ref && !now.fee;
   const clientDone = !now.client_name && !now.client_phone;
   const assetsDone = assets.every((_, i) => !now[`asset${i}`]);
   const err = (k: string) => errors[k] ? <span className="fieldErr" role="alert">{errors[k]}</span> : null;
@@ -271,9 +295,18 @@ export function ContractOrderForm(p: {
                 {USES.map((x) => <option key={x} value={x}>{x}</option>)}
               </select>
             </label>
-            <label className="field">Onorariu fără TVA
-              <span className="nwSuffix"><input className="input" inputMode="decimal" value={f.fee} onChange={set("fee")} placeholder={contract?.fee ? String(contract.fee) : "0"} /><em>lei</em></span>
-            </label>
+            <div className="field"><span className="fLabel">Onorariu fără TVA {kind === "bank" && contract && <Req />}</span>
+              <span className="nwSuffix"><input className="input" inputMode="decimal" value={f.fee} onChange={set("fee")} readOnly={feeLocked} aria-invalid={!!errors.fee || undefined} aria-label="Onorariu fără TVA"
+                placeholder={feeState === "wait" ? "după tipul bunului principal" : feeState === "missing" ? "tarif negociat" : contract?.fee ? String(contract.fee) : "0"} disabled={f.fee_later} /><em>lei</em></span>
+              {feeState === "wait" && <small className="muted">Se preia din grila contractului după ce alegi tipul bunului principal (pasul 3).</small>}
+              {feeState === "grid" && !feeFree && <small className="muted">Din grila contractului: {feeKindLabel(mainKind).toLowerCase()}{grid?.vat ? ` · ${gridRate(grid, mainKind)?.toLocaleString("ro-RO")} lei cu TVA` : ""} · <button type="button" className="linkBtn" onClick={() => setFeeFree(true)}>alt tarif</button></small>}
+              {feeState === "grid" && feeFree && <small className="muted">Tarif diferit de grilă · <button type="button" className="linkBtn" onClick={() => { setFeeFree(false); setF({ ...f, fee: String(gridNet), fee_later: false }); }}>înapoi la grilă</button></small>}
+              {feeState === "missing" && <small className="muted">Tipul „{capType(assets[0]?.type)}” nu are tarif în grila contractului: scrie tariful convenit.</small>}
+              {kind === "bank" && contract && feeState !== "wait" && feeState !== "grid" && (
+                <label className="check" style={{ marginTop: 4 }}><input type="checkbox" checked={f.fee_later} onChange={(e) => { setF({ ...f, fee_later: e.target.checked, fee: e.target.checked ? "" : f.fee }); setErrors((x) => ({ ...x, fee: "" })); }} /><span>Completez mai târziu <small className="muted">· la facturare</small></span></label>
+              )}
+              {err("fee")}
+            </div>
           </div>
           <div className="field">Tip raport
             <div className="segment nwSeg" role="group" aria-label="Tip raport">

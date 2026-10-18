@@ -36,6 +36,23 @@ export async function markBilledOutside(db: D1Database, actor: string, reportId:
   return { ok: true as const };
 }
 
+/** Corrects the fee of a report not invoiced yet (wrong in the grid, negotiated, left for later); its order follows. */
+export async function setReportFee(db: D1Database, actor: string, reportId: string, fee: number) {
+  const r = await db.prepare("SELECT id, fee, order_id, invoice_id, billed_outside_at FROM reports WHERE id = ?").bind(reportId)
+    .first<{ id: string; fee: number | null; order_id: string | null; invoice_id: string | null; billed_outside_at: string | null }>();
+  if (!r) return { ok: false as const, error: "Raportul nu există." };
+  if (r.invoice_id) return { ok: false as const, error: "Raportul are factură emisă: onorariul nu se mai schimbă." };
+  if (r.billed_outside_at) return { ok: false as const, error: "Raportul e marcat ca facturat din Oblio." };
+  const t = now();
+  await db.batch([
+    db.prepare("UPDATE reports SET fee = ?, updated_at = ? WHERE id = ?").bind(fee, t, reportId),
+    ...(r.order_id ? [db.prepare("UPDATE orders SET fee = ?, fee_net = CASE WHEN share IS NOT NULL THEN ROUND(? * share, 2) END, updated_at = ? WHERE id = ?").bind(fee, fee, t, r.order_id)] : []),
+  ]);
+  const lei = (n: number | null) => (n == null ? "—" : `${n.toLocaleString("ro-RO")} lei`);
+  await audit(db, `user:${actor}`, "report.fee", "report", reportId, `${lei(r.fee)} → ${lei(fee)}`);
+  return { ok: true as const };
+}
+
 /** The reports to invoice; `evaluatorId`: only those the person is the main evaluator of. */
 export async function toBill(db: D1Database, evaluatorId?: string | null): Promise<BillTask[]> {
   const b = await getBilling(db);
