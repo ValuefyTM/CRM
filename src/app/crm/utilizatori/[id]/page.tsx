@@ -13,6 +13,7 @@ import { photoUrl, presenceOf } from "@/lib/presence";
 import { History } from "@/components/History";
 import { UserForm } from "../UserForm";
 import { AccessPanel } from "./AccessPanel";
+import { AccreditationsPanel } from "./AccreditationsPanel";
 
 export const metadata: Metadata = { title: "Utilizator | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -43,10 +44,16 @@ export default async function UserPage({ params, searchParams }: { params: Promi
     : "Conturile echipei le modifică administratorii (și fiecare pe al său).";
   const presence = u.kind === "internal" && !gone ? presenceOf(self ? new Date().toISOString() : u.last_seen_at) : null;
   const firms = u.kind === "partner" ? (await listPartners(db)).map((p) => ({ id: p.id, name: p.name })) : [];
-  const [log, cfg, shares] = await Promise.all([
+  const [log, cfg, shares, fw, accred] = await Promise.all([
     history(db, [u.id]), getConfig(db),
     db.prepare("SELECT share_evaluator, share_verifier, inspector_fee_kind, inspector_fee FROM users WHERE id = ?").bind(u.id)
       .first<{ share_evaluator: number | null; share_verifier: number | null; inspector_fee_kind: string | null; inspector_fee: number | null }>(),
+    // Agreeri: the framework contracts (team accounts, seen by those who manage users)
+    u.kind === "internal" && can(me, "users")
+      ? db.prepare(`SELECT k.id, COALESCE(e.name, 'Fără bancă') AS bank, k.number, k.closed_on IS NOT NULL AS closed FROM contracts k LEFT JOIN entities e ON e.id = k.client_id
+          WHERE k.kind = 'framework' ORDER BY k.closed_on IS NOT NULL, e.name, k.signed_on DESC`).all<{ id: string; bank: string; number: string | null; closed: number }>().then((x) => x.results)
+      : Promise.resolve([]),
+    u.kind === "internal" ? db.prepare("SELECT contract_id FROM contract_accreditations WHERE user_id = ?").bind(u.id).all<{ contract_id: string }>().then((x) => x.results.map((r) => r.contract_id)).catch(() => [] as string[]) : Promise.resolve([] as string[]),
   ]);
   const names = roleNames(cfg);
   const roleOptions = cfg.roles.map((r) => [r.id, r.name] as [string, string]);
@@ -87,6 +94,9 @@ export default async function UserPage({ params, searchParams }: { params: Promi
               inspector_fee_kind: shares?.inspector_fee_kind ?? "fixed", inspector_fee: numStr(shares?.inspector_fee),
             }}
           />
+          {u.kind === "internal" && !gone && can(me, "users") && u.role !== "owner" && (
+            <AccreditationsPanel userId={u.id} contracts={fw.map((c) => ({ id: c.id, bank: c.bank, number: c.number, closed: !!c.closed }))} initial={accred} canEdit={canManage && can(me, "users.E")} />
+          )}
           {u.kind === "partner" && u.partner_id && <a className="rowLink" href={`${base}/utilizatori/firme/${u.partner_id}`}>Vezi firma {u.partner_name} →</a>}
         </div>
         <History log={log} />

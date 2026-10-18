@@ -125,6 +125,8 @@ const inThreeDays = () => {
 export function ContractOrderForm(p: {
   base: string; me: string; initialKind: "bank" | "collab"; initialContract?: string | null; contracts: Contract[]; collabs: Collab[]; evaluators: PickPerson[]; inspectors: PickPerson[];
   nextOrder: number;
+  /** Only bank orders (someone accredited on contracts, without the whole Comenzi module). */
+  bankOnly?: boolean;
 }) {
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
   const [kind, setKind] = useState(p.initialKind);
@@ -235,10 +237,12 @@ export function ContractOrderForm(p: {
       <div className="nwTop">
         <section className="card nwCard">
           <Step n={1} title="Sursa lucrării" sub="De unde vine comanda" done={sourceDone} />
-          <div className="segment nwSeg" role="group" aria-label="Tip lucrare">
-            <button type="button" aria-pressed={kind === "bank"} onClick={() => setKind("bank")}>Bancă · contract cadru</button>
-            <button type="button" aria-pressed={kind === "collab"} onClick={() => setKind("collab")}>Colaborare · firmă de evaluare</button>
-          </div>
+          {!p.bankOnly && (
+            <div className="segment nwSeg" role="group" aria-label="Tip lucrare">
+              <button type="button" aria-pressed={kind === "bank"} onClick={() => setKind("bank")}>Bancă · contract cadru</button>
+              <button type="button" aria-pressed={kind === "collab"} onClick={() => setKind("collab")}>Colaborare · firmă de evaluare</button>
+            </div>
+          )}
           <div className="field"><span className="fLabel">{kind === "bank" ? "Banca și contractul cadru" : "Firma colaboratoare"} <Req /></span>
             {kind === "bank"
               ? <LogoSelect value={f.contract_id} onChange={pickContract} options={bankOpts} placeholder="Alege banca…" invalid={!!errors.source} />

@@ -52,6 +52,8 @@ export async function MyHome({ user, base, denied }: { user: User; base: string;
   const hello = hour < 11 ? "Bună dimineața" : hour < 18 ? "Bună ziua" : "Bună seara";
   const late = counts?.late ?? 0;
   const quick: [string, string, string?][] = [
+    // Accredited on framework contracts (agreeri), or with the Comenzi module: a new order from here.
+    ...(can(user, "orders.A") ? [["Adaugă comandă", `${base}/comenzi/noua`, can(user, "orders.all") ? "bancă sau colaborare" : "pe contractele tale cadru"] as [string, string, string]] : []),
     ["Rapoartele mele", `${base}/rapoarte`, `${counts?.open ?? 0} în lucru`],
     ["Inspecțiile mele", `${base}/agenda-inspectii`, left ? `${left} active` : undefined],
     ...(can(user, "properties") ? [["Comparabile", `${base}/proprietati`, "proprietăți evaluate"] as [string, string, string]] : []),

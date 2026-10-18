@@ -39,8 +39,9 @@ export const MODULES = [
 
 export type ModKey = (typeof MODULES)[number]["k"];
 type SpOf<M> = M extends { k: infer K extends string; sp: readonly (readonly [infer S extends string, string])[] } ? `${K}:${S}` : never;
-/** A permission: a module (sees it), a right on it, "all" or "lead" records, or a special action. */
-export type Perm = ModKey | `${ModKey}.${Right}` | `${ModKey}.all` | `${ModKey}.lead` | SpOf<(typeof MODULES)[number]>;
+/** A permission: a module (sees it), a right on it, "all" or "lead" records, or a special action.
+ * "orders.contract": the orders of the framework contracts the user is accredited on (agreeri, see accreditations.ts). */
+export type Perm = ModKey | `${ModKey}.${Right}` | `${ModKey}.all` | `${ModKey}.lead` | SpOf<(typeof MODULES)[number]> | "orders.contract";
 
 export type Cell = { on: boolean; r: Right[]; scope?: Scope; sp: string[] };
 export type Role = { id: string; name: string; cells: Partial<Record<ModKey, Cell>> };

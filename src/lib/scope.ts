@@ -1,6 +1,7 @@
 // Server-only: which clients, orders and contracts a user works on (Setări → Permisiuni, „Pe ce date”):
 // all, the ones they created, or the ones behind reports where they are main evaluator or verifier.
-import { leadSql, scopeOf, type WithPerms } from "./perms";
+import { can, leadSql, scopeOf, type WithPerms } from "./perms";
+import { accreditedSql } from "./accreditations";
 
 type Mod = "clients" | "orders" | "contracts";
 type Viewer = WithPerms & { id: string };
@@ -16,7 +17,12 @@ const LINK: Record<Mod, (a: string) => string> = {
 export function scopeFilter(u: Viewer, mod: Mod, alias: string): ScopeFilter {
   const s = scopeOf(u, mod);
   if (s === "all") return null;
-  if (s === "own") return mod === "contracts" ? { sql: "0", binds: [] } : { sql: `${alias}.created_by = ?`, binds: [u.id] };
+  if (s === "own") {
+    if (mod === "contracts") return { sql: "0", binds: [] };
+    // Accredited on framework contracts (agreeri): the bank's orders on those contracts too.
+    if (mod === "orders" && can(u, "orders.contract")) return { sql: `(${alias}.created_by = ? OR ${accreditedSql(alias)})`, binds: [u.id, u.id] };
+    return { sql: `${alias}.created_by = ?`, binds: [u.id] };
+  }
   return { sql: `EXISTS (SELECT 1 FROM reports sr WHERE ${LINK[mod]("sr")} = ${alias}.id AND ${leadSql("sr.id")})`, binds: [u.id] };
 }
 

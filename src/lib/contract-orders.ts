@@ -9,10 +9,13 @@ import type { AssetInput } from "./asset-labels";
 export type ContractChoice = { id: string; number: string | null; bank_id: string | null; bank: string; bank_code: string | null; fee: number | null; report_type: string | null; purpose: string | null; logo?: string | null; billing_mode?: string | null };
 export type CollabChoice = { id: string; number: string | null; firm: string; share: number | null; logo?: string | null; billing_mode?: string | null };
 
-export async function contractChoices(db: D1Database) {
+/** The open framework contracts and the collaborations; `onlyFor`: just the contracts that user is accredited on. */
+export async function contractChoices(db: D1Database, onlyFor?: string) {
   const [contracts, collabs] = await Promise.all([
     db.prepare(`SELECT k.id, k.number, k.client_id AS bank_id, COALESCE(e.name, 'Fără bancă') AS bank, e.code AS bank_code, k.fee, k.report_type, k.purpose, k.billing_mode, e.logo_url AS logo
-      FROM contracts k LEFT JOIN entities e ON e.id = k.client_id WHERE k.kind = 'framework' AND k.closed_on IS NULL ORDER BY e.name, k.signed_on DESC`).all<ContractChoice>(),
+      FROM contracts k LEFT JOIN entities e ON e.id = k.client_id WHERE k.kind = 'framework' AND k.closed_on IS NULL
+      ${onlyFor ? "AND EXISTS (SELECT 1 FROM contract_accreditations ca WHERE ca.contract_id = k.id AND ca.user_id = ?)" : ""} ORDER BY e.name, k.signed_on DESC`)
+      .bind(...(onlyFor ? [onlyFor] : [])).all<ContractChoice>(),
     db.prepare(`SELECT c.id, c.number, e.name AS firm, c.share, c.billing_mode, e.logo_url AS logo FROM collaborations c JOIN entities e ON e.id = c.firm_id ORDER BY e.name`).all<CollabChoice>(),
   ]);
   return { contracts: contracts.results, collabs: collabs.results };

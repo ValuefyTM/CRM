@@ -3,6 +3,8 @@ import { createContractOrder } from "@/lib/contract-orders";
 import { openDossier } from "@/lib/dossier";
 import { fillReportAssets, parseAssets } from "@/lib/process-order";
 import { assignInspection, mailAssigned } from "@/lib/insp-assign";
+import { accreditedContracts } from "@/lib/accreditations";
+import { can } from "@/lib/perms";
 
 const id_ = (v: unknown) => (typeof v === "string" && /^[\w-]{1,80}$/.test(v) ? v : null);
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -19,6 +21,11 @@ export async function POST(req: Request) {
   if (!evaluator) return err("Alege evaluatorul principal.");
   const assets = parseAssets(b.assets);
   if (!assets.ok) return err(assets.error);
+  // Accredited only (agreeri): a bank order, on one of the contracts they are accredited on.
+  if (can(a.user, "orders.contract") && !can(a.user, "orders.all")) {
+    const mine = await accreditedContracts(a.db, a.user.id);
+    if (b.kind === "collab" || !mine.includes(String(b.contract_id ?? ""))) return err("Poți înregistra comenzi doar pe contractele cadru pe care ești agreat.", 403);
+  }
   const o = await createContractOrder(a.db, a.user.id, b, assets.assets);
   if (!o.ok) return err(o.error);
   // The delivery deadline: a date, or a date and time ("2026-10-20T14:30").

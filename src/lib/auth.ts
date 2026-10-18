@@ -5,6 +5,7 @@ import { now, uuid } from "./db";
 import { normEmail, randomCode, randomToken, safeEqual, sha256 } from "./crypto";
 import { esc, layout, sendEmail } from "./email";
 import { canSignIn, findUser, getUser, isAdmin, type User } from "./users";
+import { accreditationPerms } from "./accreditations";
 import { getConfig } from "./perms-db";
 import { permsFor } from "./perms";
 
@@ -263,10 +264,12 @@ export async function currentUser(db: D1Database, app: App): Promise<User | null
   const cfg = await getConfig(db);
   const as = jar.get(AS_COOKIE)?.value;
   const target = as && isAdmin(u) ? await getUser(db, as) : null;
+  // The permissions of the role, plus what the accreditations on framework contracts add (agreeri).
+  const permsOf = async (x: User) => [...new Set([...permsFor(cfg, x.role), ...(await accreditationPerms(db, x.id))])];
   if (target && canImpersonate(u, target)) {
-    return { ...target, perms: permsFor(cfg, target.role), team: cfg.team, impersonator: { id: u.id, name: u.name || u.email, role: u.role } };
+    return { ...target, perms: await permsOf(target), team: cfg.team, impersonator: { id: u.id, name: u.name || u.email, role: u.role } };
   }
-  return { ...u, perms: permsFor(cfg, u.role), team: cfg.team };
+  return { ...u, perms: await permsOf(u), team: cfg.team };
 }
 
 export async function endSession(db: D1Database, app: App) {

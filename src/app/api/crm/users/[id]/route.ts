@@ -6,6 +6,7 @@ import { getConfig } from "@/lib/perms-db";
 import { bucket } from "@/lib/orders";
 import { err, json, staffApi } from "@/lib/api";
 import { can, roleNames } from "@/lib/perms";
+import { setAccreditations } from "@/lib/accreditations";
 
 /** Edit an account, (re)send the invitation, disable or re-enable it. */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -42,6 +43,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const changed = [v.value.role !== u.role && `rol: ${roleLabel("internal", v.value.role, roleNames(cfg))}`, shares?.ok && `cote: ${shares.value.map((x) => x ?? "—").join(" / ")}`].filter(Boolean).join(" · ");
     await audit(a.db, actor, "user.update", "user", id, changed || undefined);
     return NextResponse.json({ ok: true });
+  }
+  // Agreeri: the framework contracts the person is accredited on (administrators of the team accounts).
+  if (b.action === "accreditations") {
+    if (u.kind !== "internal" || !can(a.user, "users.E")) return err("Agreerile le dă un administrator, pentru conturile echipei.", 403);
+    const ids = Array.isArray(b.contracts) ? (b.contracts as unknown[]).filter((x): x is string => typeof x === "string" && /^[\w-]{1,80}$/.test(x)).slice(0, 200) : [];
+    const { results } = ids.length
+      ? await a.db.prepare(`SELECT id FROM contracts WHERE kind = 'framework' AND id IN (${ids.map(() => "?").join(",")})`).bind(...ids).all<{ id: string }>()
+      : { results: [] as { id: string }[] };
+    const r = await setAccreditations(a.db, u.id, results.map((x) => x.id), a.user.id);
+    if (r.added.length || r.removed.length) await audit(a.db, actor, "user.accreditations", "user", id, `agreeri: +${r.added.length} −${r.removed.length}`);
+    return NextResponse.json({ ok: true, contracts: results.map((x) => x.id) });
   }
   if (b.action === "invite") {
     if (u.status === "disabled") return err("Contul este dezactivat. Reactivează-l întâi.");

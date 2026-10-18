@@ -20,6 +20,7 @@ import { contractDoc } from "@/lib/contract-doc";
 import { DELIVERABLES, VALUE_TYPES } from "@/lib/contract-terms";
 import { IssueInvoice, InvoiceList } from "@/components/Invoices";
 import { getBilling, invoicesFor } from "@/lib/billing";
+import { accreditedUsers } from "@/lib/accreditations";
 
 export const metadata: Metadata = { title: "Contract | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -33,7 +34,8 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
   if (!d || !(await inScope(db, user, "contracts", id))) notFound();
   const k = d.contract;
   const framework = k.kind === "framework";
-  const [log, doc, sign, invoices] = await Promise.all([history(db, [id]), framework ? null : contractDoc(db, id), framework ? null : signContractById(db, id), invoicesFor(db, { contract: id })]);
+  const [log, doc, sign, invoices, accredited] = await Promise.all([history(db, [id]), framework ? null : contractDoc(db, id), framework ? null : signContractById(db, id), invoicesFor(db, { contract: id }),
+    framework ? accreditedUsers(db, id) : Promise.resolve([])]);
   const admin = can(user, "billing");
   const billing = await getBilling(db);
   const fwDefault = billing.frameworkDefault;
@@ -177,6 +179,14 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
               </dl>
             ) : <p className="hint">Contractul nu are client legat.</p>}
           </section>
+          {framework && (
+            <section className="card">
+              <div className="cardHead"><h2>Evaluatori agreați</h2>{can(user, "users") && <a className="link" href={`${base}/utilizatori?tab=interni`}>Utilizatori →</a>}</div>
+              {accredited.length === 0
+                ? <p className="hint" style={{ margin: 0 }}>Nimeni nu e agreat pe acest contract. Agreerile se dau din fișa fiecărui utilizator (Utilizatori → persoana → Agreeri pe contracte cadru): persoana poate apoi înregistra și procesa comenzile băncii pe acest contract.</p>
+                : <ul className="people">{accredited.map((p) => <li key={p.id}><span className="who"><b>{can(user, "users") ? <a className="rowLink" href={`${base}/utilizatori/${p.id}`}>{p.name}</a> : p.name}</b><small>agreat din {fmtDate(p.created_at)}</small></span></li>)}</ul>}
+            </section>
+          )}
           <section className="card">
             <div className="cardHead"><h2>Facturare</h2>
               {!framework && admin && (
