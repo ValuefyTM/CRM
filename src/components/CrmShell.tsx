@@ -67,7 +67,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
         ...group("Operațional", "g-ops", [
           may("reports") && { key: "reports", label: allReports ? "Rapoarte" : "Rapoartele mele", href: `${b}/rapoarte`, badge: myOpen },
           may("inspections") && { key: "inspections", label: may("inspections.all") ? "Inspecții" : "Inspecțiile mele", href: `${b}/agenda-inspectii` },
-          may("properties") && { key: "properties", label: may("reports.all") ? "Proprietăți" : "Proprietăți / comparabile", href: `${b}/proprietati` },
+          may("properties") && { key: "properties", label: "Proprietăți", href: `${b}/proprietati` },
         ]),
         ...group("Financiar", "g-fin", [
           may("billing") && { key: "invoicing", label: "Facturare", href: `${b}/facturare` },

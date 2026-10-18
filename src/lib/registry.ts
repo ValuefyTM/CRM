@@ -144,8 +144,8 @@ export async function registryFacets(db: D1Database, county?: string, cat?: stri
 
 /** One property with all its valuations. */
 export async function registryProperty(db: D1Database, id: string) {
-  const p = await db.prepare(`${BASE} SELECT p.*, x.construction, x.description, x.zone, x.cf_file, x.plan_file, x.geo_source, x.geo_note FROM p JOIN crm_properties x ON x.id = p.id WHERE p.id = ?`).bind(id)
-    .first<RegistryRow & { construction: string | null; description: string | null; zone: string | null; cad_land: string | null; cf_file: string | null; plan_file: string | null; geo_source: string | null; geo_note: string | null }>();
+  const p = await db.prepare(`${BASE} SELECT p.*, x.construction, x.description, x.zone, x.cf_file, x.plan_file, x.geo_source, x.geo_note, x.geo_checked_at FROM p JOIN crm_properties x ON x.id = p.id WHERE p.id = ?`).bind(id)
+    .first<RegistryRow & { construction: string | null; description: string | null; zone: string | null; cad_land: string | null; cf_file: string | null; plan_file: string | null; geo_source: string | null; geo_note: string | null; geo_checked_at: string | null }>();
   if (!p) return null;
   const valuations = (await db.prepare(`SELECT a.id, a.value, a.is_main, a.approach, r.id AS report_id, r.number, r.status, r.delivered_at, r.result_value, r.currency, r.purpose,
       COALESCE(r.report_date, substr(r.created_at, 1, 10)) AS date, c.name AS client, b.name AS bank,

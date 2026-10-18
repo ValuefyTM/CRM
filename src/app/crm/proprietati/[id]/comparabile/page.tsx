@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { staffPage } from "@/lib/guard";
 import { AREA, comparables, RADII, YEARS, type CompFilters } from "@/lib/comparables";
-import { geolocateEnabled } from "@/lib/geolocate";
 import { can } from "@/lib/perms";
 import { mySql, propertyInScope, propertyScope } from "@/lib/perms-db";
 import { CrmShell } from "@/components/CrmShell";
@@ -61,7 +60,7 @@ export default async function ComparablesPage({ params, searchParams }: { params
         <section className="card">
           <h2>Proprietatea nu are coordonate</h2>
           <p className="hint">Comparabilele se caută în jurul proprietății. Pune-o întâi pe hartă (din cadastru sau la inspecție, prin GPS).</p>
-          {geolocateEnabled() && <LocateOne id={id} />}
+          <LocateOne id={id} />
         </section>
       ) : (
         <>

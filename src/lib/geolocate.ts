@@ -158,8 +158,40 @@ export async function locateByAddress(db: D1Database, p: { id: string; full_addr
       .bind(`${hit.lat}, ${hit.lng}`, hit.source, hit.note, t, p.id).run();
     return true;
   }
-  await db.prepare("UPDATE crm_properties SET geo_note = COALESCE(geo_note, 'Adresa nu a fost găsită pe hartă.'), geo_checked_at = ? WHERE id = ?").bind(t, p.id).run();
+  // the note says the address was tried too (ADDR_NEEDS leaves it out from then on)
+  await db.prepare(`UPDATE crm_properties SET geo_note = CASE WHEN geo_note IS NULL OR geo_note = '' OR geo_note LIKE '%${ADDR_MISS}%' THEN '${ADDR_MISS}' ELSE geo_note || ' · ${ADDR_MISS}' END,
+    geo_checked_at = ? WHERE id = ?`).bind(t, p.id).run();
   return false;
+}
+
+/** The note of a property whose address was not found on the map. */
+const ADDR_MISS = "adresa nu a fost găsită pe hartă";
+/** Still without a point, with an address or a locality, and the address not tried yet. */
+const ADDR_NEEDS = `(p.geo IS NULL OR p.geo = '') AND COALESCE(NULLIF(TRIM(p.full_address), ''), NULLIF(TRIM(p.city), '')) IS NOT NULL AND (p.geo_note IS NULL OR p.geo_note NOT LIKE '%${ADDR_MISS}%')`;
+
+/** Places a few properties from their address (one a second: Nominatim's limit). Returns how many got a point. */
+async function locateAddresses(db: D1Database, rows: { id: string; full_address: string | null; city: string | null; county: string | null }[]) {
+  let located = 0;
+  for (const [n, p] of rows.entries()) {
+    if (n) await new Promise((r) => setTimeout(r, 1100));
+    if (await locateByAddress(db, p)) located++;
+  }
+  return located;
+}
+
+/**
+ * One property, on request (even if tried before): from the cadastral plans when the locator is set up and the number
+ * is known, else from the address. Returns whether it got a point.
+ */
+export async function locateOne(db: D1Database, id: string) {
+  const p = await db.prepare("SELECT id, county, city, full_address, cad_building, cad_land, cf_number FROM crm_properties WHERE id = ?").bind(id)
+    .first<Prop & { county: string | null; full_address: string | null }>();
+  if (!p) return null;
+  if (geolocateEnabled() && inPlans(p.county) && numbersOf(p).length) {
+    const r = await locate(db, [p]);
+    if (r.located) return true;
+  }
+  return locateByAddress(db, p);
 }
 
 /**
@@ -184,18 +216,34 @@ export async function locateOpenInspections(db: D1Database, limit = 6) {
   return { tried: results.length, located };
 }
 
-/** How many properties could still be placed, and how many were already tried without result. */
+/**
+ * How many properties without a point can still be placed (from the plans, never tried; or from an address not tried
+ * yet), and how many were tried every way without result.
+ */
 export async function locateCounts(db: D1Database) {
-  const r = await db.prepare(`SELECT SUM(p.geo_checked_at IS NULL) AS todo, SUM(p.geo_checked_at IS NOT NULL) AS tried FROM crm_properties p WHERE ${NEEDS}`)
+  const cad = geolocateEnabled() ? `(${NEEDS} AND p.geo_checked_at IS NULL)` : "0";
+  const r = await db.prepare(`SELECT SUM(${cad} OR ${ADDR_NEEDS}) AS todo, SUM(NOT (${cad} OR ${ADDR_NEEDS})) AS tried FROM crm_properties p
+      WHERE (p.geo IS NULL OR p.geo = '') AND COALESCE(NULLIF(TRIM(p.full_address), ''), NULLIF(TRIM(p.city), ''), p.cad_building, p.cad_land, p.cf_number) IS NOT NULL`)
     .first<{ todo: number | null; tried: number | null }>();
   return { todo: r?.todo ?? 0, tried: r?.tried ?? 0 };
 }
 
-/** The next batch of properties never tried (or all without a location again, with `retry`). */
+/** How many addresses one batch looks up (one a second). */
+const ADDR_BATCH = 6;
+
+/**
+ * The next batch: from the plans the properties never tried (or all without a point again, with `retry`), then a few
+ * from their address. The page calls it until nothing is left.
+ */
 export async function locateBatch(db: D1Database, limit: number, retry = false) {
-  const rows = (await db.prepare(`SELECT p.id, p.city, p.cad_building, p.cad_land, p.cf_number FROM crm_properties p WHERE ${NEEDS} ${retry ? "" : "AND p.geo_checked_at IS NULL"}
-    ORDER BY p.updated_at DESC LIMIT ?`).bind(limit).all<Prop>()).results;
-  if (!rows.length) return { located: 0, failed: 0, processed: 0 };
-  const r = await locate(db, rows);
-  return { ...r, processed: rows.length };
+  let located = 0, processed = 0;
+  if (geolocateEnabled()) {
+    const rows = (await db.prepare(`SELECT p.id, p.city, p.cad_building, p.cad_land, p.cf_number FROM crm_properties p WHERE ${NEEDS} ${retry ? "" : "AND p.geo_checked_at IS NULL"}
+      ORDER BY p.updated_at DESC LIMIT ?`).bind(limit).all<Prop>()).results;
+    if (rows.length) { located += (await locate(db, rows)).located; processed += rows.length; }
+  }
+  const addr = (await db.prepare(`SELECT p.id, p.full_address, p.city, p.county FROM crm_properties p WHERE ${ADDR_NEEDS} ORDER BY p.updated_at DESC LIMIT ?`).bind(ADDR_BATCH)
+    .all<{ id: string; full_address: string | null; city: string | null; county: string | null }>()).results;
+  if (addr.length) { located += await locateAddresses(db, addr); processed += addr.length; }
+  return { located, failed: processed - located, processed };
 }

@@ -30,7 +30,7 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
   const geoPct = s.n ? Math.round((s.geo / s.n) * 100) : 0;
 
   return (
-    <CrmShell user={user} base={base} active="properties" title={scope !== "all" ? "Proprietățile mele" : all ? "Proprietăți" : "Proprietăți / comparabile"}
+    <CrmShell user={user} base={base} active="properties" title={scope !== "all" ? "Proprietățile mele" : "Proprietăți"}
       subtitle={scope === "lead" ? "Proprietățile evaluate în rapoartele unde ești evaluator principal sau verificator" : scope === "own" ? "Proprietățile evaluate în rapoartele la care ești în echipă"
         : all ? "Registrul proprietăților evaluate: istoric, valori și localizare pe hartă" : "Caută comparabile în proprietățile evaluate: tip, zonă, suprafață, an, perioadă · valoare și lei/m²"}>
       <div className="dbKpis">
@@ -56,7 +56,7 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
         </a>
       </div>
 
-      {locCounts && (locCounts.todo > 0 || locCounts.tried > 0 || !geolocateEnabled()) && <LocateAll initial={locCounts} enabled={geolocateEnabled()} />}
+      {locCounts && (locCounts.todo > 0 || locCounts.tried > 0) && <LocateAll initial={locCounts} enabled={geolocateEnabled()} />}
 
       <RegistryView
         base={base} current={sp} rows={data.rows} points={data.points} total={s.n} page={data.page} pages={pages}

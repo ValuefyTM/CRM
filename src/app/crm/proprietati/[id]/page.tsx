@@ -7,7 +7,7 @@ import { REPORT_STATUS } from "@/lib/reports";
 import { niceName } from "@/lib/labels";
 import { CrmShell } from "@/components/CrmShell";
 import { ClickRow } from "@/components/ClickRow";
-import { geolocateEnabled } from "@/lib/geolocate";
+import { locateLater } from "@/lib/geolocate";
 import { LocateOne } from "../LocateActions";
 import { RegistryMap } from "../RegistryMap";
 import { CAT_COLOR, CAT_LABEL } from "@/lib/registry-labels";
@@ -34,6 +34,8 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
   if (!d) notFound();
   const p = d.property;
   const ll = parseGeo(p.geo);
+  // Without a point: placed in the background (plans, then address), at most once a week.
+  if (!ll && (!p.geo_checked_at || Date.parse(p.geo_checked_at) < Date.now() - 7 * 86400000)) locateLater(db, p.id);
   // Client, bank and the report itself only for its team (or "reports.all"); the value is there for everyone (comparables).
   const vals = await Promise.all(d.valuations.map(async (v) => ({
     ...v, val: v.value ?? (v.assets === 1 ? v.result_value : null),
@@ -86,8 +88,8 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
           {ll ? <div style={{ height: 340 }}><RegistryMap base={base} height={340} points={[{ id: p.id, lat: ll[0], lng: ll[1], cat: catKey(p.category), label: p.type ?? "", address: p.full_address ?? "", value: p.value, date: p.last_date }]} /></div>
             : (
               <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <p className="hint" style={{ margin: 0 }}>Proprietatea nu are coordonate.{p.geo_note ? ` Ultima căutare în cadastru: ${p.geo_note}` : ""}</p>
-                {geolocateEnabled() && (p.cad_building || p.cad_land || p.cf_number) && <LocateOne id={p.id} />}
+                <p className="hint" style={{ margin: 0 }}>Proprietatea nu are coordonate.{p.geo_note ? ` Ultima căutare: ${p.geo_note}` : ""}</p>
+                {(p.cad_building || p.cad_land || p.cf_number || p.full_address || p.city) && <LocateOne id={p.id} />}
               </div>
             )}
         </section>

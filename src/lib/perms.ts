@@ -26,7 +26,7 @@ export const MODULES = [
     sp: [["status", "Schimbă statusul"], ["deliver", "Predă raportul"], ["team", "Alocă echipa"]],
     hint: "„Din echipa lui”: drepturile din echipa raportului (mai jos). „Unde e evaluator / verificator”: drepturile de aici, pe rapoartele unde e evaluator principal sau verificator; rapoartele unde e doar inspector nu le vede (are inspecțiile, în Inspecții)." },
   { k: "inspections", l: "Inspecții", group: "Operațional", rights: ["E"], scope: [["all", "Toate"], ["own", "Alocate lui"], ["lead", "Alocate lui și din rapoartele unde e evaluator / verificator"]], sp: [["assign", "Alocă inspectorul"]] },
-  { k: "properties", l: "Proprietăți / comparabile", group: "Operațional", rights: ["E"], scope: [["all", "Toate"], ["own", "Din echipa lui"], LEAD],
+  { k: "properties", l: "Proprietăți", group: "Operațional", rights: ["E"], scope: [["all", "Toate"], ["own", "Din echipa lui"], LEAD],
     hint: "Proprietățile evaluate în rapoartele pe care le vede (din echipa lui) sau pe care le conduce / verifică; comparabilele se caută tot printre ele. Raportul unei proprietăți se deschide doar dacă îl vede." },
   { k: "fees", l: "Onorarii și sume", group: "Financiar", rights: [], scope: [["all", "Toate sumele"], ["own", "Doar cota lui"], ["lead", "Toate sumele unde e evaluator / verificator"]] },
   { k: "billing", l: "Facturare", group: "Financiar", rights: ["A", "E", "D"], sp: [["issue", "Emite factura"]] },

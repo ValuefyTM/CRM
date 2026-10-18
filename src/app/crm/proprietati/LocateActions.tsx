@@ -37,19 +37,19 @@ export function LocateAll({ initial, enabled }: { initial: Counts; enabled: bool
       <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{check.steps.map((x, i) => <li key={i}>{x.ok ? "✓" : "✗"} {x.text}</li>)}</ul>
     </div>
   );
-  if (!enabled) return <div className="note">Localizarea automată din cadastru se activează cu variabila <b>LOCATOR_API_TOKEN</b> (aceeași valoare în Tools și în CRM). Dacă ai setat-o, fă deploy din nou la CRM: variabilele noi intră în vigoare la următoarea versiune.</div>;
   return (
     <div className="locateBar">
       <span className="locateIc" aria-hidden="true">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" /></svg>
       </span>
       <span className="locateText">
-        <b>Localizare din cadastru</b>
+        <b>Localizare pe hartă</b>
         <small>
-          {run ? `${run.located} din ${run.processed} proprietăți au primit coordonate (centrul parcelei din planul UAT).`
-            : c.todo ? `${c.todo.toLocaleString("ro-RO")} proprietăți fără coordonate au număr cadastral sau CF și pot fi puse pe hartă.`
-            : "Toate proprietățile cu număr cadastral au fost verificate."}
-          {c.tried > 0 && ` ${c.tried.toLocaleString("ro-RO")} nu au fost găsite în planuri.`}
+          {run ? `${run.located} din ${run.processed} proprietăți au primit coordonate (din planul cadastral sau după adresă).`
+            : c.todo ? `${c.todo.toLocaleString("ro-RO")} proprietăți fără coordonate pot fi puse pe hartă: din cadastru (centrul parcelei) sau, dacă nu sunt în planuri, după adresă.`
+            : "Toate proprietățile cu număr cadastral sau adresă au fost verificate."}
+          {c.tried > 0 && ` ${c.tried.toLocaleString("ro-RO")} nu au fost găsite nici în planuri, nici după adresă.`}
+          {!enabled && " Localizatorul cadastral nu e configurat (LOCATOR_API_TOKEN): se caută doar după adresă."}
         </small>
         {msg && <span role="alert" className="error inlineErr">{msg}</span>}
       </span>
@@ -57,7 +57,7 @@ export function LocateAll({ initial, enabled }: { initial: Counts; enabled: bool
         <span className="actions">
           {c.todo > 0 && <button type="button" className="btn btnNavy btnSm" onClick={() => start(false)}>Localizează {c.todo.toLocaleString("ro-RO")}</button>}
           {c.tried > 0 && <button type="button" className="btn btnGhost btnSm" onClick={() => start(true)}>Reîncearcă negăsitele</button>}
-          <button type="button" className="btn btnGhost btnSm" disabled={checking} onClick={verify}>{checking ? "Se verifică…" : "Verifică legătura"}</button>
+          {enabled && <button type="button" className="btn btnGhost btnSm" disabled={checking} onClick={verify}>{checking ? "Se verifică…" : "Verifică legătura"}</button>}
         </span>
       )}
       {checkBox}
@@ -76,8 +76,8 @@ export function LocateOne({ id }: { id: string }) {
         const d = (await r?.json().catch(() => ({}))) as { ok?: boolean; note?: string; error?: string } | undefined;
         setBusy(false);
         if (r?.ok && d?.ok) return location.reload();
-        setMsg(d?.error || d?.note || "Nu am găsit parcela în planuri.");
-      }}>{busy ? "Se caută…" : "Localizează din cadastru"}</button>
+        setMsg(d?.error || d?.note || "Nu am găsit nici parcela în planuri, nici adresa pe hartă.");
+      }}>{busy ? "Se caută…" : "Localizează pe hartă"}</button>
       {msg && <span className="hint">{msg}</span>}
     </span>
   );
