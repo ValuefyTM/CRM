@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { staffPage } from "@/lib/guard";
 import { registry, registryFacets, REGISTRY_PAGE, REGISTRY_SORTS } from "@/lib/registry";
 import { CrmShell } from "@/components/CrmShell";
-import { can } from "@/lib/perms";
-import { inspectorHidden } from "@/lib/perms-db";
+import { can, scopeOf } from "@/lib/perms";
+import { inspectorHidden, propertyScope } from "@/lib/perms-db";
 import { geolocateEnabled, locateCounts } from "@/lib/geolocate";
 import { LocateAll } from "./LocateActions";
 import { RegistryView, type RegistryQuery } from "./RegistryView";
@@ -20,16 +20,19 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
   const page = Math.max(1, Number(sp.page) || 1);
   const admin = can(user, "properties.E");
   const all = can(user, "reports.all");
+  // Proprietăți „Pe ce date”: all of them, or only those valued in the user's reports (team / lead).
+  const scope = scopeOf(user, "properties");
   const [data, facets, locCounts] = await Promise.all([
-    registry(db, { ...sp, page }, { id: user.id, all, team: user.team, noInspector: inspectorHidden(user) }), registryFacets(db, sp.county, sp.cat), admin ? locateCounts(db) : Promise.resolve(null),
+    registry(db, { ...sp, page }, { id: user.id, all, team: user.team, noInspector: inspectorHidden(user), scope: propertyScope(user) }), registryFacets(db, sp.county, sp.cat), admin ? locateCounts(db) : Promise.resolve(null),
   ]);
   const s = data.stats;
   const pages = Math.max(1, Math.ceil(s.n / REGISTRY_PAGE));
   const geoPct = s.n ? Math.round((s.geo / s.n) * 100) : 0;
 
   return (
-    <CrmShell user={user} base={base} active="properties" title={all ? "Proprietăți" : "Proprietăți / comparabile"}
-      subtitle={all ? "Registrul proprietăților evaluate: istoric, valori și localizare pe hartă" : "Caută comparabile în proprietățile evaluate: tip, zonă, suprafață, an, perioadă · valoare și lei/m²"}>
+    <CrmShell user={user} base={base} active="properties" title={scope !== "all" ? "Proprietățile mele" : all ? "Proprietăți" : "Proprietăți / comparabile"}
+      subtitle={scope === "lead" ? "Proprietățile evaluate în rapoartele unde ești evaluator principal sau verificator" : scope === "own" ? "Proprietățile evaluate în rapoartele la care ești în echipă"
+        : all ? "Registrul proprietăților evaluate: istoric, valori și localizare pe hartă" : "Caută comparabile în proprietățile evaluate: tip, zonă, suprafață, an, perioadă · valoare și lei/m²"}>
       <div className="dbKpis">
         <div className="dbKpi static">
           <span className="dbKpiLabel"><i style={{ background: "var(--ink)" }} />Proprietăți evaluate</span>

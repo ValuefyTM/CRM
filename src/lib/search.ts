@@ -1,6 +1,6 @@
 import { niceName } from "./labels";
 import { can, type WithPerms } from "./perms";
-import { mySql } from "./perms-db";
+import { mySql, propertyScope } from "./perms-db";
 import { scopeFilter } from "./scope";
 
 // Server-only: the search box in the CRM's top bar — one query over reports, orders, clients, contracts and
@@ -30,6 +30,9 @@ export async function globalSearch(db: D1Database, raw: string, viewer?: WithPer
     return { sql: `AND ${f.sql.replace(/\?/g, () => `?${n++}`)}`, binds: f.binds };
   };
   const so = sc("orders", "o", 5), sl = sc("clients", "e", 4), sk = sc("contracts", "k", 3);
+  // Proprietăți „Pe ce date”: the condition numbered after the query's own parameters.
+  const ps = viewer ? propertyScope(viewer) : null;
+  const sp = ps ? { sql: `AND ${ps.sql.replace(/\?/g, (() => { let n = 3; return () => `?${n++}`; })())}`, binds: ps.binds } : { sql: "", binds: [] as string[] };
   const [reports, orders, clients, contracts, props] = await Promise.all([
     db.prepare(`SELECT r.id, r.number, r.label, r.status, COALESCE(r.report_date, substr(r.created_at, 1, 10)) AS d, c.name AS client, b.name AS bank
       FROM reports r LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id
@@ -50,8 +53,8 @@ export async function globalSearch(db: D1Database, raw: string, viewer?: WithPer
       WHERE (k.number = ?1 OR e.name LIKE ?2) ${sk.sql} ORDER BY k.number = ?1 DESC, k.signed_on DESC LIMIT ${PER}`).bind(q, like, ...sk.binds)
       .all<{ id: string; kind: string; number: string | null; signed_on: string | null; client: string | null }>(),
     !may("properties") ? none : db.prepare(`SELECT p.id, p.type, p.full_address, p.city, p.cf_number, p.cad_building FROM crm_properties p
-      WHERE p.cf_number LIKE ?1 OR p.cad_building LIKE ?1 OR p.cad_land LIKE ?1 OR p.full_address LIKE ?1
-      ORDER BY p.cf_number = ?2 DESC, p.updated_at DESC LIMIT ${PER}`).bind(like, q)
+      WHERE (p.cf_number LIKE ?1 OR p.cad_building LIKE ?1 OR p.cad_land LIKE ?1 OR p.full_address LIKE ?1) ${sp.sql}
+      ORDER BY p.cf_number = ?2 DESC, p.updated_at DESC LIMIT ${PER}`).bind(like, q, ...sp.binds)
       .all<{ id: string; type: string | null; full_address: string | null; city: string | null; cf_number: string | null; cad_building: string | null }>(),
   ]);
   const day = (d: string | null | undefined) => (d ? d.slice(0, 10).split("-").reverse().join(".") : "");

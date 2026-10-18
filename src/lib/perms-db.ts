@@ -1,6 +1,6 @@
 // Server-only: the permissions configuration (setting "perms"), and what a team member may do on a report.
 import { now } from "./db";
-import { can, cleanConfig, DEFAULT_CONFIG, TEAM_RIGHTS, type FeeView, type PermConfig, type TeamRight, type TeamRole, type WithPerms } from "./perms";
+import { can, cleanConfig, DEFAULT_CONFIG, leadSql, scopeOf, TEAM_RIGHTS, type FeeView, type PermConfig, type TeamRight, type TeamRole, type WithPerms } from "./perms";
 
 export async function getConfig(db: D1Database): Promise<PermConfig> {
   const row = await db.prepare("SELECT value FROM settings WHERE key = 'perms'").first<{ value: string }>().catch(() => null);
@@ -104,6 +104,26 @@ export const mySql = (u: WithPerms & { team?: PermConfig["team"] }) => myReports
 /** Same, for a report id column of another table (properties, search…). */
 export const reportVisibleSql = (team: PermConfig["team"], col: string, noInspector = false) =>
   `EXISTS (SELECT 1 FROM reports r WHERE r.id = ${col} AND ${myReportsSql(team, noInspector)})`;
+
+export type PropertyScope = { sql: string; binds: string[] } | null;
+
+/**
+ * Proprietăți / comparabile, „Pe ce date”: the properties (table aliased `alias`) with a valuation in a report the user
+ * sees as a team member ("din echipa lui"), or leads / verifies. Null: every property.
+ */
+export function propertyScope(u: WithPerms & { id: string; team?: PermConfig["team"] }, alias = "p"): PropertyScope {
+  const s = scopeOf(u, "properties");
+  if (s === "all") return null;
+  if (s === "lead") return { sql: `EXISTS (SELECT 1 FROM assets pa WHERE pa.property_id = ${alias}.id AND ${leadSql("pa.report_id")})`, binds: [u.id] };
+  return { sql: `EXISTS (SELECT 1 FROM assets pa JOIN reports r ON r.id = pa.report_id WHERE pa.property_id = ${alias}.id AND ${mySql(u)})`, binds: [u.id] };
+}
+
+/** Whether one property is among the user's (see propertyScope). */
+export async function propertyInScope(db: D1Database, u: WithPerms & { id: string; team?: PermConfig["team"] }, id: string) {
+  const f = propertyScope(u, "x");
+  if (!f) return true;
+  return !!(await db.prepare(`SELECT 1 AS ok FROM crm_properties x WHERE x.id = ? AND ${f.sql}`).bind(id, ...f.binds).first());
+}
 
 /** The share of a report's fee a team member gets (fișa utilizatorului): main evaluator %, verifier %, inspector fixed or %. */
 export async function feeShare(db: D1Database, userId: string, roles: TeamRole[], fee: number | null) {

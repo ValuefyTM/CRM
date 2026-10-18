@@ -1,5 +1,5 @@
 import { fileSrc } from "./files";
-import { reportVisibleSql } from "./perms-db";
+import { reportVisibleSql, type PropertyScope } from "./perms-db";
 import { DEFAULT_CONFIG, type TeamMatrix } from "./perms";
 
 // Server-only: the register of valued properties — every property with its latest valuation (date, value, value per
@@ -10,8 +10,9 @@ export type RegistryFilters = {
   tip?: string; smin?: string; smax?: string; amin?: string; amax?: string; luni?: string;
 };
 /** Who looks: without "reports.all", a report opens only for its team (see perms-db). */
-/** `noInspector`: the reports where the user is only inspector don't open (see inspectorHidden). */
-export type RegistryViewer = { id: string; all: boolean; team?: TeamMatrix; noInspector?: boolean };
+/** `noInspector`: the reports where the user is only inspector don't open (see inspectorHidden). `scope`: the properties
+ * the user works on (Proprietăți, „Pe ce date”; see propertyScope), null for all of them. */
+export type RegistryViewer = { id: string; all: boolean; team?: TeamMatrix; noInspector?: boolean; scope?: PropertyScope };
 
 export type RegistryRow = {
   id: string; category: string | null; type: string | null; county: string | null; city: string | null; full_address: string | null; geo: string | null;
@@ -59,9 +60,10 @@ const PHOTO = `COALESCE(NULLIF(p.image_url, ''),
     WHERE a.property_id = p.id AND f.deleted_at IS NULL ORDER BY f.category = 'exterior' DESC, f.taken_at DESC LIMIT 1),
   (SELECT s.photo_url FROM inspection_sheets s JOIN assets a ON a.id = s.asset_id WHERE a.property_id = p.id AND s.photo_url IS NOT NULL AND s.photo_url <> '' LIMIT 1))`;
 
-function where(f: RegistryFilters) {
+function where(f: RegistryFilters, viewer?: RegistryViewer) {
   const w: string[] = ["p.category IS NOT 'BUN MOBIL'"];
   const a: (string | number)[] = [];
+  if (viewer?.scope) { w.push(viewer.scope.sql); a.push(...viewer.scope.binds); }
   if (f.cat) { w.push("p.category = ?"); a.push(f.cat); }
   if (f.county) { w.push("p.county = ?"); a.push(f.county); }
   if (f.city) { w.push("p.city = ?"); a.push(f.city); }
@@ -97,7 +99,7 @@ export function parseGeo(g: string | null): [number, number] | null {
 }
 
 export async function registry(db: D1Database, f: RegistryFilters, viewer?: RegistryViewer) {
-  const { sql, args } = where(f);
+  const { sql, args } = where(f, viewer);
   const open = viewer && !viewer.all ? `CASE WHEN p.report_id IS NULL OR ${reportVisibleSql(viewer.team ?? DEFAULT_CONFIG.team, "p.report_id", viewer.noInspector)} THEN 1 ELSE 0 END` : "1";
   const openArgs = viewer && !viewer.all ? [viewer.id] : [];
   const page = Math.max(1, f.page ?? 1);

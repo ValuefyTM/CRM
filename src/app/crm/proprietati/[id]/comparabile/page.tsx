@@ -4,7 +4,7 @@ import { staffPage } from "@/lib/guard";
 import { AREA, comparables, RADII, YEARS, type CompFilters } from "@/lib/comparables";
 import { geolocateEnabled } from "@/lib/geolocate";
 import { can } from "@/lib/perms";
-import { mySql } from "@/lib/perms-db";
+import { mySql, propertyInScope, propertyScope } from "@/lib/perms-db";
 import { CrmShell } from "@/components/CrmShell";
 import { LocateOne } from "../../LocateActions";
 import { CompView } from "./CompView";
@@ -19,7 +19,8 @@ export default async function ComparablesPage({ params, searchParams }: { params
   const { db, user, base } = await staffPage("properties");
   const { id } = await params;
   const sp = await searchParams;
-  const d = await comparables(db, id, sp);
+  // The subject and the comparables: only among the properties of the user's scope (Proprietăți, „Pe ce date”).
+  const d = (await propertyInScope(db, user, id)) ? await comparables(db, id, sp, propertyScope(user)) : null;
   if (!d) notFound();
   // The reports behind the comparables open only for their team (or with "reports.all").
   if (!can(user, "reports.all")) {

@@ -1,6 +1,7 @@
 // Server-only: comparables of a property — other valued properties nearby (same type or category, similar area,
 // recent valuation), with distance, value per m² and the spread of values per m² around them.
 import { BASE, parseGeo } from "./registry";
+import type { PropertyScope } from "./perms-db";
 import { fileSrc } from "./files";
 
 export type CompFilters = { raza?: string; ani?: string; potrivire?: string; supr?: string };
@@ -27,18 +28,19 @@ const quantile = (s: number[], q: number) => {
   return s[lo] + (s[hi] - s[lo]) * (i - lo);
 };
 
-export async function comparables(db: D1Database, propertyId: string, f: CompFilters) {
+/** `scope`: the properties the user works on (Proprietăți, „Pe ce date”): the comparables come only from among them. */
+export async function comparables(db: D1Database, propertyId: string, f: CompFilters, scope: PropertyScope = null) {
   const subject = await db.prepare(`${BASE} SELECT p.* FROM p WHERE p.id = ?`).bind(propertyId)
     .first<{ id: string; type: string | null; category: string | null; full_address: string | null; city: string | null; geo: string | null; usable_area: number | null; value: number | null; sqm: number | null; last_date: string | null }>();
   if (!subject) return null;
-  return { subject, ...(await nearby(db, parseGeo(subject.geo), subject, f)) };
+  return { subject, ...(await nearby(db, parseGeo(subject.geo), subject, f, scope)) };
 }
 
 /** What the comparables are measured against: a property in the registry, or any point (e.g. an address). */
 export type CompSubject = { id?: string; type: string | null; category: string | null; usable_area: number | null };
 
 /** Valued properties around a point, filtered like the comparables page (radius, years, type/category, area). */
-export async function nearby(db: D1Database, ll: [number, number] | null, subject: CompSubject, f: CompFilters) {
+export async function nearby(db: D1Database, ll: [number, number] | null, subject: CompSubject, f: CompFilters, scope: PropertyScope = null) {
   const radius = RADII.includes(f.raza ?? "") ? Number(f.raza) : 1;
   const years = YEARS.some(([k]) => k === f.ani) ? Number(f.ani) : 3;
   const sameType = f.potrivire !== "categorie" && !!subject.type;
@@ -52,6 +54,7 @@ export async function nearby(db: D1Database, ll: [number, number] | null, subjec
   if (sameType) { w.push("p.type = ?"); a.push(subject.type!); } else if (subject.category) { w.push("p.category = ?"); a.push(subject.category); }
   if (years) { const d = new Date(); d.setFullYear(d.getFullYear() - years); w.push("p.last_date >= ?"); a.push(d.toISOString().slice(0, 10)); }
   if (tol && subject.usable_area) { w.push("p.usable_area BETWEEN ? AND ?"); a.push(subject.usable_area * (1 - tol / 100), subject.usable_area * (1 + tol / 100)); }
+  if (scope) { w.push(scope.sql); a.push(...scope.binds); }
   const raw = (await db.prepare(`${BASE} SELECT p.id, p.type, p.category, p.full_address, p.city, p.usable_area, p.year_built, p.value, p.sqm, p.last_date, p.report_id, p.report_number, p.geo,
       COALESCE(NULLIF(p.image_url, ''), (SELECT 'r2:' || f.r2_key FROM inspection_photos f JOIN inspections i ON i.id = f.inspection_id JOIN assets a ON a.id = i.asset_id
         WHERE a.property_id = p.id AND f.deleted_at IS NULL ORDER BY f.category = 'exterior' DESC LIMIT 1)) AS photo

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
-import { reportAccess } from "@/lib/perms-db";
+import { propertyInScope, reportAccess } from "@/lib/perms-db";
 import { catKey, parseGeo, registryProperty } from "@/lib/registry";
 import { REPORT_STATUS } from "@/lib/reports";
 import { niceName } from "@/lib/labels";
@@ -28,7 +28,9 @@ function Row({ k, children }: { k: string; children: React.ReactNode }) {
 
 export default async function PropertyPage({ params }: { params: Promise<{ id: string }> }) {
   const { db, user, base } = await staffPage("properties");
-  const d = await registryProperty(db, (await params).id);
+  const { id } = await params;
+  // Only the properties of the user's scope (Proprietăți, „Pe ce date”).
+  const d = (await propertyInScope(db, user, id)) ? await registryProperty(db, id) : null;
   if (!d) notFound();
   const p = d.property;
   const ll = parseGeo(p.geo);
