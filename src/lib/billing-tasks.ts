@@ -1,7 +1,7 @@
 // Server-only: "De facturat" — the finished reports (done / delivered) on a framework contract or a collaboration
 // invoiced per report, not invoiced yet. They are the billing tasks of the Facturare module: each one is previewed
 // and issued in Oblio from there. Nothing is stored: a report leaves the list when its invoice is issued.
-import { getBilling } from "./billing";
+import { FINISHED_HERE, getBilling } from "./billing";
 import { can, type WithPerms } from "./perms";
 import { audit } from "./auth";
 import { now } from "./db";
@@ -22,7 +22,7 @@ const SELECT = `SELECT r.id, r.number, r.label, r.fee, COALESCE(r.delivered_at, 
 const PER_ORDER = `(
     (k.kind = 'framework' AND COALESCE(k.billing_mode, ?1) = 'per_order')
     OR (o.collaboration_id IS NOT NULL AND COALESCE(c.billing_mode, ?2) = 'per_order'))`;
-const OPEN = `r.invoice_id IS NULL AND r.billed_outside_at IS NULL AND r.glide_id IS NULL AND r.status <> 'cancelled' AND (r.delivered_at IS NOT NULL OR r.status = 'done')`;
+const OPEN = `r.invoice_id IS NULL AND r.billed_outside_at IS NULL AND r.status <> 'cancelled' AND (r.delivered_at IS NOT NULL OR r.status = 'done') AND ${FINISHED_HERE}`;
 
 /** "Facturat din Oblio": the invoice was issued straight in Oblio; the task closes, with the invoice's number when given. */
 export async function markBilledOutside(db: D1Database, actor: string, reportId: string, ref: string) {

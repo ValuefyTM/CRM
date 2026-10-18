@@ -180,12 +180,17 @@ export async function sampleValues(db: D1Database, kind: "contract" | "collab", 
 }
 
 /** Per-order billing under a framework contract / collaboration: one approved (delivered) report, with that partner's own invoice text. */
+/** Finished in the CRM (on reports r): made here, or imported and then delivered / closed from the CRM (not finished before the import). */
+export const FINISHED_HERE = `(r.glide_id IS NULL OR r.delivered_by IS NOT NULL
+  OR EXISTS (SELECT 1 FROM audit_log al WHERE al.entity = 'report' AND al.entity_id = r.id AND al.action IN ('report.delivered', 'report.status')))`;
+
 export async function draftForReport(db: D1Database, reportId: string): Promise<Draft | { error: string }> {
   const b = await getBilling(db);
   const r = await db.prepare(`SELECT r.id, r.fee, r.delivered_at, r.status, r.glide_id, r.invoice_id, r.billed_outside_at, r.contract_id, k.kind AS contract_kind, k.client_id AS party_id, k.billing_mode, k.billing_text,
+      ${FINISHED_HERE} AS finished_here,
       o.collaboration_id, o.fee_net, c.billing_mode AS collab_mode, c.billing_text AS collab_text, c.firm_id
     FROM reports r LEFT JOIN contracts k ON k.id = r.contract_id LEFT JOIN orders o ON o.id = r.order_id LEFT JOIN collaborations c ON c.id = o.collaboration_id WHERE r.id = ?`).bind(reportId)
-    .first<{ id: string; fee: number | null; delivered_at: string | null; status: string; glide_id: string | null; invoice_id: string | null; billed_outside_at: string | null; contract_id: string | null; contract_kind: string | null; party_id: string | null;
+    .first<{ id: string; fee: number | null; delivered_at: string | null; status: string; glide_id: string | null; invoice_id: string | null; billed_outside_at: string | null; contract_id: string | null; contract_kind: string | null; party_id: string | null; finished_here: number;
       billing_mode: BillingMode | null; billing_text: string | null; collaboration_id: string | null; fee_net: number | null; collab_mode: BillingMode | null; collab_text: string | null; firm_id: string | null }>();
   if (!r) return { error: "Raportul nu există." };
   if (r.invoice_id) return { error: "Raportul este deja facturat." };
@@ -193,8 +198,8 @@ export async function draftForReport(db: D1Database, reportId: string): Promise<
   const collab = !!r.collaboration_id;
   const mode = collab ? r.collab_mode ?? b.collabDefault : r.contract_kind === "framework" ? r.billing_mode ?? b.frameworkDefault : null;
   if (mode !== "per_order") return { error: "Acest raport nu se facturează per comandă (vezi Setări → Facturare)." };
-  // Reports brought from Glide were invoiced outside the CRM; new ones once finished (approved / delivered).
-  if (r.glide_id) return { error: "Raport importat din vechiul CRM: a fost facturat în afara acestui CRM." };
+  // Reports finished before the import were invoiced outside the CRM; the ones finished here (imported or not) once finished.
+  if (r.glide_id && !r.finished_here) return { error: "Raport finalizat în vechiul CRM: a fost facturat în afara acestui CRM." };
   if (!r.delivered_at && r.status !== "done") return { error: "Factura se emite după finalizarea raportului." };
   const party = await partyOf(db, collab ? r.firm_id : r.party_id);
   if (!party) return { error: "Nu știu cui se facturează: contractul nu are bancă / firmă." };
