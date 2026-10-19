@@ -34,7 +34,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const [contacts, portalUsers, reports, orders, totals, log] = await Promise.all([
     clientContacts(db, id),
     clientPortalUsers(db, id),
-    db.prepare(`SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.result_value, r.report_type, NULL AS client_name, NULL AS bank_code, NULL AS issuer_name,
+    db.prepare(`SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.result_value, r.result_eur, r.report_type, NULL AS client_name, NULL AS bank_code, NULL AS issuer_name,
         (SELECT u.name FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = r.id AND m.role = 'evaluator' LIMIT 1) AS evaluator,
         (SELECT COALESCE(p.type, '') || '|' || COALESCE(p.full_address, p.city, '') FROM assets a JOIN crm_properties p ON p.id = a.property_id WHERE a.report_id = r.id ORDER BY a.is_main DESC LIMIT 1) AS asset
       FROM reports r WHERE r.client_id = ? ORDER BY r.report_date DESC LIMIT 50`).bind(id).all<ReportRow>().then((r) => r.results),

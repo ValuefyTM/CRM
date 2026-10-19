@@ -17,7 +17,7 @@ export function ReportList({ reports, base, title, empty }: { reports: ReportRow
                 <span className="who">
                   <a className="rowLink" href={`${base}/rapoarte/${r.id}`}>{r.label ?? `Raport ${r.number ?? ""}`}</a>
                   <span className="muted">{[r.report_type, cap(type), address].filter(Boolean).join(" · ")}</span>
-                  <span className="muted">{fmtDate(r.report_date)} · {r.evaluator ?? "—"} · {lei(r.result_value)}</span>
+                  <span className="muted">{fmtDate(r.report_date)} · {r.evaluator ?? "—"} · {r.result_eur ? lei(r.result_eur, "€") : lei(r.result_value)}</span>
                 </span>
                 <span className={`pill ${cls}`}><i />{label}</span>
               </li>

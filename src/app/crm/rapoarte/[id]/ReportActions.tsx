@@ -230,9 +230,10 @@ const numOf = (s: string) => { const n = parseFloat(s.replace(/\s/g, "").replace
 const fmt = (n: number, d = 0) => n.toLocaleString("ro-RO", { minimumFractionDigits: d, maximumFractionDigits: d });
 
 /**
- * "Predă raportul": the date of the valuation and its result — each asset's value (lei), the approach that gave it and
- * the value in euro at the BNR rate of that day; the total is the report's result. Then "Finalizat" on the report and
- * the order. For portal and website orders the client gets an email with the download link (unless unticked).
+ * "Predă raportul": the date of the valuation and its result — each asset's value in euro and the approach that gave
+ * it; the total is the report's result. The lei value is worked out on the server at the BNR rate of the report's date
+ * (never asked). Then "Finalizat" on the report and the order. For portal and website orders the client gets an
+ * email with the download link (unless unticked).
  * `values`: the report values something (not an inspection / information note), so the values are required.
  */
 export function DeliverButton({ id, ready, number, suggested, notifyTo, assets, values, auto = true, autoOpen = false }: {
@@ -246,38 +247,24 @@ export function DeliverButton({ id, ready, number, suggested, notifyTo, assets, 
   // Opened once in the browser (the modal is a portal on document.body, which the server does not have).
   useEffect(() => { if (autoOpen && ready) setOpen(true); }, [autoOpen, ready]);
   const [f, setF] = useState({ number: number ?? suggested, report_date: new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" }), notify: !!notifyTo });
+  // `value` of an asset here: its value in euro (already given at an earlier attempt)
   const [vals, setVals] = useState<Record<string, { value: string; approach: string }>>(() =>
     Object.fromEntries(assets.map((a) => [a.id, { value: a.value != null ? String(a.value) : "", approach: a.approach ?? "" }])));
-  const [rate, setRate] = useState("");
-  const [rateInfo, setRateInfo] = useState<{ date: string } | { error: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
-  // The BNR euro rate of the report's date (the last one published on or before it); typed by hand when BNR is not reachable.
-  useEffect(() => {
-    if (!open || !values || !/^\d{4}-\d{2}-\d{2}$/.test(f.report_date)) return;
-    const ctl = new AbortController();
-    setRateInfo(null);
-    fetch(`/api/crm/bnr?date=${f.report_date}`, { signal: ctl.signal }).then((r) => r.json() as Promise<{ rate?: number; date?: string; error?: string }>).then((d) => {
-      if (d.rate) { setRate(String(d.rate)); setRateInfo({ date: d.date! }); } else setRateInfo({ error: d.error || "Cursul nu a putut fi citit." });
-    }).catch(() => { if (!ctl.signal.aborted) setRateInfo({ error: "Cursul BNR nu a putut fi citit. Scrie cursul manual." }); });
-    return () => ctl.abort();
-  }, [open, values, f.report_date]);
-  const rateNum = numOf(rate);
   const total = assets.reduce((s, a) => s + (numOf(vals[a.id]?.value ?? "") ?? 0), 0);
-  const eur = (lei: number | null) => (lei != null && rateNum ? Math.round(lei / rateNum) : null);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!auto && !f.number.trim()) return setMsg("Completează numărul raportului.");
     if (values) {
       for (const a of assets) {
         const v = vals[a.id];
-        if (!numOf(v?.value ?? "")) return setMsg(`Completează valoarea pentru ${a.label}.`);
+        if (!numOf(v?.value ?? "")) return setMsg(`Completează valoarea (în euro) pentru ${a.label}.`);
         if (!v.approach) return setMsg(`Alege abordarea care a dat valoarea pentru ${a.label}.`);
       }
-      if (!rateNum) return setMsg("Completează cursul BNR al euro din data raportului.");
     }
     setBusy(true); setMsg("");
-    const error = await patch(id, { delivered: true, ...f, ...(values ? { eur_rate: rateNum, values: assets.map((a) => ({ id: a.id, value: numOf(vals[a.id].value), approach: vals[a.id].approach })) } : {}) });
+    const error = await patch(id, { delivered: true, ...f, ...(values ? { values: assets.map((a) => ({ id: a.id, eur: numOf(vals[a.id].value), approach: vals[a.id].approach })) } : {}) });
     setBusy(false);
     if (error) return setMsg(error);
     location.reload();
@@ -289,7 +276,7 @@ export function DeliverButton({ id, ready, number, suggested, notifyTo, assets, 
         <div className="vfModal" role="dialog" aria-modal="true" aria-labelledby="delTitle" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
           <form className={`vfModalBox${values && assets.length > 1 ? " wide" : ""}`} onSubmit={submit} noValidate>
             <h2 id="delTitle">Predă raportul</h2>
-            <p className="hint" style={{ margin: 0 }}>Raportul devine Finalizat, iar comanda se închide.{values ? " Rezultatul evaluării se trece pe fiecare bun și se adună." : ""}</p>
+            <p className="hint" style={{ margin: 0 }}>Raportul devine Finalizat, iar comanda se închide.{values ? " Rezultatul evaluării, în euro, se trece pe fiecare bun și se adună." : ""}</p>
             <div className="formRow">
               <label className="field">Nr. raport<input className="input mono" value={f.number} onChange={(e) => setF({ ...f, number: e.target.value })} readOnly={!!number || auto} />
                 {auto && !number && <small className="muted">Automat, următorul din seria VALUEFY</small>}</label>
@@ -298,34 +285,27 @@ export function DeliverButton({ id, ready, number, suggested, notifyTo, assets, 
             {values && (
               <div className="delValues">
                 <table className="table delTable">
-                  <thead><tr><th>Bun</th><th style={{ textAlign: "right" }}>Valoare (lei)</th><th>Abordare</th><th style={{ textAlign: "right" }}>Euro</th></tr></thead>
+                  <thead><tr><th>Bun</th><th style={{ textAlign: "right" }}>Valoare (€)</th><th>Abordare</th></tr></thead>
                   <tbody>
                     {assets.map((a) => {
                       const v = vals[a.id];
-                      const n = numOf(v.value);
                       return (
                         <tr key={a.id}>
                           <td><b>{a.label}</b>{a.sub && <div className="muted">{a.sub}</div>}</td>
-                          <td style={{ textAlign: "right" }}><input className="input mono num" inputMode="decimal" style={{ width: 130, textAlign: "right" }} value={v.value} aria-label={`Valoare ${a.label}`}
-                            onChange={(e) => setVals({ ...vals, [a.id]: { ...v, value: e.target.value } })} /></td>
+                          <td style={{ textAlign: "right" }}><span className="nwSuffix" style={{ justifyContent: "flex-end" }}><input className="input mono num" inputMode="decimal" style={{ width: 130, textAlign: "right" }} value={v.value} aria-label={`Valoare ${a.label} în euro`}
+                            onChange={(e) => setVals({ ...vals, [a.id]: { ...v, value: e.target.value } })} /><em>€</em></span></td>
                           <td><select className="select" value={v.approach} aria-label={`Abordare ${a.label}`} onChange={(e) => setVals({ ...vals, [a.id]: { ...v, approach: e.target.value } })}>
                             <option value="">— alege —</option>{APPROACHES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
-                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }} className="mono num">{eur(n) != null ? `${fmt(eur(n)!)} €` : <span className="muted">—</span>}</td>
                         </tr>
                       );
                     })}
                   </tbody>
                   {assets.length > 1 && (
-                    <tfoot><tr><th>Rezultat evaluare</th><th style={{ textAlign: "right" }} className="mono num">{total ? `${fmt(total, 2)} lei` : "—"}</th><th /><th style={{ textAlign: "right" }} className="mono num">{eur(total) ? `${fmt(eur(total)!)} €` : "—"}</th></tr></tfoot>
+                    <tfoot><tr><th>Rezultat evaluare</th><th style={{ textAlign: "right" }} className="mono num">{total ? `${fmt(total)} €` : "—"}</th><th /></tr></tfoot>
                   )}
                 </table>
-                <div className="formRow" style={{ alignItems: "end" }}>
-                  <label className="field">Curs BNR euro la data raportului
-                    <span className="nwSuffix"><input className="input mono" inputMode="decimal" value={rate} onChange={(e) => { setRate(e.target.value); }} placeholder="ex. 5,08" /><em>lei / €</em></span>
-                    <small className={rateInfo && "error" in rateInfo ? "error" : "muted"}>{!rateInfo ? "Se citește cursul BNR…" : "error" in rateInfo ? rateInfo.error : rateInfo.date === f.report_date ? `Cursul BNR din ${rateInfo.date.split("-").reverse().join(".")}` : `Ultimul curs BNR publicat înainte: ${rateInfo.date.split("-").reverse().join(".")}`}</small>
-                  </label>
-                  {assets.length === 1 && <div className="field">Rezultat evaluare<b className="mono num" style={{ fontSize: 18 }}>{total ? `${fmt(total, 2)} lei` : "—"}{eur(total) ? <small className="muted"> · {fmt(eur(total)!)} €</small> : null}</b></div>}
-                </div>
+                {assets.length === 1 && <div className="field">Rezultat evaluare<b className="mono num" style={{ fontSize: 18 }}>{total ? `${fmt(total)} €` : "—"}</b></div>}
+                <p className="hint" style={{ margin: 0 }}>Echivalentul în lei se calculează singur, la cursul BNR din data raportului.</p>
               </div>
             )}
             {notifyTo ? (

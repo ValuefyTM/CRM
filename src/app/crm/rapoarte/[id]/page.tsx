@@ -155,6 +155,9 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   ].filter((x): x is { name: string; path: string } => !!x));
   const docCount = sources.length + orderDocs.length + glideFiles.length + (final ? 1 : 0);
   const assetsTotal = assets.reduce((s, a) => s + (a.value ?? 0), 0);
+  const assetsEur = assets.reduce((s, a) => s + (a.value_eur ?? 0), 0);
+  // The result: in euro (as given at delivery), with the lei equivalent when the BNR rate was known; older reports in lei only.
+  const result = (eur: number | null | undefined, ron: number | null | undefined, c = cur) => (eur ? <><span className="mono num">{lei(eur, "€")}</span>{ron ? <small className="muted"> · {lei(ron, c)}</small> : null}</> : ron ? <span className="mono num">{lei(ron, c)}</span> : null);
   const order = r.order_id ? orderCode({ id: r.order_id, seq: r.order_seq, bank_ref: r.order_bank_ref, bank: r.bank_code, source: r.order_source ?? undefined }) : null;
   type Recipient = { id: string; name: string; kind: string | null; role: string; contact: string; link?: boolean };
   const recipients: Recipient[] = [];
@@ -251,7 +254,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   }));
   const boardHead = (
     <div className="abListHead">
-      <h2>Bunuri evaluate <span className="muted">· {assets.length} {assets.length === 1 ? "bun" : "bunuri"}{assetsTotal || r.result_value ? <> · total <span className="mono num">{lei(assetsTotal || r.result_value, cur)}</span></> : null}</span></h2>
+      <h2>Bunuri evaluate <span className="muted">· {assets.length} {assets.length === 1 ? "bun" : "bunuri"}{assetsEur || r.result_eur || assetsTotal || r.result_value ? <> · total {result(assetsEur || r.result_eur, assetsTotal || r.result_value)}</> : null}</span></h2>
       {mayAssign && freeAssets > 0 && <AllocateAll report={r.id} me={user.id} people={inspectors} docs={accessDocs} rows={allocRows} autoOpen={alocare === "1"} />}
       {mayAssign && freeAssets === 0 && openAssets > 0 && <AllocateAll realloc report={r.id} me={user.id} people={inspectors} docs={accessDocs} rows={allocRows} autoOpen={false} />}
     </div>
@@ -370,7 +373,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                     })()}
                   </a>
                   <dl className="kv">
-                    <Row k="Valoare rezultat">{r.result_value || assetsTotal ? <><span className="mono num">{lei(r.result_value || assetsTotal, cur)}</span>{r.result_eur ? <small className="muted"> · {lei(r.result_eur, "€")}</small> : null}</> : null}</Row>
+                    <Row k="Valoare rezultat">{result(r.result_eur || assetsEur, r.result_value || assetsTotal)}</Row>
                     <Row k="Abordare">{main.approach ? APPROACH[main.approach] : null}</Row>
                     {assets.length > 1 && <Row k="Alte bunuri"><a className="link" href={href("bunuri")}>{assets.length - 1} {assets.length === 2 ? "bun" : "bunuri"} →</a></Row>}
                   </dl>
@@ -490,7 +493,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                       {f.length > 0 && <dl className="abFacts">{f.map(([k, v]) => <div key={k}><dt>{k}</dt><dd className={/CF|cad|VIN|înmatriculare/i.test(k) ? "mono" : ""}>{v}</dd></div>)}</dl>}
                     </div>
                     <div className="abSide">
-                      <span className="abVal">{a.value != null ? <b className="mono num">{lei(a.value, cur)}</b> : <small className="muted">fără valoare</small>}{a.value_eur ? <small> · {lei(a.value_eur, "€")}</small> : null}{a.approach && <small> · {APPROACH[a.approach]}</small>}</span>
+                      <span className="abVal">{a.value_eur ? <b className="mono num">{lei(a.value_eur, "€")}</b> : a.value != null ? <b className="mono num">{lei(a.value, cur)}</b> : <small className="muted">fără valoare</small>}{a.value_eur && a.value ? <small> · {lei(a.value, cur)}</small> : null}{a.approach && <small> · {APPROACH[a.approach]}</small>}</span>
                       {c.assets && (
                         <span className="abActs">
                           <AssetEditor report={r.id} label="Modifică" shared={a.other_reports} client={{ name: r.client_name, phone: r.client_phone }} initial={assetForm(a)} />
@@ -600,11 +603,11 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                 <Row k="Transmis către">{recipients.length ? recipients.map((x) => x.name).join(" · ") : null}</Row>
                 <Row k="Borderou">{r.statement_number ? `B-${r.statement_number}` : <span className="muted">neinclus</span>}</Row>
                 {r.delivered_at && <Row k="Predat">{fmtDate(r.delivered_at, true)}{r.delivered_by_name ? ` · ${r.delivered_by_name}` : ""}</Row>}
-                {r.delivered_at && r.result_value ? <Row k="Rezultat evaluare"><span className="mono num">{lei(r.result_value, cur)}</span>{r.result_eur ? <> · <span className="mono num">{lei(r.result_eur, "€")}</span>{r.eur_rate ? <small className="muted"> · curs BNR {r.eur_rate.toLocaleString("ro-RO", { maximumFractionDigits: 4 })} la {fmtDate(r.report_date)}</small> : null}</> : null}</Row> : null}
+                {r.delivered_at && (r.result_eur || r.result_value) ? <Row k="Rezultat evaluare">{result(r.result_eur, r.result_value)}{r.result_eur && r.result_value && r.eur_rate ? <small className="muted"> · curs BNR {r.eur_rate.toLocaleString("ro-RO", { maximumFractionDigits: 4 })} la {fmtDate(r.report_date)}</small> : null}</Row> : null}
               </dl>
               {r.client_notified_at && <p className="hint">Clientul a fost anunțat pe email la {fmtDate(r.client_notified_at, true)}.</p>}
               {c.deliver && !r.delivered_at && <DeliverButton id={r.id} ready={!!final} number={r.number} suggested={suggested} notifyTo={notifyTo} values={hasValues(r.report_type)} auto={ownIssuer} autoOpen={predare === "1"}
-                assets={assets.map((a) => ({ id: a.id, label: assetShort(a), sub: a.full_address ?? a.city, value: a.value, approach: a.approach }))} />}
+                assets={assets.map((a) => ({ id: a.id, label: assetShort(a), sub: a.full_address ?? a.city, value: a.value_eur, approach: a.approach }))} />}
             </section>
           } />
       )}

@@ -18,7 +18,7 @@ export const INSPECTION_STATUS: Record<string, [string, string]> = {
 };
 
 export type ReportRow = {
-  id: string; number: string | null; label: string | null; report_date: string | null; status: string; fee: number | null; result_value: number | null;
+  id: string; number: string | null; label: string | null; report_date: string | null; status: string; fee: number | null; result_value: number | null; result_eur?: number | null;
   report_type: string | null; client_name: string | null; bank_code: string | null; issuer_name: string | null; evaluator: string | null; asset: string | null; asset_photo?: string | null;
   issuer_short: string | null; insp_total: number; insp_done: number; insp_next: string | null; insp_last: string | null; no_insp: number;
   issuer_logo: string | null; issuer_color: string | null; bank_name: string | null; bank_logo: string | null; purpose: string | null; value_type: string | null;
@@ -37,7 +37,7 @@ export const rowMembers = (r: Pick<ReportRow, "members">): RowMember[] =>
     return { id, name, role, photo: photoUrl(id, avatarAt || null) };
   });
 
-const ROW = `SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.result_value, r.collected, r.collected_at, r.report_type, r.purpose, r.value_type,
+const ROW = `SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.result_value, r.result_eur, r.collected, r.collected_at, r.report_type, r.purpose, r.value_type,
   r.stage, r.delivered_at, r.verified_at, r.received_on, r.created_at, r.term_days, o.created_at AS ordered_at, i.color AS issuer_color,
   EXISTS (SELECT 1 FROM invoices v, json_each(v.report_ids) j WHERE j.value = r.id AND v.kind = 'invoice' AND v.status <> 'cancelled') AS invoiced,
   c.name AS client_name, COALESCE(b.code, b.name) AS bank_code, b.name AS bank_name, b.logo_url AS bank_logo, i.name AS issuer_name, COALESCE(NULLIF(i.code, ''), i.name) AS issuer_short, i.logo_url AS issuer_logo,

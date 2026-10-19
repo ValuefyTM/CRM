@@ -1,6 +1,7 @@
 // Server-only: progress of an order (timeline for the client and the team) and the delivery of the report:
 // number and date, "done" on the report and the order, and the client's notice with the download link.
 import { now } from "./db";
+import { eurRate } from "./bnr";
 import { audit } from "./auth";
 import { esc, layout, sendEmail } from "./email";
 import { appUrl } from "./site";
@@ -94,24 +95,25 @@ export async function deliverReport(db: D1Database, user: { id: string }, report
   if (own && !r.number) number = (await numberOwnReport(db, reportId)) ?? "";
   if (!r.number && !number) return { ok: false as const, error: "Completează numărul raportului." };
   if (!own && number && number !== r.number) { const dup = await checkFirmNumber(db, reportId, r.issuer_id, number); if (dup) return { ok: false as const, error: dup }; }
-  // The result of the valuation: each asset's value (lei) and the approach that gave it, in euro at the BNR rate of the
-  // report's date; their sum is the report's result. Required for a valuation (not for an inspection / information note).
+  // The result of the valuation: each asset's value in euro and the approach that gave it; their sum is the report's
+  // result. The lei equivalent comes from the BNR rate of the report's date when BNR answers (never asked for).
+  // Required for a valuation (not for an inspection / information note).
   const { results: assets } = await db.prepare("SELECT a.id, p.type FROM assets a JOIN crm_properties p ON p.id = a.property_id WHERE a.report_id = ? ORDER BY a.is_main DESC, a.created_at").bind(reportId).all<{ id: string; type: string | null }>();
   const valued = assets.length > 0 && hasValues(r.report_type);
-  const rate = typeof b.eur_rate === "number" && b.eur_rate > 0 ? b.eur_rate : null;
-  const sent = Array.isArray(b.values) ? (b.values as { id?: unknown; value?: unknown; approach?: unknown }[]) : [];
-  const values: { id: string; value: number; approach: string; eur: number }[] = [];
+  const sent = Array.isArray(b.values) ? (b.values as { id?: unknown; eur?: unknown; approach?: unknown }[]) : [];
+  const values: { id: string; value: number | null; approach: string; eur: number }[] = [];
+  let rate: number | null = null;
   if (valued) {
-    if (!rate) return { ok: false as const, error: "Completează cursul BNR al euro din data raportului." };
+    rate = (await eurRate(db, date ?? r.report_date ?? now().slice(0, 10)).catch(() => null))?.rate ?? null;
     for (const a of assets) {
       const v = sent.find((x) => x.id === a.id);
-      const n = typeof v?.value === "number" && Number.isFinite(v.value) && v.value > 0 ? v.value : null;
-      if (n == null) return { ok: false as const, error: `Completează valoarea pentru ${capType(a.type) || "fiecare bun"}.` };
+      const n = typeof v?.eur === "number" && Number.isFinite(v.eur) && v.eur > 0 ? v.eur : null;
+      if (n == null) return { ok: false as const, error: `Completează valoarea (în euro) pentru ${capType(a.type) || "fiecare bun"}.` };
       if (!["market", "income", "cost"].includes(String(v?.approach))) return { ok: false as const, error: `Alege abordarea care a dat valoarea pentru ${capType(a.type) || "fiecare bun"}.` };
-      values.push({ id: a.id, value: Math.round(n * 100) / 100, approach: String(v!.approach), eur: Math.round(n / rate) });
+      values.push({ id: a.id, value: rate ? Math.round(n * rate * 100) / 100 : null, approach: String(v!.approach), eur: Math.round(n) });
     }
   }
-  const total = values.reduce((s, v) => s + v.value, 0), totalEur = values.reduce((s, v) => s + v.eur, 0);
+  const total = rate ? values.reduce((s, v) => s + (v.value ?? 0), 0) : null, totalEur = values.reduce((s, v) => s + v.eur, 0);
   const t = now();
   await db.batch([
     ...values.map((v) => db.prepare("UPDATE assets SET value = ?, approach = ?, value_eur = ? WHERE id = ?").bind(v.value, v.approach, v.eur, v.id)),
@@ -121,7 +123,7 @@ export async function deliverReport(db: D1Database, user: { id: string }, report
       .bind(number, date, t.slice(0, 10), t, user.id, date, t.slice(0, 10), valued ? 1 : 0, total, valued ? 1 : 0, totalEur, valued ? 1 : 0, rate, t, reportId),
     ...(r.order_id ? [db.prepare("UPDATE orders SET status = 'done', updated_at = ? WHERE id = ? AND status <> 'cancelled'").bind(t, r.order_id)] : []),
   ]);
-  const what = [number && `nr. ${number}`, valued && `rezultat ${total.toLocaleString("ro-RO")} lei · ${totalEur.toLocaleString("ro-RO")} € la ${rate}`].filter(Boolean).join(" · ");
+  const what = [number && `nr. ${number}`, valued && `rezultat ${totalEur.toLocaleString("ro-RO")} €${total != null ? ` · ${total.toLocaleString("ro-RO")} lei la ${rate}` : ""}`].filter(Boolean).join(" · ");
   await audit(db, `user:${user.id}`, "report.delivered", "report", reportId, what || undefined);
 
   let notified: string | null = null;
