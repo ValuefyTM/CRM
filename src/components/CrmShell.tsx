@@ -19,6 +19,7 @@ import { ownBillingOnly, toBillCount } from "@/lib/billing-tasks";
 import { inspChannel } from "@/lib/uvalo";
 import { activeInspections } from "@/lib/inspections-board";
 import { scopeOf } from "@/lib/perms";
+import { openQuotes } from "@/lib/quotes";
 
 export async function CrmShell(props: { user: User; base: string; active: string; title: string; subtitle?: string; actions?: React.ReactNode; bare?: boolean; dateTitle?: boolean; children: React.ReactNode }) {
   const b = props.base;
@@ -59,6 +60,8 @@ export async function CrmShell(props: { user: User; base: string; active: string
   // Facturare: how many reports wait for their invoice (the person's own, with "Doar ale lui").
   const toBillN = db && may("billing") ? await toBillCount(db, ownBillingOnly(u) ? u.id : null).catch(() => 0) : 0;
   // Inspecții: the ones still to do (to schedule or scheduled), as the page shows them to this user.
+  // Oferte: the ones still open (to send or waiting for an answer).
+  const quotesN = db && may("orders") ? await openQuotes(db) : 0;
   const inspN = db && may("inspections") ? await activeInspections(db, scopeOf(u, "inspections") as "all" | "lead" | "own", u.id) : 0;
   return (
     <Shell
@@ -74,6 +77,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
         ...group("CRM", "g-crm", [
           may("clients") && { key: "clients", label: "Clienți / Entități", href: `${b}/clienti` },
           may("contracts") && { key: "contracts", label: "Contracte", href: `${b}/contracte` },
+          may("orders") && { key: "quotes", label: "Oferte", href: `${b}/oferte`, badge: quotesN },
           may("orders") && { key: "orders", label: "Comenzi", href: `${b}/comenzi`, badge: unread, hot: true },
           may("tenders") && { key: "tenders", label: "Licitații SEAP", href: `${b}/licitatii` },
           may("listings") && { key: "listings", label: "Anunțuri imobiliare", href: `${b}/anunturi`, badge: inquiries, hot: true },

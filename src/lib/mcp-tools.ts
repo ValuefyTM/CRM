@@ -1,4 +1,5 @@
-// Server-only: the actions Claude can use through the MCP connector — read-only, at most 50 rows per answer.
+// Server-only: the actions Claude can use through the MCP connector — read-only (one exception: noting an offer),
+// at most 50 rows per answer.
 // Each one reuses the CRM's own queries where they exist, and returns compact JSON with links to the CRM pages.
 import type { User } from "./users";
 import { isAdmin } from "./users";
@@ -14,6 +15,8 @@ import { invoicesFor } from "./billing";
 import { dashboard } from "./dashboard";
 import { listLeads, leadStatus } from "./leads";
 import { listInquiries } from "./listings";
+import { createQuote, guessType, isExpired, listQuotes, quoteCode, QUOTE_STATUS, quoteWhat } from "./quotes";
+import { PURPOSES } from "./order-labels";
 
 export type Ctx = { db: D1Database; user: User; link: (path: string) => string };
 type Args = Record<string, unknown>;
@@ -21,6 +24,8 @@ type Tool = {
   name: string; title: string; description: string;
   inputSchema: { type: "object"; properties: Record<string, unknown>; required?: string[] };
   adminOnly?: boolean;
+  /** writes into the CRM (the connector is otherwise read-only) */
+  write?: boolean;
   run: (c: Ctx, a: Args) => Promise<unknown>;
 };
 
@@ -66,6 +71,55 @@ const reportRow = (c: Ctx, r: { id: string; number: string | null; label: string
 });
 
 export const TOOLS: Tool[] = [
+  {
+    name: "oferte",
+    title: "Oferte făcute clienților",
+    description: "Ofertele notate în CRM (Oferte): deschise (de trimis / în așteptarea răspunsului), acceptate, convertite în lucrări, refuzate sau expirate. Caută după client, telefon, adresă sau OF-număr.",
+    inputSchema: { type: "object", properties: {
+      stare: S("deschise (implicit) | acceptate | convertite | refuzate | toate", { enum: ["deschise", "acceptate", "convertite", "refuzate", "toate"] }),
+      text: S("Client, telefon, adresă sau numărul ofertei (OF-12)."), limita: LIMIT,
+    } },
+    run: async (c, a) => {
+      const rows = await listQuotes(c.db, { tab: str(a, "stare") || "deschise", q: str(a, "text") });
+      return { oferte: rows.slice(0, limit(a)).map((q) => ({
+        id: q.id, numar: quoteCode(q), stare: isExpired(q) ? "Expirată" : QUOTE_STATUS[q.status][0], client: q.client_name, telefon: q.client_phone, email: q.client_email,
+        bun: quoteWhat(q) || null, scop: q.purpose, tip_raport: q.report_type, onorariu_lei: q.fee, termen_zile: q.term_days, valabila_pana: q.valid_until, urgent: !!q.urgent,
+        trimisa_la: q.sent_at, canal: q.channel, colaborare: q.collab_firm, note: q.notes, de_cine: q.author, creata: q.created_at,
+        ...(q.status === "converted" ? { raport: q.report_number, link_raport: q.report_id ? c.link(`/rapoarte/${q.report_id}`) : null } : {}), link: c.link(`/oferte/${q.id}`),
+      })), total: rows.length };
+    },
+  },
+  {
+    name: "adauga_oferta",
+    title: "Notează o ofertă",
+    description: "Notează în CRM o ofertă făcută unui client (modulul Oferte), ca să nu fie uitată: cine, ce se evaluează, onorariul, termenul, cum a fost transmisă. Nu creează comandă sau contract: acestea se fac din CRM, la conversia ofertei. Singura acțiune care scrie în CRM.",
+    inputSchema: { type: "object", properties: {
+      client: S("Numele clientului (persoană sau firmă)."), telefon: S("Telefonul clientului (telefon sau email, cel puțin unul)."), email: S("Emailul clientului."),
+      firma: { type: "boolean", description: "true dacă clientul e persoană juridică." }, cui: S("CUI-ul firmei, dacă e cazul."),
+      bun: S("Ce se evaluează: apartament, casă, teren, spațiu comercial, autoturism… (se potrivește cu tipurile din CRM)."),
+      adresa: S("Adresa bunului."), localitate: S("Localitatea."), judet: S("Județul."), suprafata: N("Suprafața utilă în m² (opțional)."),
+      scop: S(`Utilizarea desemnată, de ex. ${["Garantare bancară", ...PURPOSES.filter((x) => x !== "Credit bancar")].slice(0, 5).join(", ")}…`),
+      tip_raport: S("Raport de evaluare (implicit), Notă de evaluare sau Notă de inspecție."),
+      onorariu: N("Onorariul fără TVA, în lei."), termen_zile: N("Termenul propus, în zile lucrătoare."), valabila_zile: N("Câte zile e valabilă oferta (implicit 14)."),
+      transmisa_prin: S("email | whatsapp | phone | meeting — dacă oferta a fost deja transmisă clientului; lipsă = încă netrimisă.", { enum: ["email", "whatsapp", "phone", "meeting"] }),
+      urgent: { type: "boolean", description: "Clientul are nevoie repede." }, note: S("Ce s-a discutat, condiții, de urmărit."),
+    }, required: ["client", "bun"] },
+    write: true,
+    run: async (c, a) => {
+      const days = num(a, "valabila_zile") ?? 14;
+      const valid = new Date(Date.now() + Math.max(1, Math.min(365, days)) * 86400000).toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
+      const r = await createQuote(c.db, c.user.id, {
+        client_name: str(a, "client"), client_phone: str(a, "telefon"), client_email: str(a, "email"), client_kind: a.firma === true ? "company" : "person", client_cui: str(a, "cui"),
+        purpose: str(a, "scop"), report_type: str(a, "tip_raport") || "Raport de evaluare", fee: num(a, "onorariu"), term_days: num(a, "termen_zile") ?? 3, valid_until: valid,
+        urgent: a.urgent === true, notes: str(a, "note"), sent_via: str(a, "transmisa_prin") || undefined,
+        assets: [{ type: guessType(str(a, "bun")), full_address: str(a, "adresa"), city: str(a, "localitate"), county: str(a, "judet"), usable_area: num(a, "suprafata") != null ? String(num(a, "suprafata")) : "" }],
+      });
+      if (!r.ok) return { eroare: r.error };
+      const q = (await listQuotes(c.db, { tab: "toate", q: "" })).find((x) => x.id === r.id);
+      return { ok: true, numar: q ? quoteCode(q) : null, id: r.id, bun: q ? quoteWhat(q) : null, stare: q ? QUOTE_STATUS[q.status][0] : null, link: c.link(`/oferte/${r.id}`),
+        mesaj: "Oferta a fost notată în CRM. Comanda sau contractul se fac din CRM, cu „Convertește în lucrare”." };
+    },
+  },
   {
     name: "cauta",
     title: "Căutare generală",

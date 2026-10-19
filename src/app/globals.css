@@ -3045,3 +3045,9 @@ span.rdPick { display: inline-block; }
 .alSwitch i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
 .alSwitch input:checked + i { background: var(--ok, #1fa971); } .alSwitch input:checked + i::after { transform: translateX(16px); }
 .bellIcon.k-alert { background: var(--err-bg); color: var(--err); }
+/* Oferte */
+.qtActions { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 14px; margin-top: 6px; border-top: 1px solid var(--divider); }
+.qtActions .qtDel { color: var(--err); margin-left: auto; }
+.qtAssets { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.qtAssets li { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--divider); border-radius: 12px; }
+.qtTable td { vertical-align: top; }
