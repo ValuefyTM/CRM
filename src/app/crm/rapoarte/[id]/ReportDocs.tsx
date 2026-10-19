@@ -14,22 +14,13 @@ export type DocItem = {
   insp?: boolean;
 };
 
-/** "La inspector": tick whether the inspector sees the document (in the inspections app and in UVALO). */
-function InspTick({ report, d, edit }: { report: string; d: DocItem; edit: boolean }) {
-  const [on, setOn] = useState(!!d.insp);
-  const [busy, setBusy] = useState(false);
+/** "La inspector": the tick of a document (saved with "Actualizează la inspector", not on each click). */
+function InspTick({ d, on, edit, changed, onChange }: { d: DocItem; on: boolean; edit: boolean; changed: boolean; onChange: (v: boolean) => void }) {
   if (d.insp === undefined) return null;
   if (!edit || d.origin === "glide") return on ? <span className="rdInsp on" title="Inspectorul vede actul">La inspector</span> : null;
   return (
-    <label className={`rdInsp${on ? " on" : ""}`} title={on ? "Inspectorul vede actul (în aplicația de inspecții și în UVALO)" : "Inspectorul nu vede actul"}>
-      <input type="checkbox" checked={on} disabled={busy} onChange={async (e) => {
-        const v = e.target.checked;
-        setOn(v); setBusy(true);
-        const r = await fetch(`/api/crm/reports/${report}/documents`, { method: "PATCH", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ doc: d.id, origin: d.origin, insp_visible: v }) }).catch(() => null);
-        setBusy(false);
-        if (!r?.ok) { setOn(!v); alert("Nu am putut salva. Încearcă din nou."); }
-      }} />
+    <label className={`rdInsp${on ? " on" : ""}${changed ? " changed" : ""}`} title={changed ? "Modificat: se trimite la „Actualizează la inspector”" : on ? "Inspectorul vede actul" : "Inspectorul nu vede actul"}>
+      <input type="checkbox" checked={on} onChange={(e) => onChange(e.target.checked)} />
       <span>La inspector</span>
     </label>
   );
@@ -42,10 +33,13 @@ const VIEWS: [View, string][] = [["lista", "Listă"], ["tabel", "Tabel"], ["card
 const kindOf = (d: DocItem) => (d.kind && DOC_KIND_KEYS.includes(d.kind) ? d.kind : "other");
 const ext = (name: string) => (name.match(/\.(\w{2,4})$/)?.[1] ?? "doc").toUpperCase();
 const size = (n: number | null) => (n == null ? "" : n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+const short = (iso: string | null) => (iso ? new Date(iso.length <= 10 ? `${iso}T12:00:00` : iso).toLocaleDateString("ro-RO", { day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "Europe/Bucharest" }) : "");
 const day = (iso: string | null) => (iso ? new Date(iso.length <= 10 ? `${iso}T12:00:00` : iso).toLocaleDateString("ro-RO", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Bucharest" }).replace(".", "") : "");
 
-export function ReportDocs({ report, assets, items, edit, remove, deliver, missing }: {
+export function ReportDocs({ report, assets, items, edit, remove, deliver, missing, inspOpen = false }: {
   report: string; assets: { id: string; label: string; sub?: string | null }[]; items: DocItem[]; edit: boolean; remove: boolean;
+  /** An inspection is given and not done yet: the ticks can be sent to the inspector. */
+  inspOpen?: boolean;
   /** The deliverables (final report, sheets, delivery), shown smaller on the right. */
   deliver?: React.ReactNode;
   /** "Marchează un document lipsă", under the list. */
@@ -88,6 +82,25 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
     if (failed.length) setMsg(`Nu s-au putut șterge: ${failed.join(", ")}.`);
     router.refresh();
   };
+  // The ticks for the inspector: changed here, sent all at once with "Actualizează la inspector".
+  const [ticks, setTicks] = useState<Record<string, boolean>>({});
+  useEffect(() => { setTicks({}); }, [items]);
+  const tickOf = (d: DocItem) => ticks[keyOf(d)] ?? !!d.insp;
+  const changedTicks = items.filter((d) => d.insp !== undefined && d.origin !== "glide" && ticks[keyOf(d)] !== undefined && ticks[keyOf(d)] !== !!d.insp);
+  const [sending, setSending] = useState(false);
+  const [sentMsg, setSentMsg] = useState("");
+  const sendTicks = async () => {
+    setSending(true); setSentMsg("");
+    const r = await fetch(`/api/crm/reports/${report}/documents`, { method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ insp: changedTicks.map((d) => ({ doc: d.id, origin: d.origin, on: tickOf(d) })) }) }).catch(() => null);
+    const j = (await r?.json().catch(() => ({}))) as { error?: string; sent?: number };
+    setSending(false);
+    if (!r?.ok) return setSentMsg(j?.error || "Nu am putut actualiza. Încearcă din nou.");
+    setSentMsg(j.sent ? "Actualizat la inspector și în UVALO." : "Actualizat la inspector.");
+    router.refresh();
+  };
+  const tick = (d: DocItem) => d.status !== "missing" && (
+    <InspTick d={d} on={tickOf(d)} edit={edit && inspOpen} changed={changedTicks.includes(d)} onChange={(v) => { setSentMsg(""); setTicks((t) => ({ ...t, [keyOf(d)]: v })); }} />);
   const pick = (d: DocItem) => (d.status === "uploaded" && (d.origin === "report" || d.origin === "order")
     ? <input type="checkbox" className="rdPick" aria-label={`Selectează ${d.name}`} checked={sel.has(keyOf(d))}
         onChange={(e) => setSel((cur) => { const n = new Set(cur); if (e.target.checked) n.add(keyOf(d)); else n.delete(keyOf(d)); return n; })} />
@@ -123,23 +136,20 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
   const choose = (k: string) => { setFilter(k); if (k && k !== "report") setTarget(k); else if (k === "report") setTarget(""); };
   return (
     <div className={`rdLayout${deliver ? "" : " noDeliver"}`}>
-    <nav className="card rdNav" aria-label="Acte pe bunuri">
-      <div className="section">Bunuri</div>
-      <ul>
-        {nav.map(([k, l, sub]) => (
-          <li key={k || "all"}>
-            <button type="button" aria-pressed={filter === k} onClick={() => choose(k)}>
-              <span><b>{l}</b>{sub && <small>{sub}</small>}</span><em>{count(k)}</em>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </nav>
     <section className="card flush rdCard">
       <div className="cardHead rdHead">
         <h2>Acte{filter ? <span className="muted"> · {nav.find(([k]) => k === filter)?.[1]}</span> : null}</h2>
         <span className="muted">{shown.length} {shown.length === 1 ? "act" : "acte"}</span>
       </div>
+      {nav.length > 1 && (
+        <div className="rdTabs" role="tablist" aria-label="Acte pe bunuri">
+          {nav.map(([k, l, sub]) => (
+            <button key={k || "all"} type="button" role="tab" aria-selected={filter === k} title={sub ?? undefined} onClick={() => choose(k)}>
+              {l}<em>{count(k)}</em>
+            </button>
+          ))}
+        </div>
+      )}
 
       {edit && (
         <div className={`rdDrop${over ? " over" : ""}`} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
@@ -184,7 +194,7 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
         : view === "tabel" ? (
           <div className="tableWrap">
             <table className="table rdTable">
-              <thead><tr><th style={{ width: 34 }} /><th>Act</th><th>Tip</th>{many && <th>Bun</th>}<th>Data</th><th>Mărime</th><th>Inspector</th><th /></tr></thead>
+              <thead><tr><th style={{ width: 30 }} /><th>Act</th><th>Tip</th>{many && <th>Bun</th>}<th>Data</th><th>Mărime</th><th>Inspector</th><th /></tr></thead>
               <tbody>
                 {shown.map((d) => {
                   const k = kindOf(d);
@@ -194,11 +204,16 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
                       <td><span className="rdTName"><span className={`rdExt sm k-${d.status === "missing" ? "miss" : k}`}>{d.status === "missing" ? "!" : ext(d.name)}</span><b title={d.name}>{d.name}</b></span>
                         {d.origin !== "report" && <small className="muted">{d.origin === "order" ? "din comandă" : "în vechiul CRM"}</small>}</td>
                       <td>{d.status === "missing" ? <span className="errTxt">lipsă</span> : d.origin === "report" && edit ? <DocTypeSelect id={report} doc={d.id} assets={many ? assets : null} value={`${k}:${d.asset_id ?? ""}`} /> : docKindLabel(k)}</td>
-                      {many && <td>{d.asset_id ? labelOf(d.asset_id) : "tot raportul"}</td>}
-                      <td style={{ whiteSpace: "nowrap" }}>{day(d.at)}</td>
+                      {many && <td className="rdTAsset" title={d.asset_id ? labelOf(d.asset_id) : "tot raportul"}>{d.asset_id ? labelOf(d.asset_id) : "tot raportul"}</td>}
+                      <td style={{ whiteSpace: "nowrap" }}>{short(d.at)}</td>
                       <td style={{ whiteSpace: "nowrap" }}>{size(d.size)}</td>
-                      <td>{d.status !== "missing" && <InspTick report={report} d={d} edit={edit} />}</td>
-                      <td><span className="rdActs">{acts(d)}</span></td>
+                      <td>{tick(d)}</td>
+                      <td><span className="rdActs rdTActs">
+                        {d.status === "missing" && edit && <UploadButton id={report} doc={d.id} label="Încarcă" className="linkBtn" />}
+                        {d.href && <a className="rdIco" href={d.href} target="_blank" rel="noopener" title="Deschide" aria-label={`Deschide ${d.name}`}>
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg></a>}
+                        {d.origin === "report" && remove && <DeleteDoc id={report} doc={d.id} name={d.name} />}
+                      </span></td>
                     </tr>
                   );
                 })}
@@ -222,7 +237,7 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
                   <div className="rdCardBody">
                     <b title={d.name}>{d.name}</b>
                     <small>{d.status === "missing" ? "lipsă · blochează predarea" : <>{docKindLabel(k)}{many && <> · {d.asset_id ? labelOf(d.asset_id) : "tot raportul"}</>}{d.at && ` · ${day(d.at)}`}</>}</small>
-                    <span className="rdCardActs">{d.status !== "missing" && <InspTick report={report} d={d} edit={edit} />}{acts(d)}</span>
+                    <span className="rdCardActs">{tick(d)}{acts(d)}</span>
                   </div>
                 </li>
               );
@@ -248,7 +263,7 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
                   </small>
                 </span>
                 <span className="rdActs">
-                  {d.status !== "missing" && <InspTick report={report} d={d} edit={edit} />}
+                  {tick(d)}
                   {d.status !== "missing" && d.origin === "report" && edit && <DocTypeSelect id={report} doc={d.id} assets={many ? assets : null} value={`${k}:${d.asset_id ?? ""}`} />}
                   {acts(d)}
                 </span>
@@ -256,6 +271,14 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
             );
           })}
         </ul>
+      )}
+      {edit && items.some((d) => d.insp !== undefined && d.origin !== "glide") && (
+        <div className="rdInspBar">
+          <span className="muted">{!inspOpen ? "Bifele „La inspector” se trimit când raportul are o inspecție alocată și nefinalizată."
+            : changedTicks.length ? `${changedTicks.length} ${changedTicks.length === 1 ? "modificare" : "modificări"} netrimise inspectorului`
+            : sentMsg || "Bifează ce acte vede inspectorul, apoi actualizează."}</span>
+          <button type="button" className="btn btnGhost btnSm" disabled={!inspOpen || !changedTicks.length || sending} onClick={sendTicks}>{sending ? "Se actualizează…" : "Actualizează la inspector"}</button>
+        </div>
       )}
       {missing && <div className="rdMissing">{missing}</div>}
     </section>

@@ -90,6 +90,25 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const a = await reportApi(id, "docs", true);
   if ("res" in a) return a.res;
   const b = await json(req);
+  // The ticks for the inspector, all at once ("Actualizează la inspector"): `{ insp: [{ doc, origin, on }] }`.
+  if (Array.isArray(b.insp)) {
+    const open = await a.db.prepare(`SELECT 1 AS x FROM inspections WHERE report_id = ? AND status IN ('to_schedule', 'scheduled') AND glide_id IS NULL AND inspector_id IS NOT NULL LIMIT 1`).bind(id).first();
+    if (!open) return err("Raportul nu are o inspecție alocată și nefinalizată: actele se aleg la alocare.", 409);
+    const list = (b.insp as { doc?: unknown; origin?: unknown; on?: unknown }[]).slice(0, 200);
+    const names: string[] = [];
+    for (const x of list) {
+      const order = x.origin === "order";
+      const d = order
+        ? await a.db.prepare("SELECT d.id, d.filename FROM order_documents d JOIN reports r ON r.order_id = d.order_id WHERE d.id = ? AND r.id = ?").bind(String(x.doc ?? ""), id).first<{ id: string; filename: string }>()
+        : await a.db.prepare("SELECT id, filename FROM report_documents WHERE id = ? AND report_id = ? AND kind = 'source'").bind(String(x.doc ?? ""), id).first<{ id: string; filename: string }>();
+      if (!d) continue;
+      await a.db.prepare(`UPDATE ${order ? "order_documents" : "report_documents"} SET insp_visible = ? WHERE id = ?`).bind(x.on === true ? 1 : 0, d.id).run();
+      names.push(`${d.filename} ${x.on === true ? "✓" : "✗"}`);
+    }
+    if (names.length) await audit(a.db, `user:${a.user.id}`, "report.document_insp", "report", id, names.join(", ").slice(0, 500));
+    const sent = await resyncUvalo(a.db, { reportId: id });
+    return Response.json({ ok: true, sent });
+  }
   if (typeof b.insp_visible === "boolean") {
     const order = b.origin === "order";
     const d = order

@@ -568,7 +568,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
       )}
 
       {tab === "documente" && (
-        <ReportDocs report={r.id} assets={assets.map((a) => ({ id: a.id, label: assetShort(a), sub: a.full_address ?? a.city }))} items={docItems} edit={c.docs} remove={c.docsDelete}
+        <ReportDocs inspOpen={assets.some(isActive)} report={r.id} assets={assets.map((a) => ({ id: a.id, label: assetShort(a), sub: a.full_address ?? a.city }))} items={docItems} edit={c.docs} remove={c.docsDelete}
           missing={c.docs ? <><span className="muted">Lipsește un act de la client?</span><MissingDoc id={r.id} /></> : null}
           deliver={
             <section className="card dDeliver">

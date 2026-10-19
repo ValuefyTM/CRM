@@ -2436,8 +2436,8 @@ a.navItem[aria-current="page"] .navIcon { opacity: 1; }
 
 /* Report page, Acte: assets on the left, the documents in the middle, the deliverables smaller on the right */
 .dBody.solo { grid-template-columns: minmax(0, 1fr); }
-.rdLayout { display: grid; grid-template-columns: 220px minmax(0, 1fr) 290px; gap: 14px; align-items: start; }
-.rdLayout.noDeliver { grid-template-columns: 220px minmax(0, 1fr); }
+.rdLayout { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 14px; align-items: start; }
+.rdLayout.noDeliver { grid-template-columns: minmax(0, 1fr); }
 .rdLayout > .card { margin: 0; }
 .rdNav { padding: 12px; position: sticky; top: calc(var(--topH, 64px) + 12px); }
 .rdNav .section { margin: 2px 6px 8px; }
@@ -2461,7 +2461,7 @@ a.navItem[aria-current="page"] .navIcon { opacity: 1; }
 .dDelCheck .checklist li { padding: 7px 9px; font-size: 12.5px; }
 .dDelKv { margin: 0; font-size: 12.5px; }
 .rdMissing { padding: 12px 22px; border-top: 1px solid var(--divider); }
-@media (max-width: 1280px) { .rdLayout { grid-template-columns: 200px minmax(0, 1fr); } .rdDeliver { grid-column: 1 / -1; position: static; } }
+@media (max-width: 1100px) { .rdLayout { grid-template-columns: minmax(0, 1fr); } .rdDeliver { position: static; } }
 @media (max-width: 820px) { .rdLayout, .rdLayout.noDeliver { grid-template-columns: 1fr; } .rdNav { position: static; } }
 .rmMenu { position: relative; }
 .rmMenu summary { list-style: none; cursor: pointer; }
@@ -2872,3 +2872,43 @@ span.rdPick { display: inline-block; }
 .rdCardBody small { color: var(--muted); font-size: 11.5px; }
 .rdCardActs { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin-top: 4px; font-size: 12.5px; }
 @media (max-width: 720px) { .rdBar { padding: 10px 14px 0; } .rdCards { padding: 12px 14px 16px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } .rdThumb { height: 170px; } }
+
+/* Acte: bunurile ca taburi, tabel compact, actualizarea la inspector */
+.rdTabs { display: flex; gap: 4px; padding: 10px 22px 0; overflow-x: auto; scrollbar-width: thin; border-bottom: 1px solid var(--divider); }
+.rdTabs button { border: 0; background: none; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--muted); padding: 7px 10px 9px; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.rdTabs button:hover { color: var(--ink); }
+.rdTabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+.rdTabs em { font-style: normal; font-size: 10.5px; font-weight: 800; padding: 0 6px; border-radius: 8px; background: var(--cream-2); color: var(--muted); }
+.rdTabs button[aria-selected="true"] em { background: var(--ink); color: #fff; }
+.rdTable { font-size: 12.5px; min-width: 680px; }
+.rdTable thead th { padding-top: 7px; padding-bottom: 7px; font-size: 10px; }
+.rdTable th, .rdTable td { padding: 5px 8px; }
+.rdTable th:first-child, .rdTable td:first-child { padding-left: 16px; }
+.rdTable td small { display: block; font-size: 11px; line-height: 1.2; }
+.rdTable .select { height: 28px; padding: 0 26px 0 8px; font-size: 12px; max-width: 170px; }
+.rdTable .rdInsp { padding: 1px 8px 1px 6px; font-size: 11px; }
+.rdTable .rdActs { gap: 8px; font-size: 12px; }
+.rdTName { max-width: 300px; }
+.rdInsp.changed { border-style: dashed; border-color: var(--acc); }
+.rdInspBar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 12px; padding: 10px 22px; border-top: 1px solid var(--divider); font-size: 12px; }
+@media (max-width: 720px) { .rdTabs { padding: 8px 14px 0; } .rdInspBar { padding: 10px 14px; } }
+
+/* Tabel acte: încape în card, fără derulare */
+.rdCard .tableWrap { overflow-x: auto; }
+.rdTable { min-width: 0; table-layout: auto; width: 100%; }
+.rdTable td, .rdTable th { white-space: nowrap; }
+.rdTable td:nth-child(2) { white-space: normal; width: 99%; }
+.rdTName { max-width: none; min-width: 120px; }
+.rdTName b { max-width: 260px; }
+.rdTAsset { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+.rdTable .select { max-width: 140px; }
+.rdTable .rdActs .linkBtn, .rdTable .rdActs .link { font-size: 11.5px; }
+.rdTable select.select { width: 128px; min-width: 0; max-width: 128px; }
+.rdTable td { padding-top: 4px; padding-bottom: 4px; }
+.rdTActs { gap: 6px; }
+.rdIco { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; color: var(--ink); }
+.rdIco:hover { background: var(--cream-2); }
+.rdTActs .linkBtn.danger { font-size: 11.5px; }
+.rdTable th, .rdTable td { padding-left: 7px; padding-right: 7px; }
+.rdTName b { max-width: 220px; }
+.rdTable select.select { height: 28px; min-height: 28px; padding: 0 24px 0 8px; font-size: 12px; background-position: right 6px center; }
