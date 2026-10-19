@@ -133,7 +133,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
                 {o.client_email && <div><dt>Email</dt><dd><a href={`mailto:${o.client_email}`}>{o.client_email}</a></dd></div>}
                 {o.report_type && <div><dt>Tip raport</dt><dd>{o.report_type}</dd></div>}
                 {o.purpose && <div><dt>Scop</dt><dd>{o.purpose}</dd></div>}
-                <div><dt>Onorariu</dt><dd>{lei(o.fee)}</dd></div>
+                <div><dt>Onorariu fără TVA</dt><dd>{lei(o.fee)}</dd></div>
                 <div><dt>Înregistrată de</dt><dd>{o.creator_name || o.creator_email || "—"}</dd></div>
                 {o.contract_number && <div><dt>Contract</dt><dd>Clasic nr. {o.contract_number}</dd></div>}
               </dl>
