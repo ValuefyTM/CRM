@@ -3021,3 +3021,27 @@ span.rdPick { display: inline-block; }
 .blAlert { display: flex; flex-direction: column; gap: 4px; min-width: 170px; }
 .blAlert .select { height: 34px; font-size: 12.5px; }
 .bellIcon.k-collect { background: #fdecea; color: #b5382b; font-size: 9.5px; }
+/* Setări → Alerte */
+.alRules { display: flex; flex-direction: column; gap: 12px; }
+.alRule { border: 1px solid var(--divider); border-radius: 14px; padding: 12px 14px; background: #fff; }
+.alRule.off { opacity: .6; background: var(--cream-2); }
+.alHead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.alKind { font-weight: 700; max-width: 360px; }
+.alDel { margin-left: auto; color: var(--err); }
+.alHint { margin: 4px 0 8px; }
+.alGrid { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(220px, 1.4fr) minmax(160px, 1fr); gap: 12px 18px; }
+.alMoreGrid { margin-top: 8px; padding-top: 10px; border-top: 1px dashed var(--divider); }
+@media (max-width: 760px) { .alGrid { grid-template-columns: 1fr; } }
+.alTo { border: 0; padding: 0; margin: 0; min-width: 0; } .alTo legend { padding: 0; }
+.alCheck { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--ink); cursor: pointer; line-height: 1.35; padding: 2px 0; }
+.alCheck input { width: 15px; height: 15px; margin: 0; accent-color: var(--ink); flex-shrink: 0; }
+.alList { max-height: 220px; overflow-y: auto; border: 1px solid var(--divider); border-radius: 10px; padding: 6px 10px; margin-top: 4px; display: flex; flex-direction: column; gap: 2px; }
+.alList > div { display: flex; flex-direction: column; gap: 2px; padding-top: 4px; }
+.alWhen { display: flex; gap: 6px; } .alDays { width: 80px; }
+.alMore { background: none; border: 0; padding: 6px 0 0; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--muted); cursor: pointer; }
+.alSwitch { position: relative; width: 36px; height: 20px; flex-shrink: 0; cursor: pointer; }
+.alSwitch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.alSwitch i { position: absolute; inset: 0; border-radius: 10px; background: #cfc8ba; transition: background .15s; }
+.alSwitch i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.alSwitch input:checked + i { background: var(--ok, #1fa971); } .alSwitch input:checked + i::after { transform: translateX(16px); }
+.bellIcon.k-alert { background: var(--err-bg); color: var(--err); }

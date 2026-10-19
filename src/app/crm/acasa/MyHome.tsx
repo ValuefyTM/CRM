@@ -8,6 +8,8 @@ import { mySql } from "@/lib/perms-db";
 import { BillingTasksCard } from "@/components/BillingTasksCard";
 import { can } from "@/lib/perms";
 import type { User } from "@/lib/users";
+import { dashboardAlerts } from "@/lib/alerts";
+import { niceName } from "@/lib/labels";
 
 const today = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
 
@@ -30,7 +32,7 @@ export async function MyHome({ user, base, denied }: { user: User; base: string;
   // The database comes from getDb, not as a prop: a binding cannot be passed between components.
   const db = (await getDb())!;
   const t = today();
-  const [open, counts, visits, left] = await Promise.all([
+  const [open, counts, visits, left, alerts] = await Promise.all([
     listReports(db, { status: "deschise", mine: { id: user.id, sql: mySql(user) } }),
     db.prepare(`SELECT SUM(r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL) AS open,
         SUM(r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL AND ${OVER_TERM_SQL}) AS late,
@@ -47,6 +49,8 @@ export async function MyHome({ user, base, denied }: { user: User; base: string;
     db.prepare(`SELECT COUNT(*) AS n FROM inspections i LEFT JOIN reports r ON r.id = i.report_id
       WHERE i.inspector_id = ? AND i.status IN ('to_schedule', 'scheduled') AND i.glide_id IS NULL AND (r.id IS NULL OR (r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL))`)
       .bind(user.id).first<{ n: number }>().then((x) => x?.n ?? 0),
+    // the configurable alerts aimed at this user (Setări → Alerte, "și pe tabloul de bord")
+    dashboardAlerts(db, user, base).catch(() => []),
   ]);
   const first = user.name ? user.name.split(" ")[0] : "";
   const hour = Number(new Date().toLocaleString("en-GB", { hour: "2-digit", hour12: false, timeZone: "Europe/Bucharest" }));
@@ -78,6 +82,26 @@ export async function MyHome({ user, base, denied }: { user: User; base: string;
         <a className="dbKpi" href={`${base}/rapoarte?status=done`}><span className="dbKpiLabel"><i style={{ background: "var(--ok)" }} />Finalizate luna aceasta</span><b>{counts?.done_month ?? 0}</b></a>
         <a className="dbKpi" href={`${base}/agenda-inspectii`}><span className="dbKpiLabel"><i style={{ background: "var(--ink)" }} />Inspecții de făcut</span><b>{left}</b></a>
       </div>
+      {alerts.length > 0 && (
+        <section className="card">
+          <div className="cardHead"><h2>Alerte</h2><span className="muted">{alerts.reduce((s, a) => s + a.count, 0)} de rezolvat</span></div>
+          <ul className="dbAlerts">
+            {alerts.map((a) => (
+              <li key={a.key} className={a.tone}>
+                <a className="dbAlertHead" href={a.href}>
+                  <span className="ic">!</span>
+                  <span className="t"><b>{a.title}</b><small>{a.hint}</small></span>
+                  <span className="n">{a.count}</span>
+                </a>
+                <div className="dbAlertItems">
+                  {a.items.slice(0, 4).map((it, i) => <a key={i} href={it.href}><b>{niceName(it.label)}</b>{it.sub && <small>{it.sub}</small>}</a>)}
+                  {a.count > 4 && <a href={a.href} className="more">+{a.count - 4}</a>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {/* "Emite factura" without the Facturare module: the reports to invoice, right here. */}
       {can(user, "billing:issue") && !can(user, "billing") && <BillingTasksCard user={user} base={base} />}
       <div className="cols myCols">

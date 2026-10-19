@@ -4,6 +4,7 @@ import { can } from "@/lib/perms";
 import { MyHome } from "./acasa/MyHome";
 import { BillingTasksCard } from "@/components/BillingTasksCard";
 import { dashboard, type Alert } from "@/lib/dashboard";
+import { dashboardAlerts } from "@/lib/alerts";
 import { OVER_TERM_SQL } from "@/lib/reports";
 import { STAGE_LABEL } from "@/lib/dossier";
 import { niceName } from "@/lib/labels";
@@ -88,8 +89,9 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
   if (!can(user, "dashboard.all")) {
     return <CrmShell user={user} base={base} active="home" title={dateTitle} dateTitle><MyHome user={user} base={base} denied={denied} /></CrmShell>;
   }
-  const [d, firm] = await Promise.all([
+  const [d, ruleAlerts, firm] = await Promise.all([
     dashboard(db, base),
+    dashboardAlerts(db, user, base).catch(() => []),
     // Past the standard term (red in the list) and the inspections still to do, for the whole firm.
     db.prepare(`SELECT (SELECT COUNT(*) FROM reports r WHERE r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL AND ${OVER_TERM_SQL}) AS late,
         (SELECT COUNT(*) FROM inspections i JOIN reports r ON r.id = i.report_id WHERE i.status IN ('to_schedule', 'scheduled') AND i.glide_id IS NULL
@@ -97,7 +99,8 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
   ]);
   const money = can(user, "fees.all");
   const monthLabel = new Date(`${d.today}T12:00:00Z`).toLocaleDateString("ro-RO", { month: "long", timeZone: "UTC" });
-  const alerts = d.alerts.filter((a) => a.count > 0);
+  // the configurable alerts (Setări → Alerte) first, then the built-in ones
+  const alerts = [...ruleAlerts, ...d.alerts.filter((a) => a.count > 0)];
   const urgent = alerts.filter((a) => a.tone === "err").reduce((s, a) => s + a.count, 0);
   const spark = (k: "n" | "fees") => d.months.slice(-6).map((m) => m[k]);
   const maxLoad = Math.max(1, ...d.team.map((t) => t.open + t.inspections));
