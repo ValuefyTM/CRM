@@ -223,8 +223,8 @@ async function openClaimed(db: D1Database, o: Order, actor: { id: string; name: 
         accepted?.value_type ?? null, day, several ? sp?.fee ?? null : (accepted ? fee : sp?.fee ?? fee) ?? null, Number(day.slice(0, 4)), o.source === "partner" ? o.created_by : null,
         opts.notes ?? null, urgentDays ?? sp?.term_days ?? term ?? null, opts.due_on ?? null, accepted?.id ?? null, actor?.id ?? null, at(j), at(j));
   const members = (id: string) => [
-    ...(evaluator ? [db.prepare("INSERT OR IGNORE INTO report_members (report_id, user_id, role) VALUES (?, ?, 'evaluator')").bind(id, evaluator)] : []),
-    ...(opts.verifier_id ? [db.prepare("INSERT OR IGNORE INTO report_members (report_id, user_id, role) VALUES (?, ?, 'verifier')").bind(id, opts.verifier_id)] : []),
+    ...(evaluator ? [db.prepare("INSERT OR IGNORE INTO report_members (report_id, user_id, role, added_at, added_by) VALUES (?, ?, 'evaluator', ?, ?)").bind(id, evaluator, t, actor?.id ?? null)] : []),
+    ...(opts.verifier_id ? [db.prepare("INSERT OR IGNORE INTO report_members (report_id, user_id, role, added_at, added_by) VALUES (?, ?, 'verifier', ?, ?)").bind(id, opts.verifier_id, t, actor?.id ?? null)] : []),
   ];
   // Several reports (or one more on an existing contract) tell themselves apart by purpose.
   const mainLabel = (several || (o.contract_id && o.source === "direct")) && s0?.purpose ? `${label} · ${s0.purpose}` : label;

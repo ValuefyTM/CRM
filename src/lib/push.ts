@@ -7,6 +7,7 @@ import { notificationsFor, type Notice } from "./notifications";
 import { getConfig } from "./perms-db";
 import { permsFor } from "./perms";
 import { origin } from "./site";
+import { esc, layout, sendEmail } from "./email";
 import { generateVapidKeys, sendWebPush, type PushKeys, type Subscription } from "./webpush";
 
 const KEY = "vapid";
@@ -37,15 +38,17 @@ export const removePushSubscription = (db: D1Database, userId: string, endpoint:
 export const hasPushSubscription = async (db: D1Database, userId: string, endpoint: string) =>
   !!(await db.prepare("SELECT 1 AS ok FROM push_subscriptions WHERE user_id = ? AND endpoint = ?").bind(userId, endpoint).first());
 
-type Target = { id: string; name: string | null; email: string; role: string; push_sent_at: string | null };
+type Target = { id: string; name: string | null; email: string; role: string; push_sent_at: string | null; mail_sent_at: string | null; subscribed: number };
 
 /**
- * Pushes the new bell items to every subscribed person. `since`: the dispatcher skips a user when nothing can be new
- * (their push_sent_at is after the event). Safe to call often: it does nothing without subscriptions.
+ * Pushes the new bell items to every subscribed person, and emails the ones ticked "și pe email" (Setări → Alerte) to
+ * everyone. Each person has two marks (push_sent_at, mail_sent_at): only what is newer than them goes out. Safe to call
+ * often: nothing new, nothing sent.
  */
 export async function dispatchPush(db: D1Database, baseUrl?: string) {
-  const { results: users } = await db.prepare(`SELECT u.id, u.name, u.email, u.role, u.push_sent_at FROM users u
-      WHERE u.status = 'active' AND EXISTS (SELECT 1 FROM push_subscriptions s WHERE s.user_id = u.id AND s.failures < 5)`).all<Target>().catch(() => ({ results: [] as Target[] }));
+  const { results: users } = await db.prepare(`SELECT u.id, u.name, u.email, u.role, u.push_sent_at, u.mail_sent_at,
+        EXISTS (SELECT 1 FROM push_subscriptions s WHERE s.user_id = u.id AND s.failures < 5) AS subscribed
+      FROM users u WHERE u.status = 'active' AND u.kind = 'internal'`).all<Target>().catch(() => ({ results: [] as Target[] }));
   if (!users.length) return 0;
   // the CRM's address: of the request, or (email handler, no request) the configured one
   const base = baseUrl ?? (await origin().catch(() => process.env.CRM_URL || "https://crm.valuefy.ro"));
@@ -55,7 +58,7 @@ export async function dispatchPush(db: D1Database, baseUrl?: string) {
     const t = now();
     const viewer = { ...u, perms: permsFor(cfg, u.role), team: cfg.team, name: u.name ?? "", email: u.email };
     const { items } = await notificationsFor(db, viewer, base);
-    const fresh = items.filter((n) => u.push_sent_at && n.at > u.push_sent_at && n.at <= t);
+    const fresh = u.subscribed ? items.filter((n) => u.push_sent_at && n.at > u.push_sent_at && n.at <= t) : [];
     if (fresh.length) {
       const { results: subs } = await db.prepare("SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ? AND failures < 5").bind(u.id)
         .all<{ id: string; endpoint: string; p256dh: string; auth: string }>();
@@ -70,9 +73,25 @@ export async function dispatchPush(db: D1Database, baseUrl?: string) {
         if (okAny) await db.prepare("UPDATE push_subscriptions SET last_ok_at = ?, failures = 0 WHERE id = ?").bind(t, s.id).run();
       }
     }
-    await db.prepare("UPDATE users SET push_sent_at = ? WHERE id = ?").bind(t, u.id).run();
+    // by email: the alerts ticked for it, in one message
+    const mail = items.filter((n) => n.email && u.mail_sent_at && n.at > u.mail_sent_at && n.at <= t);
+    if (mail.length && u.email) await sendAlertMail(u, mail).catch((e) => console.error("alert mail", e));
+    await db.prepare("UPDATE users SET push_sent_at = ?, mail_sent_at = ? WHERE id = ?").bind(t, t, u.id).run();
   }
   return sent;
+}
+
+/** One email with the new alerts of a person: each with its text and a link into the CRM. */
+async function sendAlertMail(u: Target, list: Notice[]) {
+  const first = (u.name ?? "").split(" ")[0];
+  const rows = list.slice(0, 20).map((n) => `<p style="margin:0 0 12px"><a href="${esc(n.href)}" style="color:#111111;font-weight:bold">${esc(n.title)}</a>${n.sub ? `<br><span style="color:#6B6B85;font-size:13px">${esc(n.sub)}</span>` : ""}</p>`).join("");
+  const subject = list.length === 1 ? `CRM: ${list[0].title}` : `CRM: ${list.length} alerte noi`;
+  await sendEmail({
+    to: u.email, subject,
+    html: layout({ eyebrow: "Alertă CRM", title: list.length === 1 ? list[0].title : `${list.length} alerte noi`, body: `<p style="margin:0 0 16px">${esc(first ? `Bună, ${first}.` : "Bună.")}</p>${rows}`,
+      button: { label: "Deschide CRM-ul", url: list[0].href }, foot: "Primești acest email pentru că alerta are bifat „și pe email” în Setări → Alerte." }),
+    text: `${list.map((n) => `${n.title}${n.sub ? ` — ${n.sub}` : ""}\n${n.href}`).join("\n\n")}`,
+  });
 }
 
 const payloadOf = (n: Notice) => ({ id: n.id, title: n.title, body: n.sub, href: n.href, kind: n.kind, at: n.at });

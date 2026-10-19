@@ -2,7 +2,7 @@
 // No server code here: the settings editor and the server use the same lists.
 
 export type AlertKind =
-  | "insp_done" | "insp_not_scheduled" | "insp_overdue"
+  | "report_assigned" | "insp_done" | "insp_not_scheduled" | "insp_overdue"
   | "uncollected_after_insp" | "delivered_uncollected" | "to_invoice"
   | "review_waiting" | "overdue" | "order_new";
 
@@ -16,6 +16,8 @@ export type AlertRule = {
   scope: string[];
   /** also a card on the dashboard (not only the bell and the phone) */
   dashboard: boolean;
+  /** also sent by email */
+  email?: boolean;
   enabled: boolean;
   /** an own title instead of the situation's */
   title?: string;
@@ -34,6 +36,7 @@ export type KindInfo = {
 };
 
 export const ALERT_KINDS: Record<AlertKind, KindInfo> = {
+  report_assigned: { label: "Raport alocat", hint: "cineva a fost pus în echipa unui raport", from: "de la alocare", group: "Rapoarte", tone: "info", lasting: false, roles: ["assigned", "evaluator", "team", "ops", "admins", "all"] },
   insp_done: { label: "Inspecție realizată", hint: "fișa a fost finalizată de inspector", from: "de la finalizarea inspecției", group: "Inspecții", tone: "info", lasting: false, roles: ["evaluator", "verifier", "team", "ops", "admins", "all"] },
   insp_not_scheduled: { label: "Inspecție alocată, neprogramată", hint: "inspectorul nu a programat vizita", from: "de la alocare", group: "Inspecții", tone: "warn", lasting: true, roles: ["inspector", "evaluator", "team", "admins", "all"] },
   insp_overdue: { label: "Inspecție programată, nerealizată", hint: "data programată a trecut fără fișă", from: "de la data programată", group: "Inspecții", tone: "err", lasting: true, roles: ["inspector", "evaluator", "team", "admins", "all"] },
@@ -46,6 +49,7 @@ export const ALERT_KINDS: Record<AlertKind, KindInfo> = {
 };
 
 export const ALERT_TO: [string, string, string][] = [
+  ["assigned", "Persoana alocată", "cel pus în echipă"],
   ["evaluator", "Evaluatorul principal", "al raportului"],
   ["verifier", "Verificatorul", "al raportului"],
   ["inspector", "Inspectorul", "al inspecției"],
@@ -60,6 +64,7 @@ export const DAY_CHOICES: [number, string][] = [[0, "imediat"], [1, "după 1 zi"
 
 /** The rules of a firm that set none yet. */
 export const DEFAULT_RULES: AlertRule[] = [
+  { id: "r-assigned", kind: "report_assigned", days: 0, to: ["assigned"], scope: [], dashboard: false, enabled: true },
   { id: "r-insp-done", kind: "insp_done", days: 0, to: ["team", "admins"], scope: [], dashboard: false, enabled: true },
 ];
 

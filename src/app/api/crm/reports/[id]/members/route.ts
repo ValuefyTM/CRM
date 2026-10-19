@@ -15,7 +15,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const u = await a.db.prepare("SELECT id, COALESCE(NULLIF(name, ''), email) AS name FROM users WHERE id = ? AND kind = 'internal'").bind(String(b.user ?? "")).first<{ id: string; name: string }>();
   if (!u) return err("Alege persoana.");
   if (!(await a.db.prepare("SELECT id FROM reports WHERE id = ?").bind(id).first())) return err("Raportul nu există.", 404);
-  await a.db.prepare("INSERT OR IGNORE INTO report_members (report_id, user_id, role) VALUES (?, ?, ?)").bind(id, u.id, role).run();
+  await a.db.prepare("INSERT OR IGNORE INTO report_members (report_id, user_id, role, added_at, added_by) VALUES (?, ?, ?, ?, ?)").bind(id, u.id, role, now(), a.user.id).run();
   await a.db.prepare("UPDATE reports SET updated_at = ? WHERE id = ?").bind(now(), id).run();
   await audit(a.db, `user:${a.user.id}`, "report.member", "report", id, `${u.name} (${ROLE_LABEL[role].toLowerCase()})`);
   pushLater(a.db);

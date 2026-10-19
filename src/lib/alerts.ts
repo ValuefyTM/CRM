@@ -8,6 +8,7 @@ import { now } from "./db";
 import { getBilling, FINISHED_HERE } from "./billing";
 import { DUE_SQL } from "./reports";
 import { orderCode } from "./order-labels";
+import { ROLE_LABEL } from "./reports";
 
 export type { AlertRule };
 
@@ -27,7 +28,7 @@ export async function getAlertRules(db: D1Database): Promise<AlertRule[]> {
   return rules;
 }
 
-const TO = new Set(["evaluator", "verifier", "inspector", "team", "ops", "orders", "admins", "all"]);
+const TO = new Set(["assigned", "evaluator", "verifier", "inspector", "team", "ops", "orders", "admins", "all"]);
 function cleanRules(v: unknown): AlertRule[] {
   if (!Array.isArray(v)) return [];
   const out: AlertRule[] = [];
@@ -36,7 +37,7 @@ function cleanRules(v: unknown): AlertRule[] {
     const to = Array.isArray(x.to) ? x.to.filter((t): t is string => typeof t === "string" && (TO.has(t) || /^u:[\w-]{1,64}$/.test(t))) : [];
     const scope = Array.isArray(x.scope) ? x.scope.filter((s): s is string => typeof s === "string" && (s === "direct" || /^[kc]:[\w-]{1,80}$/.test(s))).slice(0, 200) : [];
     const days = typeof x.days === "number" && Number.isFinite(x.days) ? Math.min(365, Math.max(0, Math.round(x.days))) : 0;
-    out.push({ id: x.id.slice(0, 40), kind: x.kind as AlertKind, days, to, scope, dashboard: !!x.dashboard, enabled: x.enabled !== false, ...(typeof x.title === "string" && x.title.trim() ? { title: x.title.trim().slice(0, 80) } : {}) });
+    out.push({ id: x.id.slice(0, 40), kind: x.kind as AlertKind, days, to, scope, dashboard: !!x.dashboard, email: !!x.email, enabled: x.enabled !== false, ...(typeof x.title === "string" && x.title.trim() ? { title: x.title.trim().slice(0, 80) } : {}) });
     if (out.length >= 60) break;
   }
   return out;
@@ -56,6 +57,8 @@ export async function saveAlertRules(db: D1Database, actor: string, rules: unkno
 type Row = {
   key: string; anchor: string | null; rid: string | null; oid: string | null; number: string | null; label: string | null; client: string | null; bank: string | null;
   fee: number | null; kid: string | null; cid: string | null; my_roles: string | null; inspector_id: string | null; who: string | null; place: string | null; extra: string | null;
+  /** the person a "report assigned" row is about */
+  assigned_id: string | null;
   seq: number | null; bank_ref: string | null; source: string | null;
 };
 
@@ -64,7 +67,7 @@ const REPORT_COLS = `r.id AS rid, NULL AS oid, r.number, r.label, c.name AS clie
   (SELECT k.id FROM contracts k WHERE k.id = r.contract_id AND k.kind = 'framework') AS kid, o.collaboration_id AS cid,
   (SELECT group_concat(rm.role) FROM report_members rm WHERE rm.report_id = r.id AND rm.user_id = ?1) AS my_roles, NULL AS seq, NULL AS bank_ref, NULL AS source`;
 const REPORT_JOINS = `LEFT JOIN orders o ON o.id = r.order_id LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id`;
-const INSP_COLS = `i.id AS key, i.inspector_id, (SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE x.id = i.inspector_id) AS who,
+const INSP_COLS = `i.id AS key, NULL AS assigned_id, i.inspector_id, (SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE x.id = i.inspector_id) AS who,
   COALESCE(NULLIF(i.address, ''), p.full_address, p.city) AS place`;
 const INSP_JOINS = `LEFT JOIN reports r ON r.id = i.report_id LEFT JOIN assets a ON a.id = i.asset_id LEFT JOIN crm_properties p ON p.id = a.property_id ${REPORT_JOINS}`;
 const OPEN_REPORT = `r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL`;
@@ -72,27 +75,31 @@ const NEW_HERE = `r.glide_id IS NULL`;
 
 /** ?1 = user id, ?2 = the oldest moment still of interest, ?3 / ?4 = the billing defaults (framework, collaboration). */
 const SQL: Record<AlertKind, string> = {
+  report_assigned: `SELECT rm.report_id || ':' || rm.user_id || ':' || rm.role AS key, rm.user_id AS assigned_id, NULL AS inspector_id,
+      (SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE x.id = rm.user_id) AS who, (SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE x.id = rm.added_by) AS place,
+      rm.added_at AS anchor, rm.role || '|' || COALESCE(rm.added_by, '') AS extra, ${REPORT_COLS}
+    FROM report_members rm JOIN reports r ON r.id = rm.report_id ${REPORT_JOINS} WHERE rm.added_at > ?2 AND r.status <> 'cancelled'`,
   insp_done: `SELECT ${INSP_COLS}, i.done_at AS anchor, NULL AS extra, ${REPORT_COLS} FROM inspections i ${INSP_JOINS}
     WHERE i.status = 'done' AND i.done_at IS NOT NULL AND i.glide_id IS NULL AND i.done_at > ?2`,
   insp_not_scheduled: `SELECT ${INSP_COLS}, COALESCE(i.assigned_at, i.created_at) AS anchor, NULL AS extra, ${REPORT_COLS} FROM inspections i ${INSP_JOINS}
     WHERE i.status = 'to_schedule' AND i.glide_id IS NULL AND (r.id IS NULL OR ${OPEN_REPORT})`,
   insp_overdue: `SELECT ${INSP_COLS}, i.scheduled_at AS anchor, i.scheduled_at AS extra, ${REPORT_COLS} FROM inspections i ${INSP_JOINS}
     WHERE i.status = 'scheduled' AND i.scheduled_at IS NOT NULL AND i.glide_id IS NULL AND (r.id IS NULL OR ${OPEN_REPORT})`,
-  uncollected_after_insp: `SELECT r.id AS key, NULL AS inspector_id, NULL AS who, NULL AS place,
+  uncollected_after_insp: `SELECT r.id AS key, NULL AS assigned_id, NULL AS inspector_id, NULL AS who, NULL AS place,
       (SELECT MIN(i.done_at) FROM inspections i WHERE i.report_id = r.id AND i.status = 'done' AND i.done_at IS NOT NULL) AS anchor, NULL AS extra, ${REPORT_COLS}
     FROM reports r ${REPORT_JOINS} WHERE COALESCE(r.collected, 0) = 0 AND r.status <> 'cancelled' AND ${NEW_HERE} AND anchor IS NOT NULL`,
-  delivered_uncollected: `SELECT r.id AS key, NULL AS inspector_id, NULL AS who, NULL AS place, r.delivered_at AS anchor, NULL AS extra, ${REPORT_COLS}
+  delivered_uncollected: `SELECT r.id AS key, NULL AS assigned_id, NULL AS inspector_id, NULL AS who, NULL AS place, r.delivered_at AS anchor, NULL AS extra, ${REPORT_COLS}
     FROM reports r ${REPORT_JOINS} WHERE r.delivered_at IS NOT NULL AND COALESCE(r.collected, 0) = 0 AND r.status <> 'cancelled' AND ${NEW_HERE}`,
-  to_invoice: `SELECT r.id AS key, NULL AS inspector_id, NULL AS who, NULL AS place, COALESCE(r.delivered_at, r.updated_at) AS anchor, NULL AS extra, ${REPORT_COLS}
+  to_invoice: `SELECT r.id AS key, NULL AS assigned_id, NULL AS inspector_id, NULL AS who, NULL AS place, COALESCE(r.delivered_at, r.updated_at) AS anchor, NULL AS extra, ${REPORT_COLS}
     FROM reports r ${REPORT_JOINS} LEFT JOIN contracts k ON k.id = r.contract_id LEFT JOIN collaborations cb ON cb.id = o.collaboration_id
     WHERE r.invoice_id IS NULL AND r.billed_outside_at IS NULL AND r.status <> 'cancelled' AND (r.delivered_at IS NOT NULL OR r.status = 'done') AND ${FINISHED_HERE}
       AND ((k.kind = 'framework' AND COALESCE(k.billing_mode, ?3) = 'per_order') OR (o.collaboration_id IS NOT NULL AND COALESCE(cb.billing_mode, ?4) = 'per_order'))`,
-  review_waiting: `SELECT r.id AS key, NULL AS inspector_id, NULL AS who, NULL AS place,
+  review_waiting: `SELECT r.id AS key, NULL AS assigned_id, NULL AS inspector_id, NULL AS who, NULL AS place,
       COALESCE((SELECT MAX(al.at) FROM audit_log al WHERE al.entity = 'report' AND al.entity_id = r.id AND al.action = 'report.stage' AND al.details = 'Verificare'), r.updated_at) AS anchor, NULL AS extra, ${REPORT_COLS}
     FROM reports r ${REPORT_JOINS} WHERE r.stage = 'review' AND r.verified_at IS NULL AND ${OPEN_REPORT}`,
-  overdue: `SELECT r.id AS key, NULL AS inspector_id, NULL AS who, NULL AS place, date((${DUE_SQL}), '+1 day') AS anchor, (${DUE_SQL}) AS extra, ${REPORT_COLS}
+  overdue: `SELECT r.id AS key, NULL AS assigned_id, NULL AS inspector_id, NULL AS who, NULL AS place, date((${DUE_SQL}), '+1 day') AS anchor, (${DUE_SQL}) AS extra, ${REPORT_COLS}
     FROM reports r ${REPORT_JOINS} WHERE ${OPEN_REPORT} AND ${NEW_HERE} AND (${DUE_SQL}) IS NOT NULL`,
-  order_new: `SELECT o.id AS key, NULL AS inspector_id, NULL AS who, NULL AS place, o.created_at AS anchor, NULL AS extra,
+  order_new: `SELECT o.id AS key, NULL AS assigned_id, NULL AS inspector_id, NULL AS who, NULL AS place, o.created_at AS anchor, NULL AS extra,
       NULL AS rid, o.id AS oid, NULL AS number, NULL AS label, o.client_name AS client, o.bank, NULL AS fee,
       (SELECT k.id FROM contracts k WHERE k.id = o.contract_id AND k.kind = 'framework') AS kid, o.collaboration_id AS cid, NULL AS my_roles, o.seq, o.bank_ref, o.source
     FROM orders o WHERE o.viewed_at IS NULL AND o.created_at > ?2`,
@@ -115,7 +122,7 @@ const isAdmin = (u: Viewer) => u.role === "owner" || u.role === "admin";
 function forMe(rule: AlertRule, row: Row, u: Viewer) {
   const roles = (row.my_roles ?? "").split(",").filter(Boolean);
   const mine = row.inspector_id === u.id;
-  return rule.to.some((t) => t === "all" || (t === "admins" && isAdmin(u)) || (t === "ops" && can(u, "billing")) || (t === "orders" && can(u, "orders"))
+  return rule.to.some((t) => t === "all" || (t === "assigned" && row.assigned_id === u.id) || (t === "admins" && isAdmin(u)) || (t === "ops" && can(u, "billing")) || (t === "orders" && can(u, "orders"))
     || (t === "team" && (roles.length > 0 || mine)) || (t === "inspector" && (mine || roles.includes("inspector")))
     || ((t === "evaluator" || t === "verifier" || t === "assistant") && roles.includes(t)) || t === `u:${u.id}`);
 }
@@ -145,6 +152,8 @@ export async function alertHits(db: D1Database, u: Viewer, since: string, rules?
   for (const rule of all) {
     for (const row of byKind.get(rule.kind) ?? []) {
       if (!row.anchor || !inScope(rule, row) || !forMe(rule, row, u)) continue;
+      // what one did oneself (put oneself in a team) is no news
+      if (rule.kind === "report_assigned" && (row.extra ?? "").split("|")[1] === u.id) continue;
       const at = momentOf(row.anchor) + rule.days * 86400000;
       if (at > nowMs || at <= sinceMs) continue;
       hits.push({ rule, row, at: new Date(at).toISOString() });
@@ -168,6 +177,12 @@ export function describe(h: Hit, base: string) {
   const days = rule.days ? ` de ${rule.days} ${rule.days === 1 ? "zi" : "zile"}` : "";
   let title = `${head} · ${r}`, sub = "", href = rep ?? `${base}/rapoarte`;
   switch (rule.kind) {
+    case "report_assigned": {
+      const roleKey = (row.extra ?? "").split("|")[0];
+      const role = (ROLE_LABEL[roleKey] ?? roleKey ?? "membru").toLowerCase();
+      sub = [`${row.who ?? "cineva"} · ${role}`, row.place && `de ${row.place}`, row.client].filter(Boolean).join(" · ");
+      break;
+    }
     case "insp_done": sub = [row.place, row.who && `de ${row.who}`].filter(Boolean).join(" · "); href = rep ? `${rep}?tab=inspectii` : `${base}/agenda-inspectii`; break;
     case "insp_not_scheduled": title = `${head}${days} · ${r}`; sub = [row.place, row.who].filter(Boolean).join(" · "); href = rep ? `${rep}?tab=inspectii` : `${base}/agenda-inspectii`; break;
     case "insp_overdue": sub = [row.place, row.extra && `programată ${dm(row.extra)}`, row.who].filter(Boolean).join(" · "); href = rep ? `${rep}?tab=inspectii` : `${base}/agenda-inspectii`; break;
@@ -182,7 +197,7 @@ export function describe(h: Hit, base: string) {
     }
   }
   const kind = k.group === "Bani" ? "collect" : k.group === "Inspecții" ? "inspection" : k.group === "Comenzi" ? "order" : "alert";
-  return { id: `r${rule.id}:${row.key}`, at: h.at, kind, title, short, sub, href, tone: k.tone };
+  return { id: `r${rule.id}:${row.key}`, at: h.at, kind, title, short, sub, href, tone: k.tone, email: !!rule.email };
 }
 
 export type DashAlert = { key: string; tone: "err" | "warn" | "info"; title: string; hint: string; count: number; href: string; items: { label: string; sub?: string; href: string }[] };

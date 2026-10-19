@@ -113,7 +113,7 @@ export async function assignInspection(db: D1Database, user: User, reportId: str
       .run();
   }
   await db.batch([
-    db.prepare("INSERT OR IGNORE INTO report_members (report_id, user_id, role) VALUES (?, ?, 'inspector')").bind(reportId, inspector.id),
+    db.prepare("INSERT OR IGNORE INTO report_members (report_id, user_id, role, added_at, added_by) VALUES (?, ?, 'inspector', ?, ?)").bind(reportId, inspector.id, t, user.id),
     db.prepare("UPDATE assets SET no_inspection = NULL, no_inspection_at = NULL, no_inspection_by = NULL WHERE id = ?").bind(asset.id),
     db.prepare("UPDATE reports SET updated_at = ? WHERE id = ?").bind(t, reportId),
   ]);

@@ -39,7 +39,7 @@ export default async function AlertsSettingsPage() {
             <h2>Cum funcționează</h2>
             <ul className="blHow">
               <li>Fiecare alertă descrie o <b>situație</b> (inspecție realizată, raport neîncasat, comandă neprocesată…), <b>după câte zile</b> se dă și <b>cui</b>.</li>
-              <li>Alertele ajung în <b>clopoțel</b> și, pentru cine a activat notificările, <b>pe telefon</b>. Cu „și pe tabloul de bord” apar și ca un card în „De rezolvat”.</li>
+              <li>Alertele ajung în <b>clopoțel</b> și, pentru cine a activat notificările, <b>pe telefon</b>. Cu „și pe tabloul de bord” apar și ca un card în „De rezolvat”; cu „și pe email” se trimit și pe adresa de email a fiecăruia.</li>
               <li>O situație care durează (neîncasat, nepredat) rămâne în alerte până se rezolvă: bifa „Achitat”, predarea, factura. Una de moment (inspecție realizată) se dă o singură dată.</li>
               <li>O alertă poate fi limitată la anumite contracte cadru sau colaborări (de exemplu încasarea după inspecție doar la băncile unde clientul plătește direct).</li>
               <li>Rapoartele aduse din vechiul CRM nu dau alerte.</li>

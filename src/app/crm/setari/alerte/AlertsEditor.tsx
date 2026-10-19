@@ -13,6 +13,7 @@ const GROUPS = [...new Set(KINDS.map(([, k]) => k.group))];
 function Rule({ r, edit, people, scopes, onChange, onRemove }: { r: AlertRule; edit: boolean; people: Person[]; scopes: Scope[]; onChange: (r: AlertRule) => void; onRemove: () => void }) {
   const k = ALERT_KINDS[r.kind];
   const [more, setMore] = useState(r.scope.length > 0 || r.to.some((t) => t.startsWith("u:")) || !!r.title);
+  const pick = (kind: AlertKind, to: string[]) => (ALERT_KINDS[kind].roles.includes("assigned") && !to.length ? ["assigned"] : to);
   const set = (p: Partial<AlertRule>) => onChange({ ...r, ...p });
   const toggle = (list: string[], v: string, on: boolean) => (on ? [...new Set([...list, v])] : list.filter((x) => x !== v));
   const customDays = !DAY_CHOICES.some(([d]) => d === r.days);
@@ -22,7 +23,7 @@ function Rule({ r, edit, people, scopes, onChange, onRemove }: { r: AlertRule; e
         <label className="alSwitch" title={r.enabled ? "Activă" : "Oprită"}>
           <input type="checkbox" checked={r.enabled} disabled={!edit} onChange={(e) => set({ enabled: e.target.checked })} /><i />
         </label>
-        <select className="select alKind" value={r.kind} disabled={!edit} onChange={(e) => { const kind = e.target.value as AlertKind; set({ kind, to: r.to.filter((t) => ALERT_KINDS[kind].roles.includes(t) || t.startsWith("u:")) }); }}>
+        <select className="select alKind" value={r.kind} disabled={!edit} onChange={(e) => { const kind = e.target.value as AlertKind; set({ kind, to: pick(kind, r.to.filter((t) => ALERT_KINDS[kind].roles.includes(t) || t.startsWith("u:"))) }); }}>
           {GROUPS.map((g) => <optgroup key={g} label={g}>{KINDS.filter(([, x]) => x.group === g).map(([key, x]) => <option key={key} value={key}>{x.label}</option>)}</optgroup>)}
         </select>
         <span className={`pill ${k.tone === "err" ? "late" : k.tone === "warn" ? "wait" : "ok"}`}><i />{k.lasting ? "până se rezolvă" : "o singură dată"}</span>
@@ -52,6 +53,7 @@ function Rule({ r, edit, people, scopes, onChange, onRemove }: { r: AlertRule; e
         <label className="field">Unde
           <span className="alCheck"><input type="checkbox" checked disabled /> Clopoțel și telefon</span>
           <span className="alCheck"><input type="checkbox" checked={r.dashboard} disabled={!edit} onChange={(e) => set({ dashboard: e.target.checked })} /> Și pe tabloul de bord</span>
+          <span className="alCheck"><input type="checkbox" checked={!!r.email} disabled={!edit} onChange={(e) => set({ email: e.target.checked })} /> Și pe email</span>
         </label>
       </div>
       <button type="button" className="linkBtn alMore" onClick={() => setMore((x) => !x)}>{more ? "▾ Mai puține opțiuni" : "▸ Persoane anume, doar anumite contracte, titlu propriu"}</button>
