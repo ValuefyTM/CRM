@@ -120,7 +120,7 @@ export default async function AssetPage({ params, searchParams }: {
   // The sheets, opened over the page as in UVALO.
   const ownIssuer = !r.issuer_name || /valuefy/i.test(r.issuer_name);
   const firm = { name: r.issuer_name ?? "VALUEFY", logo: fileSrc(r.issuer_logo), corp: ownIssuer ? (await getFirm(db)).anevar || null : null };
-  const sheets = Object.fromEntries(await Promise.all(done.filter((i) => i.sheet_id).map(async (i) => [i.id, await inspectionSheetDoc(db, id, a.id, i.id)] as const)));
+  const sheets = Object.fromEntries(await Promise.all(done.filter((i) => i.sheet_id).map(async (i) => [i.id, await inspectionSheetDoc(db, id, a.id, i.id).catch(() => null)] as const)));
 
   // What the inspection found, from the latest sheet.
   const lastDone = done[0];
@@ -208,8 +208,7 @@ export default async function AssetPage({ params, searchParams }: {
               <div className="bvInspTop"><b>{i.status === "done" ? fmtDate(i.done_at ?? i.created_at) : i.status === "scheduled" && i.scheduled_at ? `Programată ${fmtDate(i.scheduled_at, true)}` : `Alocată ${fmtDate(i.created_at)}`}</b><span className={`pill ${k}`}><i />{t}</span></div>
               <small>{[i.inspector, i.uvalo_code ? `UVALO ${i.uvalo_code}` : i.uvalo_id ? "UVALO" : i.glide_id ? "din vechiul CRM" : "aplicația CRM", i.photos ? `${i.photos} fotografii` : null,
                 i.signature_url ? "semnată" : null, i.present_person && `prezent: ${i.present_person}`].filter(Boolean).join(" · ")}</small>
-              {doc ? <InspSheet doc={doc} firm={firm} pdf={`${base}/rapoarte/${id}/fisa/${a.id}`} label="Deschide fișa de inspecție →" />
-                : i.status === "done" && i.sheet_id ? <a className="btn btnGold" href={`${base}/rapoarte/${id}/fisa/${a.id}`}>Deschide fișa →</a> : null}
+              {(doc || (i.status === "done" && i.sheet_id)) && <InspSheet doc={doc ?? null} src={`/api/crm/reports/${id}/sheet/${a.id}?insp=${encodeURIComponent(i.id)}`} firm={firm} pdf={`${base}/rapoarte/${id}/fisa/${a.id}`} label="Deschide fișa de inspecție →" />}
             </div>
           </article>
         );

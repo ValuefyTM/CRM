@@ -59,11 +59,16 @@ function Gallery({ photos }: { photos: Ph[] }) {
   );
 }
 
-export function InspSheet({ doc, firm, pdf, label = "Deschide fișa" }: {
-  doc: SheetDoc; firm: { name: string | null; logo: string | null; corp: string | null }; pdf: string; label?: string;
-}) {
+type Firm = { name: string | null; logo: string | null; corp: string | null };
+
+/**
+ * The button and the modal of the sheet: with `doc` given by the page it opens at once; without it (or when the page could
+ * not build it) the sheet is read from `src` when opened. The sheet always opens over the page, never on its own.
+ */
+export function InspSheet({ doc: given, src, firm, pdf, label = "Deschide fișa" }: { doc: SheetDoc | null; src?: string; firm: Firm; pdf: string; label?: string }) {
   const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
+  const [doc, setDoc] = useState<SheetDoc | null>(given);
+  const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
     if (!open) return;
     const k = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
@@ -71,6 +76,39 @@ export function InspSheet({ doc, firm, pdf, label = "Deschide fișa" }: {
     document.body.style.overflow = "hidden";
     return () => { window.removeEventListener("keydown", k); document.body.style.overflow = ""; };
   }, [open]);
+  useEffect(() => {
+    if (!open || doc || !src) return;
+    let off = false;
+    setErr(null);
+    fetch(src, { credentials: "include" }).then(async (r) => {
+      const j = (await r.json().catch(() => ({}))) as { doc?: SheetDoc; error?: string };
+      if (off) return;
+      if (r.ok && j.doc) setDoc(j.doc); else setErr(j.error ?? "Fișa nu a putut fi încărcată.");
+    }).catch(() => { if (!off) setErr("Fișa nu a putut fi încărcată. Verifică legătura la internet."); });
+    return () => { off = true; };
+  }, [open, doc, src]);
+  const close = () => setOpen(false);
+  const btn = <button type="button" className="btn btnNavy btnSm" onClick={() => setOpen(true)}>{label}</button>;
+  if (!doc) return (
+    <>
+      {btn}
+      {open && createPortal(
+        <div className="ufsModal" role="dialog" aria-modal="true" aria-label="Fișa de inspecție" onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
+          <div className="ufs ufsWait">
+            <header className="ufsTop"><span className="ufsCode">Fișă de inspecție</span><button type="button" className="ufsClose" aria-label="Închide fișa" onClick={close}>×</button></header>
+            <p className="ufsText">{err ?? (src ? "Se încarcă fișa…" : "Fișa nu este disponibilă.")}</p>
+            {err && <p className="ufsText"><a href={pdf} target="_blank" rel="noopener">Încearcă varianta pentru tipărire ↗</a></p>}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+  return <SheetModal doc={doc} firm={firm} pdf={pdf} open={open} setOpen={setOpen} btn={btn} />;
+}
+
+function SheetModal({ doc, firm, pdf, open, setOpen, btn }: { doc: SheetDoc; firm: Firm; pdf: string; open: boolean; setOpen: (v: boolean) => void; btn: React.ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
 
   const p = doc.property, s = doc.sheet;
   // the notes: in the sheet's own "Constatări" group when it has one, else their own card
@@ -108,7 +146,7 @@ export function InspSheet({ doc, firm, pdf, label = "Deschide fișa" }: {
 
   return (
     <>
-      <button type="button" className="btn btnNavy btnSm" onClick={() => setOpen(true)}>{label}</button>
+      {btn}
       {open && createPortal(
         <div className="ufsModal" role="dialog" aria-modal="true" aria-label={`Fișa de inspecție · ${p.address ?? ""}`} onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
           <div className="ufs" ref={box}>
@@ -168,7 +206,7 @@ export function InspSheet({ doc, firm, pdf, label = "Deschide fișa" }: {
                         {rooms.map((r, i) => (
                           <tr key={r.id ?? i}>
                             <td><b>{r.name}</b>{r.level ? <small> · {r.level}</small> : null}</td><td className="r">{num(r.area) ? nf(num(r.area)) : "—"}</td>
-                            {fin && <><td>{r.floor?.join(", ") || "—"}</td><td>{r.walls?.join(", ") || "—"}</td><td>{r.ceiling || "—"}</td><td>{r.condition || "—"}</td></>}
+                            {fin && <><td>{(Array.isArray(r.floor) ? r.floor.join(", ") : r.floor) || "—"}</td><td>{(Array.isArray(r.walls) ? r.walls.join(", ") : r.walls) || "—"}</td><td>{r.ceiling || "—"}</td><td>{r.condition || "—"}</td></>}
                           </tr>
                         ))}
                       </tbody>

@@ -262,7 +262,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   ) : null;
   // The inspection sheets of the inspected assets, opened over the page as in UVALO (all their photos).
   const withSheet = assets.filter((a) => a.inspection_status === "done" && (a.sheet_photo || a.sheet_person || a.sheet_description || a.sheet_location));
-  const sheetDocs = Object.fromEntries(await Promise.all(withSheet.map(async (a) => [a.id, await inspectionSheetDoc(db, r.id, a.id)] as const)));
+  const sheetDocs = Object.fromEntries(await Promise.all(withSheet.map(async (a) => [a.id, await inspectionSheetDoc(db, r.id, a.id).catch(() => null)] as const)));
   const ownIssuer = isOwnIssuer(r.issuer_name);
   const sheetFirm = { name: r.issuer_name ?? "VALUEFY", logo, corp: ownIssuer ? (await getFirm(db)).anevar || null : null };
   const orderChip = order && (
@@ -478,7 +478,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                 id: a.id,
                 href: `${base}/rapoarte/${r.id}/bun/${a.id}`,
                 card: (
-                  <div className="abRow">
+                  <div className={`abRow${thumb ? " hasPh" : ""}`}>
                     <span className="abThumb">{thumb ? <SafeImg src={thumb} alt="" fallback={<span className="abNo">{n + 1}</span>} /> : <span className="abNo">{n + 1}</span>}</span>
                     <div className="abMain">
                       <div className="abTitle">
@@ -519,9 +519,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                       <div className="abSheetRow">
                         {thumb ? <SafeImg src={thumb} alt="" className="abSheetPh" fallback={<span className="abSheetPh" />} /> : <span className="abSheetPh" />}
                         <span className="abSheetTxt"><b>Fișa de inspecție</b><small>{a.done_at ? fmtDate(a.done_at) : "completată"}</small></span>
-                        {sheetDocs[a.id]
-                          ? <InspSheet doc={sheetDocs[a.id]!} firm={sheetFirm} pdf={`${base}/rapoarte/${r.id}/fisa/${a.id}`} />
-                          : <a className="btn btnNavy btnSm" href={`${base}/rapoarte/${r.id}/fisa/${a.id}`}>Deschide fișa</a>}
+                        <InspSheet doc={sheetDocs[a.id] ?? null} src={`/api/crm/reports/${r.id}/sheet/${a.id}`} firm={sheetFirm} pdf={`${base}/rapoarte/${r.id}/fisa/${a.id}`} />
                       </div>
                     )}
                     {((fromApp && !cancelled && (a.assigned_by_name || a.instructions)) || active || ((a.uvalo_id) && !cancelled)) && (

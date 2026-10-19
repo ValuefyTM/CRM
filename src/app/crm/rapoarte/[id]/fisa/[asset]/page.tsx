@@ -17,7 +17,7 @@ export default async function InspectionSheetDocument({ params }: { params: Prom
   const { id, asset } = await params;
   const rep = await db.prepare("SELECT id, status, delivered_at FROM reports WHERE id = ?").bind(id).first<{ id: string; status: string; delivered_at: string | null }>();
   if (!rep || !(await reportAccess(db, user, rep)).view) notFound();
-  const d = await inspectionSheetDoc(db, id, asset);
+  const d = await inspectionSheetDoc(db, id, asset).catch((e) => { console.error("fisa", id, asset, e); return null; });
   if (!d) notFound();
   const kv = (k: string, v: string | number | null | undefined) => (v || v === 0 ? <><dt>{k}</dt><dd>{v}</dd></> : null);
   return (

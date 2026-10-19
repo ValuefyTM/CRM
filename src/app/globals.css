@@ -2993,3 +2993,8 @@ span.rdPick { display: inline-block; }
 .abTop .abThumb { width: 44px; height: 44px; }
 .abTop .abRow .abFacts div { white-space: nowrap; }
 .abTop .abRow .abTitle { flex-wrap: wrap; }
+.ufsWait { padding-bottom: 16px; } .ufsWait .ufsText { padding: 18px clamp(12px, 3vw, 24px) 0; margin: 0; }
+/* inspected asset: the property photo, larger, instead of the number */
+.abTop .abRow.hasPh { grid-template-columns: 112px minmax(0, 1fr) auto; gap: 12px; align-items: start; }
+.abTop .abRow.hasPh .abThumb { width: 112px; height: 84px; border-radius: 10px; }
+@container ab (max-width: 520px) { .abTop .abRow.hasPh { grid-template-columns: 88px minmax(0, 1fr); } .abTop .abRow.hasPh .abThumb { width: 88px; height: 66px; } }
