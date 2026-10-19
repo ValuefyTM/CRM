@@ -87,6 +87,17 @@ export function RegistryView(p: {
     return `${p.base}/proprietati${qs ? `?${qs}` : ""}`;
   };
   const go = (change: Partial<RegistryQuery>) => router.push(href(change), { scroll: false });
+  // The search applies by itself half a second after typing stops (Enter applies it at once).
+  useEffect(() => {
+    const want = q.trim();
+    if (want === (c.q ?? "").trim()) return;
+    const t = setTimeout(() => go({ q: want || undefined }), 500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
+  // the address changed from outside (reset, back): the box follows
+  const qBox = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (document.activeElement !== qBox.current) setQ(c.q ?? ""); }, [c.q]);
   const active = [c.q, c.cat, c.county, c.city, c.year, c.geo, c.tip, c.smin || c.smax, c.amin || c.amax, c.luni].filter(Boolean).length;
   const withGeo = new Set(p.points.map((x) => x.id));
 
@@ -119,7 +130,7 @@ export function RegistryView(p: {
   const filters = (
     <>
       <form className="filterBar" onSubmit={(e) => { e.preventDefault(); go({ q: q.trim() || undefined }); }}>
-        <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută adresă, CF, nr. raport, client, bancă… (mai multe, cu virgulă) ↵" title="Mai mulți termeni separați prin virgulă: toți trebuie găsiți, în proprietate sau în rapoartele ei (client, utilizatorul raportului / banca, evaluator, scop, nr. raport)" aria-label="Caută" />
+        <input ref={qBox} className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută adresă, CF, nr. raport, client, bancă… (mai multe, cu virgulă)" title="Mai mulți termeni separați prin virgulă: toți trebuie găsiți, în proprietate sau în rapoartele ei (client, utilizatorul raportului / banca, evaluator, scop, nr. raport)" aria-label="Caută" />
         <FilterSelect label="Categorie" value={c.cat ?? ""} options={p.cats} onChange={(v) => go({ cat: v || undefined, tip: undefined })} />
         <FilterSelect label="Tip" value={c.tip ?? ""} options={p.types} onChange={(v) => go({ tip: v || undefined })} />
         <FilterSelect label="Județ" value={c.county ?? ""} options={p.counties} onChange={(v) => go({ county: v || undefined, city: undefined })} all="Toate" />
