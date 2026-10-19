@@ -114,6 +114,7 @@ export function OfferView({ offer: o, order, preview = false, toolbar, delivered
               <div className="tot"><dt>Total</dt><dd>{money(shown.total)}</dd></div>
             </dl>
             {o.payment_terms && <p className="ofNote"><b>Plată:</b> {o.payment_terms}</p>}
+            {code && !accepted && <p className="ofNote"><b>După acceptare:</b> oferta se transformă automat în contractul de prestări servicii, pe care îl primești pe email la semnat; raportul pornește apoi cu inspecția.</p>}
           </section>
         </div>
 

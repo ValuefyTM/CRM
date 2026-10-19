@@ -11,6 +11,13 @@ type Bank = { id: string; name: string; code: string | null };
 type Existing = { id: string; number: string; fee: number | null; purpose: string | null; report_type: string | null };
 /** A property already valued in the contract: a new report can value it again with the same inspection. */
 export type ContractProp = { id: string; type: string | null; address: string | null; cf: string | null };
+/** An offer being converted: what the form starts with. */
+export type FromQuote = {
+  id: string; code: string; email: string; notes: string; inspection_notes: string; urgent: boolean;
+  report: { purpose: string; report_type: string; fee: string; term_days: string };
+  fresh: { kind: "person" | "company"; name: string; cui: string; phone: string; email: string; city: string } | null;
+  assets: AssetForm[]; accepted: { name: string | null; at: string | null } | null;
+};
 type Rep = { purpose: string; report_type: string; fee: string; term_days: string; assets: number[]; shared: string[] };
 
 const KIND: Record<string, string> = { person: "PF", company: "PJ", bank: "Bancă", ifn: "IFN", uat: "UAT", broker: "Broker", anaf: "ANAF", other: "Altul" };
@@ -117,21 +124,28 @@ function ClientPicker({ value, onChange, fresh, setFresh }: {
 export function ContractForm(p: {
   base: string; me: string; next: string; initialKind: "classic" | "framework"; evaluators: PickPerson[]; banks: Bank[]; purposes: string[]; reportKinds: string[];
   client: PickedClient | null; existing: Existing | null; contractProps: ContractProp[];
+  /** converting an offer: classic contract, accepted now, everything filled in from it */
+  quote?: FromQuote | null;
 }) {
-  const [kind, setKind] = useState(p.initialKind);
+  const q = p.quote ?? null;
+  const [kind, setKind] = useState(q ? "classic" : p.initialKind);
   const [mode, setMode] = useState<"accepted" | "offer">("accepted");
   const [client, setClient] = useState<PickedClient | null>(p.client);
-  const [fresh, setFresh] = useState({ on: false, kind: "person" as "person" | "company", name: "", cui: "", phone: "", email: "", city: "" });
+  const [fresh, setFresh] = useState({ on: !!q?.fresh, kind: "person" as "person" | "company", name: "", cui: "", phone: "", email: "", city: "", ...(q?.fresh ?? {}) });
   const [f, setF] = useState({
     fee: p.existing?.fee ? String(p.existing.fee) : "", purpose: p.existing?.purpose ?? "", report_type: p.existing?.report_type ?? "Raport de evaluare", ordered_on: today(),
-    evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "", verifier_id: "", due_on: "", urgent: false, send_contract: true, inspection_notes: "", notes: "",
+    evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "", verifier_id: "", due_on: "", urgent: q?.urgent ?? false, send_contract: true, inspection_notes: q?.inspection_notes ?? "", notes: q?.notes ?? "",
   });
+  // where the contract goes for signing (asked when converting an offer)
+  const [sendTo, setSendTo] = useState(q?.email ?? "");
   const [fw, setFw] = useState({ client_id: "", number: "", signed_on: today(), fee: "", report_type: "Raport de evaluare", purpose: "Garantare bancară", notes: "", billing_mode: "" });
-  const [assets, setAssets] = useState<AssetForm[]>([{ ...emptyAsset(), full_address: "", is_main: true }]);
+  const [assets, setAssets] = useState<AssetForm[]>(q?.assets.length ? q.assets : [{ ...emptyAsset(), full_address: "", is_main: true }]);
   // On an existing contract the new report may value only properties already in it (inspected once, there).
   const [newAssets, setNewAssets] = useState(p.contractProps.length === 0);
   const blank = (purpose = "", report_type = "Raport de evaluare"): Rep => ({ purpose, report_type, fee: "", term_days: "3", assets: [], shared: [] });
-  const [reps, setReps] = useState<Rep[]>([{ ...blank("", p.existing?.report_type ?? "Raport de evaluare"), assets: p.contractProps.length ? [] : [0] }]);
+  const [reps, setReps] = useState<Rep[]>([q
+    ? { purpose: q.report.purpose, report_type: q.report.report_type, fee: q.report.fee, term_days: q.report.term_days || "3", assets: q.assets.map((_, i) => i), shared: [] }
+    : { ...blank("", p.existing?.report_type ?? "Raport de evaluare"), assets: p.contractProps.length ? [] : [0] }]);
   const setRep = (i: number, change: Partial<Rep>) => setReps(reps.map((r, j) => (j === i ? { ...r, ...change } : r)));
   const toggle = (list: (number | string)[], v: number | string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
   const usedAssets = newAssets ? assets : [];
@@ -150,6 +164,8 @@ export function ContractForm(p: {
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
   const setW = (k: keyof typeof fw) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setFw({ ...fw, [k]: e.target.value });
   const who = client ? { name: client.name, phone: client.phone ?? "", email: client.email ?? "" } : { name: fresh.name, phone: fresh.phone, email: fresh.email };
+  const signEmail = q ? sendTo.trim() : who.email.trim();
+  const vatPct = 21;
 
   const post = async (body: Record<string, unknown>) => {
     setBusy(true); setMsg("");
@@ -177,8 +193,9 @@ export function ContractForm(p: {
     if (usedAssets.some((_, n) => !reps.some((r) => r.assets.includes(n)))) return setMsg("Fiecare bun trebuie inclus în cel puțin un raport.");
     if (!usedAssets.length && !reps.some((r) => r.shared.length)) return setMsg("Adaugă cel puțin un bun.");
     if (mode === "accepted" && !f.evaluator_id) return setMsg("Alege evaluatorul principal.");
+    if (q && f.send_contract && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sendTo.trim())) return setMsg("Completează emailul la care se trimite contractul la semnat (sau debifează trimiterea).");
     const d = await post({
-      kind: "classic", mode, contract_id: p.existing?.id, ...f, purpose: reps[0].purpose, report_type: reps[0].report_type, fee: total ? String(total) : "",
+      kind: "classic", mode, contract_id: p.existing?.id, ...f, quote_id: q?.id, send_to: q ? sendTo.trim() : undefined, purpose: reps[0].purpose, report_type: reps[0].report_type, fee: total ? String(total) : "",
       reports: reps.map((r) => ({ ...r, term_days: Number(r.term_days) || null })),
       ...(client ? { client_id: client.id } : { client: { kind: fresh.kind, name: fresh.name, cui: fresh.cui, phone: fresh.phone, email: fresh.email, city: fresh.city } }),
       assets: usedAssets.map((a, i) => ({ ...a, is_main: i === 0, ...(a.contact_kind === "client" ? { contact_name: who.name, contact_phone: who.phone } : {}) })),
@@ -198,7 +215,12 @@ export function ContractForm(p: {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 940 }}>
-      {!p.existing && (
+      {q && (
+        <div className="note">
+          Din oferta <b>{q.code}</b>{q.accepted ? <> · acceptată{q.accepted.name ? ` și semnată de ${q.accepted.name}` : ""}</> : null}. Verifică raportul și echipa; contractul clasic se completează automat din aceste date (client, bunuri, onorariu, termen) și, la salvare, pleacă la semnat pe email.
+        </div>
+      )}
+      {!p.existing && !q && (
         <div className="ctKindPick" role="group" aria-label="Tip contract">
           <button type="button" aria-pressed={kind === "classic"} onClick={() => { setKind("classic"); setMsg(""); }}>
             <b>Contract clasic</b><span>Lucrare directă VALUEFY pentru un client: unul sau mai multe rapoarte (ex. impozitare + raportare). Nr. {p.next}, automat.</span>
@@ -211,7 +233,7 @@ export function ContractForm(p: {
 
       {kind === "classic" ? (
         <form onSubmit={submitClassic} noValidate style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-          {!p.existing && (
+          {!p.existing && !q && (
             <section className="card">
               <h2>Cum pornește lucrarea</h2>
               <div className="ctKindPick ctModePick" role="group" aria-label="Pornire">
@@ -321,9 +343,15 @@ export function ContractForm(p: {
                 <label className="field">Termen predare <small>(opțional)</small><input className="input" type="date" value={f.due_on} onChange={set("due_on")} /></label>
               </div>
               <p className="hint">Inspecțiile le aloci după creare: se deschide raportul cu fereastra de alocare, bun cu bun.</p>
-              {!p.existing && (
+              {!p.existing && !q && (
                 <label className="check"><input type="checkbox" checked={f.send_contract && !!who.email.trim()} disabled={!who.email.trim()} onChange={(e) => setF({ ...f, send_contract: e.target.checked })} />
                   <span>Trimite clientului contractul la semnat online{who.email.trim() ? ` (${who.email.trim()})` : " — clientul nu are email"}</span></label>
+              )}
+              {q && (
+                <div className="formRow" style={{ alignItems: "end" }}>
+                  <label className="check" style={{ paddingBottom: 8 }}><input type="checkbox" checked={f.send_contract} onChange={(e) => setF({ ...f, send_contract: e.target.checked })} /><span>Trimite contractul la semnat online, pe email</span></label>
+                  {f.send_contract && <label className="field">Emailul pentru contract<input className="input" type="email" value={sendTo} onChange={(e) => setSendTo(e.target.value)} placeholder="nume@exemplu.ro" /></label>}
+                </div>
               )}
             </section>
           )}
@@ -331,12 +359,27 @@ export function ContractForm(p: {
             <label className="field">Note interne <small>(opțional)</small><textarea className="textarea" rows={2} value={f.notes} onChange={set("notes")} /></label>
           </section>
 
+          {q && (
+            <section className="card ctSummary">
+              <div className="cardHead"><h2>Sumar contract</h2><span className="ctNo">Nr. {p.next} · se completează automat</span></div>
+              <dl className="kv">
+                <div><dt>Client</dt><dd>{who.name || "—"}{who.phone ? ` · ${who.phone}` : ""}</dd></div>
+                <div><dt>Bunuri</dt><dd>{usedAssets.length ? usedAssets.map((a, i) => assetName(a, i).replace(/^\d+\. /, "")).join("; ") : "—"}</dd></div>
+                <div><dt>{reps.length > 1 ? "Rapoarte" : "Raport"}</dt><dd>{reps.map((r) => [r.purpose || "scop de ales", r.report_type, r.term_days ? `${r.term_days} zile lucrătoare` : ""].filter(Boolean).join(" · ")).join("; ")}</dd></div>
+                <div><dt>Onorariu</dt><dd>{total ? `${total.toLocaleString("ro-RO")} lei fără TVA · ${(total * (1 + vatPct / 100)).toLocaleString("ro-RO", { maximumFractionDigits: 2 })} lei cu TVA` : "—"}</dd></div>
+                <div><dt>Data</dt><dd>{f.ordered_on.split("-").reverse().join(".")}{f.urgent ? " · urgent" : ""}</dd></div>
+                <div><dt>Echipă</dt><dd>{p.evaluators.find((e) => e.id === f.evaluator_id)?.name ?? "evaluator de ales"}{f.verifier_id ? ` · verificator ${p.evaluators.find((e) => e.id === f.verifier_id)?.name ?? ""}` : ""}</dd></div>
+                <div><dt>Semnare</dt><dd>{f.send_contract ? (signEmail ? `se trimite pe email la ${signEmail}` : "email de completat") : "nu se trimite acum (se poate trimite din contract)"}</dd></div>
+              </dl>
+              <p className="hint">Contractul folosește modelul firmei (Setări → Model contract) cu datele de mai sus; clientul îl completează cu datele de facturare și îl semnează online.</p>
+            </section>
+          )}
           {msg && <div role="alert" className="error">{msg}</div>}
           <div className="actions">
             <button type="submit" className="btn btnGold" disabled={busy}>
-              {busy ? "Se creează…" : p.existing ? (reps.length > 1 ? `Creează cele ${reps.length} rapoarte pe contract` : "Creează raportul pe contract") : mode === "accepted" ? `Creează contractul nr. ${p.next} și ${reps.length > 1 ? `cele ${reps.length} rapoarte` : "raportul"}` : "Continuă la ofertă →"}
+              {busy ? "Se creează…" : q ? (f.send_contract ? `Creează contractul nr. ${p.next}, raportul și trimite la semnat` : `Creează contractul nr. ${p.next} și raportul`) : p.existing ? (reps.length > 1 ? `Creează cele ${reps.length} rapoarte pe contract` : "Creează raportul pe contract") : mode === "accepted" ? `Creează contractul nr. ${p.next} și ${reps.length > 1 ? `cele ${reps.length} rapoarte` : "raportul"}` : "Continuă la ofertă →"}
             </button>
-            <a className="btn btnGhost" href={p.existing ? `${p.base}/contracte/${p.existing.id}` : `${p.base}/contracte`}>Renunță</a>
+            <a className="btn btnGhost" href={q ? `${p.base}/oferte/${q.id}` : p.existing ? `${p.base}/contracte/${p.existing.id}` : `${p.base}/contracte`}>Renunță</a>
           </div>
         </form>
       ) : (

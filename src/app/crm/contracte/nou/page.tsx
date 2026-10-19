@@ -3,7 +3,9 @@ import { staffPage } from "@/lib/guard";
 import { evaluatorChoices } from "@/lib/dossier";
 import { bankChoices, CONTRACT_PURPOSES, nextContractNumber, REPORT_KINDS } from "@/lib/contracts";
 import { CrmShell } from "@/components/CrmShell";
-import { ContractForm, type ContractProp, type PickedClient } from "./ContractForm";
+import { ContractForm, type ContractProp, type FromQuote, type PickedClient } from "./ContractForm";
+import { getQuote, quoteAssets, quoteCode } from "@/lib/quotes";
+import { emptyAsset, type AssetForm } from "@/lib/asset-labels";
 
 export const metadata: Metadata = { title: "Contract nou | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -12,9 +14,18 @@ export const dynamic = "force-dynamic";
  * New contract. Classic: direct work for a client of VALUEFY — accepted now (report and contract at once) or with an
  * offer first. Framework: the agreement signed with a bank. `?contract=` adds another report under a classic contract.
  */
-export default async function NewContract({ searchParams }: { searchParams: Promise<{ tip?: string; contract?: string; client?: string }> }) {
+export default async function NewContract({ searchParams }: { searchParams: Promise<{ tip?: string; contract?: string; client?: string; oferta?: string }> }) {
   const { db, user, base } = await staffPage("contracts.A");
   const sp = await searchParams;
+  // Converting an offer (Oferte) into direct work: the form comes filled in from it.
+  const q = sp.oferta ? await getQuote(db, sp.oferta) : null;
+  const fromQuote: FromQuote | null = q && q.status !== "converted" ? {
+    id: q.id, code: quoteCode(q), email: q.client_email ?? "", notes: q.notes ?? "", inspection_notes: q.inspection_notes ?? "", urgent: !!q.urgent,
+    report: { purpose: q.purpose ?? "", report_type: q.report_type ?? "Raport de evaluare", fee: q.fee != null ? String(q.fee) : "", term_days: q.term_days != null ? String(q.term_days) : "3" },
+    fresh: q.client_id ? null : { kind: q.client_kind === "company" ? "company" : "person", name: q.client_name, cui: q.client_cui ?? "", phone: q.client_phone ?? "", email: q.client_email ?? "", city: "" },
+    assets: quoteAssets(q).map((a, i) => ({ ...emptyAsset(), ...Object.fromEntries(Object.entries(a).filter(([, v]) => typeof v === "string")), uid: `q${i}`, is_main: i === 0 } as AssetForm)),
+    accepted: q.status === "accepted" ? { name: q.accepted_name, at: q.decided_at } : null,
+  } : null;
   const [evaluators, banks, next] = await Promise.all([evaluatorChoices(db), bankChoices(db), nextContractNumber(db)]);
   const existing = sp.contract
     ? await db.prepare(`SELECT k.id, k.number, k.fee, k.purpose, k.report_type, e.id AS client_id, e.kind, e.name, e.cui, e.phone, e.email, e.city
@@ -26,18 +37,19 @@ export default async function NewContract({ searchParams }: { searchParams: Prom
     ? (await db.prepare(`SELECT DISTINCT p.id, p.type, COALESCE(p.full_address, p.city) AS address, p.cf_number AS cf FROM assets a JOIN reports r ON r.id = a.report_id
         JOIN crm_properties p ON p.id = a.property_id WHERE r.contract_id = ? AND r.status <> 'cancelled'`).bind(existing.id).all<ContractProp>()).results
     : [];
-  const clientId = existing?.client_id ?? sp.client ?? null;
+  const clientId = existing?.client_id ?? sp.client ?? q?.client_id ?? null;
   const client: PickedClient | null = clientId
     ? existing?.client_id ? { id: existing.client_id, kind: existing.kind, name: existing.name, cui: existing.cui, phone: existing.phone, email: existing.email, city: existing.city }
       : await db.prepare("SELECT id, kind, name, cui, phone, email, city FROM entities WHERE id = ?").bind(clientId).first<PickedClient>()
     : null;
   return (
-    <CrmShell user={user} base={base} active="contracts" title={existing ? `Raport nou pe contractul ${existing.number}` : "Contract nou"}
-      subtitle={existing ? "Un raport în plus pe contractul clasic existent: fără contract nou" : `Lucrare directă VALUEFY (contract clasic, următorul nr. ${next}) sau contract cadru cu o bancă`}
-      actions={<a href={existing ? `${base}/contracte/${existing.id}` : `${base}/contracte`} className="btn btnGhost btnSm">← {existing ? "Contract" : "Contracte"}</a>}>
+    <CrmShell user={user} base={base} active={fromQuote ? "quotes" : "contracts"} title={fromQuote ? `Contract din oferta ${fromQuote.code}` : existing ? `Raport nou pe contractul ${existing.number}` : "Contract nou"}
+      subtitle={fromQuote ? `Detaliile raportului și contractul clasic (nr. ${next}, completat automat), trimis clientului la semnat` : existing ? "Un raport în plus pe contractul clasic existent: fără contract nou" : `Lucrare directă VALUEFY (contract clasic, următorul nr. ${next}) sau contract cadru cu o bancă`}
+      actions={<a href={fromQuote ? `${base}/oferte/${fromQuote.id}` : existing ? `${base}/contracte/${existing.id}` : `${base}/contracte`} className="btn btnGhost btnSm">← {fromQuote ? "Ofertă" : existing ? "Contract" : "Contracte"}</a>}>
+      {sp.oferta && !fromQuote && <div className="note">Oferta nu există sau e deja convertită.</div>}
       <ContractForm base={base} me={user.id} next={next} initialKind={sp.tip === "cadru" && !existing ? "framework" : "classic"} evaluators={evaluators} banks={banks}
         purposes={CONTRACT_PURPOSES} reportKinds={REPORT_KINDS} client={client} contractProps={contractProps}
-        existing={existing ? { id: existing.id, number: existing.number, fee: existing.fee, purpose: existing.purpose, report_type: existing.report_type } : null} />
+        existing={existing ? { id: existing.id, number: existing.number, fee: existing.fee, purpose: existing.purpose, report_type: existing.report_type } : null} quote={fromQuote} />
     </CrmShell>
   );
 }

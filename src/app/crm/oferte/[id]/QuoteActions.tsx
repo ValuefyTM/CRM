@@ -132,15 +132,25 @@ export function QuoteActions({ id, status, base, canEdit, canDelete, canConvert,
         <div className="vfModal" role="dialog" aria-modal="true" aria-labelledby="qtConvT" onClick={(e) => { if (e.target === e.currentTarget) setConv(false); }}>
           <form className="vfModalBox" style={{ maxWidth: 560 }} onSubmit={convert} noValidate>
             <h2 id="qtConvT">Convertește oferta în lucrare</h2>
-            <p className="hint" style={{ margin: 0 }}>Se creează comanda și raportul cu datele din ofertă (client, bunuri, onorariu); clientul nou se adaugă în CRM. Apoi aloci inspecțiile.</p>
+            <p className="hint" style={{ margin: 0 }}>Comanda și raportul se creează cu datele din ofertă (client, bunuri, onorariu); clientul nou se adaugă în CRM. Apoi aloci inspecțiile.</p>
             <div className="ctKindPick ctModePick" role="group" aria-label="Cum merge lucrarea">
               <button type="button" aria-pressed={c.mode === "direct"} onClick={() => setC({ ...c, mode: "direct" })}>
-                <b>Direct · contract clasic</b><span>Lucrare VALUEFY pentru client: contractul (nr. automat) și raportul; contractul poate pleca la semnat online.</span>
+                <b>Direct · contract clasic</b><span>Lucrare VALUEFY pentru client: alegi detaliile raportului, contractul se completează automat și pleacă la semnat pe email.</span>
               </button>
               <button type="button" aria-pressed={c.mode === "collab"} onClick={() => setC({ ...c, mode: "collab" })}>
                 <b>Pe colaborare</b><span>Comandă CO-… pe o firmă colaboratoare, cu cota ei; raportul se emite pe firma aceea.</span>
               </button>
             </div>
+            {c.mode === "direct" ? (
+              <>
+                <p className="hint" style={{ margin: 0 }}>Pe pagina următoare verifici detaliile raportului și echipa, vezi sumarul contractului (completat automat din ofertă) și alegi emailul la care pleacă la semnat.</p>
+                {msg && <div role="alert" className="error">{msg}</div>}
+                <div className="actions">
+                  <a className="btn btnGold" href={`${base}/contracte/nou?oferta=${id}`}>Continuă la raport și contract →</a>
+                  <button type="button" className="btn btnGhost" onClick={() => setConv(false)}>Renunță</button>
+                </div>
+              </>
+            ) : null}
             {c.mode === "collab" && (
               <label className="field">Firma colaboratoare
                 <select className="select" value={c.collaboration_id} onChange={(e) => setC({ ...c, collaboration_id: e.target.value })}>
@@ -149,25 +159,25 @@ export function QuoteActions({ id, status, base, canEdit, canDelete, canConvert,
                 </select>
               </label>
             )}
-            <div className="formRow">
-              <div className="field">Evaluator principal
-                <PersonPicker label="Evaluator principal" value={c.evaluator_id} onChange={(v) => setC({ ...c, evaluator_id: v })} people={evaluators} me={me} />
-              </div>
-              <div className="field">Verificator <small>(opțional)</small>
-                <PersonPicker label="Verificator" value={c.verifier_id} onChange={(v) => setC({ ...c, verifier_id: v })} people={evaluators.filter((x) => x.id !== c.evaluator_id)} me={me}
-                  extras={[{ value: "", label: "Mai târziu", hint: "se alege după creare" }]} placeholder="Mai târziu" />
-              </div>
-            </div>
-            <label className="field">Termen predare <small>(opțional)</small><input className="input" type="date" value={c.due_on} onChange={(e) => setC({ ...c, due_on: e.target.value })} /></label>
-            {c.mode === "direct" && (
-              <label className="check"><input type="checkbox" checked={c.send_contract && hasEmail} disabled={!hasEmail} onChange={(e) => setC({ ...c, send_contract: e.target.checked })} />
-                <span>Trimite clientului contractul la semnat online{hasEmail ? "" : " — clientul nu are email"}</span></label>
+            {c.mode === "collab" && (
+              <>
+                <div className="formRow">
+                  <div className="field">Evaluator principal
+                    <PersonPicker label="Evaluator principal" value={c.evaluator_id} onChange={(v) => setC({ ...c, evaluator_id: v })} people={evaluators} me={me} />
+                  </div>
+                  <div className="field">Verificator <small>(opțional)</small>
+                    <PersonPicker label="Verificator" value={c.verifier_id} onChange={(v) => setC({ ...c, verifier_id: v })} people={evaluators.filter((x) => x.id !== c.evaluator_id)} me={me}
+                      extras={[{ value: "", label: "Mai târziu", hint: "se alege după creare" }]} placeholder="Mai târziu" />
+                  </div>
+                </div>
+                <label className="field">Termen predare <small>(opțional)</small><input className="input" type="date" value={c.due_on} onChange={(e) => setC({ ...c, due_on: e.target.value })} /></label>
+                {msg && <div role="alert" className="error">{msg}</div>}
+                <div className="actions">
+                  <button type="submit" className="btn btnGold" disabled={busy}>{busy ? "Se creează…" : "Creează comanda și raportul"}</button>
+                  <button type="button" className="btn btnGhost" onClick={() => setConv(false)}>Renunță</button>
+                </div>
+              </>
             )}
-            {msg && <div role="alert" className="error">{msg}</div>}
-            <div className="actions">
-              <button type="submit" className="btn btnGold" disabled={busy}>{busy ? "Se creează…" : c.mode === "collab" ? "Creează comanda și raportul" : "Creează contractul și raportul"}</button>
-              <button type="button" className="btn btnGhost" onClick={() => setConv(false)}>Renunță</button>
-            </div>
           </form>
         </div>, document.body)}
     </div>
