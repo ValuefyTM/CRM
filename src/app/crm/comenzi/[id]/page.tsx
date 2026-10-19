@@ -131,6 +131,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
                 <div><dt>Client</dt><dd>{o.client_id ? <a className="rowLink" href={`${base}/clienti/${o.client_id}`}>{o.client_name ?? "—"}</a> : o.client_name ?? "—"}</dd></div>
                 {o.client_phone && <div><dt>Telefon</dt><dd><a href={`tel:${o.client_phone}`}>{o.client_phone}</a></dd></div>}
                 {o.client_email && <div><dt>Email</dt><dd><a href={`mailto:${o.client_email}`}>{o.client_email}</a></dd></div>}
+                {o.referral_id && <div><dt>Recomandată de</dt><dd><a className="rowLink" href={`${base}/clienti/${o.referral_id}`}>{o.referral_name ?? "colaborator"}</a></dd></div>}
                 {o.report_type && <div><dt>Tip raport</dt><dd>{o.report_type}</dd></div>}
                 {o.purpose && <div><dt>Scop</dt><dd>{o.purpose}</dd></div>}
                 <div><dt>Onorariu fără TVA</dt><dd>{lei(o.fee)}</dd></div>
@@ -148,6 +149,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
                 {o.bank_branch && <div><dt>Agenție</dt><dd>{o.bank_branch}</dd></div>}
                 {o.contract_number && <div><dt>Contract</dt><dd>{o.contract_kind === "framework" ? "Cadru" : "Clasic"} nr. {o.contract_number}</dd></div>}
                 <div><dt>Client</dt><dd>{o.client_name ?? "—"}</dd></div>
+                {o.referral_id && <div><dt>Recomandată de</dt><dd><a className="rowLink" href={`${base}/clienti/${o.referral_id}`}>{o.referral_name ?? "colaborator"}</a></dd></div>}
                 {o.report_type && <div><dt>Tip raport</dt><dd>{o.report_type}</dd></div>}
                 <div><dt>Tarif</dt><dd>{lei(o.fee)}</dd></div>
                 {o.share != null && <div><dt>Cota VALUEFY</dt><dd>{Math.round(o.share * 100)}% · {lei(o.fee_net)}</dd></div>}

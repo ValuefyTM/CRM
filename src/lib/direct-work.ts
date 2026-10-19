@@ -2,6 +2,7 @@
 // 'direct' with its assets, then either opens its report at once — the client has accepted: the classic contract is
 // generated with the next number — or waits for the offer to be accepted (the same path as portal orders).
 import { now, uuid } from "./db";
+import { referralOf } from "./contract-orders";
 import { audit } from "./auth";
 import { createClient, findDuplicate, type ClientInput } from "./clients";
 import { openDossier } from "./dossier";
@@ -103,6 +104,7 @@ export async function createDirectWork(db: D1Database, actor: { id: string; name
   const contactName = main.contact_kind && main.contact_kind !== "client" ? main.contact_name : null;
   const ordered = /^\d{4}-\d{2}-\d{2}$/.test(str(b.ordered_on, 10)) ? str(b.ordered_on, 10) : now().slice(0, 10);
   const fee = amount(b.fee);
+  const referral = await referralOf(db, b.referral_id);
   const id = uuid(), t = now();
   for (let attempt = 0; ; attempt++) {
     const seq = ((await db.prepare("SELECT MAX(seq) AS m FROM orders").first<{ m: number | null }>())?.m ?? 1000) + 1;
@@ -119,6 +121,7 @@ export async function createDirectWork(db: D1Database, actor: { id: string; name
       if (!String(e).includes("UNIQUE") || attempt >= 4) throw e;
     }
   }
+  if (referral) await db.prepare("UPDATE orders SET referral_id = ? WHERE id = ?").bind(referral, id).run();
   await audit(db, `user:${actor.id}`, "order.create", "order", id, `lucrare directă · ${c.name}${mode === "offer" ? " · cu ofertă" : ""}`);
   if (mode === "offer") return { ok: true as const, order: id, report: null, contract: null, client: c };
 

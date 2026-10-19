@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
 import { AssetsEditor } from "@/components/AssetsEditor";
 import { emptyAsset, type AssetForm } from "@/lib/asset-labels";
+import { ReferralPick, type Referral } from "@/components/ReferralPick";
 
 export type PickedClient = { id: string; kind: string; name: string; cui: string | null; phone: string | null; email: string | null; city: string | null; reports?: number; last_contract?: string | null };
 type Bank = { id: string; name: string; code: string | null };
@@ -16,7 +17,7 @@ export type FromQuote = {
   id: string; code: string; email: string; notes: string; inspection_notes: string; urgent: boolean;
   report: { purpose: string; report_type: string; fee: string; term_days: string };
   fresh: { kind: "person" | "company"; name: string; cui: string; phone: string; email: string; city: string } | null;
-  assets: AssetForm[]; accepted: { name: string | null; at: string | null } | null;
+  assets: AssetForm[]; accepted: { name: string | null; at: string | null } | null; referral: Referral | null;
 };
 type Rep = { purpose: string; report_type: string; fee: string; term_days: string; assets: number[]; shared: string[] };
 
@@ -126,8 +127,10 @@ export function ContractForm(p: {
   client: PickedClient | null; existing: Existing | null; contractProps: ContractProp[];
   /** converting an offer: classic contract, accepted now, everything filled in from it */
   quote?: FromQuote | null;
+  canAddClient?: boolean;
 }) {
   const q = p.quote ?? null;
+  const [referral, setReferral] = useState<Referral | null>(q?.referral ?? null);
   const [kind, setKind] = useState(q ? "classic" : p.initialKind);
   const [mode, setMode] = useState<"accepted" | "offer">("accepted");
   const [client, setClient] = useState<PickedClient | null>(p.client);
@@ -195,7 +198,7 @@ export function ContractForm(p: {
     if (mode === "accepted" && !f.evaluator_id) return setMsg("Alege evaluatorul principal.");
     if (q && f.send_contract && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sendTo.trim())) return setMsg("Completează emailul la care se trimite contractul la semnat (sau debifează trimiterea).");
     const d = await post({
-      kind: "classic", mode, contract_id: p.existing?.id, ...f, quote_id: q?.id, send_to: q ? sendTo.trim() : undefined, purpose: reps[0].purpose, report_type: reps[0].report_type, fee: total ? String(total) : "",
+      kind: "classic", mode, contract_id: p.existing?.id, ...f, quote_id: q?.id, referral_id: referral?.id ?? "", send_to: q ? sendTo.trim() : undefined, purpose: reps[0].purpose, report_type: reps[0].report_type, fee: total ? String(total) : "",
       reports: reps.map((r) => ({ ...r, term_days: Number(r.term_days) || null })),
       ...(client ? { client_id: client.id } : { client: { kind: fresh.kind, name: fresh.name, cui: fresh.cui, phone: fresh.phone, email: fresh.email, city: fresh.city } }),
       assets: usedAssets.map((a, i) => ({ ...a, is_main: i === 0, ...(a.contact_kind === "client" ? { contact_name: who.name, contact_phone: who.phone } : {}) })),
@@ -253,6 +256,7 @@ export function ContractForm(p: {
               <div className="ctPicked"><span className="ctPickedAv" aria-hidden>{KIND[client.kind] ?? "?"}</span>
                 <span className="who"><b>{client.name}</b><span className="muted">Clientul contractului nr. {p.existing.number}</span></span></div>
             ) : <ClientPicker value={client} onChange={setClient} fresh={fresh} setFresh={setFresh} />}
+            {!p.existing && <ReferralPick value={referral} onChange={setReferral} canAdd={!!p.canAddClient} />}
           </section>
 
           <section className="card">

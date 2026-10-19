@@ -1,6 +1,6 @@
 // Server-only: which clients, orders and contracts a user works on (Setări → Permisiuni, „Pe ce date”):
 // all, the ones they created, or the ones behind reports where they are main evaluator or verifier.
-import { can, leadSql, scopeOf, type WithPerms } from "./perms";
+import { can, clientKindsOf, leadSql, scopeOf, type WithPerms } from "./perms";
 import { accreditedSql } from "./accreditations";
 
 type Mod = "clients" | "orders" | "contracts";
@@ -15,6 +15,15 @@ const LINK: Record<Mod, (a: string) => string> = {
 
 /** A WHERE condition on the table aliased `alias` (entities / orders / contracts), or null for everything. */
 export function scopeFilter(u: Viewer, mod: Mod, alias: string): ScopeFilter {
+  const base = scopeBase(u, mod, alias);
+  // Clienți: only some kinds of entities (Permisiuni, „Ce tipuri”), on top of „Pe ce date”.
+  const kinds = mod === "clients" ? clientKindsOf(u) : null;
+  if (!kinds) return base;
+  const kindSql = `${alias}.kind IN (${kinds.map(() => "?").join(", ")})`;
+  return base ? { sql: `(${base.sql} AND ${kindSql})`, binds: [...base.binds, ...kinds] } : { sql: kindSql, binds: [...kinds] };
+}
+
+function scopeBase(u: Viewer, mod: Mod, alias: string): ScopeFilter {
   const s = scopeOf(u, mod);
   if (s === "all") return null;
   if (s === "own") {

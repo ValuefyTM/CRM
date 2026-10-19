@@ -5,6 +5,7 @@ import {
   BUILTIN_ROLES, FEE_VIEWS, MODULES, RIGHTS, TEAM_RIGHTS, TEAM_ROLES,
   type Cell, type FeeView, type Scope, type ModKey, type PermConfig, type Right, type TeamRight, type TeamRole,
 } from "@/lib/perms";
+import { CLIENT_KINDS } from "@/lib/client-kinds";
 
 type Mod = (typeof MODULES)[number];
 const GROUPS = [...new Set(MODULES.map((m) => m.group))].map((g) => [g, MODULES.filter((m) => m.group === g)] as const);
@@ -22,7 +23,8 @@ function CellView({ m, c }: { m: Mod; c: Cell }) {
   if (!c.on) return <span className="pmOff">—</span>;
   const scope = scopeOf(m);
   const sc = c.scope ?? "all";
-  const meta = [scope && sc !== "all" ? <b key="s">{m.k === "dashboard" ? "personal" : m.k === "fees" && sc === "own" ? "doar cota" : SCOPE_SHORT[sc]}</b> : null, c.sp.length ? `+${c.sp.length}` : null].filter(Boolean);
+  const meta = [scope && sc !== "all" ? <b key="s">{m.k === "dashboard" ? "personal" : m.k === "fees" && sc === "own" ? "doar cota" : SCOPE_SHORT[sc]}</b> : null, c.sp.length ? `+${c.sp.length}` : null,
+    c.kinds?.length ? <b key="k">{c.kinds.length} {c.kinds.length === 1 ? "tip" : "tipuri"}</b> : null].filter(Boolean);
   return (
     <>
       <span className="pmLetters">
@@ -183,6 +185,15 @@ export function PermMatrix(props: { initial: PermConfig; defaults: PermConfig; c
                         </label>
                       ))}
                     </div>
+                  </div>
+                )}
+                {"kinds" in mod && (
+                  <div className="pmBlock">
+                    <b>Ce tipuri de entități</b>
+                    <p className="hint" style={{ margin: 0 }}>Nimic bifat = toate tipurile. Bifează doar ce vede rolul (de exemplu persoanele, firmele și colaboratorii).</p>
+                    {CLIENT_KINDS.map(([k, l]) => (
+                      <label key={k} className="check"><input type="checkbox" checked={!!cell.kinds?.includes(k)} onChange={() => setCell({ kinds: toggle(cell.kinds ?? [], k) })} /> {l}</label>
+                    ))}
                   </div>
                 )}
                 {spOf(mod).length > 0 && (

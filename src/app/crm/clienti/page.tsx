@@ -1,6 +1,7 @@
 import { niceName } from "@/lib/labels";
 import type { Metadata } from "next";
 import { scopeFilter } from "@/lib/scope";
+import { clientKindsOf } from "@/lib/perms";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { CLIENT_KINDS, CLIENT_PAGE, clientCounts, kindName, listClients } from "@/lib/clients";
 import { STATUS_LABEL } from "@/lib/labels";
@@ -27,7 +28,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       actions={<><a href={`${base}/clienti/nou`} className="btn btnGold btnSm">+ Persoană fizică</a><a href={`${base}/clienti/nou?tip=pj`} className="btn btnGold btnSm">+ Persoană juridică</a></>}
     >
       <section className="card">
-        <ClientFilters base={base} total={data.total} current={{ q: sp.q, kind: sp.kind, portal: sp.portal }} kinds={CLIENT_KINDS.filter(([k]) => counts[k]).map(([k, l]) => [k, l, counts[k]])} />
+        <ClientFilters base={base} total={data.total} current={{ q: sp.q, kind: sp.kind, portal: sp.portal }} kinds={CLIENT_KINDS.filter(([k]) => counts[k] && (!clientKindsOf(user) || clientKindsOf(user)!.includes(k))).map(([k, l]) => [k, l, counts[k]])} />
         {data.rows.length === 0 ? <div className="empty">Niciun client pentru filtrele alese.</div> : (
           <div className="tableWrap">
             <table className="table">

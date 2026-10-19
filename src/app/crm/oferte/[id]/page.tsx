@@ -43,6 +43,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
             <dl className="kv">
               <Row k="Client"><b>{q.client_name}</b>{q.client_kind === "company" ? " · PJ" : ""}{q.client_cui ? ` · CUI ${q.client_cui}` : ""}{q.client_id && <> · <a className="link" href={`${base}/clienti/${q.client_id}`}>fișa clientului</a></>}</Row>
               <Row k="Contact">{[q.client_phone, q.client_email].filter(Boolean).join(" · ")}</Row>
+              <Row k="Recomandată de">{q.referral_id ? <a className="link" href={`${base}/clienti/${q.referral_id}`}>{q.referral_name ?? "colaborator"}</a> : null}</Row>
               <Row k="Onorariu">{q.fee != null ? <><span className="mono num">{lei(q.fee)}</span> fără TVA <small className="muted">· {lei(Math.round(q.fee * (1 + billing.vatPercent / 100) * 100) / 100)} cu TVA</small></> : <span className="muted">de stabilit</span>}</Row>
               <Row k="Scop · tip">{[q.purpose, q.report_type].filter(Boolean).join(" · ")}</Row>
               <Row k="Termen propus">{q.term_days ? `${q.term_days} zile lucrătoare` : null}</Row>

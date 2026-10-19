@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { staffPage } from "@/lib/guard";
 import { contractChoices } from "@/lib/contract-orders";
 import { getBilling } from "@/lib/billing";
+import { can } from "@/lib/perms";
 import { CrmShell } from "@/components/CrmShell";
 import { QuoteForm } from "../QuoteForm";
 
@@ -15,7 +16,7 @@ export default async function NewQuote() {
   return (
     <CrmShell user={user} base={base} active="quotes" title="Ofertă nouă" subtitle="Notează oferta făcută clientului; comanda sau contractul se fac la conversie"
       actions={<a href={`${base}/oferte`} className="btn btnGhost btnSm">← Oferte</a>}>
-      <QuoteForm base={base} initial={null} collabs={collabs.map((c) => ({ id: c.id, firm: c.firm, number: c.number }))} vatPercent={billing.vatPercent} />
+      <QuoteForm base={base} initial={null} collabs={collabs.map((c) => ({ id: c.id, firm: c.firm, number: c.number }))} vatPercent={billing.vatPercent} canAddClient={can(user, "clients.A")} />
     </CrmShell>
   );
 }

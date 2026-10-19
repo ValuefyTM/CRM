@@ -6,6 +6,7 @@ import { PAYMENT_PRESETS, PURPOSES } from "@/lib/order-labels";
 import { assetProfile, capType, emptyAsset, type AssetForm } from "@/lib/asset-labels";
 import { AssetsEditor, newUid } from "@/components/AssetsEditor";
 import { ClientSearch, type ClientHit } from "@/components/ClientSearch";
+import { ReferralPick, type Referral } from "@/components/ReferralPick";
 
 export type QuoteInitial = {
   id: string; client_id: string; client_kind: "person" | "company"; client_name: string; client_phone: string; client_email: string; client_cui: string;
@@ -13,6 +14,7 @@ export type QuoteInitial = {
   /** a preset key, or "custom" with the text in payment_terms */
   payment: string; payment_terms: string;
   inspection_notes: string; notes: string; assets: AssetForm[];
+  referral: Referral | null;
 };
 type Collab = { id: string; firm: string; number: string | null };
 
@@ -25,11 +27,12 @@ const Step = ({ n, title, sub, done }: { n: number; title: string; sub?: string;
 );
 const Req = () => <span className="req" aria-label="obligatoriu">*</span>;
 
-export function QuoteForm({ base, initial, collabs, vatPercent }: { base: string; initial: QuoteInitial | null; collabs: Collab[]; vatPercent: number }) {
+export function QuoteForm({ base, initial, collabs, vatPercent, canAddClient }: { base: string; initial: QuoteInitial | null; collabs: Collab[]; vatPercent: number; canAddClient: boolean }) {
+  const [referral, setReferral] = useState<Referral | null>(initial?.referral ?? null);
   const [f, setF] = useState(initial ?? {
     id: "", client_id: "", client_kind: "person" as "person" | "company", client_name: "", client_phone: "", client_email: "", client_cui: "",
     purpose: "", report_type: "Raport de evaluare", fee: "", term_days: "3", valid_until: plusDays(14), urgent: false, channel: "", collaboration_id: "", sent_via: "",
-    payment: "avans50", payment_terms: "", inspection_notes: "", notes: "", assets: [] as AssetForm[],
+    payment: "avans50", payment_terms: "", inspection_notes: "", notes: "", assets: [] as AssetForm[], referral: null,
   });
   const [assets, setAssets] = useState<AssetForm[]>(initial?.assets.length ? initial.assets : [{ ...emptyAsset(), uid: newUid(), full_address: "", is_main: true }]);
   const [picked, setPicked] = useState<ClientHit | null>(initial?.client_id ? { id: initial.client_id, kind: initial.client_kind, name: initial.client_name, cui: initial.client_cui || null, phone: initial.client_phone || null, email: initial.client_email || null, city: null, reports: 0 } : null);
@@ -64,7 +67,7 @@ export function QuoteForm({ base, initial, collabs, vatPercent }: { base: string
     setErrors(e);
     if (Object.keys(e).length) { setMsg(""); setTimeout(() => document.querySelector(".nwForm .fieldErr")?.scrollIntoView({ behavior: "smooth", block: "center" }), 0); return; }
     setBusy(true); setMsg("");
-    const body = { ...f, assets: assets.map((a, i) => ({ ...a, is_main: i === 0 })) };
+    const body = { ...f, referral_id: referral?.id ?? "", assets: assets.map((a, i) => ({ ...a, is_main: i === 0 })) };
     const r = await fetch(f.id ? `/api/crm/quotes/${f.id}` : "/api/crm/quotes", { method: f.id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
     const d = (await r?.json().catch(() => ({}))) as { id?: string; error?: string } | undefined;
     if (!r?.ok) { setBusy(false); setMsg(d?.error || "Nu am putut salva. Încearcă din nou."); return; }
@@ -98,6 +101,7 @@ export function QuoteForm({ base, initial, collabs, vatPercent }: { base: string
             <label className="field"><span className="fLabel">Email <small>(sau telefon)</small></span><input className="input" type="email" value={f.client_email} onChange={set("client_email")} placeholder="nume@exemplu.ro" /></label>
           </div>
           {f.client_kind === "company" && <label className="field"><span className="fLabel">CUI <small>(opțional)</small></span><input className="input mono" value={f.client_cui} onChange={set("client_cui")} placeholder="ex. 12345678" disabled={!!picked} /></label>}
+          <ReferralPick value={referral} onChange={setReferral} canAdd={canAddClient} />
         </section>
 
         <section className="card nwCard">

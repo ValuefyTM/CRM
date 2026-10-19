@@ -5,6 +5,8 @@
 // changes the matrix. Inside a report, what someone may do follows their role in the report's team (TEAM_*).
 // No server code here: the labels and `can` are also used by client components.
 
+import { CLIENT_KINDS } from "./client-kinds";
+
 export type Right = "A" | "E" | "D";
 export const RIGHTS: [Right | "V", string][] = [["V", "Vede"], ["A", "Adaugă"], ["E", "Editează"], ["D", "Șterge"]];
 
@@ -13,11 +15,14 @@ export const RIGHTS: [Right | "V", string][] = [["V", "Vede"], ["A", "Adaugă"],
 export type Scope = "all" | "own" | "lead";
 type ModDef = { k: string; l: string; group: string; rights: Right[]; scope?: readonly (readonly [Scope, string])[]; sp?: [string, string][]; hint?: string;
   /** the special actions (and the scope) can be given without the module itself (no menu entry) */
-  offSp?: true };
+  offSp?: true;
+  /** the role can be limited to some kinds of entities (Clienți: only clients and collaborators, say) */
+  kinds?: true };
 const LEAD = ["lead", "Unde e evaluator / verificator"] as const;
 
 export const MODULES = [
-  { k: "clients", l: "Clienți / Entități", group: "CRM", rights: ["A", "E", "D"], scope: [["all", "Toți"], ["own", "Adăugați de el"], LEAD] },
+  { k: "clients", l: "Clienți / Entități", group: "CRM", rights: ["A", "E", "D"], scope: [["all", "Toți"], ["own", "Adăugați de el"], LEAD], kinds: true,
+    hint: "„Ce tipuri”: lasă toate bifele goale pentru toate tipurile, sau bifează doar ce vede rolul (de exemplu clienții și colaboratorii, nu băncile)." },
   { k: "partners", l: "Parteneri", group: "CRM", rights: ["A", "E", "D"], hint: "Firmele partenere și conturile lor din portal." },
   { k: "contracts", l: "Contracte", group: "CRM", rights: ["A", "E", "D"], scope: [["all", "Toate"], LEAD], sp: [["sign", "Marchează semnat"]] },
   { k: "orders", l: "Comenzi", group: "CRM", rights: ["A", "E", "D"], scope: [["all", "Toate"], ["own", "Create de el"], LEAD],
@@ -46,7 +51,9 @@ type SpOf<M> = M extends { k: infer K extends string; sp: readonly (readonly [in
  * "orders.contract": the orders of the framework contracts the user is accredited on (agreeri, see accreditations.ts). */
 export type Perm = ModKey | `${ModKey}.${Right}` | `${ModKey}.all` | `${ModKey}.lead` | SpOf<(typeof MODULES)[number]> | "orders.contract";
 
-export type Cell = { on: boolean; r: Right[]; scope?: Scope; sp: string[] };
+export type Cell = { on: boolean; r: Right[]; scope?: Scope; sp: string[];
+  /** Clienți: only these kinds of entities (empty / missing = all) */
+  kinds?: string[] };
 export type Role = { id: string; name: string; cells: Partial<Record<ModKey, Cell>> };
 
 // ---------- the report team ----------
@@ -127,6 +134,7 @@ export function cleanConfig(raw: unknown): PermConfig {
         // Saved before "lead" existed: own = true.
         scope: "scope" in m ? (m.scope.some(([v]) => v === (c.scope ?? (c.own ? "own" : "all"))) ? (c.scope ?? (c.own ? "own" : "all")) : "all") : undefined,
         sp: sps.filter((s) => c.sp?.includes(s)),
+        ...("kinds" in m && Array.isArray(c.kinds) && c.kinds.length ? { kinds: CLIENT_KINDS.map(([k]) => k).filter((k) => c.kinds!.includes(k)) } : {}),
       };
     }
     roles.push({ id, name, cells });
@@ -156,8 +164,17 @@ export function permsFor(cfg: PermConfig, role: string): string[] {
     const scope = c.scope ?? "all";
     if (scope === "all") out.push(`${m.k}.all`);
     if (scope === "lead") out.push(`${m.k}.lead`);
+    // only some kinds of entities: "clients.kind:person"… (none = all kinds)
+    if ("kinds" in m && c.kinds?.length) out.push(...c.kinds.map((k) => `${m.k}.kind:${k}`));
   }
   return out;
+}
+
+/** The kinds of entities the user may see in Clienți (null = all; the owner sees all). */
+export function clientKindsOf(u: WithPerms | null | undefined): string[] | null {
+  if (!u || u.role === "owner") return null;
+  const kinds = (u.perms ?? []).filter((p) => p.startsWith("clients.kind:")).map((p) => p.slice("clients.kind:".length));
+  return kinds.length ? kinds : null;
 }
 
 /** A signed-in CRM user with the permissions of their role (see currentUser). */

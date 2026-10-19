@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { staffPage } from "@/lib/guard";
+import { can } from "@/lib/perms";
 import { evaluatorChoices } from "@/lib/dossier";
 import { bankChoices, CONTRACT_PURPOSES, nextContractNumber, REPORT_KINDS } from "@/lib/contracts";
 import { CrmShell } from "@/components/CrmShell";
@@ -25,6 +26,7 @@ export default async function NewContract({ searchParams }: { searchParams: Prom
     fresh: q.client_id ? null : { kind: q.client_kind === "company" ? "company" : "person", name: q.client_name, cui: q.client_cui ?? "", phone: q.client_phone ?? "", email: q.client_email ?? "", city: "" },
     assets: quoteAssets(q).map((a, i) => ({ ...emptyAsset(), ...Object.fromEntries(Object.entries(a).filter(([, v]) => typeof v === "string")), uid: `q${i}`, is_main: i === 0 } as AssetForm)),
     accepted: q.status === "accepted" ? { name: q.accepted_name, at: q.decided_at } : null,
+    referral: q.referral_id ? { id: q.referral_id, name: q.referral_name ?? "Colaborator" } : null,
   } : null;
   const [evaluators, banks, next] = await Promise.all([evaluatorChoices(db), bankChoices(db), nextContractNumber(db)]);
   const existing = sp.contract
@@ -49,7 +51,7 @@ export default async function NewContract({ searchParams }: { searchParams: Prom
       {sp.oferta && !fromQuote && <div className="note">Oferta nu există sau e deja convertită.</div>}
       <ContractForm base={base} me={user.id} next={next} initialKind={sp.tip === "cadru" && !existing ? "framework" : "classic"} evaluators={evaluators} banks={banks}
         purposes={CONTRACT_PURPOSES} reportKinds={REPORT_KINDS} client={client} contractProps={contractProps}
-        existing={existing ? { id: existing.id, number: existing.number, fee: existing.fee, purpose: existing.purpose, report_type: existing.report_type } : null} quote={fromQuote} />
+        existing={existing ? { id: existing.id, number: existing.number, fee: existing.fee, purpose: existing.purpose, report_type: existing.report_type } : null} quote={fromQuote} canAddClient={can(user, "clients.A")} />
     </CrmShell>
   );
 }

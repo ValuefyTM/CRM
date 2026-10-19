@@ -61,6 +61,13 @@ async function clientOf(db: D1Database, actor: string, b: Record<string, unknown
   return id;
 }
 
+/** The collaborator who brought the work (an entity of kind "broker"), when given and real. */
+export async function referralOf(db: D1Database, v: unknown) {
+  const id = str(v, 80);
+  if (!/^[\w-]{1,80}$/.test(id)) return null;
+  return (await db.prepare("SELECT id FROM entities WHERE id = ? AND kind = 'broker'").bind(id).first<{ id: string }>())?.id ?? null;
+}
+
 /**
  * Registers the order of a bank (framework contract) or of a collaborating firm, with its assets (the first is the
  * main one: its place goes on the order). Returns its id.
@@ -106,6 +113,7 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
   }
   const share = collab?.share ?? null;
   const clientId = await clientOf(db, actor, b, client, phone);
+  const referral = await referralOf(db, b.referral_id);
   const id = uuid(), t = now();
   await db.prepare(`INSERT INTO orders (id, source, created_by, property_type, city, address, surface_area, purpose, bank, urgent, client_name, client_phone, client_email,
       contact_name, contact_phone, inspection_notes, notes, status, client_id, contract_id, collaboration_id, bank_id, bank_branch, bank_ref, report_type, fee, share, fee_net,
@@ -119,6 +127,7 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
       ordered, t, actor, t, t)
     .run();
   if (feeGross != null) await db.prepare("UPDATE orders SET fee_gross = ? WHERE id = ?").bind(feeGross, id).run();
+  if (referral) await db.prepare("UPDATE orders SET referral_id = ? WHERE id = ?").bind(referral, id).run();
   if (kind === "collab") {
     await db.prepare("UPDATE orders SET seq = (SELECT COALESCE(MAX(seq), 0) + 1 FROM orders) WHERE id = ? AND seq IS NULL").bind(id).run();
     // The collaborating firm's number of the report (VALUEFY's reports are numbered automatically).

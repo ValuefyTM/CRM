@@ -12,6 +12,7 @@ import type { DraftDoc } from "@/components/AssetDocs";
 import { docKindLabel } from "@/lib/doc-kinds";
 import { SafeImg } from "@/app/crm/rapoarte/[id]/ReportActions";
 import { ClientSearch, type ClientHit as Hit } from "@/components/ClientSearch";
+import { ReferralPick, type Referral } from "@/components/ReferralPick";
 
 type Contract = { id: string; number: string | null; bank: string; bank_code: string | null; fee: number | null; report_type: string | null; purpose: string | null; logo?: string | null; billing_mode?: string | null; fee_grid?: string | null };
 type Collab = { id: string; number: string | null; firm: string; share: number | null; logo?: string | null; billing_mode?: string | null };
@@ -79,7 +80,10 @@ export function ContractOrderForm(p: {
   bankOnly?: boolean;
   /** The firm's VAT (Setări → Facturare): a grid "cu TVA" is turned into the net fee. */
   vatPercent?: number;
+  /** may add a collaborator on the spot (clients.A) */
+  canAddClient?: boolean;
 }) {
+  const [referral, setReferral] = useState<Referral | null>(null);
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
   const [kind, setKind] = useState(p.initialKind);
   const preset = p.contracts.find((c) => c.id === p.initialContract) ?? (p.contracts.length === 1 ? p.contracts[0] : null);
@@ -171,7 +175,7 @@ export function ContractOrderForm(p: {
       return;
     }
     setBusy(true); setMsg("");
-    const r = await fetch("/api/crm/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, kind, assets: assets.map((a, i) => ({
+    const r = await fetch("/api/crm/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, kind, referral_id: referral?.id ?? "", assets: assets.map((a, i) => ({
       ...a, is_main: i === 0, ...(a.contact_kind === "client" ? { contact_name: f.client_name, contact_phone: f.client_phone } : {}),
     })) }) }).catch(() => null);
     const d = (await r?.json().catch(() => ({}))) as { report?: string; error?: string; inspections?: number; assets?: string[] } | undefined;
@@ -299,6 +303,7 @@ export function ContractOrderForm(p: {
             <label className="field"><span className="fLabel">Email <small>(opțional)</small></span><input className="input" type="email" value={f.client_email} onChange={set("client_email")} placeholder="nume@exemplu.ro" /></label>
           </div>
           {f.client_kind === "company" && <label className="field"><span className="fLabel">CUI <small>(opțional)</small></span><input className="input mono" value={f.client_cui} onChange={set("client_cui")} placeholder="ex. 12345678" disabled={!!picked} /></label>}
+          <ReferralPick value={referral} onChange={setReferral} canAdd={!!p.canAddClient} />
         </section>
       </div>
 

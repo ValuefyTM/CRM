@@ -61,6 +61,7 @@ export function OrderInfo({ o, showSource }: { o: Order; showSource?: boolean })
         <div><dt>Client</dt><dd>{o.client_name}</dd></div>
         <div><dt>Telefon client</dt><dd>{o.client_phone ? <a href={`tel:${o.client_phone.replace(/\s/g, "")}`}>{o.client_phone}</a> : "—"}</dd></div>
         {o.client_email && <div><dt>Email client</dt><dd><a href={`mailto:${o.client_email}`}>{o.client_email}</a></dd></div>}
+        {o.referral_name && <div><dt>Recomandată de</dt><dd>{o.referral_name}</dd></div>}
         {o.contact_name && <div><dt>Contact inspecție</dt><dd>{o.contact_name} · <a href={`tel:${(o.contact_phone ?? "").replace(/\s/g, "")}`}>{o.contact_phone}</a></dd></div>}
         {o.source === "partner" && <div><dt>Evaluatorul poate contacta clientul</dt><dd>{yes(o.may_contact_client)}</dd></div>}
         {o.inspection_notes && <div style={{ gridColumn: "1 / -1" }}><dt>Observații inspecție</dt><dd style={{ fontWeight: 500, whiteSpace: "pre-wrap" }}>{o.inspection_notes}</dd></div>}

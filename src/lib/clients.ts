@@ -4,11 +4,8 @@ import { now, uuid } from "./db";
 import { normEmail, validEmail } from "./crypto";
 import { createUser, getUser, type UserInput } from "./users";
 
-export const CLIENT_KINDS: [string, string][] = [
-  ["person", "Persoană fizică"], ["company", "Persoană juridică"], ["bank", "Bancă"], ["ifn", "IFN"], ["uat", "Instituție publică (UAT)"],
-  ["anaf", "ANAF"], ["broker", "Broker"], ["other", "Altul"],
-];
-export const kindName = (k: string) => CLIENT_KINDS.find(([v]) => v === k)?.[1] ?? k;
+import { CLIENT_KINDS, kindName } from "./client-kinds";
+export { CLIENT_KINDS, kindName };
 
 export type Client = {
   id: string; glide_id: string | null; kind: string; name: string; cui: string | null; reg_no: string | null; billing_address: string | null;

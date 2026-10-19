@@ -37,10 +37,11 @@ export type Quote = {
   converted_at: string | null; order_id: string | null; contract_id: string | null; report_id: string | null;
   created_by: string | null; created_at: string; updated_at: string;
   /** the public page (portal /oferta/<token>) and the client's answer on it */
+  referral_id: string | null;
   token: string | null; sent_to: string | null; message: string | null; payment_terms: string | null; viewed_at: string | null;
   accepted_name: string | null; signature: string | null; accepted_ip: string | null; content_hash: string | null;
   // joined
-  author: string | null; collab_firm: string | null; report_number: string | null; order_seq: number | null; contract_number: string | null;
+  author: string | null; collab_firm: string | null; report_number: string | null; order_seq: number | null; contract_number: string | null; referral_name: string | null;
 };
 
 export const quoteCode = (q: Pick<Quote, "seq">) => (q.seq ? `OF-${q.seq}` : "OF-?");
@@ -64,7 +65,8 @@ const amount = (v: unknown) => {
 const int = (v: unknown) => { const n = typeof v === "number" ? v : parseInt(String(v ?? ""), 10); return Number.isFinite(n) && n > 0 && n < 1000 ? n : null; };
 const dateOf = (v: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(str(v, 10)) ? str(v, 10) : null);
 
-const SELECT = `SELECT q.*, COALESCE(NULLIF(u.name, ''), u.email) AS author, e.name AS collab_firm, r.number AS report_number, o.seq AS order_seq, k.number AS contract_number
+const SELECT = `SELECT q.*, COALESCE(NULLIF(u.name, ''), u.email) AS author, e.name AS collab_firm, r.number AS report_number, o.seq AS order_seq, k.number AS contract_number,
+    (SELECT x.name FROM entities x WHERE x.id = q.referral_id) AS referral_name
   FROM quotes q LEFT JOIN users u ON u.id = q.created_by LEFT JOIN collaborations cb ON cb.id = q.collaboration_id LEFT JOIN entities e ON e.id = cb.firm_id
   LEFT JOIN reports r ON r.id = q.report_id LEFT JOIN orders o ON o.id = q.order_id LEFT JOIN contracts k ON k.id = q.contract_id`;
 
@@ -168,6 +170,7 @@ function fieldsOf(b: QuoteBody) {
     urgent: b.urgent === true ? 1 : 0, assets_json: JSON.stringify(assets), inspection_notes: str(b.inspection_notes, 1000) || null, notes: str(b.notes, 4000) || null,
     channel, collaboration_id: channel === "collab" ? str(b.collaboration_id, 80) || null : null, sent_via: SENT_VIA.some(([k]) => k === b.sent_via) ? (b.sent_via as string) : null,
     payment_terms: PAYMENT_PRESETS.find(([k]) => k === b.payment)?.[1] ?? (str(b.payment_terms, 300) || null),
+    referral_id: /^[\w-]{1,80}$/.test(str(b.referral_id, 80)) ? str(b.referral_id, 80) : null,
   } };
 }
 
@@ -210,10 +213,10 @@ export async function createQuote(db: D1Database, actor: string, b: QuoteBody) {
     const seq = ((await db.prepare("SELECT MAX(seq) AS m FROM quotes").first<{ m: number | null }>())?.m ?? 0) + 1;
     try {
       await db.prepare(`INSERT INTO quotes (id, seq, status, client_id, client_kind, client_name, client_phone, client_email, client_cui, purpose, report_type, fee, term_days, valid_until, urgent,
-          assets_json, inspection_notes, notes, channel, collaboration_id, sent_at, sent_via, payment_terms, created_by, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          assets_json, inspection_notes, notes, channel, collaboration_id, sent_at, sent_via, payment_terms, referral_id, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .bind(id, seq, sent ? "sent" : "draft", v.client_id, v.client_kind, v.client_name, v.client_phone, v.client_email, v.client_cui, v.purpose, v.report_type, v.fee, v.term_days, v.valid_until, v.urgent,
-          v.assets_json, v.inspection_notes, v.notes, v.channel, v.collaboration_id, sent ? t : null, v.sent_via, v.payment_terms, actor, t, t).run();
+          v.assets_json, v.inspection_notes, v.notes, v.channel, v.collaboration_id, sent ? t : null, v.sent_via, v.payment_terms, v.referral_id, actor, t, t).run();
       break;
     } catch (e) { if (!String(e).includes("UNIQUE") || attempt >= 4) throw e; }
   }
@@ -230,9 +233,9 @@ export async function updateQuote(db: D1Database, actor: string, id: string, b: 
   if (!f.ok) return f;
   const v = f.v;
   await db.prepare(`UPDATE quotes SET client_id = ?, client_kind = ?, client_name = ?, client_phone = ?, client_email = ?, client_cui = ?, purpose = ?, report_type = ?, fee = ?, term_days = ?, valid_until = ?,
-      urgent = ?, assets_json = ?, inspection_notes = ?, notes = ?, channel = ?, collaboration_id = ?, sent_via = COALESCE(?, sent_via), payment_terms = ?, updated_at = ? WHERE id = ?`)
+      urgent = ?, assets_json = ?, inspection_notes = ?, notes = ?, channel = ?, collaboration_id = ?, sent_via = COALESCE(?, sent_via), payment_terms = ?, referral_id = ?, updated_at = ? WHERE id = ?`)
     .bind(v.client_id, v.client_kind, v.client_name, v.client_phone, v.client_email, v.client_cui, v.purpose, v.report_type, v.fee, v.term_days, v.valid_until, v.urgent, v.assets_json,
-      v.inspection_notes, v.notes, v.channel, v.collaboration_id, v.sent_via, v.payment_terms, now(), id).run();
+      v.inspection_notes, v.notes, v.channel, v.collaboration_id, v.sent_via, v.payment_terms, v.referral_id, now(), id).run();
   await audit(db, `user:${actor}`, "quote.update", "quote", id, v.client_name);
   locateQuoteLater(db, id);
   return { ok: true as const };
@@ -285,7 +288,7 @@ export async function convertQuote(db: D1Database, user: { id: string; name: str
   const assets: AssetInput[] = parsed.assets;
   const due = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$/.test(str(b.due_on, 16)) ? str(b.due_on, 16) : null;
   const common = { client_id: q.client_id, client_kind: q.client_kind, client_name: q.client_name, client_phone: q.client_phone ?? "", client_email: q.client_email ?? "", client_cui: q.client_cui ?? "",
-    purpose: q.purpose ?? "", report_type: q.report_type ?? "Raport de evaluare", fee: q.fee, urgent: !!q.urgent, inspection_notes: q.inspection_notes ?? "", notes: [q.notes, `Din oferta ${quoteCode(q)}`].filter(Boolean).join("\n") };
+    purpose: q.purpose ?? "", report_type: q.report_type ?? "Raport de evaluare", fee: q.fee, urgent: !!q.urgent, inspection_notes: q.inspection_notes ?? "", notes: [q.notes, `Din oferta ${quoteCode(q)}`].filter(Boolean).join("\n"), referral_id: q.referral_id };
   let order: string, report: string | null, contract: string | null = null;
   if (mode === "collab") {
     const collab = str(b.collaboration_id, 80) || q.collaboration_id || "";
