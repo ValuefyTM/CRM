@@ -2912,3 +2912,12 @@ span.rdPick { display: inline-block; }
 .rdTable th, .rdTable td { padding-left: 7px; padding-right: 7px; }
 .rdTName b { max-width: 220px; }
 .rdTable select.select { height: 28px; min-height: 28px; padding: 0 24px 0 8px; font-size: 12px; background-position: right 6px center; }
+
+/* „Adaugă acte noi” în dreapta, deasupra livrabilelor */
+.rdDeliver { display: flex; flex-direction: column; gap: 14px; }
+.rdDropCard { margin: 0; padding: 0; overflow: hidden; }
+.rdDropCard .rdDrop { margin: 0; border: 0; border-radius: 0; flex-direction: column; align-items: stretch; text-align: center; gap: 10px; padding: 18px 16px; }
+.rdDropCard .rdDrop > svg { align-self: center; }
+.rdDropCard .rdDropText small { display: block; margin-top: 4px; }
+.rdDropCard .rdTarget { display: flex; flex-direction: column; gap: 4px; text-align: left; }
+.rdDropCard .rdTarget .select { width: 100%; max-width: none; }

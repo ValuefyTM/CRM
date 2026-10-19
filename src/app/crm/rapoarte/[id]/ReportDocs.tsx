@@ -133,25 +133,8 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
 
   const nav: [string, string, string | null | undefined][] = [["", "Toate actele", null], ...(many ? [["report", "Tot raportul", "acte comune tuturor bunurilor"] as [string, string, string]] : []),
     ...assets.map((a): [string, string, string | null | undefined] => [a.id, a.label, a.sub])];
-  const choose = (k: string) => { setFilter(k); if (k && k !== "report") setTarget(k); else if (k === "report") setTarget(""); };
-  return (
-    <div className={`rdLayout${deliver ? "" : " noDeliver"}`}>
-    <section className="card flush rdCard">
-      <div className="cardHead rdHead">
-        <h2>Acte{filter ? <span className="muted"> · {nav.find(([k]) => k === filter)?.[1]}</span> : null}</h2>
-        <span className="muted">{shown.length} {shown.length === 1 ? "act" : "acte"}</span>
-      </div>
-      {nav.length > 1 && (
-        <div className="rdTabs" role="tablist" aria-label="Acte pe bunuri">
-          {nav.map(([k, l, sub]) => (
-            <button key={k || "all"} type="button" role="tab" aria-selected={filter === k} title={sub ?? undefined} onClick={() => choose(k)}>
-              {l}<em>{count(k)}</em>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {edit && (
+  // "Adaugă acte noi": on the right, above the deliverables (in the list's card when there is no right column).
+  const dropZone = (
         <div className={`rdDrop${over ? " over" : ""}`} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
           onDrop={(e) => { e.preventDefault(); setOver(false); if (e.dataTransfer.files.length) upload(e.dataTransfer.files); }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>
@@ -170,7 +153,26 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
           <input ref={input} type="file" multiple hidden accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.webp,.doc,.docx,.xls,.xlsx,.zip"
             onChange={(e) => { if (e.target.files?.length) upload(e.target.files); e.target.value = ""; }} />
         </div>
+  );
+  const choose = (k: string) => { setFilter(k); if (k && k !== "report") setTarget(k); else if (k === "report") setTarget(""); };
+  return (
+    <div className={`rdLayout${deliver ? "" : " noDeliver"}`}>
+    <section className="card flush rdCard">
+      <div className="cardHead rdHead">
+        <h2>Acte{filter ? <span className="muted"> · {nav.find(([k]) => k === filter)?.[1]}</span> : null}</h2>
+        <span className="muted">{shown.length} {shown.length === 1 ? "act" : "acte"}</span>
+      </div>
+      {nav.length > 1 && (
+        <div className="rdTabs" role="tablist" aria-label="Acte pe bunuri">
+          {nav.map(([k, l, sub]) => (
+            <button key={k || "all"} type="button" role="tab" aria-selected={filter === k} title={sub ?? undefined} onClick={() => choose(k)}>
+              {l}<em>{count(k)}</em>
+            </button>
+          ))}
+        </div>
       )}
+
+      {edit && !deliver && dropZone}
       {msg && <p className="adMsg pad" role="alert">{msg}</p>}
 
       {shown.length > 0 && (
@@ -282,7 +284,7 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
       )}
       {missing && <div className="rdMissing">{missing}</div>}
     </section>
-    {deliver && <aside className="rdDeliver">{deliver}</aside>}
+    {deliver && <aside className="rdDeliver">{edit && <section className="card rdDropCard">{dropZone}</section>}{deliver}</aside>}
     </div>
   );
 }
