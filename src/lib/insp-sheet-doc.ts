@@ -9,7 +9,7 @@ import { fileSrc } from "./files";
 export type SheetRow = { label: string; value: string };
 export type SheetDoc = {
   report: { id: string; number: string | null; label: string | null; bank: string | null; client: string | null; purpose: string | null };
-  property: { type: string | null; address: string | null; cf: string | null; cad: string | null; usable_area: number | null; land_area: number | null; city: string | null; county: string | null; lat: number | null; lng: number | null };
+  property: { type: string | null; address: string | null; cf: string | null; vin: string | null; cad: string | null; usable_area: number | null; land_area: number | null; city: string | null; county: string | null; lat: number | null; lng: number | null };
   inspection: { id: string; done_at: string | null; inspector: string | null; inspector_anevar: string | null };
   sheet: { type: SheetType; status: string; present: string | null; role: string | null; phone: string | null; location: string | null; submitted_at: string | null; signature: string | null;
     /** the sheet number when it was made in UVALO (FI-2026-0001), and where it was made */
@@ -69,7 +69,7 @@ const cleanRoom = (r: Room, i: number): Room => ({
 export async function inspectionSheetDoc(db: D1Database, reportId: string, assetId: string, inspectionId?: string): Promise<SheetDoc | null> {
   const row = await db.prepare(
     `SELECT r.id AS report_id, r.number, r.label, r.purpose, b.name AS bank, c.name AS client,
-        p.type, p.full_address, p.city, p.county, p.geo, p.cf_number, p.cad_building, p.cad_land, p.usable_area, p.land_area,
+        p.type, p.full_address, p.city, p.county, p.geo, p.cf_number, p.vin, p.cad_building, p.cad_land, p.usable_area, p.land_area,
         i.id AS inspection_id, i.done_at, i.template, COALESCE(NULLIF(u.name, ''), u.email) AS inspector, u.anevar_no,
         s.sheet_type, s.status, s.details, s.description, s.present_person, s.present_role, s.present_phone, s.location, s.submitted_at, s.signature_url, s.photo_url
       FROM assets a JOIN reports r ON r.id = a.report_id JOIN crm_properties p ON p.id = a.property_id
@@ -108,7 +108,7 @@ export async function inspectionSheetDoc(db: D1Database, reportId: string, asset
 
   return {
     report: { id: row.report_id as string, number: row.number as string | null, label: row.label as string | null, bank: row.bank as string | null, client: row.client as string | null, purpose: row.purpose as string | null },
-    property: { type: (row.type as string | null) ?? sheetTypeLabel(type), address: (row.full_address && row.city && String(row.full_address).toLowerCase().includes(String(row.city).toLowerCase()) ? String(row.full_address) : [row.full_address, row.city].filter(Boolean).join(", ")) || null, cf: row.cf_number as string | null,
+    property: { type: (row.type as string | null) ?? sheetTypeLabel(type), address: (row.full_address && row.city && String(row.full_address).toLowerCase().includes(String(row.city).toLowerCase()) ? String(row.full_address) : [row.full_address, row.city].filter(Boolean).join(", ")) || null, cf: row.cf_number as string | null, vin: row.vin as string | null,
       cad: (row.cad_building ?? row.cad_land) as string | null, usable_area: row.usable_area as number | null, land_area: row.land_area as number | null,
       city: row.city as string | null, county: row.county as string | null, lat: typeof geo.lat === "number" ? geo.lat : null, lng: typeof geo.lng === "number" ? geo.lng : null },
     inspection: { id: row.inspection_id as string, done_at: row.done_at as string | null, inspector: row.inspector as string | null, inspector_anevar: row.anevar_no as string | null },

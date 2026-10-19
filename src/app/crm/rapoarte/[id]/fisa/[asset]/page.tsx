@@ -2,19 +2,34 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { reportAccess } from "@/lib/perms-db";
-import { inspectionSheetDoc } from "@/lib/insp-sheet-doc";
+import { inspectionSheetDoc, type SheetDoc } from "@/lib/insp-sheet-doc";
+import { getDb } from "@/lib/db";
 import { ROOM_FIELDS } from "@/lib/insp-forms";
 import { SheetToolbar } from "./SheetToolbar";
 
-export const metadata: Metadata = { title: "Fișa de inspecție | CRM VALUEFY" };
+// The title is the PDF's name the browser offers when saving: "Fisa de inspectie_<type>_<VIN or CF>".
+export async function generateMetadata({ params }: { params: Promise<{ id: string; asset: string }> }): Promise<Metadata> {
+  const { id, asset } = await params;
+  const db = await getDb();
+  const d = db ? await inspectionSheetDoc(db, id, asset).catch(() => null) : null;
+  return { title: { absolute: d ? sheetPdfName(d) : "Fișa de inspecție" } };
+}
 export const dynamic = "force-dynamic";
+
+/** The PDF's name: "Fisa de inspectie_<type>_<VIN, else CF, else cadastral number>". */
+const sheetPdfName = (d: SheetDoc) => {
+  const type = (d.property.type ?? "").replace(/\(\s*/g, "(").replace(/\s*\)/g, ")");
+  return ["Fisa de inspectie", type && type === type.toUpperCase() ? cap(type) : type, d.property.vin || d.property.cf || d.property.cad]
+    .map((x) => (x ?? "").replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim()).filter(Boolean).join("_");
+};
 
 const cap = (s: string | null) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : "");
 
 /** The inspection sheet of an asset, printable / saved as PDF from the browser, to attach to the valuation report. */
-export default async function InspectionSheetDocument({ params }: { params: Promise<{ id: string; asset: string }> }) {
+export default async function InspectionSheetDocument({ params, searchParams }: { params: Promise<{ id: string; asset: string }>; searchParams: Promise<{ foto?: string; print?: string }> }) {
   const { db, base, user } = await staffPage();
   const { id, asset } = await params;
+  const sp = await searchParams;
   const rep = await db.prepare("SELECT id, status, delivered_at FROM reports WHERE id = ?").bind(id).first<{ id: string; status: string; delivered_at: string | null }>();
   if (!rep || !(await reportAccess(db, user, rep)).view) notFound();
   const d = await inspectionSheetDoc(db, id, asset).catch((e) => { console.error("fisa", id, asset, e); return null; });
@@ -22,7 +37,8 @@ export default async function InspectionSheetDocument({ params }: { params: Prom
   const kv = (k: string, v: string | number | null | undefined) => (v || v === 0 ? <><dt>{k}</dt><dd>{v}</dd></> : null);
   return (
     <div className="cdWrap">
-      <SheetToolbar back={`${base}/rapoarte/${id}?tab=inspectii#fisa-${asset}`} />
+      <SheetToolbar back={`${base}/rapoarte/${id}?tab=bunuri`} name={sheetPdfName(d)}
+        photos={d.photos.length} withPhotos={sp.foto !== "0"} autoPrint={sp.print === "1"} />
       {d.sheet.status !== "submitted" && <div className="cdWarn">Fișa nu a fost încă trimisă din aplicație: documentul arată ciorna salvată până acum.</div>}
       <article className="cdPage fsPage">
         <header className="cdHead">
@@ -90,7 +106,7 @@ export default async function InspectionSheetDocument({ params }: { params: Prom
       </article>
 
       {d.photos.length > 0 && (
-        <article className="cdPage fsPage fsPhotosPage">
+        <article className="cdPage fsPage fsPhotosPage" id="anexa-foto">
           <header className="cdHead">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/valuefy-logo.png" alt="VALUEFY" />
@@ -100,7 +116,7 @@ export default async function InspectionSheetDocument({ params }: { params: Prom
             {d.photos.map((p, i) => (
               <figure key={i}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={p.src} alt={p.label} loading="lazy" />
+                <img src={p.src} alt={p.label} />
                 <figcaption>{p.label}</figcaption>
               </figure>
             ))}

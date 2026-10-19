@@ -167,7 +167,8 @@ function SheetModal({ doc, firm, pdf, open, setOpen, btn }: { doc: SheetDoc; fir
                 <h1>{p.address ?? "—"}</h1>
                 <span className="ufsHeroBtns">
                   {map && <a className="ufsBtn" href={map} target="_blank" rel="noopener">Vezi pe hartă ↗</a>}
-                  <a className="ufsBtn" href={pdf} target="_blank" rel="noopener">Descarcă PDF</a>
+                  <a className="ufsBtn" href={`${pdf}?print=1`} target="_blank" rel="noopener">PDF cu anexa foto</a>
+                  <a className="ufsBtn" href={`${pdf}?foto=0&print=1`} target="_blank" rel="noopener">PDF fără poze</a>
                   {s.source === "uvalo" && <span className="ufsBtn ufsTag">din UVALO</span>}
                 </span>
               </div>
