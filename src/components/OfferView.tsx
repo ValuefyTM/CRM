@@ -90,17 +90,15 @@ export function OfferView({ offer: o, order, preview = false, toolbar, delivered
 
         <div className="ofGrid2">
           <section className="ofCard">
-            <div className="ofPhoto"><span>{ref}</span></div>
+            <div className={`ofPhoto${point ? " hasMap" : ""}`}>
+              {point && <MiniMap point={point} height={260} />}
+              <span>{ref}</span>
+              {point && <em>{point.source === "cadastru" ? "Amplasament din planul cadastral" : point.source === "adresa" ? "Amplasament după adresă" : "Amplasament aproximativ (localitatea)"}</em>}
+            </div>
             <h2>Detaliile solicitării</h2>
             <dl className="ofDl">
               {details.filter(([, v]) => v).map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
             </dl>
-            {point && (
-              <div className="ofMap">
-                <MiniMap point={point} height={200} />
-                <small>{point.source === "cadastru" ? "Amplasament din planul cadastral" : point.source === "adresa" ? "Amplasament după adresă" : "Amplasament aproximativ (localitatea)"}</small>
-              </div>
-            )}
           </section>
           <section className="ofCard">
             <div className="ofCardHead"><h2>Oferta financiară</h2><span className="ofMuted">lei</span></div>
