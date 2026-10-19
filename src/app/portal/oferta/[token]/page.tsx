@@ -15,7 +15,7 @@ const pointOf = (geo: string | null | undefined, source: string | null | undefin
   return ll ? { lat: ll[0], lng: ll[1], source: source === "cadastru" || source === "localitate" ? source : "adresa" } : null;
 };
 
-export const metadata: Metadata = { title: "Ofertă de evaluare | VALUEFY", robots: { index: false, follow: false }, referrer: "no-referrer" };
+export const metadata: Metadata = { title: "Ofertă de evaluare | VALUEFY", robots: { index: false, follow: false }, referrer: "strict-origin-when-cross-origin" };
 export const dynamic = "force-dynamic";
 
 /** Public offer page: whoever has the link (sent by email) can read, accept and sign the offer. */

@@ -21,8 +21,9 @@ export function MiniMap({ point, height = 220 }: { point: MiniPoint | null; heig
       if (off || !el.current || map.current) return;
       const l = (mod as unknown as { default?: typeof Leaflet }).default ?? (mod as unknown as typeof Leaflet);
       L.current = l;
-      const m = l.map(el.current, { zoomControl: false, attributionControl: false, scrollWheelZoom: false });
-      l.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(m);
+      const m = l.map(el.current, { zoomControl: false, attributionControl: true, scrollWheelZoom: false });
+      // OpenStreetMap asks for the attribution and a referrer (the page must not send "no-referrer")
+      l.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', referrerPolicy: "strict-origin-when-cross-origin" }).addTo(m);
       l.control.zoom({ position: "bottomright" }).addTo(m);
       m.setView([45.7489, 21.2087], 11);
       map.current = m;

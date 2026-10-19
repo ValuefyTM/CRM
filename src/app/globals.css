@@ -3060,3 +3060,4 @@ span.rdPick { display: inline-block; }
 .ofPhoto.hasMap > span { position: absolute; top: 12px; left: clamp(18px, 2.6vw, 26px); z-index: 1001; background: rgba(17, 17, 17, 0.78); color: #fff; padding: 5px 10px; border-radius: 999px; }
 .ofPhoto.hasMap > em { position: absolute; bottom: 12px; left: clamp(18px, 2.6vw, 26px); z-index: 1001; background: rgba(255, 255, 255, 0.92); color: #111; font-style: normal; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 999px; }
 @media print { .ofPhoto.hasMap { break-inside: avoid; } }
+.leaflet-container .leaflet-control-attribution { font-size: 9px; background: rgba(255, 255, 255, 0.75); padding: 1px 5px; }

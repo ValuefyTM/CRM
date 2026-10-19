@@ -8,7 +8,7 @@ import { ContractDocView } from "@/components/ContractDoc";
 import { PrintButton } from "@/components/OfferAccept";
 import { BillingForm, ContractSignForm } from "./ContractSign";
 
-export const metadata: Metadata = { title: "Contract de prestări servicii | VALUEFY", robots: { index: false, follow: false }, referrer: "no-referrer" };
+export const metadata: Metadata = { title: "Contract de prestări servicii | VALUEFY", robots: { index: false, follow: false }, referrer: "strict-origin-when-cross-origin" };
 export const dynamic = "force-dynamic";
 
 /** Public: the client completes the billing details, reads and signs the contract (link sent by email). */

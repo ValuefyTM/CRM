@@ -307,9 +307,14 @@ export async function convertQuote(db: D1Database, user: { id: string; name: str
     if (!r.ok) return r;
     order = r.order; report = r.report; contract = r.contract?.id ?? null;
   }
-  const t = now();
-  await db.prepare("UPDATE quotes SET status = 'converted', channel = ?, collaboration_id = ?, converted_at = ?, order_id = ?, contract_id = ?, report_id = ?, updated_at = ? WHERE id = ?")
-    .bind(mode, mode === "collab" ? str(b.collaboration_id, 80) || q.collaboration_id : null, t, order, contract, report, t, id).run();
-  await audit(db, `user:${user.id}`, "quote.convert", "quote", id, mode === "collab" ? "comandă pe colaborare" : "lucrare directă (contract clasic)");
+  await markQuoteConverted(db, user.id, id, { mode, collaboration_id: mode === "collab" ? str(b.collaboration_id, 80) || q.collaboration_id : null, order, contract, report });
   return { ok: true as const, order, report, contract };
+}
+
+/** The offer became work: where it went. */
+export async function markQuoteConverted(db: D1Database, actor: string, id: string, w: { mode: "direct" | "collab"; collaboration_id?: string | null; order: string | null; contract: string | null; report: string | null }) {
+  const t = now();
+  await db.prepare("UPDATE quotes SET status = 'converted', channel = ?, collaboration_id = ?, converted_at = ?, order_id = ?, contract_id = ?, report_id = ?, updated_at = ? WHERE id = ? AND status <> 'converted'")
+    .bind(w.mode, w.collaboration_id ?? null, t, w.order, w.contract, w.report, t, id).run();
+  await audit(db, `user:${actor}`, "quote.convert", "quote", id, w.mode === "collab" ? "comandă pe colaborare" : "lucrare directă (contract clasic)");
 }

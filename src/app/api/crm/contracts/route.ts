@@ -3,6 +3,7 @@ import { createDirectWork } from "@/lib/direct-work";
 import { sendForSignature } from "@/lib/contract-sign";
 import { createFrameworkContract } from "@/lib/contracts";
 import { parseAssets } from "@/lib/process-order";
+import { getQuote, markQuoteConverted } from "@/lib/quotes";
 
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const amount = (v: unknown) => {
@@ -39,12 +40,18 @@ export async function POST(req: Request) {
     && (b.reports as { shared?: unknown[] }[]).some((r) => Array.isArray(r.shared) && r.shared.length > 0);
   const assets = onlyShared ? { ok: true as const, assets: [] } : parseAssets(b.assets);
   if (!assets.ok) return err(assets.error);
+  // From an offer (Oferte): the offer must still be open; it is marked converted below.
+  const quoteId = str(b.quote_id, 80);
+  const quote = quoteId ? await getQuote(a.db, quoteId) : null;
+  if (quoteId && (!quote || quote.status === "converted")) return err(quote ? "Oferta e deja convertită în lucrare." : "Oferta nu există.");
   const r = await createDirectWork(a.db, { id: a.user.id, name: a.user.name }, b, assets.assets);
   if (!r.ok) return err(r.error);
-  // Accepted now: the contract can go straight to the client for online signing.
+  if (quote) await markQuoteConverted(a.db, a.user.id, quote.id, { mode: "direct", order: r.order, contract: r.contract?.id ?? null, report: r.report });
+  // Accepted now: the contract can go straight to the client for online signing (to the address given, else the client's).
   let signSent = false;
-  if (b.send_contract === true && r.contract && r.client.email) {
-    const s = await sendForSignature(a.db, `user:${a.user.id}`, r.contract.id, r.client.email);
+  const sendTo = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str(b.send_to, 160)) ? str(b.send_to, 160).toLowerCase() : r.client.email;
+  if (b.send_contract === true && r.contract && sendTo) {
+    const s = await sendForSignature(a.db, `user:${a.user.id}`, r.contract.id, sendTo);
     signSent = s.ok;
   }
   return Response.json({ ok: true, order: r.order, report: r.report, contract: r.contract, client: { name: r.client.name, reused: r.client.reused }, signSent });
