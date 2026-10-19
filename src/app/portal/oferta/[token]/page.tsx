@@ -5,6 +5,8 @@ import { audit } from "@/lib/auth";
 import { getOrder } from "@/lib/orders";
 import { offerByToken } from "@/lib/offers";
 import { OfferView } from "@/components/OfferView";
+import { quoteAsOffer, quoteByToken } from "@/lib/quote-public";
+import { quoteCode } from "@/lib/quotes";
 
 export const metadata: Metadata = { title: "Ofertă de evaluare | VALUEFY", robots: { index: false, follow: false }, referrer: "no-referrer" };
 export const dynamic = "force-dynamic";
@@ -13,8 +15,20 @@ export const dynamic = "force-dynamic";
 export default async function OfferPage({ params }: { params: Promise<{ token: string }> }) {
   const db = await getDb();
   if (!db) throw new Error("Baza de date nu este disponibilă.");
-  const offer = await offerByToken(db, (await params).token);
-  if (!offer || offer.status === "draft") notFound();
+  const { token } = await params;
+  const offer = await offerByToken(db, token);
+  if (!offer) {
+    // An offer from Oferte (the CRM's quotes): the same page, from the quote's data.
+    const q = await quoteByToken(db, token);
+    if (!q || !q.sent_at) notFound();
+    if (q.status === "sent" && !q.viewed_at) {
+      await db.prepare("UPDATE quotes SET viewed_at = ? WHERE id = ? AND viewed_at IS NULL").bind(now(), q.id).run();
+      await audit(db, "client:offer", "quote.viewed", "quote", q.id, quoteCode(q));
+    }
+    const v = await quoteAsOffer(db, q);
+    return <OfferView offer={v.offer} order={v.order} code={quoteCode(q)} />;
+  }
+  if (offer.status === "draft") notFound();
   const order = await getOrder(db, offer.order_id);
   if (!order) notFound();
   if (offer.status === "sent" && !offer.viewed_at) {

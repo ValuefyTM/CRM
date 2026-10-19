@@ -11,6 +11,7 @@ import { capType } from "@/lib/asset-labels";
 import { CrmShell } from "@/components/CrmShell";
 import { History } from "@/components/History";
 import { QuoteActions } from "./QuoteActions";
+import { offerLink } from "@/lib/offer-emails";
 
 export const metadata: Metadata = { title: "Ofertă | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -22,7 +23,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
   const q = await getQuote(db, id);
   if (!q) notFound();
   if (!can(user, "orders.all") && q.created_by !== user.id) notFound();
-  const [{ collabs }, evaluators, billing, log] = await Promise.all([contractChoices(db), evaluatorChoices(db), getBilling(db), history(db, [id])]);
+  const [{ collabs }, evaluators, billing, log, publicLink] = await Promise.all([contractChoices(db), evaluatorChoices(db), getBilling(db), history(db, [id]), q.token && q.sent_at ? offerLink({ token: q.token }) : Promise.resolve(null)]);
   const assets = quoteAssets(q);
   const exp = isExpired(q);
   const [label, cls] = exp ? ["Expirată", "pillWarn"] : QUOTE_STATUS[q.status];
@@ -44,13 +45,21 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
               <Row k="Scop · tip">{[q.purpose, q.report_type].filter(Boolean).join(" · ")}</Row>
               <Row k="Termen propus">{q.term_days ? `${q.term_days} zile lucrătoare` : null}</Row>
               <Row k="Valabilă până">{q.valid_until ? <span className={exp ? "errTxt" : undefined}>{fmtDate(q.valid_until)}{exp ? " · expirată" : ""}</span> : null}</Row>
-              <Row k="Transmisă">{q.sent_at ? `${fmtDate(q.sent_at, true)}${q.sent_via ? ` · ${SENT_VIA.find(([k]) => k === q.sent_via)?.[1].toLowerCase()}` : ""}` : null}</Row>
-              <Row k="Răspuns">{q.decided_at ? `${q.status === "accepted" ? "acceptată" : "refuzată"} ${fmtDate(q.decided_at, true)}${q.decline_reason ? ` · ${q.decline_reason}` : ""}` : null}</Row>
+              <Row k="Transmisă">{q.sent_at ? `${fmtDate(q.sent_at, true)}${q.sent_via ? ` · ${SENT_VIA.find(([k]) => k === q.sent_via)?.[1].toLowerCase()}` : ""}${q.sent_to ? ` · ${q.sent_to}` : ""}` : null}</Row>
+              <Row k="Pagina publică">{publicLink ? <><a className="link" href={publicLink} target="_blank" rel="noopener">deschide ↗</a>{q.viewed_at ? ` · văzută de client ${fmtDate(q.viewed_at, true)}` : " · neaccesată încă"}</> : null}</Row>
+              <Row k="Răspuns">{q.decided_at ? `${q.status === "accepted" || q.status === "converted" ? `acceptată${q.accepted_name ? ` și semnată de ${q.accepted_name}` : ""}` : "refuzată"} ${fmtDate(q.decided_at, true)}${q.decline_reason ? ` · ${q.decline_reason}` : ""}` : null}</Row>
               <Row k="Dacă acceptă">{q.channel === "collab" ? `pe colaborare${q.collab_firm ? ` · ${q.collab_firm}` : ""}` : q.channel === "direct" ? "direct · contract clasic" : "se decide la conversie"}</Row>
               {q.urgent ? <Row k="Prioritate"><span className="pill pillErr"><i />Urgent</span></Row> : null}
               <Row k="Note"><span style={{ whiteSpace: "pre-wrap" }}>{q.notes}</span></Row>
               <Row k="Pentru inspecție"><span style={{ whiteSpace: "pre-wrap" }}>{q.inspection_notes}</span></Row>
             </dl>
+            {q.signature && (
+              <div className="qtSig">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={q.signature} alt={`Semnătura ${q.accepted_name ?? ""}`} />
+                <small className="muted">Semnată online{q.content_hash ? ` · amprentă ${q.content_hash.slice(0, 16)}` : ""}</small>
+              </div>
+            )}
             {q.status === "converted" && (
               <div className="note">Convertită {fmtDate(q.converted_at, true)} în {q.channel === "collab" ? "comandă pe colaborare" : "lucrare directă"}:{" "}
                 {q.report_id && <a className="link" href={`${base}/rapoarte/${q.report_id}`}>raport {q.report_number ?? ""}</a>}
@@ -59,7 +68,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
               </div>
             )}
             <QuoteActions id={q.id} status={q.status} base={base} canEdit={can(user, "orders.E")} canDelete={can(user, "orders.D")} canConvert={can(user, "orders.A")}
-              collabs={collabs.map((c) => ({ id: c.id, firm: c.firm, number: c.number }))} me={user.id} channel={q.channel} collaborationId={q.collaboration_id} hasEmail={!!q.client_email}
+              collabs={collabs.map((c) => ({ id: c.id, firm: c.firm, number: c.number }))} me={user.id} channel={q.channel} collaborationId={q.collaboration_id} hasEmail={!!q.client_email} email={q.client_email ?? ""} hasFee={!!q.fee} publicLink={publicLink}
               evaluators={evaluators.map((e) => ({ id: e.id, name: e.name, sub: e.sub, presence: e.presence, seen: e.seen, photo: e.photo }))} />
           </section>
           <section className="card">
@@ -81,7 +90,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
           <section className="card">
             <h2>Cum merge</h2>
             <ul className="blHow">
-              <li><b>De trimis → Trimisă → Acceptată / Refuzată.</b> Marchezi fiecare pas; ofertele deschise apar în meniu ca număr.</li>
+              <li><b>Trimite clientului</b> îi dă pe email pagina ofertei (ca ofertele din portal): o citește, o acceptă și o semnează online; vezi aici când a deschis-o și semnătura. Sau marchezi tu pașii: trimisă → acceptată / refuzată.</li>
               <li><b>Convertește în lucrare</b> face comanda și raportul din datele ofertei: <b>direct</b> (contract clasic VALUEFY, cu semnare online) sau <b>pe colaborare</b> (comandă pe firma aleasă, raport emis pe ea).</li>
               <li>Ofertele se pot nota și din Claude, prin conectorul CRM („adaugă oferta…”).</li>
             </ul>

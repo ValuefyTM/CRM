@@ -12,7 +12,10 @@ const EMAIL = "contact@valuefy.ro";
 const day = (d: string | null) => (d ? new Date(d).toLocaleDateString("ro-RO", { day: "2-digit", month: "long", year: "numeric", timeZone: "Europe/Bucharest" }) : "—");
 const stamp = (d: string | null) => (d ? new Date(d).toLocaleString("ro-RO", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Bucharest" }) : "—");
 
-export function OfferView({ offer: o, order, preview = false, toolbar, delivered }: { offer: Offer; order: Order; preview?: boolean; toolbar?: React.ReactNode; delivered?: string | null }) {
+export function OfferView({ offer: o, order, preview = false, toolbar, delivered, code }: { offer: Offer; order: Order; preview?: boolean; toolbar?: React.ReactNode; delivered?: string | null;
+  /** the code shown on the page (the order's, else the quote's OF-n) */
+  code?: string }) {
+  const ref = code ?? orderCode(order);
   const t = offerTotals(o);
   const docs = offerDocs(o);
   const terms = termSections(o.terms);
@@ -32,7 +35,7 @@ export function OfferView({ offer: o, order, preview = false, toolbar, delivered
     ["Adresă", order.address],
     ["Scop", order.purpose],
     ["Bancă", order.bank],
-    ["Documente", docs.length ? (docs.filter((d) => !d.optional).every((d) => d.received) ? "Disponibile" : "Parțial disponibile") : null],
+    ["Documente", docs.length ? (docs.filter((d) => !d.optional).every((d) => d.received) ? "Disponibile" : docs.some((d) => d.received) ? "Parțial disponibile" : "De trimis după acceptare") : null],
   ];
   const calendar: [string, string][] = [
     ["Ziua 0", "Acceptare și avans"],
@@ -72,7 +75,7 @@ export function OfferView({ offer: o, order, preview = false, toolbar, delivered
           <div className="ofHeroText">
             <p className="ofEyebrow">Ofertă de evaluare · {o.number}</p>
             <h1>{accepted ? `Mulțumim${first ? `, ${first}` : ""}! Oferta este acceptată.` : `Bună${first ? `, ${first}` : " ziua"}. Oferta ta este pregătită.`}</h1>
-            <p>{o.message ?? <>Am analizat solicitarea <b>{orderCode(order)}</b>. Mai jos găsești detaliile, costul și modul în care vom realiza evaluarea.</>}</p>
+            <p>{o.message ?? (code ? <>Mai jos găsești detaliile evaluării, costul și modul în care o vom realiza.</> : <>Am analizat solicitarea <b>{ref}</b>. Mai jos găsești detaliile, costul și modul în care vom realiza evaluarea.</>)}</p>
           </div>
           <div className="ofHeroPrice">
             <span className="ofMuted">Total de plată (TVA inclus)</span>
@@ -84,7 +87,7 @@ export function OfferView({ offer: o, order, preview = false, toolbar, delivered
 
         <div className="ofGrid2">
           <section className="ofCard">
-            <div className="ofPhoto"><span>{orderCode(order)}</span></div>
+            <div className="ofPhoto"><span>{ref}</span></div>
             <h2>Detaliile solicitării</h2>
             <dl className="ofDl">
               {details.filter(([, v]) => v).map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}

@@ -6,6 +6,7 @@ import { isExpired, offerByToken, offerHash } from "@/lib/offers";
 import { sendAcceptedEmails, sendDeclinedEmail } from "@/lib/offer-emails";
 import { openDossier } from "@/lib/dossier";
 import { sendForSignature } from "@/lib/contract-sign";
+import { answerQuote, quoteByToken } from "@/lib/quote-public";
 
 /**
  * Public: the client answers an offer from its page. The secret token in the link is the authorisation.
@@ -14,8 +15,15 @@ import { sendForSignature } from "@/lib/contract-sign";
 export async function POST(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const db = await getDb();
   if (!db) return err("Serviciul nu este disponibil momentan.", 503);
-  const offer = await offerByToken(db, (await params).token);
-  if (!offer || offer.status === "draft") return err("Oferta nu există.", 404);
+  const { token } = await params;
+  const offer = await offerByToken(db, token);
+  if (!offer) {
+    const q = await quoteByToken(db, token);
+    if (!q || !q.sent_at) return err("Oferta nu există.", 404);
+    const r = await answerQuote(db, q, await json(req), req);
+    return r.ok ? Response.json({ ok: true, contract: null }) : err(r.error, r.status);
+  }
+  if (offer.status === "draft") return err("Oferta nu există.", 404);
   if (offer.status === "accepted") return err("Oferta a fost deja acceptată.", 409);
   if (offer.status === "declined") return err("Oferta a fost refuzată. Contactează-ne pentru o ofertă nouă.", 409);
   if (isExpired(offer)) return err("Oferta a expirat. Contactează-ne pentru o ofertă actualizată.", 410);

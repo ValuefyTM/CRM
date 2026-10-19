@@ -32,6 +32,9 @@ export type Quote = {
   sent_at: string | null; sent_via: string | null; decided_at: string | null; decline_reason: string | null;
   converted_at: string | null; order_id: string | null; contract_id: string | null; report_id: string | null;
   created_by: string | null; created_at: string; updated_at: string;
+  /** the public page (portal /oferta/<token>) and the client's answer on it */
+  token: string | null; sent_to: string | null; message: string | null; payment_terms: string | null; viewed_at: string | null;
+  accepted_name: string | null; signature: string | null; accepted_ip: string | null; content_hash: string | null;
   // joined
   author: string | null; collab_firm: string | null; report_number: string | null; order_seq: number | null; contract_number: string | null;
 };

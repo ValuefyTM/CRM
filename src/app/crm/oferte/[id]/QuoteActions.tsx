@@ -14,10 +14,28 @@ async function patch(id: string, body: Record<string, unknown>) {
   return r?.ok ? null : d.error ?? "Nu am putut salva.";
 }
 
-export function QuoteActions({ id, status, base, canEdit, canDelete, canConvert, collabs, evaluators, me, channel, collaborationId, hasEmail }: {
+export function QuoteActions({ id, status, base, canEdit, canDelete, canConvert, collabs, evaluators, me, channel, collaborationId, hasEmail, email, hasFee, publicLink }: {
   id: string; status: string; base: string; canEdit: boolean; canDelete: boolean; canConvert: boolean; collabs: Collab[]; evaluators: PickPerson[]; me: string;
-  channel: string | null; collaborationId: string | null; hasEmail: boolean;
+  channel: string | null; collaborationId: string | null; hasEmail: boolean; email: string; hasFee: boolean;
+  /** the public page, once the offer was sent by email */
+  publicLink: string | null;
 }) {
+  const [sendBox, setSendBox] = useState(false);
+  const [to, setTo] = useState(email);
+  const [message, setMessage] = useState("");
+  const [sentLink, setSentLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const copy = async (link: string) => { try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { prompt("Copiază linkul:", link); } };
+  const send = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true); setMsg("");
+    const r = await fetch(`/api/crm/quotes/${id}/send`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to, message }) }).catch(() => null);
+    const d = (await r?.json().catch(() => ({}))) as { error?: string; link?: string; emailed?: boolean };
+    setBusy(false);
+    if (!r?.ok) return setMsg(d.error ?? "Nu am putut trimite oferta.");
+    setSentLink(d.link ?? null);
+    if (d.emailed === false) setMsg("Oferta e marcată trimisă, dar emailul nu a plecat (emailul nu e configurat). Trimite-i clientului linkul de mai jos.");
+  };
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [sentBox, setSentBox] = useState(false);
@@ -25,11 +43,11 @@ export function QuoteActions({ id, status, base, canEdit, canDelete, canConvert,
   const [conv, setConv] = useState(false);
   const [c, setC] = useState({ mode: channel === "collab" ? "collab" : "direct", collaboration_id: collaborationId ?? "", evaluator_id: evaluators.some((e) => e.id === me) ? me : "", verifier_id: "", due_on: "", send_contract: true });
   useEffect(() => {
-    if (!conv && !sentBox) return;
-    const k = (e: KeyboardEvent) => { if (e.key === "Escape") { setConv(false); setSentBox(false); } };
+    if (!conv && !sentBox && !sendBox) return;
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") { setConv(false); setSentBox(false); setSendBox(false); } };
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
-  }, [conv, sentBox]);
+  }, [conv, sentBox, sendBox]);
   const run = async (body: Record<string, unknown>) => {
     setBusy(true); setMsg("");
     const e = await patch(id, body);
@@ -64,7 +82,10 @@ export function QuoteActions({ id, status, base, canEdit, canDelete, canConvert,
   const open = status === "draft" || status === "sent" || status === "accepted";
   return (
     <div className="qtActions">
-      {status === "draft" && canEdit && <button type="button" className="btn btnNavy btnSm" disabled={busy} onClick={() => setSentBox(true)}>Marchează trimisă</button>}
+      {(status === "draft" || status === "sent") && canEdit && <button type="button" className="btn btnNavy btnSm" disabled={busy || !hasFee} title={hasFee ? undefined : "Completează întâi onorariul"} onClick={() => { setSentLink(null); setSendBox(true); }}>{status === "sent" ? "Retrimite pe email" : "Trimite clientului"}</button>}
+      {status === "draft" && canEdit && <button type="button" className="btn btnGhost btnSm" disabled={busy} onClick={() => setSentBox(true)}>Marchează trimisă</button>}
+      {publicLink && <button type="button" className="btn btnGhost btnSm" onClick={() => copy(publicLink)}>{copied ? "Link copiat ✓" : "Copiază linkul public"}</button>}
+      {publicLink && <a className="btn btnGhost btnSm" href={publicLink} target="_blank" rel="noopener">Vezi pagina clientului ↗</a>}
       {(status === "draft" || status === "sent") && canEdit && <button type="button" className="btn btnGhost btnSm" disabled={busy} onClick={() => run({ status: "accepted" })}>✓ Acceptată</button>}
       {(status === "draft" || status === "sent") && canEdit && <button type="button" className="btn btnGhost btnSm" disabled={busy} onClick={decline}>✕ Refuzată</button>}
       {open && canConvert && <button type="button" className="btn btnGold btnSm" disabled={busy} onClick={() => setConv(true)}>Convertește în lucrare →</button>}
@@ -72,6 +93,29 @@ export function QuoteActions({ id, status, base, canEdit, canDelete, canConvert,
       {status !== "converted" && canEdit && <a className="btn btnGhost btnSm" href={`${base}/oferte/${id}/editare`}>Modifică</a>}
       {status !== "converted" && canDelete && <button type="button" className="btn btnGhost btnSm qtDel" disabled={busy} onClick={remove}>Șterge</button>}
       {msg && <div role="alert" className="error" style={{ width: "100%" }}>{msg}</div>}
+
+      {sendBox && createPortal(
+        <div className="vfModal" role="dialog" aria-modal="true" aria-labelledby="qtSendT" onClick={(e) => { if (e.target === e.currentTarget) setSendBox(false); }}>
+          <form className="vfModalBox" style={{ maxWidth: 520 }} onSubmit={send} noValidate>
+            <h2 id="qtSendT">Trimite oferta clientului</h2>
+            {sentLink ? (
+              <>
+                <div className="note">Oferta a fost trimisă. Clientul o citește, o acceptă și o semnează pe pagina ei publică.</div>
+                <label className="field">Linkul public<span style={{ display: "flex", gap: 8 }}><input className="input mono" readOnly value={sentLink} onFocus={(e) => e.currentTarget.select()} /><button type="button" className="btn btnNavy" onClick={() => copy(sentLink)}>{copied ? "Copiat ✓" : "Copiază"}</button></span></label>
+                {msg && <div className="error">{msg}</div>}
+                <div className="actions"><button type="button" className="btn btnGold" onClick={() => location.reload()}>Gata</button></div>
+              </>
+            ) : (
+              <>
+                <p className="hint" style={{ margin: 0 }}>Clientul primește un email cu rezumatul și linkul către pagina ofertei (ca ofertele din portal): o citește, o acceptă și o semnează online. Linkul îl poți trimite și pe WhatsApp.</p>
+                <label className="field">Emailul clientului<input className="input" type="email" value={to} onChange={(e) => setTo(e.target.value)} placeholder="nume@exemplu.ro" /></label>
+                <label className="field">Un rând personal <small>(opțional · apare în email și pe pagină)</small><textarea className="textarea" rows={3} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="ex. Mulțumim pentru discuția de azi; mai jos oferta pentru apartamentul din Giroc." /></label>
+                {msg && <div role="alert" className="error">{msg}</div>}
+                <div className="actions"><button type="submit" className="btn btnGold" disabled={busy}>{busy ? "Se trimite…" : "Trimite oferta"}</button><button type="button" className="btn btnGhost" onClick={() => setSendBox(false)}>Renunță</button></div>
+              </>
+            )}
+          </form>
+        </div>, document.body)}
 
       {sentBox && createPortal(
         <div className="vfModal" role="dialog" aria-modal="true" onClick={(e) => { if (e.target === e.currentTarget) setSentBox(false); }}>

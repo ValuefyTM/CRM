@@ -3051,3 +3051,5 @@ span.rdPick { display: inline-block; }
 .qtAssets { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .qtAssets li { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--divider); border-radius: 12px; }
 .qtTable td { vertical-align: top; }
+.qtSig { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.qtSig img { max-width: 260px; max-height: 110px; object-fit: contain; border: 1px dashed var(--line); border-radius: 10px; background: #fff; padding: 6px; }

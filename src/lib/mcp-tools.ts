@@ -84,7 +84,7 @@ export const TOOLS: Tool[] = [
       return { oferte: rows.slice(0, limit(a)).map((q) => ({
         id: q.id, numar: quoteCode(q), stare: isExpired(q) ? "Expirată" : QUOTE_STATUS[q.status][0], client: q.client_name, telefon: q.client_phone, email: q.client_email,
         bun: quoteWhat(q) || null, scop: q.purpose, tip_raport: q.report_type, onorariu_lei: q.fee, termen_zile: q.term_days, valabila_pana: q.valid_until, urgent: !!q.urgent,
-        trimisa_la: q.sent_at, canal: q.channel, colaborare: q.collab_firm, note: q.notes, de_cine: q.author, creata: q.created_at,
+        trimisa_la: q.sent_at, vazuta_de_client: q.viewed_at, acceptata_de: q.accepted_name, canal: q.channel, colaborare: q.collab_firm, note: q.notes, de_cine: q.author, creata: q.created_at,
         ...(q.status === "converted" ? { raport: q.report_number, link_raport: q.report_id ? c.link(`/rapoarte/${q.report_id}`) : null } : {}), link: c.link(`/oferte/${q.id}`),
       })), total: rows.length };
     },

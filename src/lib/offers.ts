@@ -70,7 +70,7 @@ export function termSections(text: string | null) {
 
 const COMPANY = { name: "VALUEFY S.R.L.", cui: "38250411" };
 
-function valueTypeFor(purpose: string | null) {
+export function valueTypeFor(purpose: string | null) {
   const p = (purpose ?? "").toLowerCase();
   if (p.includes("credit") || p.includes("garan")) return "Valoarea de piață, în scopul garantării împrumutului.";
   if (p.includes("impoz")) return "Valoarea impozabilă a clădirii, determinată conform Codului fiscal și standardelor ANEVAR.";
@@ -79,13 +79,13 @@ function valueTypeFor(purpose: string | null) {
   return "Valoarea de piață.";
 }
 
-function standardsFor(purpose: string | null) {
+export function standardsFor(purpose: string | null) {
   const p = (purpose ?? "").toLowerCase();
   const base = "Standardele de evaluare a bunurilor ANEVAR, ediția în vigoare";
   return p.includes("credit") || p.includes("garan") ? `${base}, inclusiv ghidul pentru evaluarea în scopul garantării împrumutului (GEV 520).` : `${base}.`;
 }
 
-function objectFor(o: Order) {
+export function objectFor(o: Order) {
   const what = o.property_type ? propertyLabel(o.property_type) : "Proprietatea";
   const size = [o.rooms ? `${o.rooms} camere` : "", o.surface_area ? `${o.surface_area.toLocaleString("ro-RO")} m² utili` : "", o.land_area ? `teren ${o.land_area.toLocaleString("ro-RO")} m²` : ""].filter(Boolean).join(", ");
   const where = [o.address, o.city].filter(Boolean).join(", ");
@@ -143,6 +143,9 @@ export type OfferInput = {
   message: string | null; object_text: string; value_type: string; approaches: string; standards: string; documents: OfferDoc[]; terms: string;
 };
 
+export const DEFAULT_PAYMENT_TERMS = "50% avans la acceptare, 50% la livrarea raportului. Prin card sau transfer bancar, pe baza facturii emise.";
+export const DEFAULT_APPROACHES = "Abordarea prin piață (comparații directe); alte abordări, după caz, conform datelor disponibile.";
+
 /** Pre-filled values for a new offer on an order. */
 export function offerDraft(o: Order, docs: Pick<OrderDocument, "kind">[], evaluator: { id: string; name: string; anevar_no: string | null } | null): OfferInput {
   const have = new Set(docs.map((d) => d.kind));
@@ -156,9 +159,9 @@ export function offerDraft(o: Order, docs: Pick<OrderDocument, "kind">[], evalua
     client_email: o.client_email ?? o.creator_email ?? "",
     fee: 0, travel_fee: null, travel_label: null, urgent_fee: null, vat_rate: 21,
     term_days: 5, urgent_days: null, valid_until: valid,
-    payment_terms: "50% avans la acceptare, 50% la livrarea raportului. Prin card sau transfer bancar, pe baza facturii emise.",
+    payment_terms: DEFAULT_PAYMENT_TERMS,
     evaluator_id: evaluator?.id ?? null, message: null, object_text: object, value_type: valueType,
-    approaches: "Abordarea prin piață (comparații directe); alte abordări, după caz, conform datelor disponibile.",
+    approaches: DEFAULT_APPROACHES,
     standards: standardsFor(o.purpose),
     documents: DOCS[type].map((d) => ({ label: d.label, received: have.has(d.key), optional: d.optional })),
     terms: defaultTerms(o, { evaluator: evaluator?.name ?? null, anevar: evaluator?.anevar_no ?? null, object, valueType, client }),

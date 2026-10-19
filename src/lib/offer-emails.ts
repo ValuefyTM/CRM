@@ -39,9 +39,9 @@ export async function sendOfferEmail(o: Offer, order: Order, to: string) {
   });
 }
 
-export async function sendAcceptedEmails(o: Offer, order: Order) {
+export async function sendAcceptedEmails(o: Offer, order: Order, crmPath = `/comenzi/${order.id}`) {
   const link = await offerLink(o);
-  const crm = await appUrl("crm", `/comenzi/${order.id}`);
+  const crm = await appUrl("crm", crmPath);
   const urgent = !!o.accepted_urgent;
   const jobs: Promise<boolean>[] = [];
   if (o.sent_to)
@@ -73,8 +73,8 @@ export async function sendAcceptedEmails(o: Offer, order: Order) {
   await Promise.all(jobs);
 }
 
-export async function sendDeclinedEmail(o: Offer, order: Order) {
-  const crm = await appUrl("crm", `/comenzi/${order.id}`);
+export async function sendDeclinedEmail(o: Offer, order: Order, crmPath = `/comenzi/${order.id}`) {
+  const crm = await appUrl("crm", crmPath);
   await Promise.all(teamInbox().map((to) => sendEmail({
     to,
     subject: `Ofertă refuzată ${o.number} · ${orderCode(order)}`,
