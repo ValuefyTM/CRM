@@ -17,6 +17,8 @@ import { basePath } from "@/lib/site";
 import { scopeFilter } from "@/lib/scope";
 import { ownBillingOnly, toBillCount } from "@/lib/billing-tasks";
 import { inspChannel } from "@/lib/uvalo";
+import { activeInspections } from "@/lib/inspections-board";
+import { scopeOf } from "@/lib/perms";
 
 export async function CrmShell(props: { user: User; base: string; active: string; title: string; subtitle?: string; actions?: React.ReactNode; bare?: boolean; dateTitle?: boolean; children: React.ReactNode }) {
   const b = props.base;
@@ -56,6 +58,8 @@ export async function CrmShell(props: { user: User; base: string; active: string
   const inspViaApp = db ? (await inspChannel(db).catch(() => "app")) === "app" : true;
   // Facturare: how many reports wait for their invoice (the person's own, with "Doar ale lui").
   const toBillN = db && may("billing") ? await toBillCount(db, ownBillingOnly(u) ? u.id : null).catch(() => 0) : 0;
+  // Inspecții: the ones still to do (to schedule or scheduled), as the page shows them to this user.
+  const inspN = db && may("inspections") ? await activeInspections(db, scopeOf(u, "inspections") as "all" | "lead" | "own", u.id) : 0;
   return (
     <Shell
       // "Vezi ca…" is picked on the dashboard only; elsewhere the banner just says whose CRM it is and leads back.
@@ -76,7 +80,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
         ]),
         ...group("Operațional", "g-ops", [
           may("reports") && { key: "reports", label: allReports ? "Rapoarte" : "Rapoartele mele", href: `${b}/rapoarte`, badge: myOpen },
-          may("inspections") && { key: "inspections", label: may("inspections.all") ? "Inspecții" : "Inspecțiile mele", href: `${b}/agenda-inspectii` },
+          may("inspections") && { key: "inspections", label: may("inspections.all") ? "Inspecții" : "Inspecțiile mele", href: `${b}/agenda-inspectii`, badge: inspN },
           may("properties") && { key: "properties", label: "Proprietăți", href: `${b}/proprietati` },
           // The inspections app (phone: sheets, photos, signature), with the same sign-in: on phones only, and only
           // when the firm's inspections go through it (not through UVALO).

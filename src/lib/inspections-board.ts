@@ -125,3 +125,14 @@ export async function inspectionBoard(db: D1Database, f: BoardFilters, viewer?: 
     people: people.results.map((p) => ({ id: p.id, name: p.name, active: p.active, ...presenceOf(p.last_seen_at), photo: photoUrl(p.id, p.avatar_at) })),
   };
 }
+
+/**
+ * The inspections still to do (to schedule or scheduled, report open), for the menu: all of them, the team's
+ * ("lead": the user's own and those of the reports they lead) or the user's own, as the Inspecții page shows them.
+ */
+export async function activeInspections(db: D1Database, scope: "all" | "lead" | "own", userId: string) {
+  const who = scope === "all" ? "" : scope === "lead" ? `AND (i.inspector_id = ? OR ${leadSql("i.report_id")})` : "AND i.inspector_id = ?";
+  const r = await db.prepare(`SELECT COUNT(*) AS n FROM inspections i LEFT JOIN reports r ON r.id = i.report_id WHERE ${ACTIVE} ${who}`)
+    .bind(...(scope === "all" ? [] : scope === "lead" ? [userId, userId] : [userId])).first<{ n: number }>().catch(() => null);
+  return r?.n ?? 0;
+}
