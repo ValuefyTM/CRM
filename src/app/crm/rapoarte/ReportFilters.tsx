@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { FilterSelect } from "@/components/FilterSelect";
+import { IconFilter, type IconOption } from "@/components/IconFilter";
 
 type Facet = [string, string, number?][];
 export type ReportQuery = { q?: string; status?: string; year?: string; bank?: string; issuer?: string; evaluator?: string; sort?: string; bunuri?: string };
@@ -10,7 +11,7 @@ export type ReportQuery = { q?: string; status?: string; year?: string; bank?: s
 /** Search + dropdown filters for the reports list; every change reloads the list (filters live in the URL). */
 export function ReportFilters(props: {
   base: string; current: ReportQuery; total: number;
-  years: Facet; banks: Facet; issuers: Facet; evaluators: Facet; sorts: Facet;
+  years: Facet; banks: IconOption[]; issuers: IconOption[]; evaluators: IconOption[]; sorts: Facet;
   /** Status tabs: key, label, count, link. */
   tab: string; tabs: [string, string, number, string][];
 }) {
@@ -37,9 +38,9 @@ export function ReportFilters(props: {
       </form>
       <div className="filterBar repTools">
         <FilterSelect label="An" value={c.year ?? ""} options={props.years} onChange={(v) => go({ year: v || undefined })} all="Toți" />
-        <FilterSelect label="Bancă" value={c.bank ?? ""} options={props.banks} onChange={(v) => go({ bank: v || undefined })} />
-        <FilterSelect label="Evaluator" value={c.evaluator ?? ""} options={props.evaluators} onChange={(v) => go({ evaluator: v || undefined })} all="Toți" />
-        {props.issuers.length > 1 && <FilterSelect label="Emis de" value={c.issuer ?? ""} options={props.issuers} onChange={(v) => go({ issuer: v || undefined })} all="Toți" />}
+        <IconFilter label="Bancă" value={c.bank ?? ""} options={props.banks} onChange={(v) => go({ bank: v || undefined })} />
+        <IconFilter label="Evaluator" value={c.evaluator ?? ""} options={props.evaluators} onChange={(v) => go({ evaluator: v || undefined })} all="Toți" />
+        {(props.issuers.length > 1 || c.issuer) && <IconFilter label="Emis de" value={c.issuer ?? ""} options={props.issuers} onChange={(v) => go({ issuer: v || undefined })} all="Toți" />}
         <label className={`fsel toggle${c.bunuri === "fara" ? " on" : ""}`} data-on={c.bunuri === "fara" ? "" : undefined} title="Rapoartele care nu au niciun bun înregistrat">
           <input type="checkbox" checked={c.bunuri === "fara"} onChange={(e) => go({ bunuri: e.target.checked ? "fara" : undefined })} />
           <span>Fără bun</span>

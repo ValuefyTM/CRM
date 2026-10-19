@@ -44,7 +44,7 @@ export function BankOrdersTable({ rows, base, initial = "all" }: { rows: CrmOrde
     <section className="card">
       <div className="filterBar">
         <StatusTabs rows={rows} value={f} onChange={setF} pre={byBank} />
-        <FilterSelect label="Bancă" value={bank} onChange={setBank} options={banks.map((b) => [b, b, rows.filter((r) => r.bank === b && test(r)).length])} />
+        <FilterSelect label="Bancă" value={bank} onChange={setBank} options={banks.map((b) => [b, b, rows.filter((r) => r.bank === b && test(r)).length] as [string, string, number]).filter(([b, , n]) => n > 0 || b === bank)} />
         <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută după nr. comandă, client, agenție…" aria-label="Caută" />
       </div>
       <div className="resultLine">

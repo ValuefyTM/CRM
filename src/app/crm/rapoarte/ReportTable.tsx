@@ -61,7 +61,8 @@ export function ReportTable({ rows, base, today, sort, sortHref, scope = true }:
                           {logo ? <SafeImg src={logo} className="repLogo" fallback={<i className="repLogo" aria-hidden>{short}</i>} /> : <i className={`repLogo${own ? " own" : ""}`} aria-hidden>{short}</i>}
                           <span className="repText">
                             <small className={`repKind${kind === "Raport" ? "" : " isNote"}`}>{kind}</small>
-                            {r.number ? <b className="mono">{r.number}</b> : <b className="muted">fără număr</b>}
+                            <span className="repNo">{r.number ? <b className="mono">{r.number}</b> : <b className="muted">fără număr</b>}
+                            {r.status !== "cancelled" && <i className={`paidDot${r.collected ? " on" : ""}`} title={r.collected ? `Achitat${r.collected_at ? ` · ${fmtDate(r.collected_at)}` : ""}` : "Neachitat"} aria-label={r.collected ? "Achitat" : "Neachitat"} role="img" />}</span>
                           </span>
                         </a>
                       </td>

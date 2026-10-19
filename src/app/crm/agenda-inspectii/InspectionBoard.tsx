@@ -88,11 +88,12 @@ export function InspectionBoard(p: {
   const list = (
     <div className="tableWrap">
       <table className="table ibTable">
-        <thead><tr><th>Când</th><th>Proprietate</th><th>Inspector</th><th>Contact</th><th>Raport</th><th>Status</th></tr></thead>
+        <thead><tr><th>Când</th><th>Status</th><th>Proprietate</th><th>Inspector</th><th>Contact</th><th>Raport</th></tr></thead>
         <tbody>
           {p.rows.map((r) => (
             <tr key={r.id} onMouseEnter={() => setHover(r.id)} onMouseLeave={() => setHover(null)} className={hover === r.id ? "hl" : ""}>
               <td className="ibWhen">{when(r)}</td>
+              <td>{pill(r)}{r.sheet_status === "draft" && r.status !== "done" && <small className="block muted">fișă în lucru</small>}{r.glide && <small className="block muted">din vechiul CRM</small>}</td>
               <td className="ibProp">
                 {report(r) ? <a href={report(r)}><b>{cap(r.type) || "Inspecție"}</b></a> : <b>{cap(r.type) || "Inspecție"}</b>}
                 <small>{r.address ?? "—"}</small>
@@ -100,7 +101,6 @@ export function InspectionBoard(p: {
               <td>{who(r)}</td>
               <td>{r.contact_name ? <><span>{r.contact_name}</span>{r.contact_phone && <small className="block"><a href={`tel:${r.contact_phone.replace(/[^\d+]/g, "")}`}>{r.contact_phone}</a></small>}</> : <span className="muted">—</span>}</td>
               <td>{!r.report_id ? "—" : report(r) ? <a className="ref" href={report(r)}>{r.report_number ?? "fără nr."}</a> : <span className="ref">{r.report_number ?? "fără nr."}</span>}{r.report_label && <small className="block muted ibEll">{r.report_label}</small>}</td>
-              <td>{pill(r)}{r.sheet_status === "draft" && r.status !== "done" && <small className="block muted">fișă în lucru</small>}{r.glide && <small className="block muted">din vechiul CRM</small>}</td>
             </tr>
           ))}
         </tbody>

@@ -3000,3 +3000,21 @@ span.rdPick { display: inline-block; }
 @container ab (max-width: 520px) { .abTop .abRow.hasPh { grid-template-columns: 88px minmax(0, 1fr); } .abTop .abRow.hasPh .abThumb { width: 88px; height: 66px; } }
 .cdBarCheck { display: inline-flex; align-items: center; gap: 6px; color: #fff; font-size: 12.5px; cursor: pointer; }
 .fsPhotosPage[hidden] { display: none !important; }
+/* filters with logos / avatars (IconFilter) */
+.ifWrap { position: relative; display: inline-flex; }
+.ifBtn { font: inherit; color: var(--ink); }
+.ifBtn > b { font-size: 13.5px; font-weight: 700; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ifLogo { width: 20px; height: 20px; border-radius: 6px; background: var(--cream-2); display: inline-flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; font-size: 8.5px; font-weight: 800; color: var(--muted); }
+.ifLogo img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+.ifPop { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; min-width: 240px; max-width: 320px; max-height: 360px; overflow-y: auto; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14); padding: 6px; display: grid; gap: 1px; }
+.ifSearch { width: 100%; height: 34px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; font: inherit; font-size: 13px; margin-bottom: 4px; }
+.ifOpt { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 8px; border: 0; border-radius: 8px; background: none; font: inherit; font-size: 13px; text-align: left; cursor: pointer; color: var(--ink); }
+.ifOpt > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ifOpt small { color: var(--muted-2); font-size: 11.5px; }
+.ifOpt:hover { background: var(--cream-2); } .ifOpt.on { background: var(--acc-soft); font-weight: 700; }
+.ifAll { width: 20px; text-align: center; color: var(--muted-2); }
+.ifNone { padding: 8px; color: var(--muted-2); font-size: 12.5px; }
+/* reports list: paid (green) / not paid (red) dot next to the number, the report's "Achitat" tick */
+.repNo { display: inline-flex; align-items: center; gap: 5px; }
+.paidDot { width: 7px; height: 7px; border-radius: 50%; background: #E0645A; opacity: .75; flex-shrink: 0; }
+.paidDot.on { background: #3FA36B; opacity: .85; }

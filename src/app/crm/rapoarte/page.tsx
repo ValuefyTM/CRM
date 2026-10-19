@@ -8,6 +8,8 @@ import { ReportFilters } from "./ReportFilters";
 import { CrmShell } from "@/components/CrmShell";
 import { can } from "@/lib/perms";
 import { mySql } from "@/lib/perms-db";
+import { fileSrc } from "@/lib/files";
+import { photoUrl } from "@/lib/presence";
 
 export const metadata: Metadata = { title: "Rapoarte | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -25,7 +27,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   // Without a status: the reports in progress ("toate": every status).
   const status = sp.status || DEFAULT_TAB;
   const f = { ...sp, status, page, mine };
-  const [data, facets, counts] = await Promise.all([listReports(db, f), reportFacets(db, mine), reportTabCounts(db, f)]);
+  const [data, facets, counts] = await Promise.all([listReports(db, f), reportFacets(db, { status, mine, etapa: sp.etapa, termen: sp.termen }), reportTabCounts(db, f)]);
   // "Fără bun": the open ones can be cancelled in one go (by someone who sees all reports and changes statuses).
   const openNoAsset = sp.bunuri === "fara" && all && can(user, "reports:status")
     ? (await db.prepare("SELECT COUNT(*) AS n FROM reports r WHERE r.status NOT IN ('done', 'cancelled') AND NOT EXISTS (SELECT 1 FROM assets x WHERE x.report_id = r.id)").first<{ n: number }>())?.n ?? 0
@@ -50,9 +52,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <ReportFilters
           base={base} total={data.total} current={{ q: sp.q, status: sp.status, year: sp.year, bank: sp.bank, issuer: sp.issuer, evaluator: sp.evaluator, sort: sp.sort, bunuri: sp.bunuri }}
           years={facets.years.map((y) => [String(y.y), String(y.y), y.n])}
-          banks={facets.banks.map((b) => [b.code, b.code, b.n])}
-          issuers={facets.issuers.map((i) => [i.id, i.name, i.n])}
-          evaluators={facets.evaluators.map((e) => [e.id, e.name, e.n])}
+          banks={facets.banks.map((b) => ({ v: b.code, label: b.code, n: b.n, logo: fileSrc(b.logo) }))}
+          issuers={facets.issuers.map((i) => ({ v: i.id, label: i.name, n: i.n, logo: fileSrc(i.logo) }))}
+          evaluators={facets.evaluators.map((e) => ({ v: e.id, label: e.name, n: e.n, person: { id: e.id, photo: photoUrl(e.id, e.avatar_at) } }))}
           sorts={Object.entries(REPORT_SORTS).map(([k, [l]]) => [k, l])}
           tab={tab} tabs={REPORT_TABS.map(([k, label]) => [k, label, counts[k] ?? 0, link({ status: k === DEFAULT_TAB ? undefined : k })])}
         />

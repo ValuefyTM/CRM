@@ -78,7 +78,7 @@ export function OrdersTable({ rows, base, initial }: { rows: CrmOrderRow[]; base
       <div className="filterBar">
         <StatusTabs rows={rows} value={f} onChange={setF} pre={bySource} />
         {/* Each tab is one channel already: the source filter only helps where several are mixed. */}
-        {new Set(rows.map((r) => r.source)).size > 1 && <FilterSelect label="De la" value={src} onChange={setSrc} options={SOURCES.map(([k, l]) => [k, l, rows.filter((r) => r.source === k && test(r)).length])} all="Oricine" />}
+        {new Set(rows.map((r) => r.source)).size > 1 && <FilterSelect label="De la" value={src} onChange={setSrc} options={SOURCES.map(([k, l]) => [k, l, rows.filter((r) => r.source === k && test(r)).length] as [string, string, number]).filter(([k, , n]) => n > 0 || k === src)} all="Oricine" />}
         <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută după nr. comandă, adresă, client, colaborator… ↵" aria-label="Caută" />
       </div>
       <div className="resultLine">
