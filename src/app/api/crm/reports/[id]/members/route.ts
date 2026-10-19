@@ -3,6 +3,7 @@ import { now } from "@/lib/db";
 import { err, json, reportApi } from "@/lib/api";
 import { ROLE_LABEL } from "@/lib/reports";
 import { pushLater } from "@/lib/push";
+import { mailAssignment } from "@/lib/dossier";
 
 /** Adds a team member to the report: `{ user, role }`. */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -19,6 +20,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   await a.db.prepare("UPDATE reports SET updated_at = ? WHERE id = ?").bind(now(), id).run();
   await audit(a.db, `user:${a.user.id}`, "report.member", "report", id, `${u.name} (${ROLE_LABEL[role].toLowerCase()})`);
   pushLater(a.db);
+  // by email too, only if the "Raport alocat" alert asks for it
+  if (u.id !== a.user.id) await mailAssignment(a.db, id, u.id, role, a.user.name || null).catch((e) => console.error("assignment mail", e));
   return Response.json({ ok: true });
 }
 

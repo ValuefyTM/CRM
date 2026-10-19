@@ -14,6 +14,8 @@ import { fillReportAssets } from "./process-order";
 import { addAsset, updateAsset } from "./assets";
 import { NEXT_OWN_NUMBER, ownIssuerId } from "./report-numbers";
 import type { AssetInput } from "./asset-labels";
+import { ROLE_LABEL } from "./reports";
+import { assignmentMailWanted } from "./alerts";
 
 // ---------- stages and deadline ----------
 
@@ -271,7 +273,9 @@ async function openClaimed(db: D1Database, o: Order, actor: { id: string; name: 
   await audit(db, who, "report.opened", "report", reportId, accepted ? `din oferta ${accepted.number}` : o.source === "bank" ? "comandă bancă" : o.source === "collab" ? "colaborare" : "din comandă");
   await audit(db, who, "order.dossier", "order", o.id, reportId);
 
-  if (evaluator && evaluator !== actor?.id) await notifyEvaluator(db, reportId, evaluator, label || "raport nou", actor?.name ?? null, !!accepted);
+  // the team hears of the report by email only if the "Raport alocat" alert asks for it (what one did oneself is no news)
+  if (evaluator && evaluator !== actor?.id) await mailAssignment(db, reportId, evaluator, "evaluator", actor?.name ?? null, !!accepted);
+  if (opts.verifier_id && opts.verifier_id !== actor?.id) await mailAssignment(db, reportId, opts.verifier_id, "verifier", actor?.name ?? null);
   return { ok: true as const, id: reportId, created: true, assetId, contract };
 }
 
@@ -342,24 +346,35 @@ async function placeAssets(db: D1Database, actor: string, p: {
   }
 }
 
-async function notifyEvaluator(db: D1Database, reportId: string, userId: string, label: string, by: string | null, fromOffer: boolean) {
+/**
+ * The email to someone put in a report's team (the main evaluator at the opening of the file, a member added later).
+ * Sent only when the "Raport alocat" alert has "și pe email" ticked for them (Setări → Alerte): the bell and the push
+ * follow the rule on their own. `fromOffer`: the report came from an accepted offer, not from a colleague.
+ */
+export async function mailAssignment(db: D1Database, reportId: string, userId: string, role: string, by: string | null, fromOffer = false) {
+  if (!(await assignmentMailWanted(db, userId, role))) return false;
   const u = await db.prepare("SELECT email, COALESCE(NULLIF(name, ''), email) AS name FROM users WHERE id = ? AND status NOT IN ('disabled', 'deleted')").bind(userId).first<{ email: string; name: string }>();
-  if (!u) return;
-  const link = await appUrl("crm", `/rapoarte/${reportId}?tab=inspectii&alocare=1`);
-  const why = fromOffer ? "Clientul a acceptat oferta, iar raportul s-a creat pe numele tău" : `${by ?? "Un coleg"} ți-a dat raportul`;
+  const r = await db.prepare("SELECT COALESCE(NULLIF(label, ''), number, 'raport nou') AS label FROM reports WHERE id = ?").bind(reportId).first<{ label: string }>();
+  if (!u || !r) return false;
+  const label = r.label;
+  const lead = role === "evaluator";
+  const roleText = (ROLE_LABEL[role] ?? role).toLowerCase();
+  const link = await appUrl("crm", lead ? `/rapoarte/${reportId}?tab=inspectii&alocare=1` : `/rapoarte/${reportId}`);
+  const why = fromOffer ? "Clientul a acceptat oferta, iar raportul s-a creat pe numele tău" : lead ? `${by ?? "Un coleg"} ți-a dat raportul` : `${by ?? "Un coleg"} te-a pus ${roleText} la raportul`;
   await sendEmail({
     to: u.email,
-    subject: `Raport nou: ${label}`,
-    text: `${why}: ${label}.\nAlocă inspecțiile și urmărește raportul din CRM: ${link}`,
+    subject: lead ? `Raport nou: ${label}` : `Raport alocat (${roleText}): ${label}`,
+    text: `${why}: ${label}.\n${lead ? "Alocă inspecțiile și urmărește raportul din CRM" : "Deschide raportul din CRM"}: ${link}`,
     html: layout({
       eyebrow: "CRM VALUEFY",
-      title: "Ai un raport nou",
+      title: lead ? "Ai un raport nou" : "Ai fost pus în echipa unui raport",
       body: `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A4A">${esc(why)}: <strong style="color:#111111">${esc(label)}</strong>.</p>
-<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A4A">Pasul următor: alocă inspecțiile pentru fiecare bun (ție sau unui coleg) sau marchează bunurile evaluate fără inspecție.</p>`,
+${lead ? `<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A4A">Pasul următor: alocă inspecțiile pentru fiecare bun (ție sau unui coleg) sau marchează bunurile evaluate fără inspecție.</p>` : ""}`,
       button: { label: "Deschide raportul →", url: link },
-      foot: "Primești acest email pentru că ești evaluatorul principal al raportului.",
+      foot: "Primești acest email pentru că alerta „Raport alocat” are bifat „și pe email” în Setări → Alerte.",
     }),
   });
+  return true;
 }
 
 /** Team members who can lead a report: evaluators (by role or duty), owners and administrators. */

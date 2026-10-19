@@ -115,7 +115,19 @@ function momentOf(s: string): number {
 }
 
 export type Viewer = WithPerms & { id: string; name?: string; email?: string };
-export type Hit = { rule: AlertRule; row: Row; at: string };
+export type Hit = { rule: AlertRule; row: Row; at: string;
+  /** a "report assigned" alert about the viewer themself: they get the dedicated email of the assignment (dossier.ts), not the digest */
+  self?: boolean };
+
+/**
+ * Whether the person put in a report's team gets the assignment email: only when an enabled "Raport alocat" rule aimed
+ * at them has "și pe email" ticked (Setări → Alerte). Push and the bell follow the rule anyway.
+ */
+export async function assignmentMailWanted(db: D1Database, userId: string, role: string) {
+  const rules = await getAlertRules(db);
+  return rules.some((r) => r.enabled && r.kind === "report_assigned" && r.email
+    && r.to.some((t) => t === "all" || t === "assigned" || t === "team" || t === role || t === `u:${userId}`));
+}
 
 const isAdmin = (u: Viewer) => u.role === "owner" || u.role === "admin";
 
@@ -156,7 +168,7 @@ export async function alertHits(db: D1Database, u: Viewer, since: string, rules?
       if (rule.kind === "report_assigned" && (row.extra ?? "").split("|")[1] === u.id) continue;
       const at = momentOf(row.anchor) + rule.days * 86400000;
       if (at > nowMs || at <= sinceMs) continue;
-      hits.push({ rule, row, at: new Date(at).toISOString() });
+      hits.push({ rule, row, at: new Date(at).toISOString(), ...(rule.kind === "report_assigned" && row.assigned_id === u.id ? { self: true } : {}) });
     }
   }
   return hits.sort((a, c) => (a.at < c.at ? 1 : -1));
@@ -197,7 +209,8 @@ export function describe(h: Hit, base: string) {
     }
   }
   const kind = k.group === "Bani" ? "collect" : k.group === "Inspecții" ? "inspection" : k.group === "Comenzi" ? "order" : "alert";
-  return { id: `r${rule.id}:${row.key}`, at: h.at, kind, title, short, sub, href, tone: k.tone, email: !!rule.email };
+  // the person assigned gets the dedicated assignment email (dossier.ts) when the rule is ticked, not the digest
+  return { id: `r${rule.id}:${row.key}`, at: h.at, kind, title, short, sub, href, tone: k.tone, email: !!rule.email && !h.self };
 }
 
 export type DashAlert = { key: string; tone: "err" | "warn" | "info"; title: string; hint: string; count: number; href: string; items: { label: string; sub?: string; href: string }[] };
