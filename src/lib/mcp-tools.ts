@@ -167,7 +167,7 @@ export const TOOLS: Tool[] = [
     },
     run: async (c, a) => {
       const f: ReportFilters = { status: str(a, "status") || undefined, etapa: str(a, "etapa") || undefined, termen: str(a, "termen") || undefined,
-        bank: str(a, "banca") || undefined, year: str(a, "an") || undefined, q: str(a, "text") || undefined };
+        bank: str(a, "banca") || undefined, year: str(a, "an") || undefined, q: str(a, "text") || undefined, sort: "new" };
       if (str(a, "evaluator")) {
         const u = await findPerson(c.db, str(a, "evaluator"));
         if (!u?.id) return { eroare: u?.name ?? `Nu găsesc evaluatorul „${str(a, "evaluator")}”.` };

@@ -49,7 +49,7 @@ export function ReportFilters(props: {
             <b style={{ color: "var(--ink)" }}>{props.total.toLocaleString("ro-RO")}</b> rapoarte
             {active > 0 && <> · <button type="button" className="resetLink" style={{ height: "auto", padding: 0 }} onClick={() => { setQ(""); router.push(`${props.base}/rapoarte${c.status ? `?status=${c.status}` : ""}`); }}>✕ Resetează ({active})</button></>}
           </span>
-          <FilterSelect label="Ordine" value={c.sort ?? ""} options={props.sorts.filter(([v]) => v)} onChange={(v) => go({ sort: v || undefined })} all="Cele mai noi" />
+          <FilterSelect label="Ordine" value={c.sort ?? ""} options={props.sorts.filter(([v]) => v)} onChange={(v) => go({ sort: v || undefined })} all="Cele mai vechi" />
         </span>
       </div>
     </>

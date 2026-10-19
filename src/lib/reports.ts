@@ -64,9 +64,10 @@ export type ReportFilters = { q?: string; status?: string; year?: string; bank?:
   /** Only the reports this user sees as a team member ("Rapoartele mele"): their id and the condition (perms-db mySql). */
   mine?: { id: string; sql: string } };
 
+// Without a choice the oldest first (the ones waiting longest on top).
 export const REPORT_SORTS: Record<string, [string, string]> = {
-  "": ["Cele mai noi", "COALESCE(r.report_date, substr(r.created_at, 1, 10)) DESC, CAST(r.number AS INTEGER) DESC"],
-  old: ["Cele mai vechi", "COALESCE(r.report_date, substr(r.created_at, 1, 10)) ASC"],
+  "": ["Cele mai vechi", "COALESCE(r.report_date, substr(r.created_at, 1, 10)) ASC, CAST(r.number AS INTEGER) ASC"],
+  new: ["Cele mai noi", "COALESCE(r.report_date, substr(r.created_at, 1, 10)) DESC, CAST(r.number AS INTEGER) DESC"],
 };
 export const PAGE_SIZE = 50;
 
