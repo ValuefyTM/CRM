@@ -40,12 +40,12 @@ export async function MyHome({ user, base, denied }: { user: User; base: string;
     db.prepare(`SELECT i.id, i.status, i.scheduled_at, i.report_id, r.number, p.type, COALESCE(NULLIF(i.address, ''), p.full_address, p.city) AS address,
         ${can(user, "reports.all") ? "1" : `(r.id IS NOT NULL AND ${mySql(user)})`} AS can_open
       FROM inspections i JOIN assets a ON a.id = i.asset_id JOIN crm_properties p ON p.id = a.property_id LEFT JOIN reports r ON r.id = i.report_id
-      WHERE i.inspector_id = ? AND i.status IN ('to_schedule', 'scheduled') AND (r.id IS NULL OR (r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL))
+      WHERE i.inspector_id = ? AND i.status IN ('to_schedule', 'scheduled') AND i.glide_id IS NULL AND (r.id IS NULL OR (r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL))
       ORDER BY i.scheduled_at IS NULL, i.scheduled_at LIMIT 8`).bind(...(can(user, "reports.all") ? [] : [user.id]), user.id)
       .all<{ id: string; status: string; scheduled_at: string | null; report_id: string | null; number: string | null; type: string | null; address: string | null; can_open: number }>(),
     // All the inspections still to do (the list above shows the next 8).
     db.prepare(`SELECT COUNT(*) AS n FROM inspections i LEFT JOIN reports r ON r.id = i.report_id
-      WHERE i.inspector_id = ? AND i.status IN ('to_schedule', 'scheduled') AND (r.id IS NULL OR (r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL))`)
+      WHERE i.inspector_id = ? AND i.status IN ('to_schedule', 'scheduled') AND i.glide_id IS NULL AND (r.id IS NULL OR (r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL))`)
       .bind(user.id).first<{ n: number }>().then((x) => x?.n ?? 0),
   ]);
   const first = user.name ? user.name.split(" ")[0] : "";

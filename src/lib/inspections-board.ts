@@ -24,7 +24,8 @@ const addDays = (iso: string, n: number) => { const d = new Date(`${iso}T12:00:0
 export const weekStart = (iso: string) => { const d = new Date(`${iso}T12:00:00Z`); const w = (d.getUTCDay() + 6) % 7; return addDays(iso, -w); };
 
 /** Still to do and the report still open (old unfinished tasks of delivered reports from Glide are left out). */
-const ACTIVE = `i.status IN ('to_schedule', 'scheduled') AND (r.id IS NULL OR (r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL))`;
+// Only what is given from this CRM is still to do: the old CRM's open inspections (imported) are not tasks any more.
+const ACTIVE = `i.status IN ('to_schedule', 'scheduled') AND i.glide_id IS NULL AND (r.id IS NULL OR (r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL))`;
 
 export const BOARD_STATES: [string, string][] = [
   ["", "Active"], ["deprogramat", "De programat"], ["programate", "Programate"], ["intarziate", "Întârziate"], ["realizate", "Realizate"], ["toate", "Toate"],
@@ -99,7 +100,7 @@ export async function inspectionBoard(db: D1Database, f: BoardFilters, viewer?: 
   const [rows, week, counts, people] = await Promise.all([
     db.prepare(`${SELECT} ${sql} ORDER BY i.status = 'done', COALESCE(i.scheduled_at, i.due_on, '9999') ASC, i.done_at DESC LIMIT 300`).bind(...args).all<Raw>(),
     // The calendar shows the chosen week, whatever the state filter (only the inspector filter applies).
-    db.prepare(`${SELECT} WHERE i.status IN ('scheduled', 'done') AND substr(COALESCE(i.scheduled_at, i.done_at), 1, 10) BETWEEN ? AND ? ${f.inspector ? "AND i.inspector_id = ?" : ""}
+    db.prepare(`${SELECT} WHERE (i.status = 'done' OR (i.status = 'scheduled' AND i.glide_id IS NULL)) AND substr(COALESCE(i.scheduled_at, i.done_at), 1, 10) BETWEEN ? AND ? ${f.inspector ? "AND i.inspector_id = ?" : ""}
       ${f.lead ? `AND (i.inspector_id = ? OR ${leadSql("i.report_id")})` : ""}
       ORDER BY COALESCE(i.scheduled_at, i.done_at)`).bind(wk, addDays(wk, 6), ...(f.inspector ? [f.inspector] : []), ...(f.lead ? [f.lead, f.lead] : [])).all<Raw>(),
     db.prepare(`SELECT SUM(${ACTIVE} AND i.status = 'to_schedule') AS to_schedule, SUM(${ACTIVE} AND i.status = 'scheduled') AS scheduled,

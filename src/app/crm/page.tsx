@@ -92,7 +92,7 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
     dashboard(db, base),
     // Past the standard term (red in the list) and the inspections still to do, for the whole firm.
     db.prepare(`SELECT (SELECT COUNT(*) FROM reports r WHERE r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL AND ${OVER_TERM_SQL}) AS late,
-        (SELECT COUNT(*) FROM inspections i JOIN reports r ON r.id = i.report_id WHERE i.status IN ('to_schedule', 'scheduled')
+        (SELECT COUNT(*) FROM inspections i JOIN reports r ON r.id = i.report_id WHERE i.status IN ('to_schedule', 'scheduled') AND i.glide_id IS NULL
           AND r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL) AS insp`).bind(today).first<{ late: number; insp: number }>(),
   ]);
   const money = can(user, "fees.all");

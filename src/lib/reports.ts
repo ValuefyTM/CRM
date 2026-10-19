@@ -42,9 +42,9 @@ const ROW = `SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.r
   (SELECT group_concat(line, char(10)) FROM (SELECT m.user_id || char(31) || COALESCE(NULLIF(u.name, ''), u.email) || char(31) || m.role || char(31) || COALESCE(u.avatar_at, '') AS line
      FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = r.id
      ORDER BY CASE m.role WHEN 'evaluator' THEN 1 WHEN 'verifier' THEN 2 WHEN 'inspector' THEN 3 ELSE 4 END, u.name)) AS members,
-  (SELECT COUNT(*) FROM inspections x WHERE x.report_id = r.id AND x.status <> 'cancelled') AS insp_total,
+  (SELECT COUNT(*) FROM inspections x WHERE x.report_id = r.id AND x.status <> 'cancelled' AND (x.glide_id IS NULL OR x.status = 'done' OR x.done_at IS NOT NULL)) AS insp_total,
   (SELECT COUNT(*) FROM inspections x WHERE x.report_id = r.id AND x.status <> 'cancelled' AND (x.done_at IS NOT NULL OR x.status = 'done')) AS insp_done,
-  (SELECT MIN(x.scheduled_at) FROM inspections x WHERE x.report_id = r.id AND x.status = 'scheduled' AND x.done_at IS NULL) AS insp_next,
+  (SELECT MIN(x.scheduled_at) FROM inspections x WHERE x.report_id = r.id AND x.status = 'scheduled' AND x.done_at IS NULL AND x.glide_id IS NULL) AS insp_next,
   (SELECT MAX(x.done_at) FROM inspections x WHERE x.report_id = r.id AND x.status <> 'cancelled') AS insp_last,
   (SELECT COUNT(*) FROM assets a WHERE a.report_id = r.id AND a.no_inspection IS NOT NULL) AS no_insp,
   (SELECT u.name FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = r.id AND m.role = 'evaluator' LIMIT 1) AS evaluator,

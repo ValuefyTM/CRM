@@ -68,7 +68,7 @@ export async function dashboard(db: D1Database, base: string) {
     db.prepare(`SELECT i.id, i.report_id, i.scheduled_at, i.duration_min, COALESCE(NULLIF(u.name, ''), u.email) AS inspector, i.inspector_id, u.last_seen_at, u.avatar_at,
         p.type, COALESCE(p.full_address, p.city) AS address, i.contact_name FROM inspections i
       JOIN assets a ON a.id = i.asset_id JOIN crm_properties p ON p.id = a.property_id LEFT JOIN users u ON u.id = i.inspector_id
-      WHERE i.status = 'scheduled' AND substr(i.scheduled_at, 1, 10) BETWEEN ? AND ? ORDER BY i.scheduled_at LIMIT 12`)
+      WHERE i.status = 'scheduled' AND i.glide_id IS NULL AND substr(i.scheduled_at, 1, 10) BETWEEN ? AND ? ORDER BY i.scheduled_at LIMIT 12`)
       .bind(t, addDays(t, 1)).all<{ id: string; report_id: string | null; scheduled_at: string; duration_min: number | null; inspector: string | null; inspector_id: string | null;
         last_seen_at: string | null; avatar_at: string | null; type: string | null; address: string | null; contact_name: string | null }>(),
     db.prepare(`SELECT o.id, o.bank, o.bank_ref, o.client_name, o.created_at FROM orders o WHERE o.source = 'bank' AND o.glide_id IS NULL
