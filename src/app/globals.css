@@ -2934,3 +2934,33 @@ span.rdPick { display: inline-block; }
 @media (max-width: 1100px) {
   .rdLayout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "drop" "list" "deliver"; grid-template-rows: auto; }
 }
+
+/* Bunuri: un card pe bun, în două părți — bunul (sus) și inspecția lui (card în card, jos) */
+.abCard { padding: 0; cursor: default; overflow: hidden; }
+.abCard:hover { box-shadow: 0 4px 14px rgba(20, 20, 20, 0.05); }
+.abTop { position: relative; padding: 14px 16px; cursor: pointer; }
+.abTop:hover { background: #fffdf8; }
+.abTop > :not(.abPick) { position: relative; z-index: 1; pointer-events: none; }
+.abTop .abActs, .abTop .abActs * { pointer-events: auto; }
+.abCard > :not(.abPick) { pointer-events: auto; }
+.abInsp { margin: 0 12px 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--cream); display: flex; flex-direction: column; gap: 10px; }
+.abInspHead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.abInspTitle { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.abInspHead small { font-size: 11.5px; }
+.abInspBody { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
+@container ab (min-width: 720px) { .abInspBody:has(.abSheetBox) { grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); } }
+.abInspInfo { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.abInsp .abWho { padding: 0; background: none; }
+.abInspKv { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px 16px; }
+.abInspKv div { display: flex; flex-direction: column; min-width: 0; }
+.abInspKv div.wide { grid-column: 1 / -1; }
+.abInspKv dt { font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted-2); }
+.abInspKv dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.abInsp .abSheetBox { background: #fff; }
+.abInsp .abPanelActs { border-top: 1px solid var(--line); padding-top: 10px; }
+.abCard.on { border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); }
+.abList { container: ab / inline-size; }
+.abInsp .abSheetBox { grid-template-columns: 52px minmax(0, 1fr) auto; padding: 8px 10px; }
+.abInsp .abSheetBox .btn { grid-column: auto; justify-self: end; }
+.abInsp .abSheetBox .abSheetPh { width: 52px; height: 52px; }
+@container ab (min-width: 720px) { .abInspBody:has(.abSheetBox) { grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); } }
