@@ -9,7 +9,30 @@ import { DeleteDoc, DocTypeSelect, UploadButton } from "./ReportActions";
 export type DocItem = {
   id: string; name: string; kind: string | null; asset_id: string | null; status: "uploaded" | "missing"; origin: "report" | "order" | "glide";
   href: string | null; size: number | null; at: string | null; by: string | null; note?: string;
+  /** The inspector sees it (ticked; by default the CF extract and the floor survey). Undefined: not a document for the inspector. */
+  insp?: boolean;
 };
+
+/** "La inspector": tick whether the inspector sees the document (in the inspections app and in UVALO). */
+function InspTick({ report, d, edit }: { report: string; d: DocItem; edit: boolean }) {
+  const [on, setOn] = useState(!!d.insp);
+  const [busy, setBusy] = useState(false);
+  if (d.insp === undefined) return null;
+  if (!edit || d.origin === "glide") return on ? <span className="rdInsp on" title="Inspectorul vede actul">La inspector</span> : null;
+  return (
+    <label className={`rdInsp${on ? " on" : ""}`} title={on ? "Inspectorul vede actul (în aplicația de inspecții și în UVALO)" : "Inspectorul nu vede actul"}>
+      <input type="checkbox" checked={on} disabled={busy} onChange={async (e) => {
+        const v = e.target.checked;
+        setOn(v); setBusy(true);
+        const r = await fetch(`/api/crm/reports/${report}/documents`, { method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ doc: d.id, origin: d.origin, insp_visible: v }) }).catch(() => null);
+        setBusy(false);
+        if (!r?.ok) { setOn(!v); alert("Nu am putut salva. Încearcă din nou."); }
+      }} />
+      <span>La inspector</span>
+    </label>
+  );
+}
 
 const OK = /\.(pdf|jpe?g|png|heic|heif|webp|docx?|xlsx?|zip)$/i;
 const ext = (name: string) => (name.match(/\.(\w{2,4})$/)?.[1] ?? "doc").toUpperCase();
@@ -83,7 +106,7 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>
           <span className="rdDropText">
             <b>{busy ? "Se încarcă…" : "Adaugă acte noi"}</b>
-            <small>Trage fișierele aici sau <button type="button" className="linkBtn" onClick={() => input.current?.click()}>alege de pe calculator</button>. Tipul (CF, releveu, act de proprietate…) se recunoaște din nume și îl poți schimba.</small>
+            <small>Trage fișierele aici sau <button type="button" className="linkBtn" onClick={() => input.current?.click()}>alege de pe calculator</button>. Tipul (CF, releveu, act de proprietate…) se recunoaște din nume și îl poți schimba. Bifa „La inspector” arată ce vede inspectorul: implicit CF și releveul.</small>
           </span>
           {many && (
             <label className="rdTarget">Atribuie la
@@ -118,6 +141,7 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
                   </small>
                 </span>
                 <span className="rdActs">
+                  {d.status !== "missing" && <InspTick report={report} d={d} edit={edit} />}
                   {d.status === "missing" ? edit && <UploadButton id={report} doc={d.id} label="Încarcă" className="linkBtn" />
                     : d.origin === "report" && edit && <DocTypeSelect id={report} doc={d.id} assets={many ? assets : null} value={`${k}:${d.asset_id ?? ""}`} />}
                   {d.href && <a className="link" href={d.href} target="_blank" rel="noopener">Descarcă</a>}

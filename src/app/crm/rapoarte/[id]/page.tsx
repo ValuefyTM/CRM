@@ -30,6 +30,7 @@ import { messagesOf } from "@/lib/messages";
 import { AddMember, CollectedToggle, DeliverButton, ReportNumberEdit, FinalDrop, MissingDoc, NotesEditor, RemoveMember, SafeImg, StageActions, StatusButton, UploadButton, VerifyActions } from "./ReportActions";
 import { dueOf, STAGE_LABEL, stageOf } from "@/lib/dossier";
 import { hasValues, nextReportNumber, noticeTarget } from "@/lib/delivery";
+import { inspVisible, typeOfOrderDoc, typeOfReportDoc } from "@/lib/insp-docs";
 import { isOwnIssuer } from "@/lib/report-numbers";
 import { draftForReport, invoicesFor } from "@/lib/billing";
 import { can, type Perm } from "@/lib/perms";
@@ -205,7 +206,9 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const shortOf = (assetId: string | null) => { const a = assets.find((x) => x.id === assetId); return a ? assetShort(a) : null; };
   // The documents the inspector may be given, and the ones chosen for an open inspection (null: the default CF / releveu).
   const accessDocs: AccessDoc[] = sources.filter((x) => x.status === "uploaded").map((x) => ({ id: x.id, name: x.filename, kind: x.doc_type ?? guessDocKind(x.filename), asset_id: x.asset_id, asset_label: shortOf(x.asset_id) }));
-  const accessOf = (a: A) => { try { const v: unknown = a.doc_refs ? JSON.parse(a.doc_refs) : null; return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : null; } catch { return null; } };
+  // The documents the inspector of an asset sees: the ticked ones (by default CF and RLV), of the whole report or of the asset.
+  const accessOf = (a: A) => sources.filter((x) => x.kind === "source" && x.status === "uploaded" && (!x.asset_id || x.asset_id === a.id)
+    && inspVisible(x.insp_visible, typeOfReportDoc(x.doc_type, x.filename))).map((x) => x.id);
   // What a card shows: the details this type of asset has (an apartment its rooms and floor, land its area, a car its plate).
   const facts = (a: A): [string, string][] => {
     const p = assetProfile(a.category, a.type);
@@ -224,12 +227,14 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const fresh = messages.length > 0 && !messages[messages.length - 1].mine;
   const docItems: DocItem[] = [
     ...sources.map((x): DocItem => ({ id: x.id, name: x.filename, kind: x.doc_type ?? guessDocKind(x.filename), asset_id: x.asset_id, status: x.status === "missing" ? "missing" : "uploaded", origin: "report",
-      href: x.status === "missing" ? null : `/api/crm/reports/${r.id}/documents/${x.id}`, size: x.size_bytes, at: x.status === "missing" ? x.requested_at : x.created_at, by: x.uploaded_by_name })),
-    ...orderDocs.map((x): DocItem => ({ id: x.id, name: x.filename, kind: guessDocKind(x.filename), asset_id: null, status: "uploaded", origin: "order", href: `/api/crm/orders/${r.order_id}/documents/${x.id}`, size: x.size_bytes, at: x.created_at, by: null })),
+      href: x.status === "missing" ? null : `/api/crm/reports/${r.id}/documents/${x.id}`, size: x.size_bytes, at: x.status === "missing" ? x.requested_at : x.created_at, by: x.uploaded_by_name,
+      insp: x.kind === "source" && x.status !== "missing" ? inspVisible(x.insp_visible, typeOfReportDoc(x.doc_type, x.filename)) : undefined })),
+    ...orderDocs.map((x): DocItem => ({ id: x.id, name: x.filename, kind: guessDocKind(x.filename), asset_id: null, status: "uploaded", origin: "order", href: `/api/crm/orders/${r.order_id}/documents/${x.id}`, size: x.size_bytes, at: x.created_at, by: null,
+      insp: inspVisible(x.insp_visible, typeOfOrderDoc(x.kind, x.filename)) })),
     ...assets.flatMap((a) => [
       a.cf_file ? { name: `Extras CF ${a.cf_number ?? ""}`.trim(), path: a.cf_file, kind: "cf" } : null,
       a.plan_file ? { name: `Releveu ${cap(a.type)}`.trim(), path: a.plan_file, kind: "rlv" } : null,
-    ].filter((x): x is { name: string; path: string; kind: string } => !!x).map((f): DocItem => ({ id: f.path, name: f.name, kind: f.kind, asset_id: a.id, status: "uploaded", origin: "glide", href: null, size: null, at: null, by: null }))),
+    ].filter((x): x is { name: string; path: string; kind: string } => !!x).map((f): DocItem => ({ id: f.path, name: f.name, kind: f.kind, asset_id: a.id, status: "uploaded", origin: "glide", href: null, size: null, at: null, by: null, insp: true }))),
   ];
   const sheets = assets.filter((a) => a.sheet_type && (a.sheet_photo || a.sheet_person || a.inspection_status === "done"));
   // The list of assets: its title with the inspection button (allocate while some asset has none, else reallocate the open

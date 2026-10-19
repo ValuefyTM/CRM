@@ -10,7 +10,7 @@ import { can } from "./perms";
 import { guessSheetType, sheetTypeLabel, type SheetType } from "./insp-forms";
 import { STD, templateList } from "./insp-templates-db";
 import { photoUrl, presenceOf } from "./presence";
-import { missingDocs, missingText, type DocType } from "./insp-docs";
+import { missingDocs, missingText, type DocType, setInspectorDocs } from "./insp-docs";
 import { cancelInUvalo, deleteInUvalo, inspChannel, inspectorByLegit, later, pushInspection, uvaloAppUrl } from "./uvalo";
 
 /** Who gives the inspector of a report: whoever allocates its team (the main evaluator), or "Inspecții: alocă inspectorul". */
@@ -84,6 +84,8 @@ export async function assignInspection(db: D1Database, user: User, reportId: str
     const ids = (b.doc_refs as unknown[]).filter((x): x is string => typeof x === "string").slice(0, 100);
     const ok = ids.length ? (await db.prepare(`SELECT id FROM report_documents WHERE report_id = ? AND id IN (${ids.map(() => "?").join(", ")})`).bind(reportId, ...ids).all<{ id: string }>()).results.map((x) => x.id) : [];
     docRefs = JSON.stringify(ok);
+    // The ticks live on the documents (so later ones count too): the chosen ones visible, the others not.
+    await setInspectorDocs(db, reportId, ok);
   }
   const missing = docRefs ? [] : await missingDocs(db, reportId, asset.id);
   if (missing.length && b.confirm_missing !== true)

@@ -5,6 +5,7 @@ import { bucket } from "@/lib/orders";
 import { fileType } from "@/lib/file-response";
 import { MAX_FILE_MB } from "@/lib/order-labels";
 import { DOC_KIND_KEYS, docKindLabel } from "@/lib/doc-kinds";
+import { resyncUvalo } from "@/lib/uvalo";
 
 const OK = /\.(pdf|jpe?g|png|heic|heif|webp|docx?|xlsx?|zip)$/i;
 
@@ -75,21 +76,38 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const savedId = missing?.id ?? docId;
   await a.db.prepare("UPDATE reports SET updated_at = ?, uploaded_on = CASE WHEN ? = 'final' THEN ? ELSE uploaded_on END WHERE id = ?").bind(now(), kind, now().slice(0, 10), id).run();
   await audit(a.db, actor, kind === "final" ? "report.final" : "report.document", "report", id, safe);
+  // A document uploaded after the inspection was sent: it reaches the inspector in UVALO too (when it is to be seen).
+  if (kind === "source") await resyncUvalo(a.db, { reportId: id });
   return Response.json({ ok: true, id: savedId });
 }
 
-/** Marks a source document as the CF extract / floor survey (or neither): `{ doc, doc_type: cf | rlv | other, asset }`. */
+/**
+ * Marks a source document as the CF extract / floor survey (or neither): `{ doc, doc_type: cf | rlv | other, asset }`;
+ * or whether the inspector sees it: `{ doc, origin?: "order", insp_visible: true | false }`.
+ */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const a = await reportApi(id, "docs", true);
   if ("res" in a) return a.res;
   const b = await json(req);
+  if (typeof b.insp_visible === "boolean") {
+    const order = b.origin === "order";
+    const d = order
+      ? await a.db.prepare("SELECT d.id, d.filename FROM order_documents d JOIN reports r ON r.order_id = d.order_id WHERE d.id = ? AND r.id = ?").bind(String(b.doc ?? ""), id).first<{ id: string; filename: string }>()
+      : await a.db.prepare("SELECT id, filename FROM report_documents WHERE id = ? AND report_id = ? AND kind = 'source'").bind(String(b.doc ?? ""), id).first<{ id: string; filename: string }>();
+    if (!d) return err("Documentul nu există.", 404);
+    await a.db.prepare(`UPDATE ${order ? "order_documents" : "report_documents"} SET insp_visible = ? WHERE id = ?`).bind(b.insp_visible ? 1 : 0, d.id).run();
+    await audit(a.db, `user:${a.user.id}`, "report.document_insp", "report", id, `${d.filename}: ${b.insp_visible ? "vizibil inspectorului" : "ascuns inspectorului"}`);
+    const sent = await resyncUvalo(a.db, { reportId: id });
+    return Response.json({ ok: true, sent });
+  }
   const d = await a.db.prepare("SELECT id, filename FROM report_documents WHERE id = ? AND report_id = ? AND kind = 'source'").bind(String(b.doc ?? ""), id).first<{ id: string; filename: string }>();
   if (!d) return err("Documentul nu există.", 404);
   const type = DOC_KIND_KEYS.includes(String(b.doc_type)) ? String(b.doc_type) : null;
   const asset = b.asset ? (await a.db.prepare("SELECT id FROM assets WHERE id = ? AND report_id = ?").bind(String(b.asset), id).first<{ id: string }>())?.id ?? null : null;
   await a.db.prepare("UPDATE report_documents SET doc_type = ?, asset_id = CASE WHEN ? THEN ? ELSE asset_id END WHERE id = ?").bind(type, "asset" in b ? 1 : 0, asset, d.id).run();
   await audit(a.db, `user:${a.user.id}`, "report.document_type", "report", id, `${d.filename}: ${docKindLabel(type)}`);
+  await resyncUvalo(a.db, { reportId: id });
   return Response.json({ ok: true });
 }
 

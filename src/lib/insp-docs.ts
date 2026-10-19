@@ -56,23 +56,45 @@ export async function assetDocs(db: D1Database, reportId: string, assetIds: stri
   return out;
 }
 
+/** The type of an order document (portal upload) for the inspector. */
+export const typeOfOrderDoc = (kind: string, name: string): DocType | "alte" => ORDER_KIND[kind] ?? (kind === "other" ? guessDocType(name) : null) ?? "alte";
+
+/** Whether the inspector sees a document: ticked in the report, else by default the CF extract and the floor survey. */
+export const inspVisible = (flag: number | null | undefined, type: DocType | "alte" | null) => (flag == null ? type === "cf" || type === "rlv" : flag === 1);
+
+/** The type of a report document for the inspector: CF / RLV (marked, else recognised by its name) or another document. */
+export const typeOfReportDoc = (docType: string | null, name: string): DocType | "alte" => {
+  const t = docType === "cf" || docType === "rlv" ? docType : docType ? null : guessDocType(name);
+  return t ?? "alte";
+};
+
 /**
- * The documents an inspector may open for an inspection: the ones chosen when it was given (`doc_refs`), else the
- * CF extract and floor survey of its assets.
+ * The documents an inspector may open for an inspection, as ticked in the report's documents (by default the CF
+ * extract and the floor survey): the report's own (of the whole report or of its assets), the order's, and the old
+ * CRM's CF / RLV. Read each time, so a document uploaded or ticked later reaches the inspector too.
  */
-export async function docsForInspection(db: D1Database, inspectionId: string, reportId: string, assetIds: string[]): Promise<InspDoc[]> {
-  const row = await db.prepare("SELECT doc_refs FROM inspections WHERE id = ?").bind(inspectionId).first<{ doc_refs: string | null }>().catch(() => null);
-  let refs: string[] | null = null;
-  try { refs = row?.doc_refs ? (JSON.parse(row.doc_refs) as string[]).filter((x) => typeof x === "string") : null; } catch { refs = null; }
-  if (!refs) return assetDocs(db, reportId, assetIds);
-  if (!refs.length) return [];
-  const { results } = await db.prepare(`SELECT id, filename, content_type, r2_key, doc_type, asset_id FROM report_documents
-      WHERE report_id = ? AND status = 'uploaded' AND r2_key IS NOT NULL AND id IN (${refs.map(() => "?").join(", ")}) ORDER BY created_at`)
-    .bind(reportId, ...refs).all<{ id: string; filename: string; content_type: string | null; r2_key: string; doc_type: string | null; asset_id: string | null }>();
-  return results.map((d) => {
-    const t = d.doc_type ?? guessDocType(d.filename);
-    return { ref: `r-${d.id}`, type: t === "cf" || t === "rlv" ? t : "alte", name: d.filename, asset_id: d.asset_id, content_type: d.content_type, key: d.r2_key, url: null };
-  });
+export async function docsForInspection(db: D1Database, _inspectionId: string, reportId: string, assetIds: string[]): Promise<InspDoc[]> {
+  const marks = assetIds.map(() => "?").join(", ") || "''";
+  const [rep, ord, glide] = await Promise.all([
+    db.prepare(`SELECT id, filename, content_type, r2_key, doc_type, asset_id, insp_visible FROM report_documents
+        WHERE report_id = ? AND kind = 'source' AND status = 'uploaded' AND r2_key IS NOT NULL AND (asset_id IS NULL OR asset_id IN (${marks})) ORDER BY created_at`)
+      .bind(reportId, ...assetIds).all<{ id: string; filename: string; content_type: string | null; r2_key: string; doc_type: string | null; asset_id: string | null; insp_visible: number | null }>(),
+    db.prepare(`SELECT d.id, d.kind, d.filename, d.content_type, d.r2_key, d.insp_visible FROM order_documents d JOIN reports r ON r.order_id = d.order_id WHERE r.id = ? ORDER BY d.created_at`)
+      .bind(reportId).all<{ id: string; kind: string; filename: string; content_type: string | null; r2_key: string; insp_visible: number | null }>(),
+    assetIds.length ? assetDocs(db, reportId, assetIds) : Promise.resolve([] as InspDoc[]),
+  ]);
+  const out: InspDoc[] = [];
+  for (const d of rep.results) {
+    const type = typeOfReportDoc(d.doc_type, d.filename);
+    if (inspVisible(d.insp_visible, type)) out.push({ ref: `r-${d.id}`, type, name: d.filename, asset_id: d.asset_id, content_type: d.content_type, key: d.r2_key, url: null });
+  }
+  for (const d of ord.results) {
+    const type = typeOfOrderDoc(d.kind, d.filename);
+    if (inspVisible(d.insp_visible, type)) out.push({ ref: `o-${d.id}`, type, name: d.filename, asset_id: null, content_type: d.content_type, key: d.r2_key, url: null });
+  }
+  // The old CRM's CF / RLV files of the assets (no tick: always given).
+  out.push(...glide.filter((d) => d.ref.startsWith("g-")));
+  return out;
 }
 
 /** Which of CF / RLV are missing for an asset. */
@@ -92,3 +114,13 @@ export async function docsByAsset(db: D1Database, reportId: string, assetIds: st
 
 /** "extrasul CF și releveul" / "extrasul CF" / "releveul". */
 export const missingText = (m: DocType[]) => m.map((t) => (t === "cf" ? "extrasul CF" : "releveul")).join(" și ");
+
+/**
+ * The documents chosen for the inspector in a list (the allocation window, a new work): ticked, every other uploaded
+ * document of the report unticked. Ids that are not the report's own documents are ignored.
+ */
+export async function setInspectorDocs(db: D1Database, reportId: string, ids: string[]) {
+  const list = ids.filter((x) => typeof x === "string").slice(0, 200);
+  await db.prepare(`UPDATE report_documents SET insp_visible = CASE WHEN id IN (${list.map(() => "?").join(", ") || "''"}) THEN 1 ELSE 0 END
+      WHERE report_id = ? AND kind = 'source' AND status = 'uploaded'`).bind(...list, reportId).run();
+}

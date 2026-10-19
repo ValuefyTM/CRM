@@ -210,6 +210,20 @@ export async function pushInspection(db: D1Database, id: string) {
   } catch (e) { return fail(db, id, e); }
 }
 
+/**
+ * Sends again to UVALO the open inspections already there (not finished): of a report, or of every asset of a property
+ * (its address, cadastral numbers, areas changed in the CRM), so the inspector sees the change and the documents
+ * uploaded or ticked since. Runs after the answer.
+ */
+export async function resyncUvalo(db: D1Database, by: { reportId?: string; propertyId?: string }) {
+  const where = by.reportId ? "i.report_id = ?" : "a.property_id = ?";
+  const { results } = await db.prepare(`SELECT i.id FROM inspections i JOIN assets a ON a.id = i.asset_id
+      WHERE ${where} AND i.status IN ('to_schedule', 'scheduled') AND i.glide_id IS NULL AND i.uvalo_id IS NOT NULL
+        AND COALESCE(i.uvalo_status, '') NOT IN ('deleted', 'gata', 'pred')`).bind(by.reportId ?? by.propertyId).all<{ id: string }>().catch(() => ({ results: [] as { id: string }[] }));
+  for (const x of results) await later(pushInspection(db, x.id));
+  return results.length;
+}
+
 /** Taken back in the CRM (cancelled, done without the app): it leaves the inspector's phone in UVALO. */
 export async function cancelInUvalo(db: D1Database, id: string, reason: string) {
   const r = await db.prepare("SELECT uvalo_id, uvalo_status FROM inspections WHERE id = ?").bind(id).first<{ uvalo_id: string | null; uvalo_status: string | null }>();

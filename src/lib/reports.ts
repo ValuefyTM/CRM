@@ -258,6 +258,8 @@ export type ReportDocument = {
   id: string; report_id: string; kind: "source" | "final"; filename: string; content_type: string | null; size_bytes: number | null; r2_key: string | null;
   status: "uploaded" | "missing"; requested_at: string | null; uploaded_by_name: string | null; created_at: string;
   doc_type: string | null; asset_id: string | null;
+  /** Ticked for the inspector (null: the default, CF and RLV yes). */
+  insp_visible: number | null;
 };
 
 export async function reportDocuments(db: D1Database, id: string) {
@@ -268,8 +270,8 @@ export async function reportDocuments(db: D1Database, id: string) {
 /** Documents that came with the order (portal uploads), shown as source documents of the report. */
 export async function reportOrderDocuments(db: D1Database, orderId: string | null) {
   if (!orderId) return [];
-  return (await db.prepare("SELECT id, kind, filename, content_type, size_bytes, created_at FROM order_documents WHERE order_id = ? ORDER BY created_at")
-    .bind(orderId).all<{ id: string; kind: string; filename: string; content_type: string | null; size_bytes: number; created_at: string }>()).results;
+  return (await db.prepare("SELECT id, kind, filename, content_type, size_bytes, created_at, insp_visible FROM order_documents WHERE order_id = ? ORDER BY created_at")
+    .bind(orderId).all<{ id: string; kind: string; filename: string; content_type: string | null; size_bytes: number; created_at: string; insp_visible: number | null }>()).results;
 }
 
 export type AssetDetail = {
@@ -347,6 +349,7 @@ const REPORT_ACTION: Record<string, (d: string | null) => string> = {
   "report.document_remove": (d) => `Document șters${d ? `: ${d}` : ""}`,
   "report.final": (d) => `Raport final încărcat${d ? `: ${d}` : ""}`,
   "report.delivered": (d) => `Raport predat${d ? ` (${d})` : ""}`,
+  "report.document_insp": (d) => `Acte la inspector${d ? `: ${d}` : ""}`,
   "report.fee": (d) => `Onorariu modificat${d ? `: ${d}` : ""}`,
   "report.number": (d) => `Număr raport modificat${d ? `: ${d}` : ""}`,
   "report.asset_add": (d) => `Bun adăugat${d ? `: ${d}` : ""}`,
