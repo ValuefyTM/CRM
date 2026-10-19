@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import { getDb, now } from "@/lib/db";
 import { audit } from "@/lib/auth";
 import { getOrder } from "@/lib/orders";
-import { offerByToken } from "@/lib/offers";
+import { isExpired, money, offerByToken, offerTotals } from "@/lib/offers";
+import { propertyLabel } from "@/lib/order-labels";
+import { origin } from "@/lib/site";
 import { OfferView } from "@/components/OfferView";
 import { quoteAsOffer, quoteByToken } from "@/lib/quote-public";
 import { quoteAssets, quoteCode } from "@/lib/quotes";
@@ -15,7 +17,39 @@ const pointOf = (geo: string | null | undefined, source: string | null | undefin
   return ll ? { lat: ll[0], lng: ll[1], source: source === "cadastru" || source === "localitate" ? source : "adresa" } : null;
 };
 
-export const metadata: Metadata = { title: "Ofertă de evaluare | VALUEFY", robots: { index: false, follow: false }, referrer: "strict-origin-when-cross-origin" };
+const fmtDay = (d: string) => new Date(d.length <= 10 ? `${d}T12:00:00` : d).toLocaleDateString("ro-RO", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Bucharest" });
+
+/**
+ * The link's preview (WhatsApp, email, Messenger): the offer's code and total in the title, what is valued and until
+ * when in the description, a branded picture. Nothing secret goes in it (the token stays in the URL only).
+ */
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const base: Metadata = { robots: { index: false, follow: false }, referrer: "strict-origin-when-cross-origin" };
+  const { token } = await params;
+  const db = await getDb();
+  if (!db) return { ...base, title: "Ofertă de evaluare | VALUEFY" };
+  let offer = await offerByToken(db, token).catch(() => null);
+  let order = offer ? await getOrder(db, offer.order_id) : null;
+  let code = offer?.number ?? "";
+  if (!offer) {
+    const q = await quoteByToken(db, token).catch(() => null);
+    if (!q || !q.sent_at) return { ...base, title: "Ofertă de evaluare | VALUEFY" };
+    const v = await quoteAsOffer(db, q);
+    offer = v.offer; order = v.order; code = quoteCode(q);
+  }
+  if (!offer || !order || offer.status === "draft") return { ...base, title: "Ofertă de evaluare | VALUEFY" };
+  const total = offerTotals(offer).total;
+  const what = [order.property_type ? propertyLabel(order.property_type) : offer.object_text?.split(/[,—]/)[0], order.city].filter(Boolean).join(", ");
+  const state = offer.status === "accepted" ? "Acceptată" : offer.status === "declined" ? "Refuzată" : isExpired(offer) ? `A expirat pe ${fmtDay(offer.valid_until)}` : `Valabilă până la ${fmtDay(offer.valid_until)}`;
+  const title = `Ofertă de evaluare ${code} · ${money(total)} cu TVA`;
+  const description = [what && `${what}.`, `Termen ${offer.term_days} zile lucrătoare.`, `${state}.`, offer.status === "sent" && !isExpired(offer) ? "Citește oferta, acceptă și semnează online." : ""].filter(Boolean).join(" ");
+  const o = await origin();
+  return {
+    ...base, title: `${title} | VALUEFY`, description,
+    openGraph: { title, description, siteName: "VALUEFY · Evaluări imobiliare", type: "website", locale: "ro_RO", images: [{ url: `${o}/og-oferta.png`, width: 1200, height: 630, alt: "Ofertă de evaluare VALUEFY" }] },
+    twitter: { card: "summary_large_image", title, description, images: [`${o}/og-oferta.png`] },
+  };
+}
 export const dynamic = "force-dynamic";
 
 /** Public offer page: whoever has the link (sent by email) can read, accept and sign the offer. */

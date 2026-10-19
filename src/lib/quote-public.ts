@@ -33,7 +33,7 @@ const plusDays = (n: number) => new Date(Date.now() + n * 86400000).toLocaleDate
 export async function quoteAsOffer(db: D1Database, q: Quote): Promise<{ offer: Offer; order: Order }> {
   const [billing, author] = await Promise.all([
     getBilling(db),
-    q.created_by ? db.prepare("SELECT id, COALESCE(NULLIF(name, ''), email) AS name, anevar_no FROM users WHERE id = ?").bind(q.created_by).first<{ id: string; name: string; anevar_no: string | null }>() : Promise.resolve(null),
+    q.created_by ? db.prepare("SELECT id, COALESCE(NULLIF(name, ''), email) AS name, anevar_no, phone FROM users WHERE id = ?").bind(q.created_by).first<{ id: string; name: string; anevar_no: string | null; phone: string | null }>() : Promise.resolve(null),
   ]);
   const raw = quoteAssets(q);
   const parsed = parseAssets(raw.map((a) => ({ ...a, contact_kind: "client", contact_name: q.client_name, contact_phone: q.client_phone })));
@@ -67,7 +67,7 @@ export async function quoteAsOffer(db: D1Database, q: Quote): Promise<{ offer: O
     accepted_at: status === "accepted" ? q.decided_at : null, accepted_name: q.accepted_name, accepted_urgent: 0, signature: q.signature, accepted_ip: q.accepted_ip,
     content_hash: q.content_hash, declined_at: status === "declined" ? q.decided_at : null, decline_reason: q.decline_reason,
     created_by: q.created_by, created_at: q.created_at, updated_at: q.updated_at,
-    evaluator_name: author?.name ?? null, evaluator_anevar: author?.anevar_no ?? null,
+    evaluator_name: author?.name ?? null, evaluator_anevar: author?.anevar_no ?? null, evaluator_phone: author?.phone ?? null,
   };
   return { offer, order };
 }

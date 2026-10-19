@@ -7,6 +7,12 @@ import { OfferAccept, PrintButton } from "./OfferAccept";
 import { MiniMap, type MiniPoint } from "./MiniMap";
 
 const SITE = "https://valuefy.ro";
+/** A Romanian phone as WhatsApp wants it: digits, with the country code ("0722…" → "40722…"). */
+const waNumber = (phone: string | null | undefined) => {
+  const d = (phone ?? "").replace(/\D/g, "");
+  if (!d) return null;
+  return d.startsWith("0") ? `4${d}` : d.startsWith("40") ? d : d.length === 9 ? `40${d}` : d;
+};
 const PHONE = "+40 766 225 936";
 const EMAIL = "contact@valuefy.ro";
 
@@ -161,7 +167,14 @@ export function OfferView({ offer: o, order, preview = false, toolbar, delivered
             <small>Evaluator autorizat ANEVAR{o.evaluator_anevar ? ` · legitimația nr. ${o.evaluator_anevar}` : ""}</small>
           </div>
           <div className="ofEvalActions no-print">
-            <a className="ofBtnGhost" href={`mailto:${EMAIL}?subject=${encodeURIComponent(`Întrebare despre oferta ${o.number}`)}`}>Am o întrebare</a>
+            {(() => {
+              // a question goes to the evaluator on WhatsApp (their phone), else to the firm's email
+              const wa = waNumber(o.evaluator_phone) ?? waNumber(PHONE);
+              const text = `Bună ziua! Am o întrebare despre oferta de evaluare ${ref}.`;
+              return wa
+                ? <a className="ofBtnGhost ofWa" href={`https://wa.me/${wa}?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 1.8a8.2 8.2 0 1 1-4.2 15.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 0 1 12 3.8zm-3.3 4.4c-.2 0-.5 0-.7.3-.3.3-1 1-1 2.4s1 2.8 1.2 3c.1.2 2 3.1 4.9 4.2 2.4.9 2.9.8 3.4.7.5 0 1.7-.7 1.9-1.4.2-.7.2-1.2.2-1.4-.1-.1-.3-.2-.6-.3l-2-1c-.3-.1-.5-.2-.7.2l-.9 1.1c-.2.2-.3.2-.6.1a6.8 6.8 0 0 1-3.4-3c-.3-.4 0-.5.2-.7l.5-.6.3-.5c.1-.2 0-.4 0-.5l-.9-2.2c-.2-.5-.5-.5-.7-.5h-.6z" /></svg> Scrie-i pe WhatsApp</a>
+                : <a className="ofBtnGhost" href={`mailto:${EMAIL}?subject=${encodeURIComponent(`Întrebare despre oferta ${ref}`)}`}>Am o întrebare</a>;
+            })()}
           </div>
         </section>
 
@@ -183,6 +196,17 @@ export function OfferView({ offer: o, order, preview = false, toolbar, delivered
             defaultName={isCompany(o.client_name) ? "" : o.client_name ?? ""} defaultUrgent={!!order.urgent} />
         )}
 
+        {!accepted && (
+          <section className="ofCard ofSignLine" aria-hidden="true">
+            <h2>Acceptare</h2>
+            <p className="ofMuted small">Oferta se acceptă și se semnează online, pe pagina ei (linkul primit pe email / WhatsApp). Pe hârtie: numele, data și semnătura de mai jos.</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginTop: 18, fontSize: 11 }}>
+              <div style={{ borderTop: "1px solid #999", paddingTop: 6 }}>Nume și prenume</div>
+              <div style={{ borderTop: "1px solid #999", paddingTop: 6 }}>Data</div>
+              <div style={{ borderTop: "1px solid #999", paddingTop: 6 }}>Semnătura</div>
+            </div>
+          </section>
+        )}
         <footer className="ofFoot">Oferta {o.number} · emisă {day(o.sent_at ?? o.created_at)} · VALUEFY · {PHONE} · <a href={`mailto:${EMAIL}`}>{EMAIL}</a></footer>
       </main>
     </div>

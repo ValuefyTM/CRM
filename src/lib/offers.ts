@@ -19,7 +19,7 @@ export type Offer = {
   content_hash: string | null; declined_at: string | null; decline_reason: string | null;
   created_by: string | null; created_at: string; updated_at: string;
   // joined
-  evaluator_name: string | null; evaluator_anevar: string | null;
+  evaluator_name: string | null; evaluator_anevar: string | null; evaluator_phone?: string | null;
 };
 
 export const OFFER_STATUS: Record<Offer["status"], [string, string]> = {
@@ -29,7 +29,7 @@ export const OFFER_STATUS: Record<Offer["status"], [string, string]> = {
   declined: ["Refuzată", "pillErr"],
 };
 
-const SELECT = `SELECT f.*, COALESCE(NULLIF(u.name, ''), u.email) AS evaluator_name, u.anevar_no AS evaluator_anevar
+const SELECT = `SELECT f.*, COALESCE(NULLIF(u.name, ''), u.email) AS evaluator_name, u.anevar_no AS evaluator_anevar, u.phone AS evaluator_phone
   FROM offers f LEFT JOIN users u ON u.id = f.evaluator_id`;
 
 export const offerForOrder = (db: D1Database, orderId: string) =>

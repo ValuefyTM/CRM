@@ -515,12 +515,33 @@ a.rMeta:hover u { color: var(--acc-light); }
   .ofBarRight .ofPill { display: none; }
   .ofMain { padding: 18px 14px 36px; }
 }
+/* The offer saved as PDF ("Descarcă PDF"): compact, one column of cards that flow across pages, no buttons or map
+   controls, no empty signature form (a signature line instead); the signed offer keeps its signature. */
 @media print {
-  .no-print, .ofDecline, .ofLinkBtn { display: none !important; }
+  @page { size: A4; margin: 12mm 11mm; }
+  .no-print, .ofDecline, .ofLinkBtn, .ofAccept, .leaflet-control-container, .ofHeroBtns { display: none !important; }
   .ofPage { background: #fff; }
-  .ofCard, .ofHero { break-inside: avoid; animation: none; }
-  .ofHero { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .ofMain { max-width: none; padding: 0; gap: 10px; }
+  .ofCard, .ofHero { animation: none !important; transform: none !important; box-shadow: none !important; border-radius: 10px; }
+  .ofCard { padding: 14px 16px; gap: 10px; break-inside: auto; }
+  .ofHero { padding: 20px 22px; gap: 18px; break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .ofHero h1 { font-size: 22px; } .ofHero p { font-size: 13px; } .ofTotal { font-size: 28px; }
+  .ofGrid2 { gap: 10px; }
+  .ofPhoto.hasMap > div:first-child { height: 170px !important; }
+  .ofCard h2 { font-size: 15px; } .ofCard h3 { font-size: 13px; margin: 4px 0 0; }
+  .ofDl dd, .ofLines li, .ofSum, .ofNote, .ofTiles p, .ofDocs li, .ofBullets li, .ofTerms li, .ofTerms p { font-size: 11.5px; }
+  .ofEyebrow { font-size: 9.5px; }
+  .ofTiles > div, .ofCal li, .ofTerms li, .ofEval, .ofSigned, .ofDl > div { break-inside: avoid; }
+  .ofCard h2, .ofCard h3, .ofCardHead { break-after: avoid; }
+  .ofTerms { gap: 8px 22px; }
+  .ofCal { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; } .ofCal li { padding: 8px 10px; }
+  .ofEval { padding: 12px 16px; }
+  .ofSigned .ofSig { max-height: 90px; }
+  .ofFoot { font-size: 10px; padding-top: 2px; }
+  /* an unsigned offer printed to be signed by hand */
+  .ofSignLine { display: block !important; }
 }
+.ofSignLine { display: none; }
 .ofPreviewBar { position: sticky; top: 78px; z-index: 15; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 14px 18px; border-radius: 16px; background: #fff; border: 1.5px solid var(--acc); box-shadow: 0 16px 36px -22px rgba(17, 17, 17, 0.45); }
 .ofPreviewBar > div:first-child { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
 .ofPreviewBar b { color: var(--ink); font-size: 14px; }
@@ -3061,3 +3082,5 @@ span.rdPick { display: inline-block; }
 .ofPhoto.hasMap > em { position: absolute; bottom: 12px; left: clamp(18px, 2.6vw, 26px); z-index: 1001; background: rgba(255, 255, 255, 0.92); color: #111; font-style: normal; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 999px; }
 @media print { .ofPhoto.hasMap { break-inside: avoid; } }
 .leaflet-container .leaflet-control-attribution { font-size: 9px; background: rgba(255, 255, 255, 0.75); padding: 1px 5px; }
+.ofWa { display: inline-flex; align-items: center; gap: 8px; }
+.ofWa svg { color: #25D366; }
