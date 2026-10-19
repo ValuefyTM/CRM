@@ -43,6 +43,8 @@ export const MODULES = [
   { k: "users", l: "Utilizatori", group: "Administrare", rights: ["A", "E", "D"] },
   { k: "settings", l: "Setări firmă", group: "Administrare", rights: ["E"], hint: "Datele firmei, facturare, conexiuni Claude." },
   { k: "templates", l: "Fișe de inspecție", group: "Administrare", rights: ["E"] },
+  { k: "anevar", l: "Monitorizare ANEVAR", group: "Administrare", rights: [],
+    hint: "Raportul anual de activitate către ANEVAR (Anexa 4), calculat în timp real: statistici, excluderi, înghețarea anului raportat. Doar pentru cine raportează (proprietarul îl are oricum)." },
 ] as const satisfies readonly ModDef[];
 
 export type ModKey = (typeof MODULES)[number]["k"];

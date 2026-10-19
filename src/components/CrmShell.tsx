@@ -95,6 +95,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
         ]),
         ...group("Administrare", "g-admin", [
           may("users") && { key: "users", label: "Utilizatori", href: `${b}/utilizatori` },
+          may("anevar") && { key: "anevar", label: "Monitorizare ANEVAR", href: `${b}/anevar` },
           // Date firmă, permisiuni, fișe de inspecție, facturare, Claude, import: tabs of Setări.
           !!settings && { key: "settings", label: "Setări", href: settings },
         ]),
