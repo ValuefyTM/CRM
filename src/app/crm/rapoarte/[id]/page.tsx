@@ -82,10 +82,10 @@ function Row({ k, children }: { k: string; children?: React.ReactNode }) {
   return <div><dt>{k}</dt><dd>{children ?? "—"}</dd></div>;
 }
 
-export default async function ReportPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; alocare?: string; bun?: string }> }) {
+export default async function ReportPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; alocare?: string; bun?: string; predare?: string }> }) {
   const { db, user, base } = await staffPage();
   const { id } = await params;
-  const { tab: asked, alocare, bun } = await searchParams;
+  const { tab: asked, alocare, bun, predare } = await searchParams;
   const wanted = asked && OLD_TABS[asked] ? OLD_TABS[asked] : asked;
   const tab: Tab = TABS.find(([k]) => k === wanted)?.[0] ?? "general";
   const r = await getReport(db, id);
@@ -295,8 +295,10 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.8 7L3 21l2-6.2A8 8 0 1 1 21 12z" /></svg>
               Mesaje{messages.length > 0 && <b>{messages.length}</b>}
             </a>
-            {c.docs && <a className="btn btnGold btnSm" href={href("documente")}>{final ? "Livrare raport" : "Încarcă raportul final"}</a>}
-            {c.status && <StatusButton id={r.id} status={r.status} reason={r.suspend_reason} locked={acc.locked} />}
+            {c.docs && <a className="btn btnGold btnSm" href={final && c.deliver && !r.delivered_at ? `${href("documente")}&predare=1` : href("documente")}>{final ? "Livrare raport" : "Încarcă raportul final"}</a>}
+            {/* "Finalizat" goes through the delivery (date, values per asset, euro, approach), never straight to the status. */}
+            {c.status && <StatusButton id={r.id} status={r.status} reason={r.suspend_reason} locked={acc.locked}
+              finish={r.delivered_at ? null : !c.deliver ? "Raportul îl finalizează evaluatorul principal, din „Predă raportul”." : final ? `${href("documente")}&predare=1` : "Încarcă întâi raportul final (PDF semnat) în Documente; apoi îl predai cu valorile."} />}
             {c.status && !acc.locked && !r.glide_id && r.status !== "cancelled" && <StageActions id={r.id} stage={stage} hasVerifier={!!verifier} />}
           </div>
         </div>
@@ -596,7 +598,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                 {r.delivered_at && r.result_value ? <Row k="Rezultat evaluare"><span className="mono num">{lei(r.result_value, cur)}</span>{r.result_eur ? <> · <span className="mono num">{lei(r.result_eur, "€")}</span>{r.eur_rate ? <small className="muted"> · curs BNR {r.eur_rate.toLocaleString("ro-RO", { maximumFractionDigits: 4 })} la {fmtDate(r.report_date)}</small> : null}</> : null}</Row> : null}
               </dl>
               {r.client_notified_at && <p className="hint">Clientul a fost anunțat pe email la {fmtDate(r.client_notified_at, true)}.</p>}
-              {c.deliver && !r.delivered_at && <DeliverButton id={r.id} ready={!!final} number={r.number} suggested={suggested} notifyTo={notifyTo} values={hasValues(r.report_type)} auto={ownIssuer}
+              {c.deliver && !r.delivered_at && <DeliverButton id={r.id} ready={!!final} number={r.number} suggested={suggested} notifyTo={notifyTo} values={hasValues(r.report_type)} auto={ownIssuer} autoOpen={predare === "1"}
                 assets={assets.map((a) => ({ id: a.id, label: assetShort(a), sub: a.full_address ?? a.city, value: a.value, approach: a.approach }))} />}
             </section>
           } />

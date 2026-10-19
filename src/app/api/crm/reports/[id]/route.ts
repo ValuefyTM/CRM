@@ -63,6 +63,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return Response.json({ ok: true });
     }
     // Suspending or cancelling needs the reason: kept on the report (suspend_reason) and posted in the team's messages.
+    // "Finalizat" is the delivery (number, date, values per asset): not a plain change of status.
+    if (b.status === "done" && r.status !== "done") return err("Raportul se finalizează din „Predă raportul”, cu data și valorile pe fiecare bun.", 409);
     const raw = typeof b.reason === "string" ? b.reason : typeof b.suspend_reason === "string" ? b.suspend_reason : "";
     const reason = raw.trim().slice(0, 500);
     const why = b.status === "suspended" || b.status === "cancelled";

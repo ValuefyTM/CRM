@@ -30,7 +30,8 @@ const NEEDS_REASON: Record<string, [label: string, placeholder: string, button: 
 
 /** "Schimbă status" in the report header: a sheet (from the bottom on a phone) with one big button per status. */
 /** `locked`: the report is finished; it can only be reopened ("În lucru"), with the reason. */
-export function StatusButton({ id, status, reason, locked = false }: { id: string; status: string; reason: string | null; locked?: boolean }) {
+/** `finish`: "Finalizat" opens the delivery (a link) or tells why it cannot yet (a message); null: no delivery step (already delivered). */
+export function StatusButton({ id, status, reason, locked = false, finish = null }: { id: string; status: string; reason: string | null; locked?: boolean; finish?: string | null }) {
   const cur = locked ? "done" : status === "draft" ? "in_progress" : status;
   const why_ = (s: string) => (locked && s === "in_progress" ? REOPEN : NEEDS_REASON[s]);
   const [open, setOpen] = useState(false);
@@ -47,6 +48,11 @@ export function StatusButton({ id, status, reason, locked = false }: { id: strin
     location.reload();
   };
   const choose = (s: string) => {
+    // Finishing is the delivery: number, date, the value of each asset (lei, euro, approach).
+    if (s === "done" && s !== cur && finish) {
+      if (finish.startsWith("/")) { location.href = finish; return; }
+      setPick(null); setMsg(finish); return;
+    }
     if (why_(s)) { setPick(s); setWhy(s === cur ? reason ?? "" : ""); setMsg(""); return; }
     if (s === cur) return setOpen(false);
     save(s);
@@ -229,12 +235,16 @@ const fmt = (n: number, d = 0) => n.toLocaleString("ro-RO", { minimumFractionDig
  * the order. For portal and website orders the client gets an email with the download link (unless unticked).
  * `values`: the report values something (not an inspection / information note), so the values are required.
  */
-export function DeliverButton({ id, ready, number, suggested, notifyTo, assets, values, auto = true }: {
+export function DeliverButton({ id, ready, number, suggested, notifyTo, assets, values, auto = true, autoOpen = false }: {
   id: string; ready: boolean; number: string | null; suggested: string; notifyTo: string | null; assets: DeliverAsset[]; values: boolean;
   /** VALUEFY's report: the number of its series, automatic (a collaborating firm's is typed). */
   auto?: boolean;
+  /** Opened right away (from "Finalizat" or "Livrare raport"). */
+  autoOpen?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  // Opened once in the browser (the modal is a portal on document.body, which the server does not have).
+  useEffect(() => { if (autoOpen && ready) setOpen(true); }, [autoOpen, ready]);
   const [f, setF] = useState({ number: number ?? suggested, report_date: new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" }), notify: !!notifyTo });
   const [vals, setVals] = useState<Record<string, { value: string; approach: string }>>(() =>
     Object.fromEntries(assets.map((a) => [a.id, { value: a.value != null ? String(a.value) : "", approach: a.approach ?? "" }])));
