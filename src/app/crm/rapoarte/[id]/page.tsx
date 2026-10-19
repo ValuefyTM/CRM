@@ -503,42 +503,39 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                 panel: (
                   <>
                     <div className="abInspHead">
-                      <span className="abInspTitle">Inspecție</span>
                       <span className={`pill ${pc}`}><i />{pt}</span>
-                      {(a.uvalo_id || a.uvalo_error) && !cancelled && (
-                        <small className="muted">UVALO{a.uvalo_code ? <> · <span className="mono">{a.uvalo_code}</span></> : null} · {UVALO_STATUS[a.uvalo_status ?? ""] ?? (a.uvalo_id ? "trimisă" : "netrimisă")}</small>
-                      )}
+                      {person || (!cancelled && a.inspector) ? <PersonLine id={a.inspector_id ?? a.inspector!} name={a.inspector!} presence={person?.presence} photo={person?.photo} size={24} />
+                        : <small className="muted">{none ? "nu are nevoie de inspecție" : "niciun inspector"}</small>}
                     </div>
-                    <div className="abInspBody">
-                      <div className="abInspInfo">
-                        <div className="abWho">
-                          {person || (!cancelled && a.inspector) ? <PersonLine id={a.inspector_id ?? a.inspector!} name={a.inspector!} presence={person?.presence} photo={person?.photo} sub={person?.seen ?? "inspector"} size={32} />
-                            : <span className="muted">{none ? "Nu are nevoie de inspecție" : "Niciun inspector alocat"}</span>}
-                        </div>
+                    <dl className="abInspKv">
+                      {none && <div><dt>Motiv</dt><dd>{a.no_inspection}</dd></div>}
+                      {!cancelled && a.inspection_status === "done" && <div><dt>Realizată</dt><dd>{a.done_at ? fmtDate(a.done_at, a.done_at.length > 10) : "—"}</dd></div>}
+                      {active && <div><dt>Programată</dt><dd>{a.scheduled_at ? fmtDate(a.scheduled_at, true) : <span className="muted">încă nu</span>}{a.due_on ? <span className="muted"> · termen {fmtDate(a.due_on)}</span> : null}</dd></div>}
+                      {!none && contact && <div><dt>Contact</dt><dd title={contact}>{contact}</dd></div>}
+                      {cancelled && !none && <div><dt>Stare</dt><dd>anulată</dd></div>}
+                      {a.uvalo_error && !cancelled && <div><dt>UVALO</dt><dd className="errTxt" title={a.uvalo_error}>{a.uvalo_error}</dd></div>}
+                    </dl>
+                    {hasSheet && (
+                      <div className="abSheetRow">
+                        {thumb ? <SafeImg src={thumb} alt="" className="abSheetPh" fallback={<span className="abSheetPh" />} /> : <span className="abSheetPh" />}
+                        <span className="abSheetTxt"><b>Fișa de inspecție</b><small>{a.done_at ? fmtDate(a.done_at) : "completată"}</small></span>
+                        {sheetDocs[a.id]
+                          ? <InspSheet doc={sheetDocs[a.id]!} firm={sheetFirm} pdf={`${base}/rapoarte/${r.id}/fisa/${a.id}`} />
+                          : <a className="btn btnNavy btnSm" href={`${base}/rapoarte/${r.id}/fisa/${a.id}`}>Deschide fișa</a>}
+                      </div>
+                    )}
+                    {((fromApp && !cancelled && (a.assigned_by_name || a.instructions)) || active || ((a.uvalo_id) && !cancelled)) && (
+                      <details className="abMore">
+                        <summary>Detalii</summary>
                         <dl className="abInspKv">
-                          {none && <div><dt>Motiv</dt><dd>{a.no_inspection}</dd></div>}
-                          {!cancelled && a.inspection_status === "done" && <div><dt>Realizată</dt><dd>{a.done_at ? fmtDate(a.done_at, a.done_at.length > 10) : "—"}</dd></div>}
-                          {active && <div><dt>Programată</dt><dd>{a.scheduled_at ? fmtDate(a.scheduled_at, true) : <span className="muted">încă nu</span>}</dd></div>}
-                          {active && a.due_on && <div><dt>Termen</dt><dd>{fmtDate(a.due_on)}</dd></div>}
-                          {!none && contact && <div><dt>Contact</dt><dd>{contact}</dd></div>}
                           {fromApp && !cancelled && a.assigned_by_name && <div><dt>Alocată de</dt><dd>{a.assigned_by_name}{a.assigned_at ? `, ${fmtDate(a.assigned_at)}` : ""}</dd></div>}
                           {active && <div><dt>Acte la inspector</dt><dd>{seen ? `${seen} ${seen === 1 ? "act" : "acte"}` : <span className="muted">niciun act</span>}</dd></div>}
                           {fromApp && a.sheet_status === "draft" && active && <div><dt>Fișă</dt><dd>în lucru</dd></div>}
-                          {cancelled && !none && <div><dt>Stare</dt><dd>inspecția a fost anulată</dd></div>}
+                          {a.uvalo_id && !cancelled && <div><dt>UVALO</dt><dd>{a.uvalo_code ? <span className="mono">{a.uvalo_code} · </span> : null}{UVALO_STATUS[a.uvalo_status ?? ""] ?? "trimisă"}</dd></div>}
                           {fromApp && a.instructions && !cancelled && <div className="wide"><dt>Instrucțiuni</dt><dd>{a.instructions}</dd></div>}
-                          {a.uvalo_error && !cancelled && <div className="wide"><dt>UVALO</dt><dd className="errTxt">{a.uvalo_error}</dd></div>}
                         </dl>
-                      </div>
-                      {hasSheet && (
-                        <div className="abSheetBox">
-                          {thumb ? <SafeImg src={thumb} alt="" className="abSheetPh" fallback={<span className="abSheetPh" />} /> : <span className="abSheetPh" />}
-                          <span className="abSheetTxt"><b>Fișa de inspecție</b><small>{[a.done_at && `efectuată ${fmtDate(a.done_at, a.done_at.length > 10)}`, a.inspector].filter(Boolean).join(" · ") || "completată"}</small></span>
-                          {sheetDocs[a.id]
-                            ? <InspSheet doc={sheetDocs[a.id]!} firm={sheetFirm} pdf={`${base}/rapoarte/${r.id}/fisa/${a.id}`} />
-                            : <a className="btn btnNavy btnSm" href={`${base}/rapoarte/${r.id}/fisa/${a.id}`}>Deschide fișa</a>}
-                        </div>
-                      )}
-                    </div>
+                      </details>
+                    )}
                     {mayAssign && active && a.uvalo_error && <UvaloAction report={r.id} inspection={a.inspection_id!} action="push" />}
                     {mayAssign && a.uvalo_id && (a.uvalo_status === "gata" || a.uvalo_status === "pred") && a.inspection_status !== "done" && <UvaloAction report={r.id} inspection={a.inspection_id!} action="import" />}
                     {mayAssign && (

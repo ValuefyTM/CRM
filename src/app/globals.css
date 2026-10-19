@@ -2964,3 +2964,32 @@ span.rdPick { display: inline-block; }
 .abInsp .abSheetBox .btn { grid-column: auto; justify-self: end; }
 .abInsp .abSheetBox .abSheetPh { width: 52px; height: 52px; }
 @container ab (min-width: 720px) { .abInspBody:has(.abSheetBox) { grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); } }
+
+/* Bunuri: bunul în stânga, inspecția compactă în dreapta, în același card */
+.abCard { display: grid; grid-template-columns: minmax(0, 1fr); }
+@container ab (min-width: 760px) { .abCard { grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); } .abInsp { margin: 8px 8px 8px 0; } }
+.abInsp { margin: 0 8px 8px; padding: 10px 12px; gap: 6px; font-size: 12.5px; align-self: stretch; }
+.abInspHead { gap: 6px 8px; }
+.abInspHead .pill { font-size: 11px; }
+.abInspHead .person, .abInspHead > a, .abInspHead > span:not(.pill) { font-size: 12px; }
+.abInspKv { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+.abInspKv div { flex-direction: row; gap: 8px; align-items: baseline; }
+.abInspKv dt { flex: 0 0 74px; font-size: 10px; }
+.abInspKv dd { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.abInspKv div.wide dd { white-space: normal; }
+.abSheetRow { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--ok-line); background: #fff; }
+.abSheetRow .abSheetPh { width: 36px; height: 36px; border-radius: 7px; object-fit: cover; background: var(--cream-2); }
+.abSheetRow .abSheetTxt { display: flex; flex-direction: column; min-width: 0; }
+.abSheetRow .abSheetTxt b { font-size: 12.5px; } .abSheetRow .abSheetTxt small { font-size: 11px; color: var(--muted); }
+.abSheetRow .btn { padding: 5px 10px; font-size: 12px; }
+.abMore summary { cursor: pointer; font-size: 11.5px; font-weight: 700; color: var(--muted); list-style: none; }
+.abMore summary::before { content: "▸ "; } .abMore[open] summary::before { content: "▾ "; }
+.abMore .abInspKv { margin-top: 4px; }
+.abInsp .abPanelActs { padding-top: 6px; gap: 4px 10px; font-size: 12px; }
+.abInsp .abPanelActs .btn { padding: 4px 9px; font-size: 12px; }
+.abTop { padding: 12px 14px; }
+.abTop .abSide { min-width: 0; }
+.abTop .abRow { grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; }
+.abTop .abThumb { width: 44px; height: 44px; }
+.abTop .abRow .abFacts div { white-space: nowrap; }
+.abTop .abRow .abTitle { flex-wrap: wrap; }
