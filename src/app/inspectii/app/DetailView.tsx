@@ -141,12 +141,12 @@ export function DetailView({ ctx, id, item }: { ctx: Ctx; id: string; item: Loca
           {i.year_built != null && <div className="iKv"><span>An construcție</span><b>{i.year_built}</b></div>}
         </section>
 
-        {(i.report_number || i.client || i.purpose) && (
+        {(i.report_number || i.client || i.bank || i.purpose) && (
           <section className="iBox">
             <h3>Lucrarea</h3>
             {i.report_number && <div className="iKv"><span>Raport</span><b>{i.report_number}{i.report_label ? ` · ${i.report_label}` : ""}</b></div>}
             {i.client && <div className="iKv"><span>Client</span><b>{i.client}</b></div>}
-            {i.bank && <div className="iKv"><span>Bancă</span><b>{i.bank}</b></div>}
+            {i.bank && <div className="iKv"><span>Utilizatorul raportului</span><b>{i.bank}</b></div>}
             {i.purpose && <div className="iKv"><span>Scop</span><b>{i.purpose}</b></div>}
           </section>
         )}

@@ -131,6 +131,8 @@ type Row = {
   cf_number: string | null; usable_area: number | null; land_area: number | null; geo: string | null; type: string | null; category: string | null;
   rooms: number | null; floor: string | null; height_regime: string | null; year_built: number | null; construction: string | null;
   vehicle_make: string | null; vehicle_model: string | null; reg_number: string | null; vin: string | null; mileage: number | null;
+  /** the report's client and its user (the bank / recipient), shown to the valuer */
+  client: string | null; report_user: string | null;
 };
 
 /** The question ids (CRM sheets and UVALO's standard ones) that ask what an asset field holds: UVALO pre-fills them. */
@@ -160,8 +162,10 @@ const CONTACT_ROLE: Record<string, string> = { client: "Client", owner: "Proprie
 const rowOf = (db: D1Database, id: string) => db.prepare(`SELECT i.id, i.report_id, i.asset_id, i.status, i.sheet_type, i.template, i.due_on, i.instructions, i.contact_kind, i.contact_name, i.contact_phone,
     i.inspector_id, i.uvalo_id, i.uvalo_docs, u.anevar_no AS legit, COALESCE(NULLIF(u.name, ''), u.email) AS inspector,
     p.full_address, p.city, p.county, p.cad_building, p.cad_land, p.cf_number, p.usable_area, p.land_area, p.geo, p.type, p.category,
-    p.rooms, p.floor, p.height_regime, p.year_built, p.construction, p.vehicle_make, p.vehicle_model, p.reg_number, p.vin, p.mileage
-  FROM inspections i JOIN assets a ON a.id = i.asset_id JOIN crm_properties p ON p.id = a.property_id LEFT JOIN users u ON u.id = i.inspector_id WHERE i.id = ?`).bind(id).first<Row>();
+    p.rooms, p.floor, p.height_regime, p.year_built, p.construction, p.vehicle_make, p.vehicle_model, p.reg_number, p.vin, p.mileage,
+    c.name AS client, b.name AS report_user
+  FROM inspections i JOIN assets a ON a.id = i.asset_id JOIN crm_properties p ON p.id = a.property_id LEFT JOIN users u ON u.id = i.inspector_id
+    LEFT JOIN reports r ON r.id = i.report_id LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id WHERE i.id = ?`).bind(id).first<Row>();
 
 const fail = async (db: D1Database, id: string, e: unknown) => {
   const msg = (e as Error).message ?? String(e);
@@ -188,7 +192,7 @@ export async function pushInspection(db: D1Database, id: string) {
       ref: r.id, legit: r.legit, address: r.full_address || [r.city, r.county].filter(Boolean).join(", ") || "Adresă necompletată",
       cad_nr: r.cad_building || r.cad_land || null, cf_nr: r.cf_number, county: r.county, uat: r.city, lat: geo.lat ?? null, lng: geo.lng ?? null,
       prop_type: (r.category ?? "").toUpperCase() === "BUN MOBIL" ? MOVABLE : PROP[type], area_util: r.usable_area, area_land: r.land_area, contact_name: r.contact_name, contact_phone: r.contact_phone,
-      contact_role: r.contact_kind ? CONTACT_ROLE[r.contact_kind] ?? null : null, facts: factsOf(r), instructions: r.instructions, due_on: r.due_on, ...(key ? { template_ref: tplRef(key) } : {}),
+      contact_role: r.contact_kind ? CONTACT_ROLE[r.contact_kind] ?? null : null, facts: factsOf(r), client: r.client, report_user: r.report_user, instructions: r.instructions, due_on: r.due_on, ...(key ? { template_ref: tplRef(key) } : {}),
     }) });
     // the documents the inspector may open, each sent once
     const sent = new Set(parseJson<string[]>(r.uvalo_docs, []));
