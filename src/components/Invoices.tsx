@@ -68,7 +68,7 @@ export function IssueInvoice({ contract, report, kind = "invoice", label, primar
                   <tbody>
                     {d.lines.map((l, i) => (
                       <tr key={i}><td>{i + 1}</td><td><b>{l.name}</b><div>{l.description}</div></td><td>{d.unit}</td><td>{l.quantity}</td>
-                        <td>{lei(l.price)}</td><td>{lei(l.price * l.quantity)}</td><td>{lei(Math.round(l.price * l.quantity * d.vatPercent) / 100)}</td></tr>
+                        <td>{lei(l.price)}</td><td>{lei(l.price * l.quantity)}</td><td>{lei(l.gross != null ? l.gross * l.quantity - Math.round(l.gross * l.quantity / (1 + d.vatPercent / 100) * 100) / 100 : Math.round(l.price * l.quantity * d.vatPercent) / 100)}</td></tr>
                     ))}
                   </tbody>
                 </table>

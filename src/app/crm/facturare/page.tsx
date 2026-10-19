@@ -68,7 +68,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
                     <td>{x.collab ? "colaborare" : x.contract_number ? `cadru nr. ${x.contract_number}` : "—"}</td>
                     {!own && <td>{x.evaluator ?? <span className="muted">—</span>}</td>}
                     <td>{day(x.finished_at)}</td>
-                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{x.fee ? lei(x.fee) : <span className="pill pillErr"><i />fără onorariu</span>}{canIssue && <> <FeeEdit report={x.id} fee={x.fee} number={x.number} vatPercent={vat} /></>}</td>
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{x.fee ? lei(x.fee) : <span className="pill pillErr"><i />fără onorariu</span>}{canIssue && <> <FeeEdit report={x.id} fee={x.fee} gross={x.fee_gross} number={x.number} vatPercent={vat} /></>}</td>
                     <td>{canIssue ? <span className="actions" style={{ flexWrap: "nowrap" }}><IssueInvoice report={x.id} label="Previzualizează și emite" /><BilledOutside report={x.id} /></span> : <span className="muted">fără drept de emitere</span>}</td>
                   </ClickRow>
                 ))}

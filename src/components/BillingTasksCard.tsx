@@ -36,7 +36,7 @@ export async function BillingTasksCard({ user, base }: { user: WithPerms & { id:
                 <td><b>{niceName(x.party) || "—"}</b><div className="muted">{x.collab ? "colaborare" : x.contract_number ? `contract cadru nr. ${x.contract_number}` : ""}{x.bank_ref ? ` · comanda ${x.bank_ref}` : ""}</div></td>
                 {!own && <td>{x.evaluator ?? <span className="muted">—</span>}</td>}
                 <td>{day(x.finished_at)}</td>
-                <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{x.fee ? lei(x.fee) : <span className="pill pillErr"><i />fără onorariu</span>} <FeeEdit report={x.id} fee={x.fee} number={x.number} vatPercent={vat} /></td>
+                <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{x.fee ? lei(x.fee) : <span className="pill pillErr"><i />fără onorariu</span>} <FeeEdit report={x.id} fee={x.fee} gross={x.fee_gross} number={x.number} vatPercent={vat} /></td>
                 <td><span className="actions" style={{ flexWrap: "nowrap" }}><IssueInvoice report={x.id} label="Previzualizează și emite" /><BilledOutside report={x.id} /></span></td>
               </ClickRow>
             ))}

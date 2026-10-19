@@ -229,6 +229,8 @@ async function openClaimed(db: D1Database, o: Order, actor: { id: string; name: 
   // Several reports (or one more on an existing contract) tell themselves apart by purpose.
   const mainLabel = (several || (o.contract_id && o.source === "direct")) && s0?.purpose ? `${label} · ${s0.purpose}` : label;
 
+  // The fee with VAT of the order (a grid "cu TVA") goes with it when the report keeps the order's fee.
+  const feeGross = !accepted && !several && o.fee_gross != null && fee === o.fee ? o.fee_gross : null;
   await db.batch([
     db.prepare(`INSERT INTO crm_properties (id, category, type, city, full_address, usable_area, description) VALUES (?, ?, ?, ?, ?, ?, ?)`)
       .bind(propertyId, category, type, o.city, where, o.surface_area ?? null,
@@ -240,6 +242,7 @@ async function openClaimed(db: D1Database, o: Order, actor: { id: string; name: 
       .bind(assetId, reportId, propertyId, o.contact_name ? "other" : "client", o.contact_name ?? o.client_name ?? o.creator_name, o.contact_phone ?? o.client_phone),
     ...members(reportId),
     db.prepare("UPDATE orders SET status = 'in_progress', client_id = ?, updated_at = ? WHERE id = ?").bind(clientId, t, o.id),
+    ...(feeGross != null ? [db.prepare("UPDATE reports SET fee_gross = ? WHERE id = ?").bind(feeGross, reportId)] : []),
   ]);
   // The classic contract of the work (portal, website, direct work), unless the order is under a contract already
   // (framework contract of a bank, collaboration, or another report of the same classic contract).

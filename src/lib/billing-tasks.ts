@@ -7,11 +7,11 @@ import { audit } from "./auth";
 import { now } from "./db";
 
 export type BillTask = {
-  id: string; number: string | null; label: string | null; fee: number | null; finished_at: string | null; report_type: string | null;
+  id: string; number: string | null; label: string | null; fee: number | null; fee_gross: number | null; finished_at: string | null; report_type: string | null;
   contract_id: string | null; contract_number: string | null; collab: number; party: string | null; bank_ref: string | null; evaluator: string | null; evaluator_id: string | null;
 };
 
-const SELECT = `SELECT r.id, r.number, r.label, r.fee, COALESCE(r.delivered_at, r.updated_at) AS finished_at, r.report_type, r.contract_id, k.number AS contract_number,
+const SELECT = `SELECT r.id, r.number, r.label, r.fee, r.fee_gross, COALESCE(r.delivered_at, r.updated_at) AS finished_at, r.report_type, r.contract_id, k.number AS contract_number,
     (o.collaboration_id IS NOT NULL) AS collab, COALESCE(e.name, f.name) AS party, o.bank_ref,
     m.user_id AS evaluator_id, (SELECT COALESCE(NULLIF(u.name, ''), u.email) FROM users u WHERE u.id = m.user_id) AS evaluator
   FROM reports r LEFT JOIN contracts k ON k.id = r.contract_id LEFT JOIN entities e ON e.id = k.client_id
@@ -37,7 +37,8 @@ export async function markBilledOutside(db: D1Database, actor: string, reportId:
 }
 
 /** Corrects the fee of a report not invoiced yet (wrong in the grid, negotiated, left for later); its order follows. */
-export async function setReportFee(db: D1Database, actor: string, reportId: string, fee: number) {
+/** `gross`: the fee was given with VAT (the invoice is issued on it, VAT included); null when given without VAT. */
+export async function setReportFee(db: D1Database, actor: string, reportId: string, fee: number, gross: number | null = null) {
   const r = await db.prepare("SELECT id, fee, order_id, invoice_id, billed_outside_at FROM reports WHERE id = ?").bind(reportId)
     .first<{ id: string; fee: number | null; order_id: string | null; invoice_id: string | null; billed_outside_at: string | null }>();
   if (!r) return { ok: false as const, error: "Raportul nu există." };
@@ -45,11 +46,11 @@ export async function setReportFee(db: D1Database, actor: string, reportId: stri
   if (r.billed_outside_at) return { ok: false as const, error: "Raportul e marcat ca facturat din Oblio." };
   const t = now();
   await db.batch([
-    db.prepare("UPDATE reports SET fee = ?, updated_at = ? WHERE id = ?").bind(fee, t, reportId),
-    ...(r.order_id ? [db.prepare("UPDATE orders SET fee = ?, fee_net = CASE WHEN share IS NOT NULL THEN ROUND(? * share, 2) END, updated_at = ? WHERE id = ?").bind(fee, fee, t, r.order_id)] : []),
+    db.prepare("UPDATE reports SET fee = ?, fee_gross = ?, updated_at = ? WHERE id = ?").bind(fee, gross, t, reportId),
+    ...(r.order_id ? [db.prepare("UPDATE orders SET fee = ?, fee_gross = ?, fee_net = CASE WHEN share IS NOT NULL THEN ROUND(? * share, 2) END, updated_at = ? WHERE id = ?").bind(fee, gross, fee, t, r.order_id)] : []),
   ]);
   const lei = (n: number | null) => (n == null ? "—" : `${n.toLocaleString("ro-RO")} lei`);
-  await audit(db, `user:${actor}`, "report.fee", "report", reportId, `${lei(r.fee)} → ${lei(fee)}`);
+  await audit(db, `user:${actor}`, "report.fee", "report", reportId, `${lei(r.fee)} → ${lei(fee)} fără TVA${gross != null ? ` (${lei(gross)} cu TVA)` : ""}`);
   return { ok: true as const };
 }
 

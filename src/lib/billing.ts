@@ -89,7 +89,8 @@ export async function setBillingRule(db: D1Database, actor: string, kind: "contr
 
 // ---------- issuing ----------
 
-export type InvoiceLine = { name: string; description: string; price: number; quantity: number; reportId: string | null };
+/** `gross`: the unit price with VAT, when the fee is known so: issued with the VAT included (the total is exactly it). */
+export type InvoiceLine = { name: string; description: string; price: number; quantity: number; reportId: string | null; gross?: number | null };
 type Party = { id: string | null; name: string; cif: string | null; rc: string | null; address: string | null; city: string | null; county: string | null; email: string | null; phone: string | null; vatPayer: boolean };
 
 const partyOf = async (db: D1Database, entityId: string | null): Promise<Party | null> => {
@@ -101,6 +102,12 @@ const partyOf = async (db: D1Database, entityId: string | null): Promise<Party |
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const totals = (lines: InvoiceLine[], vat: number) => {
+  // Prices with VAT included: the total is their sum, the VAT is taken out of it (as Oblio does).
+  if (vat > 0 && lines.length && lines.every((l) => l.gross != null)) {
+    const total = round2(lines.reduce((s, l) => s + l.gross! * l.quantity, 0));
+    const net = round2(total / (1 + vat / 100));
+    return { net, vat: round2(total - net), total };
+  }
   const net = round2(lines.reduce((s, l) => s + l.price * l.quantity, 0));
   const v = round2(net * vat / 100);
   return { net, vat: v, total: round2(net + v) };
@@ -190,11 +197,11 @@ export const FINISHED_HERE = `(r.delivered_at >= (SELECT COALESCE(MAX(value), '9
 
 export async function draftForReport(db: D1Database, reportId: string): Promise<Draft | { error: string }> {
   const b = await getBilling(db);
-  const r = await db.prepare(`SELECT r.id, r.fee, r.delivered_at, r.status, r.glide_id, r.invoice_id, r.billed_outside_at, r.contract_id, k.kind AS contract_kind, k.client_id AS party_id, k.billing_mode, k.billing_text,
+  const r = await db.prepare(`SELECT r.id, r.fee, r.fee_gross, r.delivered_at, r.status, r.glide_id, r.invoice_id, r.billed_outside_at, r.contract_id, k.kind AS contract_kind, k.client_id AS party_id, k.billing_mode, k.billing_text,
       ${FINISHED_HERE} AS finished_here,
       o.collaboration_id, o.fee_net, c.billing_mode AS collab_mode, c.billing_text AS collab_text, c.firm_id
     FROM reports r LEFT JOIN contracts k ON k.id = r.contract_id LEFT JOIN orders o ON o.id = r.order_id LEFT JOIN collaborations c ON c.id = o.collaboration_id WHERE r.id = ?`).bind(reportId)
-    .first<{ id: string; fee: number | null; delivered_at: string | null; status: string; glide_id: string | null; invoice_id: string | null; billed_outside_at: string | null; contract_id: string | null; contract_kind: string | null; party_id: string | null; finished_here: number;
+    .first<{ id: string; fee: number | null; fee_gross: number | null; delivered_at: string | null; status: string; glide_id: string | null; invoice_id: string | null; billed_outside_at: string | null; contract_id: string | null; contract_kind: string | null; party_id: string | null; finished_here: number;
       billing_mode: BillingMode | null; billing_text: string | null; collaboration_id: string | null; fee_net: number | null; collab_mode: BillingMode | null; collab_text: string | null; firm_id: string | null }>();
   if (!r) return { error: "Raportul nu există." };
   if (r.invoice_id) return { error: "Raportul este deja facturat." };
@@ -211,7 +218,11 @@ export async function draftForReport(db: D1Database, reportId: string): Promise<
   if (!price) return { error: "Raportul nu are onorariu." };
   const text = { ...DEFAULT_TEXT, ...parseJson<BillingText>(collab ? r.collab_text : r.billing_text, {}) };
   const vals = (await reportValues(db, r.id)) ?? {};
-  const lines: InvoiceLine[] = [{ name: text.product || b.product, price, quantity: 1, reportId: r.id, description: fillText(text.line, vals) }];
+  // The fee given with VAT (grid "cu TVA", or typed with VAT): the invoice totals exactly it.
+  // A net fee with more than 2 decimals (taken out of VAT) is invoiced on its amount with VAT, so the total comes out round.
+  const fine = Math.abs(price * 100 - Math.round(price * 100)) > 1e-6;
+  const gross = !b.vatPayer ? null : !collab && r.fee_gross != null ? r.fee_gross : fine ? round2(price * (1 + b.vatPercent / 100)) : null;
+  const lines: InvoiceLine[] = [{ name: text.product || b.product, price, quantity: 1, reportId: r.id, description: fillText(text.line, vals), gross }];
   return finishDraft(db, b, "invoice", party, lines, collab ? null : r.contract_id, r.collaboration_id, fillText(text.mentions, vals));
 }
 
@@ -247,8 +258,8 @@ export async function issue(db: D1Database, actor: string, d: Draft) {
     },
     issueDate: day, dueDate: d.kind === "invoice" ? due : undefined, seriesName: d.series, language: b.language, precision: 2, currency: "RON",
     products: d.lines.map((l) => ({
-      name: l.name, description: l.description, price: l.price, measuringUnit: b.unit, currency: "RON",
-      vatName: b.vatPayer ? b.vatName : "Neplatitor", vatPercentage: b.vatPayer ? b.vatPercent : 0, vatIncluded: false, quantity: l.quantity, productType: "Serviciu",
+      name: l.name, description: l.description, price: l.gross != null && b.vatPayer ? l.gross : round2(l.price), measuringUnit: b.unit, currency: "RON",
+      vatName: b.vatPayer ? b.vatName : "Neplatitor", vatPercentage: b.vatPayer ? b.vatPercent : 0, vatIncluded: l.gross != null && b.vatPayer, quantity: l.quantity, productType: "Serviciu",
     })),
     issuerName: b.issuer || undefined, mentions: d.mentions || undefined,
   };

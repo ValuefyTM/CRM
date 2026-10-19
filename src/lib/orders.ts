@@ -29,6 +29,8 @@ export type Order = Nullable<Pick<PortalFields, "property_type" | "city" | "addr
   assets_json: string | null; reports_json: string | null; statement_id: string | null;
   /** Collaboration: the collaborating firm's number of the report, typed with the order. */
   collab_report_number?: string | null;
+  /** The fee with VAT when known as such (a grid "cu TVA"): the invoice is issued on it, VAT included. */
+  fee_gross?: number | null;
   // joined
   creator_name: string | null; creator_email: string | null; partner_name: string | null; doc_count: number;
   collab_firm: string | null; contract_number: string | null; contract_kind: string | null;

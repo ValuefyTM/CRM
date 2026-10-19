@@ -1,6 +1,7 @@
 import { err, json, staffApi } from "@/lib/api";
 import { mayBillReport, setReportFee } from "@/lib/billing-tasks";
 import { getBilling } from "@/lib/billing";
+import { round4 } from "@/lib/fee-grid";
 
 /**
  * Corrects the fee of a report still to invoice: `{ report, fee, vat? }`. With `vat: true` the amount includes VAT and
@@ -15,7 +16,9 @@ export async function POST(req: Request) {
   if (!(await mayBillReport(a.db, a.user, report))) return err("Poți modifica doar onorariul rapoartelor tale.", 403);
   const n = typeof b.fee === "number" ? b.fee : parseFloat(String(b.fee ?? "").replace(/\s/g, "").replace(",", "."));
   if (!Number.isFinite(n) || n <= 0 || n >= 1e7) return err("Scrie onorariul (lei).");
-  const net = b.vat === true ? n / (1 + (await getBilling(a.db)).vatPercent / 100) : n;
-  const r = await setReportFee(a.db, a.user.id, report, Math.round(net * 100) / 100);
+  // With VAT: the net keeps 4 decimals and the amount with VAT is kept too, so the invoice totals exactly that amount.
+  const gross = b.vat === true ? Math.round(n * 100) / 100 : null;
+  const net = gross != null ? round4(gross / (1 + (await getBilling(a.db)).vatPercent / 100)) : round4(n);
+  const r = await setReportFee(a.db, a.user.id, report, net, gross);
   return r.ok ? Response.json({ ok: true }) : err(r.error);
 }

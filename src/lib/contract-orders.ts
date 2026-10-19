@@ -5,7 +5,7 @@ import { now, uuid } from "./db";
 import { audit } from "./auth";
 import { propertyType } from "./process-order";
 import { capType, type AssetInput } from "./asset-labels";
-import { feeKindOf, netFromGrid, parseFeeGrid } from "./fee-grid";
+import { feeKindOf, grossFromGrid, netFromGrid, parseFeeGrid } from "./fee-grid";
 import { getBilling } from "./billing";
 
 export type ContractChoice = {
@@ -29,7 +29,7 @@ export async function contractChoices(db: D1Database, onlyFor?: string) {
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const amount = (v: unknown) => {
   const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(/\s/g, "").replace(",", "."));
-  return Number.isFinite(n) && n >= 0 && n < 1e7 ? Math.round(n * 100) / 100 : null;
+  return Number.isFinite(n) && n >= 0 && n < 1e7 ? Math.round(n * 10000) / 10000 : null; // 4 decimals: a fee out of VAT
 };
 
 /**
@@ -79,6 +79,7 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
   const contactPhone = contactName ? main.contact_phone : null;
   const ordered = /^\d{4}-\d{2}-\d{2}$/.test(str(b.ordered_on, 10)) ? str(b.ordered_on, 10) : now().slice(0, 10);
   let fee = amount(b.fee);
+  let feeGross: number | null = null;
   let contract: ContractChoice | null = null, collab: CollabChoice | null = null;
 
   if (kind === "bank") {
@@ -88,7 +89,10 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
     // The fee: the one typed, else the contract's grid for the kind of the main asset (net of VAT), else the contract's standard fee.
     // Without any: the fee is required, unless it is left for later ("Completez mai târziu").
     const grid = parseFeeGrid(contract.fee_grid);
-    fee ??= netFromGrid(grid, feeKindOf(main.category, main.type), (await getBilling(db)).vatPercent) ?? (contract.fee || null); // 0 in the old CRM = no fee set
+    const vat = (await getBilling(db)).vatPercent, kindOf = feeKindOf(main.category, main.type);
+    fee ??= netFromGrid(grid, kindOf, vat) ?? (contract.fee || null); // 0 in the old CRM = no fee set
+    // The grid's fee with VAT: the invoice is issued on it, VAT included (its total is exactly the grid's amount).
+    feeGross = grossFromGrid(grid, kindOf, vat, fee);
     if (fee == null && b.fee_later !== true) {
       return { ok: false as const, error: grid ? `Tipul bunului principal (${capType(main.type) || "—"}) nu e în grila de tarife a contractului: completează tariful sau bifează „Completez mai târziu”.` : "Completează tariful sau bifează „Completez mai târziu”." };
     }
@@ -114,6 +118,7 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
       str(b.report_type, 120) || contract?.report_type || null, fee, share, fee != null && share != null ? Math.round(fee * share * 100) / 100 : null,
       ordered, t, actor, t, t)
     .run();
+  if (feeGross != null) await db.prepare("UPDATE orders SET fee_gross = ? WHERE id = ?").bind(feeGross, id).run();
   if (kind === "collab") {
     await db.prepare("UPDATE orders SET seq = (SELECT COALESCE(MAX(seq), 0) + 1 FROM orders) WHERE id = ? AND seq IS NULL").bind(id).run();
     // The collaborating firm's number of the report (VALUEFY's reports are numbered automatically).

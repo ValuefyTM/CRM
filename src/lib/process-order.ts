@@ -7,7 +7,7 @@ import { getOrder } from "./orders";
 import { openDossier } from "./dossier";
 import { addAsset, updateAsset, validateAsset } from "./assets";
 import { capType, type AssetInput } from "./asset-labels";
-import { feeKindOf, netFromGrid, parseFeeGrid } from "./fee-grid";
+import { feeKindOf, grossFromGrid, netFromGrid, parseFeeGrid } from "./fee-grid";
 import { getBilling } from "./billing";
 import type { User } from "./users";
 
@@ -15,7 +15,7 @@ const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0
 const id_ = (v: unknown) => (typeof v === "string" && /^[\w-]{1,80}$/.test(v) ? v : null);
 const amount = (v: unknown) => {
   const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(/\s/g, "").replace(",", "."));
-  return Number.isFinite(n) && n > 0 && n < 1e7 ? Math.round(n * 100) / 100 : null;
+  return Number.isFinite(n) && n > 0 && n < 1e7 ? Math.round(n * 10000) / 10000 : null; // 4 decimals
 };
 
 /** Order property type (portal vocabulary) from the asset's category / type. */
@@ -61,9 +61,11 @@ export async function processBankOrder(db: D1Database, user: User, orderId: stri
   // The fee: the one typed, else the contract's grid for the kind of the main asset (net of VAT), else the one already on the order,
   // else the contract's standard fee. Bank orders need one, unless it is left for later ("Completez mai târziu").
   let fee = amount(d.fee);
+  let feeGross: number | null = null;
+  const k = contract ? await db.prepare("SELECT fee, fee_grid FROM contracts WHERE id = ?").bind(contract).first<{ fee: number | null; fee_grid: string | null }>() : null;
+  const grid = parseFeeGrid(k?.fee_grid), vat = contract ? (await getBilling(db)).vatPercent : 0, kindOf = feeKindOf(main.category, main.type);
   if (contract && fee == null) {
-    const k = await db.prepare("SELECT fee, fee_grid FROM contracts WHERE id = ?").bind(contract).first<{ fee: number | null; fee_grid: string | null }>();
-    fee = netFromGrid(parseFeeGrid(k?.fee_grid), feeKindOf(main.category, main.type), (await getBilling(db)).vatPercent) ?? o.fee ?? (k?.fee || null);
+    fee = netFromGrid(grid, kindOf, vat) ?? o.fee ?? (k?.fee || null);
     if (fee == null && o.source === "bank" && d.fee_later !== true) {
       return { ok: false as const, error: k?.fee_grid ? `Tipul bunului principal (${capType(main.type) || "—"}) nu e în grila de tarife a contractului: completează onorariul sau bifează „Completez mai târziu”.` : "Completează onorariul sau bifează „Completez mai târziu”." };
     }
@@ -79,6 +81,9 @@ export async function processBankOrder(db: D1Database, user: User, orderId: stri
       propertyType(main), main.city, main.full_address, main.usable_area, extra, extra, t, t, orderId)
     .run();
 
+  // The grid's fee with VAT (a grid "cu TVA"): the invoice is issued on it, VAT included.
+  feeGross = grossFromGrid(grid, kindOf, vat, fee);
+  await db.prepare("UPDATE orders SET fee_gross = ? WHERE id = ?").bind(feeGross, orderId).run();
   // A collaborating firm's report number (VALUEFY's are given automatically when the report opens).
   if (o.collaboration_id && str(d.report_number, 30)) await db.prepare("UPDATE orders SET collab_report_number = ? WHERE id = ?").bind(str(d.report_number, 30), orderId).run();
   const due = /^\d{4}-\d{2}-\d{2}$/.test(str(d.due_on, 10)) ? str(d.due_on, 10) : null;

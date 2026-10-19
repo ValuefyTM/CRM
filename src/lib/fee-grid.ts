@@ -38,11 +38,21 @@ export function parseFeeGrid(raw: string | null | undefined): FeeGrid | null {
 /** The grid's amount for a kind, as listed (with or without VAT). */
 export const gridRate = (grid: FeeGrid | null, kind: FeeKind | null) => (grid && kind && grid.rates[kind]) || null;
 
+/** Fees keep 4 decimals: a fee taken out of VAT gives back the exact amount with VAT. */
+export const round4 = (n: number) => Math.round(n * 10000) / 10000;
+
 /** The net fee (without VAT) for a kind: the grid's amount, taken out of VAT when the grid is "cu TVA". */
 export function netFromGrid(grid: FeeGrid | null, kind: FeeKind | null, vatPercent: number) {
   const r = gridRate(grid, kind);
   if (r == null) return null;
-  return grid!.vat ? Math.round((r / (1 + vatPercent / 100)) * 100) / 100 : r;
+  return grid!.vat ? round4(r / (1 + vatPercent / 100)) : r;
+}
+
+/** The fee with VAT when the grid gives it so ("cu TVA"), for the given net fee (only when that net is the grid's own). */
+export function grossFromGrid(grid: FeeGrid | null, kind: FeeKind | null, vatPercent: number, net: number | null) {
+  if (!grid?.vat || net == null) return null;
+  const n = netFromGrid(grid, kind, vatPercent);
+  return n != null && Math.abs(n - net) < 0.00005 ? gridRate(grid, kind) : null;
 }
 
 /** Validates a grid sent from the form; `null` = no grid. */
