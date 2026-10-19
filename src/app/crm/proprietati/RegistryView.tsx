@@ -119,7 +119,7 @@ export function RegistryView(p: {
   const filters = (
     <>
       <form className="filterBar" onSubmit={(e) => { e.preventDefault(); go({ q: q.trim() || undefined }); }}>
-        <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută adresă, localitate, CF, nr. cadastral, nr. raport… ↵" aria-label="Caută" />
+        <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută adresă, CF, nr. raport, client, bancă… (mai multe, cu virgulă) ↵" title="Mai mulți termeni separați prin virgulă: toți trebuie găsiți, în proprietate sau în rapoartele ei (client, utilizatorul raportului / banca, evaluator, scop, nr. raport)" aria-label="Caută" />
         <FilterSelect label="Categorie" value={c.cat ?? ""} options={p.cats} onChange={(v) => go({ cat: v || undefined, tip: undefined })} />
         <FilterSelect label="Tip" value={c.tip ?? ""} options={p.types} onChange={(v) => go({ tip: v || undefined })} />
         <FilterSelect label="Județ" value={c.county ?? ""} options={p.counties} onChange={(v) => go({ county: v || undefined, city: undefined })} all="Toate" />

@@ -79,11 +79,17 @@ function where(f: RegistryFilters, viewer?: RegistryViewer) {
     const d = new Date(); d.setMonth(d.getMonth() - n(f.luni)!);
     w.push("p.last_date >= ?"); a.push(d.toISOString().slice(0, 10));
   }
-  const q = f.q?.trim();
-  if (q) {
-    const like = `%${q.replace(/[%_]/g, "")}%`;
-    w.push("(p.full_address LIKE ? OR p.street LIKE ? OR p.city LIKE ? OR p.cf_number = ? OR p.cad_building = ? OR p.cad_land = ? OR p.report_number = ?)");
-    a.push(like, like, like, q, q, q, q);
+  // Several terms separated by commas, all of them to be found ("BRD, Giroc, Popescu"): each in the property itself or in
+  // one of its reports — number, label, client, the report's user (the bank), issuer, purpose, the team.
+  const terms = (f.q ?? "").split(",").map((t) => t.trim()).filter(Boolean).slice(0, 8);
+  for (const t of terms) {
+    const like = `%${t.replace(/[%_]/g, "")}%`;
+    w.push(`(p.full_address LIKE ? OR p.street LIKE ? OR p.city LIKE ? OR p.county LIKE ? OR p.type LIKE ? OR p.cf_number LIKE ? OR p.cad_building = ? OR p.cad_land = ?
+      OR EXISTS (SELECT 1 FROM assets ax JOIN reports rx ON rx.id = ax.report_id
+        LEFT JOIN entities ec ON ec.id = rx.client_id LEFT JOIN entities eb ON eb.id = rx.recipient_id LEFT JOIN entities ei ON ei.id = rx.issuer_id
+        WHERE ax.property_id = p.id AND (rx.number = ? OR rx.label LIKE ? OR ec.name LIKE ? OR ec.cui = ? OR eb.name LIKE ? OR eb.code LIKE ? OR ei.name LIKE ? OR rx.purpose LIKE ?
+          OR EXISTS (SELECT 1 FROM report_members mx JOIN users ux ON ux.id = mx.user_id WHERE mx.report_id = rx.id AND COALESCE(NULLIF(ux.name, ''), ux.email) LIKE ?))))`);
+    a.push(like, like, like, like, like, like, t, t, t, like, like, t, like, like, like, like, like);
   }
   return { sql: `WHERE ${w.join(" AND ")}`, args: a };
 }
