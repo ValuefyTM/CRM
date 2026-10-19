@@ -70,7 +70,7 @@ export const orderRef = (seq: number) => `CO-${seq}`;
 export const STAGES = ["Comandă primită", "Ofertă acceptată", "Inspecție programată", "Inspecție realizată", "Raport în lucru", "În verificare", "Raport livrat"];
 
 export const ACCEPT = ".pdf,.jpg,.jpeg,.png,.heic,.webp,.doc,.docx";
-export const MAX_FILE_MB = 20;
+export const MAX_FILE_MB = 40;
 
 /** Status pill for an order. New orders show whether documents are missing; processed ones (Glide) their outcome. */
 export const orderStatus = (o: { docs_missing: number; status?: string }): [string, string] => {
