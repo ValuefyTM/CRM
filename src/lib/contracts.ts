@@ -17,6 +17,8 @@ export type Contract = {
 export type ContractRow = Contract & {
   client: string | null; client_kind: string | null; reports: number; open: number; done: number; report_id: string | null; report_number: string | null;
   report_status: string | null; report_label: string | null; month: number;
+  /** the bank's logo (framework contracts) and whether its fee grid is set */
+  client_logo: string | null; has_grid: number;
 };
 /** `scope`: only the contracts the user works on (Permisiuni: Contracte, „Pe ce date”; see scope.ts). */
 export type ContractFilters = { tip?: string; an?: string; stare?: string; q?: string; page?: number; scope?: ScopeFilter };
@@ -119,7 +121,7 @@ export async function listContracts(db: D1Database, f: ContractFilters) {
   const page = Math.max(1, f.page ?? 1);
   const month = bucharestDay().slice(0, 7);
   const [rows, total] = await Promise.all([
-    db.prepare(`SELECT k.id, k.glide_id, k.kind, k.number, k.signed_on, k.client_id, k.currency, k.fee, k.services, k.valuation_types, k.report_type, k.purpose, k.notes, k.created_at, k.updated_at, k.sign_sent_at, k.signed_at, k.closed_on, k.billing_mode, e.name AS client, e.kind AS client_kind,
+    db.prepare(`SELECT k.id, k.glide_id, k.kind, k.number, k.signed_on, k.client_id, k.currency, k.fee, k.services, k.valuation_types, k.report_type, k.purpose, k.notes, k.created_at, k.updated_at, k.sign_sent_at, k.signed_at, k.closed_on, k.billing_mode, e.name AS client, e.kind AS client_kind, e.logo_url AS client_logo, k.fee_grid IS NOT NULL AS has_grid,
         (SELECT COUNT(*) FROM reports r WHERE r.contract_id = k.id) AS reports,
         (SELECT COUNT(*) FROM reports r WHERE r.contract_id = k.id AND ${OPEN}) AS open,
         (SELECT COUNT(*) FROM reports r WHERE r.contract_id = k.id AND ${DONE}) AS done,
@@ -127,7 +129,7 @@ export async function listContracts(db: D1Database, f: ContractFilters) {
         x.id AS report_id, x.number AS report_number, x.status AS report_status, x.label AS report_label
       FROM contracts k LEFT JOIN entities e ON e.id = k.client_id
         LEFT JOIN reports x ON x.id = (SELECT r.id FROM reports r WHERE r.contract_id = k.id ORDER BY r.created_at DESC LIMIT 1)
-      ${sql} ORDER BY k.kind = 'framework' DESC, k.signed_on DESC, CAST(k.number AS INTEGER) DESC LIMIT ${CONTRACT_PAGE} OFFSET ?`)
+      ${sql} ORDER BY k.kind = 'framework' DESC, ${f.tip === "cadru" ? "reports DESC, " : ""}k.signed_on DESC, CAST(k.number AS INTEGER) DESC LIMIT ${CONTRACT_PAGE} OFFSET ?`)
       .bind(month, ...args, (page - 1) * CONTRACT_PAGE).all<ContractRow>(),
     db.prepare(`SELECT COUNT(*) AS n FROM contracts k LEFT JOIN entities e ON e.id = k.client_id ${sql}`).bind(...args).first<{ n: number }>(),
   ]);
@@ -145,15 +147,44 @@ export async function contractStats(db: D1Database) {
         SUM(kind = 'framework' AND closed_on IS NULL) AS framework,
         (SELECT COUNT(*) FROM reports r JOIN contracts f ON f.id = r.contract_id WHERE f.kind = 'framework' AND substr(COALESCE(r.received_on, r.created_at), 1, 7) = ?2) AS framework_month,
         MAX(CASE WHEN kind = 'classic' THEN CAST(number AS INTEGER) END) AS last,
-        SUM(sign_sent_at IS NOT NULL AND signed_at IS NULL) AS unsigned
+        SUM(sign_sent_at IS NOT NULL AND signed_at IS NULL) AS unsigned,
+        SUM(kind = 'classic') AS classic,
+        SUM(kind = 'framework' AND closed_on IS NOT NULL) AS framework_closed,
+        SUM(kind = 'framework' AND closed_on IS NULL AND billing_mode IS NULL) AS framework_nobilling,
+        SUM(kind = 'framework' AND closed_on IS NULL AND fee_grid IS NULL) AS framework_nogrid,
+        (SELECT COUNT(*) FROM reports r JOIN contracts f ON f.id = r.contract_id WHERE f.kind = 'framework' AND ${OPEN}) AS framework_open
       FROM contracts k`).bind(year, month)
-      .first<{ year: number | null; month: number | null; value: number | null; empty: number | null; framework: number | null; framework_month: number | null; last: number | null; unsigned: number | null }>(),
+      .first<{ year: number | null; month: number | null; value: number | null; empty: number | null; framework: number | null; framework_month: number | null; last: number | null; unsigned: number | null;
+        classic: number | null; framework_closed: number | null; framework_nobilling: number | null; framework_nogrid: number | null; framework_open: number | null }>(),
     db.prepare("SELECT substr(signed_on, 1, 4) AS k, COUNT(*) AS n FROM contracts WHERE signed_on IS NOT NULL GROUP BY k ORDER BY k DESC").all<{ k: string; n: number }>(),
   ]);
   return {
     year: s?.year ?? 0, month: s?.month ?? 0, value: s?.value ?? 0, empty: s?.empty ?? 0, framework: s?.framework ?? 0, frameworkMonth: s?.framework_month ?? 0,
     next: String((s?.last ?? 0) + 1), years: years.results, unsigned: s?.unsigned ?? 0,
+    classic: s?.classic ?? 0, frameworkClosed: s?.framework_closed ?? 0, frameworkNoBilling: s?.framework_nobilling ?? 0, frameworkNoGrid: s?.framework_nogrid ?? 0, frameworkOpen: s?.framework_open ?? 0,
   };
+}
+
+export type CollabRow = {
+  id: string; number: string | null; signed_on: string | null; share: number | null; billing_mode: string | null; firm_id: string; firm: string; logo: string | null;
+  orders: number; month: number; open: number; delivered: number; last_order: string | null;
+};
+
+/** The collaborations with other valuation firms (the work they send us), with their activity. `q`: the firm's name, CUI or the agreement's number. */
+export async function listCollaborations(db: D1Database, q?: string) {
+  const month = bucharestDay().slice(0, 7);
+  const term = q?.trim();
+  const like = term ? `%${term.replace(/[%_]/g, "")}%` : null;
+  const { results } = await db.prepare(`SELECT c.id, c.number, c.signed_on, c.share, c.billing_mode, e.id AS firm_id, e.name AS firm, e.logo_url AS logo,
+      (SELECT COUNT(*) FROM orders o WHERE o.collaboration_id = c.id) AS orders,
+      (SELECT COUNT(*) FROM orders o WHERE o.collaboration_id = c.id AND substr(o.created_at, 1, 7) = ?1) AS month,
+      (SELECT COUNT(*) FROM reports r JOIN orders o ON o.id = r.order_id WHERE o.collaboration_id = c.id AND ${OPEN}) AS open,
+      (SELECT COUNT(*) FROM reports r JOIN orders o ON o.id = r.order_id WHERE o.collaboration_id = c.id AND ${DONE}) AS delivered,
+      (SELECT MAX(o.created_at) FROM orders o WHERE o.collaboration_id = c.id) AS last_order
+    FROM collaborations c JOIN entities e ON e.id = c.firm_id
+    ${like ? "WHERE e.name LIKE ?2 OR e.cui LIKE ?2 OR c.number = ?3" : ""}
+    ORDER BY orders DESC, e.name`).bind(...(like ? [month, like, term] : [month])).all<CollabRow>();
+  return results;
 }
 
 export type ContractReport = {
