@@ -2924,3 +2924,13 @@ span.rdPick { display: inline-block; }
 .rdInspNote { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; }
 .rdInspNote small { font-size: 11px; }
 .rdInspBtn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Acte: lista în stânga; în dreapta „Adaugă acte noi” deasupra livrabilelor. Pe ecran îngust: adăugare, listă, livrabile. */
+.rdLayout { grid-template-areas: "list drop" "list deliver"; grid-template-rows: auto 1fr; }
+.rdLayout > .rdCard { grid-area: list; }
+.rdLayout > .rdDropCard { grid-area: drop; }
+.rdLayout > .rdDeliver { grid-area: deliver; position: static; }
+.rdLayout.noDeliver { grid-template-areas: "list"; grid-template-rows: auto; }
+@media (max-width: 1100px) {
+  .rdLayout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "drop" "list" "deliver"; grid-template-rows: auto; }
+}

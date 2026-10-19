@@ -145,10 +145,10 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
             <b>{busy ? "Se încarcă…" : "Adaugă acte noi"}</b>
             <small>Trage fișierele aici sau <button type="button" className="linkBtn" onClick={() => input.current?.click()}>alege de pe calculator</button>. Tipul (CF, releveu, act de proprietate…) se recunoaște din nume și îl poți schimba. Bifa „La inspector” arată ce vede inspectorul: implicit CF și releveul.</small>
           </span>
-          {many && (
+          {assets.length > 0 && (
             <label className="rdTarget">Atribuie la
               <select className="select selectSm" value={target} onChange={(e) => setTarget(e.target.value)}>
-                <option value="">Tot raportul</option>
+                <option value="">Dosarul general (tot raportul)</option>
                 {assets.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
               </select>
             </label>
@@ -292,7 +292,8 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
       )}
       {missing && <div className="rdMissing">{missing}</div>}
     </section>
-    {deliver && <aside className="rdDeliver">{edit && <section className="card rdDropCard">{dropZone}</section>}{deliver}</aside>}
+    {deliver && edit && <section className="card rdDropCard">{dropZone}</section>}
+    {deliver && <aside className="rdDeliver">{deliver}</aside>}
     </div>
   );
 }
