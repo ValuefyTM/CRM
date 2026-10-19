@@ -3018,3 +3018,6 @@ span.rdPick { display: inline-block; }
 .repNo { display: inline-flex; align-items: center; gap: 5px; }
 .paidDot { width: 7px; height: 7px; border-radius: 50%; background: #E0645A; opacity: .75; flex-shrink: 0; }
 .paidDot.on { background: #3FA36B; opacity: .85; }
+.blAlert { display: flex; flex-direction: column; gap: 4px; min-width: 170px; }
+.blAlert .select { height: 34px; font-size: 12.5px; }
+.bellIcon.k-collect { background: #fdecea; color: #b5382b; font-size: 9.5px; }

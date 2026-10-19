@@ -3,6 +3,7 @@
 // - framework contracts (banks) and collaborations: per their rule — not from the CRM, per order once the report is
 //   approved (delivered), or monthly on the statement.
 // Every document issued is kept here with a copy of its PDF.
+import { COLLECT_ALERT_DAYS, COLLECT_ALERT_TO, type CollectAlert, type CollectAlertTo } from "./collect-alert";
 import { bucharestDay, now, parseJson, uuid } from "./db";
 import { audit } from "./auth";
 import { bucket } from "./orders";
@@ -69,12 +70,26 @@ export async function saveBilling(db: D1Database, actor: string, b: Record<strin
 /** The billing rule of every framework contract and collaboration (their own, else the default). */
 export async function billingRules(db: D1Database) {
   const [contracts, collabs] = await Promise.all([
-    db.prepare(`SELECT k.id, k.number, k.billing_mode, k.billing_text IS NOT NULL AS custom, e.name AS party, (SELECT COUNT(*) FROM reports r WHERE r.contract_id = k.id) AS reports
-      FROM contracts k LEFT JOIN entities e ON e.id = k.client_id WHERE k.kind = 'framework' ORDER BY e.name`).all<{ id: string; number: string | null; billing_mode: BillingMode | null; custom: number; party: string | null; reports: number }>(),
-    db.prepare(`SELECT c.id, c.number, c.billing_mode, c.billing_text IS NOT NULL AS custom, e.name AS party, c.share, (SELECT COUNT(*) FROM orders o WHERE o.collaboration_id = c.id) AS orders
-      FROM collaborations c JOIN entities e ON e.id = c.firm_id ORDER BY e.name`).all<{ id: string; number: string | null; billing_mode: BillingMode | null; custom: number; party: string; share: number | null; orders: number }>(),
+    db.prepare(`SELECT k.id, k.number, k.billing_mode, k.billing_text IS NOT NULL AS custom, e.name AS party, (SELECT COUNT(*) FROM reports r WHERE r.contract_id = k.id) AS reports, k.collect_alert_days, k.collect_alert_to
+      FROM contracts k LEFT JOIN entities e ON e.id = k.client_id WHERE k.kind = 'framework' ORDER BY e.name`).all<{ id: string; number: string | null; billing_mode: BillingMode | null; custom: number; party: string | null; reports: number } & CollectAlert>(),
+    db.prepare(`SELECT c.id, c.number, c.billing_mode, c.billing_text IS NOT NULL AS custom, e.name AS party, c.share, (SELECT COUNT(*) FROM orders o WHERE o.collaboration_id = c.id) AS orders, c.collect_alert_days, c.collect_alert_to
+      FROM collaborations c JOIN entities e ON e.id = c.firm_id ORDER BY e.name`).all<{ id: string; number: string | null; billing_mode: BillingMode | null; custom: number; party: string; share: number | null; orders: number } & CollectAlert>(),
   ]);
   return { contracts: contracts.results, collabs: collabs.results };
+}
+
+export type { CollectAlert, CollectAlertTo };
+
+export async function setCollectAlert(db: D1Database, actor: string, kind: "contract" | "collab", id: string, days: number | null, to: string | null) {
+  const d = days != null && COLLECT_ALERT_DAYS.some(([x]) => x === days) ? days : null;
+  const t = d == null ? null : COLLECT_ALERT_TO.some(([x]) => x === to) ? to : "both";
+  const r = kind === "contract"
+    ? await db.prepare("UPDATE contracts SET collect_alert_days = ?, collect_alert_to = ?, updated_at = ? WHERE id = ? AND kind = 'framework'").bind(d, t, now(), id).run()
+    : await db.prepare("UPDATE collaborations SET collect_alert_days = ?, collect_alert_to = ? WHERE id = ?").bind(d, t, id).run();
+  if (!r.meta.changes) return { ok: false as const, error: "Contractul nu există." };
+  await audit(db, `user:${actor}`, "settings.collect_alert", "settings", "billing",
+    `alertă încasare ${kind === "contract" ? "contract cadru" : "colaborare"} ${id}: ${d == null ? "fără" : `${COLLECT_ALERT_DAYS.find(([x]) => x === d)?.[1]} · ${COLLECT_ALERT_TO.find(([x]) => x === t)?.[1]}`}`);
+  return { ok: true as const };
 }
 
 export async function setBillingRule(db: D1Database, actor: string, kind: "contract" | "collab", id: string, mode: string | null) {

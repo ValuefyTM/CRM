@@ -3,12 +3,40 @@
 import { useEffect, useState } from "react";
 import type { BillingMode, BillingSettings } from "@/lib/billing";
 import { BillingTextEdit } from "./BillingTextEdit";
+import { COLLECT_ALERT_DAYS, COLLECT_ALERT_TO, type CollectAlert } from "@/lib/collect-alert";
 
 type Rules = {
-  contracts: { id: string; number: string | null; billing_mode: BillingMode | null; custom: number; party: string | null; reports: number }[];
-  collabs: { id: string; number: string | null; billing_mode: BillingMode | null; custom: number; party: string; share: number | null; orders: number }[];
+  contracts: ({ id: string; number: string | null; billing_mode: BillingMode | null; custom: number; party: string | null; reports: number } & CollectAlert)[];
+  collabs: ({ id: string; number: string | null; billing_mode: BillingMode | null; custom: number; party: string; share: number | null; orders: number } & CollectAlert)[];
 };
 type Conn = { ok: boolean; error?: string; companies?: { cif: string; company: string }[]; cif?: string; series?: { type: string; name: string; next: string; default: number | boolean }[]; vat?: { name: string; percent: number; default: boolean }[] };
+
+/**
+ * The alert "inspection done, report not collected" of one framework contract / collaboration: when (days after the
+ * inspection, or none) and to whom. Saved on change.
+ */
+function AlertCell({ kind, row, edit, onSaved }: { kind: "contract" | "collab"; row: CollectAlert & { id: string }; edit: boolean; onSaved: (ok: boolean) => void }) {
+  const [days, setDays] = useState(row.collect_alert_days);
+  const [to, setTo] = useState(row.collect_alert_to ?? "both");
+  const save = async (d: number | null, t: string) => {
+    setDays(d); setTo(t as typeof to);
+    const r = await fetch("/api/crm/billing/rules", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, id: row.id, alert: { days: d, to: t } }) }).catch(() => null);
+    onSaved(!!r?.ok);
+  };
+  return (
+    <span className="blAlert">
+      <select className="select" value={days == null ? "" : String(days)} disabled={!edit} onChange={(e) => save(e.target.value === "" ? null : Number(e.target.value), to)}>
+        <option value="">Fără alertă</option>
+        {COLLECT_ALERT_DAYS.map(([d, l]) => <option key={d} value={d}>{l}</option>)}
+      </select>
+      {days != null && (
+        <select className="select" value={to} disabled={!edit} onChange={(e) => save(days, e.target.value)} aria-label="Cui se trimite alerta">
+          {COLLECT_ALERT_TO.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+        </select>
+      )}
+    </span>
+  );
+}
 
 /** The billing settings: Oblio connection (tested live), documents, direct clients, framework contracts and collaborations. */
 export function BillingPanel({ edit, initial, creds, rules, modes, flows }: {
@@ -157,7 +185,7 @@ export function BillingPanel({ edit, initial, creds, rules, modes, flows }: {
         </div>
         <div className="tableWrap">
           <table className="table">
-            <thead><tr><th>Partener</th><th>Contract</th><th>Lucrări</th><th>Când se facturează</th><th>Ce scrie pe factură</th></tr></thead>
+            <thead><tr><th>Partener</th><th>Contract</th><th>Lucrări</th><th>Când se facturează</th><th>Alertă încasare</th><th>Ce scrie pe factură</th></tr></thead>
             <tbody>
               {rules.contracts.map((k) => (
                 <tr key={k.id}>
@@ -168,6 +196,7 @@ export function BillingPanel({ edit, initial, creds, rules, modes, flows }: {
                     <option value="">Implicit ({modes.find(([m]) => m === f.frameworkDefault)?.[1]})</option>
                     {modes.map(([m, l]) => <option key={m} value={m} disabled={m === "monthly"}>{m === "monthly" ? `${l} (mai târziu)` : l}</option>)}
                   </select></td>
+                  <td><AlertCell kind="contract" row={k} edit={edit} onSaved={(ok) => setRuleMsg(ok ? "Alerta a fost salvată." : "Nu am putut salva alerta.")} /></td>
                   <td><BillingTextEdit kind="contract" id={k.id} party={k.party ?? "contract cadru"} custom={!!k.custom} product={f.product} /></td>
                 </tr>
               ))}
@@ -180,13 +209,15 @@ export function BillingPanel({ edit, initial, creds, rules, modes, flows }: {
                     <option value="">Implicit ({modes.find(([m]) => m === f.collabDefault)?.[1]})</option>
                     {modes.map(([m, l]) => <option key={m} value={m} disabled={m === "monthly"}>{m === "monthly" ? `${l} (mai târziu)` : l}</option>)}
                   </select></td>
+                  <td><AlertCell kind="collab" row={c} edit={edit} onSaved={(ok) => setRuleMsg(ok ? "Alerta a fost salvată." : "Nu am putut salva alerta.")} /></td>
                   <td><BillingTextEdit kind="collab" id={c.id} party={c.party} custom={!!c.custom} product={f.product} /></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="hint" style={{ padding: "0 16px 14px" }}>„Per comandă”: în pagina raportului apare „Emite factura” după predare (aprobare). Facturarea lunară pe borderou se va adăuga mai târziu; până atunci, aceste facturi se fac în afara CRM-ului. Implicitele se salvează cu butonul de mai sus.</p>
+        <p className="hint" style={{ padding: "0 16px 14px" }}>„Per comandă”: în pagina raportului apare „Emite factura” după predare (aprobare). Facturarea lunară pe borderou se va adăuga mai târziu; până atunci, aceste facturi se fac în afara CRM-ului. Implicitele se salvează cu butonul de mai sus.
+          <br />„Alertă încasare”: după inspecție, cât timp raportul nu e bifat „Achitat”, evaluatorul și / sau cei cu acces la Facturare primesc o notificare (clopoțel și pe telefon), ca plata să se ceară înainte de predare.</p>
       </section>
     </div>
   );

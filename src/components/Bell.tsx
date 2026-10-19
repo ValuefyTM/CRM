@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 type Notice = { id: string; at: string; kind: string; title: string; sub: string; href: string };
 type Data = { items: Notice[]; seen: string | null; unread: number };
 
-const ICON: Record<string, string> = { message: "✉", team: "+", review: "?", verified: "✓", back: "↩", inspection: "⌂", order: "•" };
+const ICON: Record<string, string> = { message: "✉", team: "+", review: "?", verified: "✓", back: "↩", inspection: "⌂", order: "•", collect: "lei" };
 const ago = (iso: string) => {
   const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
   if (m < 2) return "acum";

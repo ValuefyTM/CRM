@@ -4,7 +4,7 @@
 import { can, type WithPerms } from "./perms";
 import { orderCode } from "./order-labels";
 
-export type Notice = { id: string; at: string; kind: "message" | "team" | "review" | "verified" | "back" | "inspection" | "order"; title: string; sub: string; href: string };
+export type Notice = { id: string; at: string; kind: "message" | "team" | "review" | "verified" | "back" | "inspection" | "order" | "collect"; title: string; sub: string; href: string };
 
 const DAYS = 30;
 const num = (n: string | null) => (n ? `nr. ${n}` : "fără număr");
@@ -15,7 +15,7 @@ export async function notificationsFor(db: D1Database, u: WithPerms & { id: stri
   const seen = me?.notif_seen_at ?? null;
   const rep = (id: string) => `${base}/rapoarte/${id}`;
 
-  const [msgs, log, insp, done, orders] = await Promise.all([
+  const [msgs, log, insp, done, orders, collect] = await Promise.all([
     // Messages from the others on the reports the user is in the team of.
     db.prepare(`SELECT m.id, m.created_at AS at, r.id AS rid, r.number, COALESCE(NULLIF(au.name, ''), m.author_name, m.author_email, 'Cineva') AS who, substr(m.body, 1, 110) AS body
       FROM messages m JOIN reports r ON r.id = m.entity_id AND m.entity = 'report' LEFT JOIN users au ON au.id = m.author_id
@@ -53,6 +53,24 @@ export async function notificationsFor(db: D1Database, u: WithPerms & { id: stri
           FROM orders o WHERE o.viewed_at IS NULL AND o.created_at > ?1 ORDER BY o.created_at DESC LIMIT 10`).bind(since)
           .all<{ id: string; at: string; seq: number | null; bank_ref: string | null; source: string | null; bank: string | null; client: string | null }>().then((x) => x.results).catch(() => [])
       : Promise.resolve([]),
+    // Inspection done, report not collected yet: on the framework contracts / collaborations with the alert set
+    // (Setări → Facturare), N days after the first inspection, to the main evaluator and / or to billing ("ops").
+    // Stays in the bell until the report is ticked "Achitat". Inspection times without a zone are Bucharest time.
+    db.prepare(`SELECT x.rid, x.number, x.client, x.bank, x.fee, x.insp,
+        strftime('%Y-%m-%dT%H:%M:%fZ', x.insp, '+' || x.days || ' days', CASE WHEN x.insp LIKE '%Z' THEN '+0 hours' ELSE '-3 hours' END) AS at
+      FROM (SELECT r.id AS rid, r.number, c.name AS client, COALESCE(b.code, b.name) AS bank, r.fee,
+          (SELECT MIN(i.done_at) FROM inspections i WHERE i.report_id = r.id AND i.status = 'done' AND i.done_at IS NOT NULL) AS insp,
+          CASE WHEN o.collaboration_id IS NOT NULL THEN cb.collect_alert_days ELSE k.collect_alert_days END AS days,
+          CASE WHEN o.collaboration_id IS NOT NULL THEN cb.collect_alert_to ELSE k.collect_alert_to END AS sendto
+        FROM reports r LEFT JOIN orders o ON o.id = r.order_id LEFT JOIN collaborations cb ON cb.id = o.collaboration_id
+          LEFT JOIN contracts k ON k.id = r.contract_id AND k.kind = 'framework'
+          LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id
+        WHERE COALESCE(r.collected, 0) = 0 AND r.status <> 'cancelled' AND r.glide_id IS NULL
+          AND ((sendto IN ('ops', 'both') AND ?3 = 1)
+            OR (sendto IN ('evaluator', 'both') AND EXISTS (SELECT 1 FROM report_members rm WHERE rm.report_id = r.id AND rm.user_id = ?1 AND rm.role = 'evaluator')))) x
+      WHERE x.days IS NOT NULL AND x.insp IS NOT NULL AND at <= ?4 AND at > ?2 ORDER BY at DESC LIMIT 15`)
+      .bind(u.id, since, can(u, "billing") ? 1 : 0, new Date().toISOString())
+      .all<{ rid: string; number: string | null; client: string | null; bank: string | null; fee: number | null; insp: string; at: string }>().then((x) => x.results).catch((e) => { console.error("collect alerts", e); return []; }),
   ]);
 
   const items: Notice[] = [
@@ -78,6 +96,11 @@ export async function notificationsFor(db: D1Database, u: WithPerms & { id: stri
     ...orders.map((o): Notice => ({
       id: `o${o.id}`, at: o.at, kind: "order", title: `Comandă nouă ${orderCode({ id: o.id, seq: o.seq, bank_ref: o.bank_ref, bank: o.bank, source: o.source ?? undefined })}`,
       sub: [o.client, o.bank].filter(Boolean).join(" · ") || "neprocesată", href: `${base}/comenzi/${o.id}`,
+    })),
+    ...collect.map((c): Notice => ({
+      id: `c${c.rid}`, at: c.at, kind: "collect", title: `De încasat · raport ${num(c.number)}`,
+      sub: [`inspecție făcută ${c.insp.slice(8, 10)}.${c.insp.slice(5, 7)}`, c.client, c.bank, c.fee ? `${Math.round(c.fee).toLocaleString("ro-RO")} lei` : null].filter(Boolean).join(" · "),
+      href: rep(c.rid),
     })),
   ].sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 30);
 
