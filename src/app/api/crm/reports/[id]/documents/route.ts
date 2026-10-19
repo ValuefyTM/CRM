@@ -95,6 +95,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const open = await a.db.prepare(`SELECT 1 AS x FROM inspections WHERE report_id = ? AND status IN ('to_schedule', 'scheduled') AND glide_id IS NULL AND inspector_id IS NOT NULL LIMIT 1`).bind(id).first();
     if (!open) return err("Raportul nu are o inspecție alocată și nefinalizată: actele se aleg la alocare.", 409);
     const list = (b.insp as { doc?: unknown; origin?: unknown; on?: unknown }[]).slice(0, 200);
+    if (!list.length) return err("Nu s-a schimbat nimic în selecție.");
     const names: string[] = [];
     for (const x of list) {
       const order = x.origin === "order";
@@ -105,8 +106,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       await a.db.prepare(`UPDATE ${order ? "order_documents" : "report_documents"} SET insp_visible = ? WHERE id = ?`).bind(x.on === true ? 1 : 0, d.id).run();
       names.push(`${d.filename} ${x.on === true ? "✓" : "✗"}`);
     }
-    if (names.length) await audit(a.db, `user:${a.user.id}`, "report.document_insp", "report", id, names.join(", ").slice(0, 500));
-    const sent = await resyncUvalo(a.db, { reportId: id });
+    await audit(a.db, `user:${a.user.id}`, "report.document_insp", "report", id, names.join(", ").slice(0, 500) || "actualizat");
+    // the documents go to UVALO, then the valuer gets a notification on the phone
+    const sent = await resyncUvalo(a.db, { reportId: id }, "docs");
     return Response.json({ ok: true, sent });
   }
   if (typeof b.insp_visible === "boolean") {

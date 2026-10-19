@@ -34,12 +34,15 @@ const kindOf = (d: DocItem) => (d.kind && DOC_KIND_KEYS.includes(d.kind) ? d.kin
 const ext = (name: string) => (name.match(/\.(\w{2,4})$/)?.[1] ?? "doc").toUpperCase();
 const size = (n: number | null) => (n == null ? "" : n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 const short = (iso: string | null) => (iso ? new Date(iso.length <= 10 ? `${iso}T12:00:00` : iso).toLocaleDateString("ro-RO", { day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "Europe/Bucharest" }) : "");
+const stamp = (iso: string) => new Date(iso).toLocaleString("ro-RO", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Bucharest" }).replace(".", "");
 const day = (iso: string | null) => (iso ? new Date(iso.length <= 10 ? `${iso}T12:00:00` : iso).toLocaleDateString("ro-RO", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Bucharest" }).replace(".", "") : "");
 
-export function ReportDocs({ report, assets, items, edit, remove, deliver, missing, inspOpen = false }: {
+export function ReportDocs({ report, assets, items, edit, remove, deliver, missing, inspOpen = false, inspSent = null }: {
   report: string; assets: { id: string; label: string; sub?: string | null }[]; items: DocItem[]; edit: boolean; remove: boolean;
   /** An inspection is given and not done yet: the ticks can be sent to the inspector. */
   inspOpen?: boolean;
+  /** When the inspector's documents were last sent, and by whom. */
+  inspSent?: { at: string; who: string | null } | null;
   /** The deliverables (final report, sheets, delivery), shown smaller on the right. */
   deliver?: React.ReactNode;
   /** "Marchează un document lipsă", under the list. */
@@ -96,7 +99,7 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
     const j = (await r?.json().catch(() => ({}))) as { error?: string; sent?: number };
     setSending(false);
     if (!r?.ok) return setSentMsg(j?.error || "Nu am putut actualiza. Încearcă din nou.");
-    setSentMsg(j.sent ? "Actualizat la inspector și în UVALO." : "Actualizat la inspector.");
+    setSentMsg(j.sent ? "Actualizat la inspector; anunțat în UVALO." : "Actualizat la inspector.");
     router.refresh();
   };
   const tick = (d: DocItem) => d.status !== "missing" && (
@@ -276,10 +279,15 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
       )}
       {edit && items.some((d) => d.insp !== undefined && d.origin !== "glide") && (
         <div className="rdInspBar">
-          <span className="muted">{!inspOpen ? "Bifele „La inspector” se trimit când raportul are o inspecție alocată și nefinalizată."
-            : changedTicks.length ? `${changedTicks.length} ${changedTicks.length === 1 ? "modificare" : "modificări"} netrimise inspectorului`
-            : sentMsg || "Bifează ce acte vede inspectorul, apoi actualizează."}</span>
-          <button type="button" className="btn btnGhost btnSm" disabled={!inspOpen || !changedTicks.length || sending} onClick={sendTicks}>{sending ? "Se actualizează…" : "Actualizează la inspector"}</button>
+          <span className="rdInspNote">
+            <span className="muted">{!inspOpen ? "Bifele „La inspector” se trimit când raportul are o inspecție alocată și nefinalizată."
+              : changedTicks.length ? `${changedTicks.length} ${changedTicks.length === 1 ? "modificare" : "modificări"} netrimise inspectorului`
+              : sentMsg || "Schimbă bifele „La inspector”, apoi actualizează."}</span>
+            {inspSent && <small className="muted">Lista de acte a inspectorului actualizată {stamp(inspSent.at)}{inspSent.who ? ` · ${inspSent.who}` : ""}</small>}
+          </span>
+          <button type="button" className="btn btnGhost btnSm rdInspBtn" disabled={!inspOpen || !changedTicks.length || sending}
+            title={!inspOpen ? "Nu există o inspecție alocată și nefinalizată" : !changedTicks.length ? "Nu s-a schimbat selecția" : "Trimite lista și anunță inspectorul în UVALO"}
+            onClick={sendTicks}>{sending ? "Se actualizează…" : "Actualizează la inspector"}</button>
         </div>
       )}
       {missing && <div className="rdMissing">{missing}</div>}

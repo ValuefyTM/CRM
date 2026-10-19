@@ -225,6 +225,10 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
     return st === "none" ? ["Fără inspecție", ""] : st === "done" ? ["Inspecție realizată", "pillOk"] : st === "open" ? [a.inspection_status === "scheduled" ? "Inspecție programată" : "Inspecție de programat", "pillInfo"] : ["Inspecție nealocată", "pillWarn"];
   };
   const fresh = messages.length > 0 && !messages[messages.length - 1].mine;
+  // When the inspector's documents were last sent (the update button, or the allocation with its documents), and by whom.
+  const inspSent = await db.prepare(`SELECT l.at, COALESCE(NULLIF(u.name, ''), u.email) AS who FROM audit_log l LEFT JOIN users u ON 'user:' || u.id = l.actor
+      WHERE l.entity = 'report' AND l.entity_id = ? AND l.action IN ('report.document_insp', 'report.inspection_assign') ORDER BY l.at DESC LIMIT 1`).bind(r.id)
+    .first<{ at: string; who: string | null }>().catch(() => null);
   const docItems: DocItem[] = [
     ...sources.map((x): DocItem => ({ id: x.id, name: x.filename, kind: x.doc_type ?? guessDocKind(x.filename), asset_id: x.asset_id, status: x.status === "missing" ? "missing" : "uploaded", origin: "report",
       href: x.status === "missing" ? null : `/api/crm/reports/${r.id}/documents/${x.id}`, size: x.size_bytes, at: x.status === "missing" ? x.requested_at : x.created_at, by: x.uploaded_by_name,
@@ -568,7 +572,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
       )}
 
       {tab === "documente" && (
-        <ReportDocs inspOpen={assets.some(isActive)} report={r.id} assets={assets.map((a) => ({ id: a.id, label: assetShort(a), sub: a.full_address ?? a.city }))} items={docItems} edit={c.docs} remove={c.docsDelete}
+        <ReportDocs inspOpen={assets.some(isActive)} inspSent={inspSent} report={r.id} assets={assets.map((a) => ({ id: a.id, label: assetShort(a), sub: a.full_address ?? a.city }))} items={docItems} edit={c.docs} remove={c.docsDelete}
           missing={c.docs ? <><span className="muted">Lipsește un act de la client?</span><MissingDoc id={r.id} /></> : null}
           deliver={
             <section className="card dDeliver">

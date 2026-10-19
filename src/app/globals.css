@@ -2921,3 +2921,6 @@ span.rdPick { display: inline-block; }
 .rdDropCard .rdDropText small { display: block; margin-top: 4px; }
 .rdDropCard .rdTarget { display: flex; flex-direction: column; gap: 4px; text-align: left; }
 .rdDropCard .rdTarget .select { width: 100%; max-width: none; }
+.rdInspNote { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; }
+.rdInspNote small { font-size: 11px; }
+.rdInspBtn:disabled { opacity: 0.45; cursor: not-allowed; }

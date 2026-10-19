@@ -215,13 +215,24 @@ export async function pushInspection(db: D1Database, id: string) {
  * (its address, cadastral numbers, areas changed in the CRM), so the inspector sees the change and the documents
  * uploaded or ticked since. Runs after the answer.
  */
-export async function resyncUvalo(db: D1Database, by: { reportId?: string; propertyId?: string }) {
+export async function resyncUvalo(db: D1Database, by: { reportId?: string; propertyId?: string }, notice?: "docs") {
   const where = by.reportId ? "i.report_id = ?" : "a.property_id = ?";
   const { results } = await db.prepare(`SELECT i.id FROM inspections i JOIN assets a ON a.id = i.asset_id
       WHERE ${where} AND i.status IN ('to_schedule', 'scheduled') AND i.glide_id IS NULL AND i.uvalo_id IS NOT NULL
         AND COALESCE(i.uvalo_status, '') NOT IN ('deleted', 'gata', 'pred')`).bind(by.reportId ?? by.propertyId).all<{ id: string }>().catch(() => ({ results: [] as { id: string }[] }));
-  for (const x of results) await later(pushInspection(db, x.id));
+  // `notice`: after the update, the valuer is told on the phone (the list of documents they now have).
+  for (const x of results) await later(pushInspection(db, x.id).then((r) => (r.ok && notice ? notifyDocs(db, x.id) : null)));
   return results.length;
+}
+
+/** A phone notification in UVALO to the valuer: the documents of the inspection were updated (with their names). */
+async function notifyDocs(db: D1Database, id: string) {
+  const r = await db.prepare("SELECT report_id, asset_id FROM inspections WHERE id = ?").bind(id).first<{ report_id: string | null; asset_id: string }>();
+  const docs = r?.report_id ? await docsForInspection(db, id, r.report_id, [r.asset_id]) : [];
+  const names = docs.map((d) => d.name.replace(/\.(pdf|jpe?g|png|webp|heic)$/i, ""));
+  const text = names.length ? `Ai acum ${names.length === 1 ? "actul" : `${names.length} acte`}: ${names.join(", ")}`.slice(0, 290) : "Nu mai ai acte atașate la inspecție.";
+  try { await call(`/inspections/${encodeURIComponent(id)}/notify`, { method: "POST", body: JSON.stringify({ title: "docs", text }) }); }
+  catch (e) { await fail(db, id, e); }
 }
 
 /** Taken back in the CRM (cancelled, done without the app): it leaves the inspector's phone in UVALO. */
