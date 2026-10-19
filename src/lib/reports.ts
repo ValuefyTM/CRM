@@ -348,6 +348,7 @@ const REPORT_ACTION: Record<string, (d: string | null) => string> = {
   "report.final": (d) => `Raport final încărcat${d ? `: ${d}` : ""}`,
   "report.delivered": (d) => `Raport predat${d ? ` (${d})` : ""}`,
   "report.fee": (d) => `Onorariu modificat${d ? `: ${d}` : ""}`,
+  "report.number": (d) => `Număr raport modificat${d ? `: ${d}` : ""}`,
   "report.asset_add": (d) => `Bun adăugat${d ? `: ${d}` : ""}`,
   "report.asset_edit": (d) => `Bun modificat${d ? `: ${d}` : ""}`,
   "report.asset_remove": (d) => `Bun scos din raport${d ? `: ${d}` : ""}`,

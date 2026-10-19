@@ -136,7 +136,7 @@ export function ContractOrderForm(p: {
   const preset = p.contracts.find((c) => c.id === p.initialContract) ?? (p.contracts.length === 1 ? p.contracts[0] : null);
   const [f, setF] = useState({
     contract_id: preset?.id ?? "", collaboration_id: "", bank_ref: "", bank_branch: "", ordered_on: today, report_type: kindOf(preset?.report_type), purpose: preset?.purpose || "Garantare bancară",
-    fee: preset?.fee ? String(preset.fee) : "", fee_later: false, client_id: "", client_kind: "person" as "person" | "company", client_name: "", client_phone: "", client_email: "", client_cui: "",
+    fee: preset?.fee ? String(preset.fee) : "", fee_later: false, report_number: "", client_id: "", client_kind: "person" as "person" | "company", client_name: "", client_phone: "", client_email: "", client_cui: "",
     inspection_notes: "", notes: "", evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "", verifier_id: "", inspector_id: "", due_on: inThreeDays(), urgent: false,
   });
   // The fee field unlocked by hand (an exception to the grid).
@@ -287,6 +287,12 @@ export function ContractOrderForm(p: {
             )}
             <label className="field">Data comenzii<input className="input" type="date" value={f.ordered_on} onChange={set("ordered_on")} /></label>
           </div>
+          {/* VALUEFY's reports are numbered automatically; a collaborating firm's report carries that firm's number. */}
+          {kind === "collab" && (
+            <label className="field"><span className="fLabel">Nr. raport {collab ? <small>(al firmei {collab.firm} · opțional, se poate completa și din raport)</small> : <small>(al firmei colaboratoare · opțional)</small>}</span>
+              <input className="input mono" value={f.report_number} onChange={set("report_number")} placeholder="ex. 71290" maxLength={30} /></label>
+          )}
+          {kind === "bank" && <p className="nwInfo">Nr. raport: <b>automat</b> · următorul din seria VALUEFY, la înregistrare</p>}
           {kind === "bank" && <label className="field"><span className="fLabel">Agenție / sucursală <small>(opțional)</small></span><input className="input" value={f.bank_branch} onChange={set("bank_branch")} placeholder="ex. Timișoara Iosefin" /></label>}
           <div className="formRow">
             <label className="field">Utilizarea desemnată

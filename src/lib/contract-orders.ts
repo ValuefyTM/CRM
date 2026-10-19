@@ -96,6 +96,9 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
     collab = await db.prepare("SELECT c.id, c.number, e.name AS firm, c.share FROM collaborations c JOIN entities e ON e.id = c.firm_id WHERE c.id = ?")
       .bind(str(b.collaboration_id, 80)).first<CollabChoice>();
     if (!collab) return { ok: false as const, error: "Alege colaborarea (firma de evaluare)." };
+    const nr = str(b.report_number, 30);
+    if (nr && await db.prepare("SELECT 1 AS x FROM reports r JOIN collaborations c ON c.firm_id = r.issuer_id WHERE c.id = ? AND r.number = ? AND r.status <> 'cancelled' LIMIT 1").bind(collab.id, nr).first())
+      return { ok: false as const, error: `Există deja un raport cu nr. ${nr} emis pe ${collab.firm}.` };
   }
   const share = collab?.share ?? null;
   const clientId = await clientOf(db, actor, b, client, phone);
@@ -111,7 +114,12 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
       str(b.report_type, 120) || contract?.report_type || null, fee, share, fee != null && share != null ? Math.round(fee * share * 100) / 100 : null,
       ordered, t, actor, t, t)
     .run();
-  if (kind === "collab") await db.prepare("UPDATE orders SET seq = (SELECT COALESCE(MAX(seq), 0) + 1 FROM orders) WHERE id = ? AND seq IS NULL").bind(id).run();
+  if (kind === "collab") {
+    await db.prepare("UPDATE orders SET seq = (SELECT COALESCE(MAX(seq), 0) + 1 FROM orders) WHERE id = ? AND seq IS NULL").bind(id).run();
+    // The collaborating firm's number of the report (VALUEFY's reports are numbered automatically).
+    const nr = str(b.report_number, 30);
+    if (nr) await db.prepare("UPDATE orders SET collab_report_number = ? WHERE id = ?").bind(nr, id).run();
+  }
   await audit(db, `user:${actor}`, "order.create", "order", id, kind === "bank" ? `${contract!.bank} ${str(b.bank_ref, 60)}` : `colaborare ${collab!.firm}`);
   return { ok: true as const, id };
 }

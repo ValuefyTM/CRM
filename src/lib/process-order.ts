@@ -79,6 +79,8 @@ export async function processBankOrder(db: D1Database, user: User, orderId: stri
       propertyType(main), main.city, main.full_address, main.usable_area, extra, extra, t, t, orderId)
     .run();
 
+  // A collaborating firm's report number (VALUEFY's are given automatically when the report opens).
+  if (o.collaboration_id && str(d.report_number, 30)) await db.prepare("UPDATE orders SET collab_report_number = ? WHERE id = ?").bind(str(d.report_number, 30), orderId).run();
   const due = /^\d{4}-\d{2}-\d{2}$/.test(str(d.due_on, 10)) ? str(d.due_on, 10) : null;
   const r = await openDossier(db, orderId, { id: user.id, name: user.name }, { evaluator_id: evaluator, verifier_id: id_(d.verifier_id), due_on: due });
   if (!r.ok) return r;

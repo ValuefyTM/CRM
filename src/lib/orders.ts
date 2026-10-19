@@ -27,6 +27,8 @@ export type Order = Nullable<Pick<PortalFields, "property_type" | "city" | "addr
   bank_branch: string | null; bank_ref: string | null; report_type: string | null; fee: number | null; share: number | null; fee_net: number | null;
   referral_order_id: string | null; ordered_on: string | null; intake: string | null; bank_link: string | null; processed_at: string | null;
   assets_json: string | null; reports_json: string | null; statement_id: string | null;
+  /** Collaboration: the collaborating firm's number of the report, typed with the order. */
+  collab_report_number?: string | null;
   // joined
   creator_name: string | null; creator_email: string | null; partner_name: string | null; doc_count: number;
   collab_firm: string | null; contract_number: string | null; contract_kind: string | null;

@@ -229,8 +229,10 @@ const fmt = (n: number, d = 0) => n.toLocaleString("ro-RO", { minimumFractionDig
  * the order. For portal and website orders the client gets an email with the download link (unless unticked).
  * `values`: the report values something (not an inspection / information note), so the values are required.
  */
-export function DeliverButton({ id, ready, number, suggested, notifyTo, assets, values }: {
+export function DeliverButton({ id, ready, number, suggested, notifyTo, assets, values, auto = true }: {
   id: string; ready: boolean; number: string | null; suggested: string; notifyTo: string | null; assets: DeliverAsset[]; values: boolean;
+  /** VALUEFY's report: the number of its series, automatic (a collaborating firm's is typed). */
+  auto?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ number: number ?? suggested, report_date: new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" }), notify: !!notifyTo });
@@ -255,7 +257,7 @@ export function DeliverButton({ id, ready, number, suggested, notifyTo, assets, 
   const eur = (lei: number | null) => (lei != null && rateNum ? Math.round(lei / rateNum) : null);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!f.number.trim()) return setMsg("Completează numărul raportului.");
+    if (!auto && !f.number.trim()) return setMsg("Completează numărul raportului.");
     if (values) {
       for (const a of assets) {
         const v = vals[a.id];
@@ -279,7 +281,8 @@ export function DeliverButton({ id, ready, number, suggested, notifyTo, assets, 
             <h2 id="delTitle">Predă raportul</h2>
             <p className="hint" style={{ margin: 0 }}>Raportul devine Finalizat, iar comanda se închide.{values ? " Rezultatul evaluării se trece pe fiecare bun și se adună." : ""}</p>
             <div className="formRow">
-              <label className="field">Nr. raport<input className="input mono" value={f.number} onChange={(e) => setF({ ...f, number: e.target.value })} readOnly={!!number} /></label>
+              <label className="field">Nr. raport<input className="input mono" value={f.number} onChange={(e) => setF({ ...f, number: e.target.value })} readOnly={!!number || auto} />
+                {auto && !number && <small className="muted">Automat, următorul din seria VALUEFY</small>}</label>
               <label className="field">Data evaluării (data raportului)<input className="input" type="date" value={f.report_date} onChange={(e) => setF({ ...f, report_date: e.target.value })} /></label>
             </div>
             {values && (
@@ -322,6 +325,43 @@ export function DeliverButton({ id, ready, number, suggested, notifyTo, assets, 
             {msg && <div role="alert" className="error">{msg}</div>}
             <div className="actions">
               <button type="submit" className="btn btnNavy" disabled={busy}>{busy ? "Se salvează…" : "Predă raportul"}</button>
+              <button type="button" className="btn btnGhost" onClick={() => setOpen(false)}>Renunță</button>
+            </div>
+          </form>
+        </div>, document.body)}
+    </>
+  );
+}
+
+/** The number of a report issued on a collaborating firm (the firm's own numbering): a small pencil next to it. */
+export function ReportNumberEdit({ id, number, firm }: { id: string; number: string | null; firm: string }) {
+  const [open, setOpen] = useState(false);
+  const [v, setV] = useState(number ?? "");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!v.trim()) return setMsg("Scrie numărul raportului.");
+    setBusy(true); setMsg("");
+    const error = await patch(id, { number: v.trim() });
+    setBusy(false);
+    if (error) return setMsg(error);
+    location.reload();
+  };
+  return (
+    <>
+      <button type="button" className="numEdit" title="Modifică numărul raportului" aria-label="Modifică numărul raportului" onClick={() => { setV(number ?? ""); setMsg(""); setOpen(true); }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>
+      </button>
+      {open && createPortal(
+        <div className="vfModal" role="dialog" aria-modal="true" aria-labelledby="numEditT" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
+          <form className="vfModalBox" style={{ width: "min(420px, 100%)" }} onSubmit={save} noValidate>
+            <h2 id="numEditT">Numărul raportului</h2>
+            <p className="hint" style={{ margin: 0 }}>Raportul e emis pe <b>{firm}</b>: numărul îl dă firma colaboratoare.</p>
+            <label className="field">Nr. raport<input className="input mono" value={v} onChange={(e) => setV(e.target.value)} maxLength={30} autoFocus /></label>
+            {msg && <div role="alert" className="error">{msg}</div>}
+            <div className="actions">
+              <button type="submit" className="btn btnGold" disabled={busy}>{busy ? "Se salvează…" : "Salvează"}</button>
               <button type="button" className="btn btnGhost" onClick={() => setOpen(false)}>Renunță</button>
             </div>
           </form>

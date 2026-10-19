@@ -12,6 +12,7 @@ import { offerForOrder, type Offer } from "./offers";
 import { createClassicContract, refreshClassicContract } from "./contracts";
 import { fillReportAssets } from "./process-order";
 import { addAsset, updateAsset } from "./assets";
+import { NEXT_OWN_NUMBER, ownIssuerId } from "./report-numbers";
 import type { AssetInput } from "./asset-labels";
 
 // ---------- stages and deadline ----------
@@ -157,11 +158,17 @@ async function openClaimed(db: D1Database, o: Order, actor: { id: string; name: 
   const t = now();
   const day = bucharestDay(t);
 
-  const [clientId, recipientId, issuer] = await Promise.all([
+  // The issuer: a collaboration order's report is issued on the collaborating firm (with that firm's number, typed with
+  // the order); every other report on VALUEFY, numbered automatically (the last number of its series + 1).
+  const [clientId, recipientId, own, firm] = await Promise.all([
     clientFor(db, o, actor?.id ?? "system"),
     recipientFor(db, o),
-    db.prepare("SELECT id FROM entities WHERE kind = 'valuation_firm' AND upper(name) LIKE 'VALUEFY%' LIMIT 1").first<{ id: string }>(),
+    ownIssuerId(db),
+    o.collaboration_id ? db.prepare("SELECT c.firm_id FROM collaborations c WHERE c.id = ?").bind(o.collaboration_id).first<{ firm_id: string }>() : Promise.resolve(null),
   ]);
+  const issuer = firm?.firm_id ? { id: firm.firm_id } : own ? { id: own } : null;
+  const ownSeries = !firm?.firm_id && !!own;
+  const firmNumber = firm?.firm_id ? (o.collab_report_number ?? "").trim() || null : null;
 
   // Direct work can hold several reports under one contract (e.g. taxation and financial reporting of the same
   // building): per report its purpose, type, fee, term and assets. Without it, one report as the order says.
@@ -208,10 +215,10 @@ async function openClaimed(db: D1Database, o: Order, actor: { id: string; name: 
   // Several reports opened together keep their order (annex 1.1, 1.2…): each a millisecond after the previous.
   const at = (j: number) => new Date(Date.parse(t) + j).toISOString();
   const insertReport = (id: string, sp: ReportSpec | undefined, reportLabel: string, j = 0) =>
-    db.prepare(`INSERT INTO reports (id, label, issuer_id, contract_id, order_id, client_id, recipient_id, bank_branch, report_type, valuation_types, purpose, value_type,
+    db.prepare(`INSERT INTO reports (id, number, label, issuer_id, contract_id, order_id, client_id, recipient_id, bank_branch, report_type, valuation_types, purpose, value_type,
         received_on, fee, status, reporting_year, referral_user_id, notes, term_days, due_on, offer_id, opened_by, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'in_progress', ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(id, reportLabel || null, issuer?.id ?? null, o.contract_id, o.id, clientId, recipientId, o.bank_branch, sp?.report_type || o.report_type,
+      VALUES (?, CASE WHEN ? THEN ${NEXT_OWN_NUMBER} ELSE ? END, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'in_progress', ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(id, ownSeries ? 1 : 0, own, j === 0 ? firmNumber : null, reportLabel || null, issuer?.id ?? null, o.contract_id, o.id, clientId, recipientId, o.bank_branch, sp?.report_type || o.report_type,
         specs.length ? kindOf(sp?.assets) : "EPI", sp?.purpose || o.purpose,
         accepted?.value_type ?? null, day, several ? sp?.fee ?? null : (accepted ? fee : sp?.fee ?? fee) ?? null, Number(day.slice(0, 4)), o.source === "partner" ? o.created_by : null,
         opts.notes ?? null, urgentDays ?? sp?.term_days ?? term ?? null, opts.due_on ?? null, accepted?.id ?? null, actor?.id ?? null, at(j), at(j));

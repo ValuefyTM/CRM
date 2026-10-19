@@ -44,7 +44,7 @@ export function ProcessWizard(p: {
   const [bank, setBank] = useState({ branch: o.branch ?? "", consultant: "", purpose: o.purpose ?? "Credit bancar", report_type: o.report_type ?? "", notes: "" });
   const [assets, setAssets] = useState<AssetForm[]>([{ ...emptyAsset({ city: o.city }), full_address: o.address ?? "", is_main: true }]);
   const [dos, setDos] = useState({
-    contract_id: o.contract_id ?? "", fee: o.fee ? String(o.fee) : "", fee_later: false, urgent: o.urgent, evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "",
+    contract_id: o.contract_id ?? "", fee: o.fee ? String(o.fee) : "", fee_later: false, report_number: "", urgent: o.urgent, evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "",
     verifier_id: "", due_on: "",
   });
   const [feeFree, setFeeFree] = useState(false);
@@ -255,6 +255,9 @@ export function ProcessWizard(p: {
                 )}
               </div>
             </div>
+            {o.source === "collab"
+              ? <label className="field">Nr. raport <small>(al firmei colaboratoare · opțional)</small><input className="input mono" value={dos.report_number} onChange={(e) => setDos({ ...dos, report_number: e.target.value })} maxLength={30} /></label>
+              : <p className="hint" style={{ margin: 0 }}>Nr. raport: automat, următorul din seria VALUEFY.</p>}
             <div className="formRow">
               <div className="field">Evaluator principal
                 <PersonPicker label="Evaluator principal" value={dos.evaluator_id} onChange={(v) => setDos({ ...dos, evaluator_id: v })} people={p.evaluators} me={p.me} />

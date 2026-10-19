@@ -27,9 +27,10 @@ import { guessDocKind } from "@/lib/doc-kinds";
 import { Avatar, PersonLine } from "@/components/Avatar";
 import { Messages } from "@/components/Messages";
 import { messagesOf } from "@/lib/messages";
-import { AddMember, CollectedToggle, DeliverButton, FinalDrop, MissingDoc, NotesEditor, RemoveMember, SafeImg, StageActions, StatusButton, UploadButton, VerifyActions } from "./ReportActions";
+import { AddMember, CollectedToggle, DeliverButton, ReportNumberEdit, FinalDrop, MissingDoc, NotesEditor, RemoveMember, SafeImg, StageActions, StatusButton, UploadButton, VerifyActions } from "./ReportActions";
 import { dueOf, STAGE_LABEL, stageOf } from "@/lib/dossier";
 import { hasValues, nextReportNumber, noticeTarget } from "@/lib/delivery";
+import { isOwnIssuer } from "@/lib/report-numbers";
 import { draftForReport, invoicesFor } from "@/lib/billing";
 import { can, type Perm } from "@/lib/perms";
 import { feeShare } from "@/lib/perms-db";
@@ -124,7 +125,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const inspState = (a: A): AllocRow["state"] => a.inspection_status === "done" ? "done" : isActive(a) ? "open" : a.no_inspection ? "none" : "free";
   const [history, log, suggested, notifyTo] = await Promise.all([
     main ? propertyHistory(db, main.property_id, id) : Promise.resolve([]), reportLog(db, r, assets),
-    r.number ? Promise.resolve("") : nextReportNumber(db), r.delivered_at ? Promise.resolve(null) : noticeTarget(db, r.order_id),
+    r.number || !isOwnIssuer(r.issuer_name) ? Promise.resolve("") : nextReportNumber(db), r.delivered_at ? Promise.resolve(null) : noticeTarget(db, r.order_id),
   ]);
   // Working stage and deadline (from the offer: working days counted from the inspection).
   const tasks = assets.filter((a) => a.inspection_status && a.inspection_status !== "cancelled");
@@ -253,7 +254,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   // The inspection sheets of the inspected assets, opened over the page as in UVALO (all their photos).
   const withSheet = assets.filter((a) => a.inspection_status === "done" && (a.sheet_photo || a.sheet_person || a.sheet_description || a.sheet_location));
   const sheetDocs = Object.fromEntries(await Promise.all(withSheet.map(async (a) => [a.id, await inspectionSheetDoc(db, r.id, a.id)] as const)));
-  const ownIssuer = !r.issuer_name || /valuefy/i.test(r.issuer_name);
+  const ownIssuer = isOwnIssuer(r.issuer_name);
   const sheetFirm = { name: r.issuer_name ?? "VALUEFY", logo, corp: ownIssuer ? (await getFirm(db)).anevar || null : null };
   const orderChip = order && (
     <><i className="rcLogo">CO</i>Comandă {order}{r.ordered_at && <small>· {short(r.ordered_at)}</small>}</>
@@ -271,7 +272,9 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             <p className="eyebrow"><a className="dBack" href={`${base}/rapoarte`}>← Rapoarte</a>{r.report_type ? cap(r.report_type) : "Raport de evaluare"}{r.valuation_types && <span> · {r.valuation_types.split(",").map((v) => VAL_TYPE[v] ?? v).join(", ")}</span>}</p>
             <div className="rTitle">
               <span className="dLogo">{logo ? <SafeImg src={logo} alt={r.issuer_name ?? ""} fallback={<b>{(r.issuer_short ?? initials(r.issuer_name ?? "VALUEFY", "v")).slice(0, 3)}</b>} /> : <b>{(r.issuer_short ?? initials(r.issuer_name ?? "VALUEFY", "v")).slice(0, 3)}</b>}</span>
-              <h2>{r.number ? `Nr. ${r.number}` : "Fără număr"}</h2>
+              <h2 className="rNumber">{r.number ? `Nr. ${r.number}` : "Fără număr"}
+                {/* A collaborating firm's report: its number is typed (VALUEFY's series is automatic, not edited). */}
+                {!ownIssuer && c.edit && <ReportNumberEdit id={r.id} number={r.number} firm={r.issuer_name ?? "firma colaboratoare"} />}</h2>
               <span className={`pill ${cls}`}><i />{label}{finished && r.report_date ? ` · ${fmtDate(r.report_date)}` : ""}</span>
               {r.status !== "cancelled" && <span className={`pill ${stage === "delivered" ? "pillOk" : "pillWarn"}`}><i />{STAGE_LABEL[stage]}</span>}
               {!!r.urgent && !finished && <span className="dUrgent" title="Comanda a fost marcată urgentă"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" /></svg>Urgent</span>}
@@ -593,7 +596,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                 {r.delivered_at && r.result_value ? <Row k="Rezultat evaluare"><span className="mono num">{lei(r.result_value, cur)}</span>{r.result_eur ? <> · <span className="mono num">{lei(r.result_eur, "€")}</span>{r.eur_rate ? <small className="muted"> · curs BNR {r.eur_rate.toLocaleString("ro-RO", { maximumFractionDigits: 4 })} la {fmtDate(r.report_date)}</small> : null}</> : null}</Row> : null}
               </dl>
               {r.client_notified_at && <p className="hint">Clientul a fost anunțat pe email la {fmtDate(r.client_notified_at, true)}.</p>}
-              {c.deliver && !r.delivered_at && <DeliverButton id={r.id} ready={!!final} number={r.number} suggested={suggested} notifyTo={notifyTo} values={hasValues(r.report_type)}
+              {c.deliver && !r.delivered_at && <DeliverButton id={r.id} ready={!!final} number={r.number} suggested={suggested} notifyTo={notifyTo} values={hasValues(r.report_type)} auto={ownIssuer}
                 assets={assets.map((a) => ({ id: a.id, label: assetShort(a), sub: a.full_address ?? a.city, value: a.value, approach: a.approach }))} />}
             </section>
           } />

@@ -8,6 +8,7 @@ import { bucket, getOrder, orderCode, type Order } from "./orders";
 import { offerForOrder } from "./offers";
 import { dueOf, stageOf, type Stage } from "./dossier";
 import { capType } from "./asset-labels";
+import { checkFirmNumber, isOwnIssuer, nextOwnNumber, numberOwnReport } from "./report-numbers";
 
 export type Progress = {
   steps: { label: string; at: string | null }[];
@@ -61,13 +62,8 @@ export async function orderProgress(db: D1Database, o: Order): Promise<Progress>
 /** Whether a report of this type states values (an inspection or information note does not). */
 export const hasValues = (reportType: string | null | undefined) => !/inspec|informare/i.test(reportType ?? "");
 
-/** Number to suggest for a new report: the highest numeric one of the year, plus one. */
-export async function nextReportNumber(db: D1Database) {
-  const year = new Date().getFullYear();
-  const r = await db.prepare(`SELECT MAX(CAST(number AS INTEGER)) AS n FROM reports WHERE number GLOB '[0-9]*' AND COALESCE(reporting_year, CAST(substr(report_date, 1, 4) AS INTEGER)) = ?`)
-    .bind(year).first<{ n: number | null }>();
-  return r?.n ? String(r.n + 1) : "";
-}
+/** Number shown before delivering a VALUEFY report that has none yet: the next one of its series (given at delivery). */
+export const nextReportNumber = nextOwnNumber;
 
 /** Who hears that the report is ready, and where they download it: the portal account, or the offer page (website orders). */
 async function clientNotice(db: D1Database, o: Order) {
@@ -85,14 +81,19 @@ async function clientNotice(db: D1Database, o: Order) {
  * to the client with the download link. `notify: false` keeps it quiet (e.g. delivered by hand).
  */
 export async function deliverReport(db: D1Database, user: { id: string }, reportId: string, b: { number?: unknown; report_date?: unknown; notify?: unknown; values?: unknown; eur_rate?: unknown }) {
-  const r = await db.prepare("SELECT id, number, report_date, order_id, delivered_at, report_type FROM reports WHERE id = ?").bind(reportId)
-    .first<{ id: string; number: string | null; report_date: string | null; order_id: string | null; delivered_at: string | null; report_type: string | null }>();
+  const r = await db.prepare(`SELECT r.id, r.number, r.report_date, r.order_id, r.delivered_at, r.report_type, r.issuer_id, i.name AS issuer_name
+      FROM reports r LEFT JOIN entities i ON i.id = r.issuer_id WHERE r.id = ?`).bind(reportId)
+    .first<{ id: string; number: string | null; report_date: string | null; order_id: string | null; delivered_at: string | null; report_type: string | null; issuer_id: string | null; issuer_name: string | null }>();
   if (!r) return { ok: false as const, error: "Raportul nu există." };
   const final = await db.prepare("SELECT id FROM report_documents WHERE report_id = ? AND kind = 'final' AND status = 'uploaded' LIMIT 1").bind(reportId).first();
   if (!final) return { ok: false as const, error: "Încarcă întâi fișierul final al raportului (PDF semnat)." };
-  const number = typeof b.number === "string" ? b.number.trim().slice(0, 30) : "";
+  // VALUEFY's reports: the number of the series, automatic (never typed). A collaborating firm's: the firm's number.
+  const own = isOwnIssuer(r.issuer_name);
+  let number = own ? "" : typeof b.number === "string" ? b.number.trim().slice(0, 30) : "";
   const date = typeof b.report_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.report_date) ? b.report_date : null;
+  if (own && !r.number) number = (await numberOwnReport(db, reportId)) ?? "";
   if (!r.number && !number) return { ok: false as const, error: "Completează numărul raportului." };
+  if (!own && number && number !== r.number) { const dup = await checkFirmNumber(db, reportId, r.issuer_id, number); if (dup) return { ok: false as const, error: dup }; }
   // The result of the valuation: each asset's value (lei) and the approach that gave it, in euro at the BNR rate of the
   // report's date; their sum is the report's result. Required for a valuation (not for an inspection / information note).
   const { results: assets } = await db.prepare("SELECT a.id, p.type FROM assets a JOIN crm_properties p ON p.id = a.property_id WHERE a.report_id = ? ORDER BY a.is_main DESC, a.created_at").bind(reportId).all<{ id: string; type: string | null }>();

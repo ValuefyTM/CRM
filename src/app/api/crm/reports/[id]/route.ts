@@ -10,6 +10,7 @@ import { addMessage } from "@/lib/messages";
 import { isFinished } from "@/lib/perms-db";
 import type { TeamRight } from "@/lib/perms";
 import { pushLater } from "@/lib/push";
+import { checkFirmNumber, isOwnIssuer } from "@/lib/report-numbers";
 
 /** Report changes from its page: `{ status, suspend_reason? }`, `{ stage }`, `{ notes }` or `{ delivered: true, number, report_date, notify }`. */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -28,8 +29,24 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     ["stage" in b && b.stage !== "verified" && b.stage !== "back", "status", "Etapa o schimbă evaluatorul principal."],
     [b.stage === "verified" || b.stage === "back", "verify", "Verificarea o finalizează verificatorul."],
     [b.delivered === true, "deliver", "Raportul îl predă evaluatorul principal."],
+    [typeof b.number === "string" && b.delivered !== true, "edit", "Nu poți modifica numărul acestui raport."],
   ];
   for (const [when, right, msg] of need) if (when && !a.access.can[right]) return err(msg, 403);
+
+  // The number of a report issued on a collaborating firm (that firm's numbering; VALUEFY's series is automatic).
+  // It may be corrected also once the report is finished.
+  if (typeof b.number === "string" && b.delivered !== true) {
+    const x = await a.db.prepare("SELECT r.number, r.issuer_id, i.name AS issuer FROM reports r LEFT JOIN entities i ON i.id = r.issuer_id WHERE r.id = ?").bind(id)
+      .first<{ number: string | null; issuer_id: string | null; issuer: string | null }>();
+    if (isOwnIssuer(x?.issuer)) return err("Rapoartele VALUEFY se numerotează automat: numărul nu se modifică.", 409);
+    const number = b.number.trim().slice(0, 30);
+    if (!number) return err("Scrie numărul raportului.");
+    const dup = await checkFirmNumber(a.db, id, x!.issuer_id, number);
+    if (dup) return err(dup);
+    await a.db.prepare("UPDATE reports SET number = ?, updated_at = ? WHERE id = ?").bind(number, now(), id).run();
+    await audit(a.db, actor, "report.number", "report", id, `${x!.number ?? "fără număr"} → ${number}`);
+    return Response.json({ ok: true });
+  }
 
   const closed = isFinished(r);
   if (closed && typeof b.status !== "string" && typeof b.collected !== "boolean") return err("Raportul este finalizat și nu se mai modifică. Redeschide-l din „Schimbă status”.", 409);
