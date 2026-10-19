@@ -69,6 +69,13 @@ export const orderRef = (seq: number) => `CO-${seq}`;
 /** Stages of the order timeline (the real progress comes from orderProgress in src/lib/delivery.ts). */
 export const STAGES = ["Comandă primită", "Ofertă acceptată", "Inspecție programată", "Inspecție realizată", "Raport în lucru", "În verificare", "Raport livrat"];
 
+/** How the fee is paid, as offered to the client (Oferte): the first is the default of the offers made on orders too. */
+export const PAYMENT_PRESETS: [string, string][] = [
+  ["avans50", "50% avans la acceptare, 50% la livrarea raportului. Prin card sau transfer bancar, pe baza facturii emise."],
+  ["avans30", "30% avans la acceptare, restul la livrarea raportului. Prin card sau transfer bancar, pe baza facturii emise."],
+  ["integral", "Integral la acceptare (avans 100%), prin card sau transfer bancar, pe baza facturii emise."],
+  ["livrare", "Integral la livrarea raportului, prin card sau transfer bancar, pe baza facturii emise."],
+];
 export const ACCEPT = ".pdf,.jpg,.jpeg,.png,.heic,.webp,.doc,.docx";
 export const MAX_FILE_MB = 40;
 

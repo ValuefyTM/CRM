@@ -11,6 +11,8 @@ import { capType } from "@/lib/asset-labels";
 import { CrmShell } from "@/components/CrmShell";
 import { History } from "@/components/History";
 import { QuoteActions } from "./QuoteActions";
+import { MiniMap, type MiniPoint } from "@/components/MiniMap";
+import { parseGeo } from "@/lib/registry";
 import { offerLink } from "@/lib/offer-emails";
 
 export const metadata: Metadata = { title: "Ofertă | CRM VALUEFY" };
@@ -44,6 +46,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
               <Row k="Onorariu">{q.fee != null ? <><span className="mono num">{lei(q.fee)}</span> fără TVA <small className="muted">· {lei(Math.round(q.fee * (1 + billing.vatPercent / 100) * 100) / 100)} cu TVA</small></> : <span className="muted">de stabilit</span>}</Row>
               <Row k="Scop · tip">{[q.purpose, q.report_type].filter(Boolean).join(" · ")}</Row>
               <Row k="Termen propus">{q.term_days ? `${q.term_days} zile lucrătoare` : null}</Row>
+              <Row k="Plata">{(q.payment_terms ?? "50% avans la acceptare, 50% la livrarea raportului").split(/[.,] (?=[A-ZÎȘȚ]|prin )/)[0]}</Row>
               <Row k="Valabilă până">{q.valid_until ? <span className={exp ? "errTxt" : undefined}>{fmtDate(q.valid_until)}{exp ? " · expirată" : ""}</span> : null}</Row>
               <Row k="Transmisă">{q.sent_at ? `${fmtDate(q.sent_at, true)}${q.sent_via ? ` · ${SENT_VIA.find(([k]) => k === q.sent_via)?.[1].toLowerCase()}` : ""}${q.sent_to ? ` · ${q.sent_to}` : ""}` : null}</Row>
               <Row k="Pagina publică">{publicLink ? <><a className="link" href={publicLink} target="_blank" rel="noopener">deschide ↗</a>{q.viewed_at ? ` · văzută de client ${fmtDate(q.viewed_at, true)}` : " · neaccesată încă"}</> : null}</Row>
@@ -79,7 +82,13 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
                   <li key={i}>
                     <b>{i + 1}. {capType(str(a.type)) || "Bun"}</b>
                     <span className="muted">{[str(a.full_address), str(a.city), str(a.county)].filter(Boolean).join(", ") || "fără adresă"}</span>
-                    <small className="muted">{[str(a.usable_area) && `${a.usable_area} m²`, str(a.cf_number) && `CF ${a.cf_number}`, str(a.rooms) && `${a.rooms} camere`, str(a.land_area) && `teren ${a.land_area} m²`, str(a.vehicle_make) && `${a.vehicle_make} ${str(a.vehicle_model)}`.trim(), str(a.description)].filter(Boolean).join(" · ")}</small>
+                    <small className="muted">{[str(a.usable_area) && `${a.usable_area} m²`, str(a.cf_number) && `CF ${a.cf_number}`, str(a.cad_building) && `cad. ${a.cad_building}`, str(a.rooms) && `${a.rooms} camere`, str(a.land_area) && `teren ${a.land_area} m²`, str(a.vehicle_make) && `${a.vehicle_make} ${str(a.vehicle_model)}`.trim(), str(a.description)].filter(Boolean).join(" · ")}</small>
+                    {(() => {
+                      const ll = parseGeo(str(a.geo) || null);
+                      const src = (["cadastru", "adresa", "localitate"].includes(str(a.geo_source)) ? str(a.geo_source) : "adresa") as MiniPoint["source"];
+                      return ll ? <div className="qtMap"><MiniMap point={{ lat: ll[0], lng: ll[1], source: src }} height={180} /><small className="muted">{src === "cadastru" ? "Din planul cadastral (geoportal)" : src === "adresa" ? "După adresă" : "Aproximativ: centrul localității"}{str(a.geo_note) ? ` · ${a.geo_note}` : ""}</small></div>
+                        : str(a.geo_note) ? <small className="muted">Fără punct pe hartă: {a.geo_note}</small> : null;
+                    })()}
                   </li>
                 ))}
               </ul>

@@ -39,8 +39,14 @@ export function AssetFields({ value: f, onChange, docs }: { value: AssetForm; on
         body: JSON.stringify({ cad_building: f.cad_building, cad_land: f.cad_land, cf_number: f.cf_number, city: f.city, county: f.county, address: f.full_address }) }).catch(() => null);
       if (ctl.signal.aborted) return;
       const d = (await r?.json().catch(() => null)) as { hit?: (MiniPoint & { note: string }) | null; cadastreTried?: boolean } | null;
-      if (d?.hit) setLoc({ state: "found", point: { lat: d.hit.lat, lng: d.hit.lng, source: d.hit.source }, note: d.hit.note });
-      else setLoc({ state: "none", point: null, note: d?.cadastreTried ? "Nici geoportalul, nici adresa nu au dat un punct." : "Adresa nu a fost găsită pe hartă." });
+      if (d?.hit) {
+        setLoc({ state: "found", point: { lat: d.hit.lat, lng: d.hit.lng, source: d.hit.source }, note: d.hit.note });
+        // the point is saved with the asset (the property gets it at once; the plans are asked again in the background)
+        onChange({ geo: `${d.hit.lat}, ${d.hit.lng}`, geo_source: d.hit.source, geo_note: d.hit.note });
+      } else {
+        setLoc({ state: "none", point: null, note: d?.cadastreTried ? "Nici geoportalul, nici adresa nu au dat un punct." : "Adresa nu a fost găsită pe hartă." });
+        onChange({ geo: "", geo_source: "", geo_note: "" });
+      }
     }, 900);
     return () => { clearTimeout(t); ctl.abort(); };
   }, [f.cad_building, f.cad_land, f.cf_number, f.full_address, f.city, f.county]); // eslint-disable-line react-hooks/exhaustive-deps

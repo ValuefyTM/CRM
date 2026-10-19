@@ -2,7 +2,7 @@
 // An offer (new or edited): the client, the assets, the fee and the terms. No contract, no bank: that is decided
 // later, when the offer is converted into work.
 import { useState } from "react";
-import { PURPOSES } from "@/lib/order-labels";
+import { PAYMENT_PRESETS, PURPOSES } from "@/lib/order-labels";
 import { assetProfile, capType, emptyAsset, type AssetForm } from "@/lib/asset-labels";
 import { AssetsEditor, newUid } from "@/components/AssetsEditor";
 import { ClientSearch, type ClientHit } from "@/components/ClientSearch";
@@ -10,6 +10,8 @@ import { ClientSearch, type ClientHit } from "@/components/ClientSearch";
 export type QuoteInitial = {
   id: string; client_id: string; client_kind: "person" | "company"; client_name: string; client_phone: string; client_email: string; client_cui: string;
   purpose: string; report_type: string; fee: string; term_days: string; valid_until: string; urgent: boolean; channel: string; collaboration_id: string; sent_via: string;
+  /** a preset key, or "custom" with the text in payment_terms */
+  payment: string; payment_terms: string;
   inspection_notes: string; notes: string; assets: AssetForm[];
 };
 type Collab = { id: string; firm: string; number: string | null };
@@ -27,7 +29,7 @@ export function QuoteForm({ base, initial, collabs, vatPercent }: { base: string
   const [f, setF] = useState(initial ?? {
     id: "", client_id: "", client_kind: "person" as "person" | "company", client_name: "", client_phone: "", client_email: "", client_cui: "",
     purpose: "", report_type: "Raport de evaluare", fee: "", term_days: "3", valid_until: plusDays(14), urgent: false, channel: "", collaboration_id: "", sent_via: "",
-    inspection_notes: "", notes: "", assets: [] as AssetForm[],
+    payment: "avans50", payment_terms: "", inspection_notes: "", notes: "", assets: [] as AssetForm[],
   });
   const [assets, setAssets] = useState<AssetForm[]>(initial?.assets.length ? initial.assets : [{ ...emptyAsset(), uid: newUid(), full_address: "", is_main: true }]);
   const [picked, setPicked] = useState<ClientHit | null>(initial?.client_id ? { id: initial.client_id, kind: initial.client_kind, name: initial.client_name, cui: initial.client_cui || null, phone: initial.client_phone || null, email: initial.client_email || null, city: null, reports: 0 } : null);
@@ -121,6 +123,14 @@ export function QuoteForm({ base, initial, collabs, vatPercent }: { base: string
           <div className="formRow">
             <label className="field">Termen propus <small>(zile lucrătoare)</small><input className="input" inputMode="numeric" value={f.term_days} onChange={set("term_days")} /></label>
             <label className="field">Valabilă până la<input className="input" type="date" value={f.valid_until} onChange={set("valid_until")} /></label>
+          </div>
+          <div className="field">Plata
+            <select className="select" value={f.payment} onChange={set("payment")}>
+              {PAYMENT_PRESETS.map(([k, l]) => <option key={k} value={k}>{l.split(/[.,] /)[0]}</option>)}
+              <option value="custom">Altfel (scriu eu)</option>
+            </select>
+            {f.payment === "custom" && <input className="input" style={{ marginTop: 6 }} value={f.payment_terms} onChange={set("payment_terms")} placeholder="ex. avans 40% la acceptare, restul în 2 rate" maxLength={300} />}
+            <small className="muted">apare pe pagina ofertei, la „Plată”</small>
           </div>
           <div className="formRow">
             <label className="field">Transmisă prin

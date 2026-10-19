@@ -4,6 +4,7 @@ import { greetName, isCompany, isExpired, money, offerDocs, offerTotals, termSec
 import { orderCode, propertyLabel, type Order } from "@/lib/orders";
 import { initials } from "@/lib/guard";
 import { OfferAccept, PrintButton } from "./OfferAccept";
+import { MiniMap, type MiniPoint } from "./MiniMap";
 
 const SITE = "https://valuefy.ro";
 const PHONE = "+40 766 225 936";
@@ -12,9 +13,11 @@ const EMAIL = "contact@valuefy.ro";
 const day = (d: string | null) => (d ? new Date(d).toLocaleDateString("ro-RO", { day: "2-digit", month: "long", year: "numeric", timeZone: "Europe/Bucharest" }) : "—");
 const stamp = (d: string | null) => (d ? new Date(d).toLocaleString("ro-RO", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Bucharest" }) : "—");
 
-export function OfferView({ offer: o, order, preview = false, toolbar, delivered, code }: { offer: Offer; order: Order; preview?: boolean; toolbar?: React.ReactNode; delivered?: string | null;
+export function OfferView({ offer: o, order, preview = false, toolbar, delivered, code, point = null }: { offer: Offer; order: Order; preview?: boolean; toolbar?: React.ReactNode; delivered?: string | null;
   /** the code shown on the page (the order's, else the quote's OF-n) */
-  code?: string }) {
+  code?: string;
+  /** where the asset is (from the plans or the address): a small map under the request's details */
+  point?: MiniPoint | null }) {
   const ref = code ?? orderCode(order);
   const t = offerTotals(o);
   const docs = offerDocs(o);
@@ -92,6 +95,12 @@ export function OfferView({ offer: o, order, preview = false, toolbar, delivered
             <dl className="ofDl">
               {details.filter(([, v]) => v).map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
             </dl>
+            {point && (
+              <div className="ofMap">
+                <MiniMap point={point} height={200} />
+                <small>{point.source === "cadastru" ? "Amplasament din planul cadastral" : point.source === "adresa" ? "Amplasament după adresă" : "Amplasament aproximativ (localitatea)"}</small>
+              </div>
+            )}
           </section>
           <section className="ofCard">
             <div className="ofCardHead"><h2>Oferta financiară</h2><span className="ofMuted">lei</span></div>

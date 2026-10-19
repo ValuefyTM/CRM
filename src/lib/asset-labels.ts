@@ -23,6 +23,8 @@ export type AssetInput = {
   vehicle_make: string | null; vehicle_model: string | null; reg_number: string | null; vin: string | null; mileage: number | null;
   is_main: boolean; value: number | null; approach: string | null; notes: string | null;
   contact_kind: string | null; contact_name: string | null; contact_phone: string | null;
+  /** the point found while filling in the form ("lat, lng"): from the cadastral plans, else the address */
+  geo?: string | null; geo_source?: "cadastru" | "adresa" | "localitate" | null; geo_note?: string | null;
 };
 
 /** Values of the asset form (strings, as typed). */
@@ -32,6 +34,8 @@ export type AssetForm = {
   cad_building: string; cad_land: string; usable_area: string; year_built: string; description: string; is_main: boolean; value: string; approach: string; notes: string;
   contact_kind: string; contact_name: string; contact_phone: string;
   land_area: string; rooms: string; floor: string; height_regime: string; vehicle_make: string; vehicle_model: string; reg_number: string; vin: string; mileage: string;
+  /** the point found on the small map ("lat, lng"), its source and note: saved with the asset */
+  geo?: string; geo_source?: string; geo_note?: string;
 };
 export const emptyAsset = (near?: { county?: string | null; city?: string | null }): AssetForm => ({
   category: "REZIDENTIAL", type: "", construction: "existing", county: near?.county ?? "", city: near?.city ?? "", full_address: "", cf_number: "", cad_building: "", cad_land: "",

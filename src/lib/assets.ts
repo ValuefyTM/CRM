@@ -36,8 +36,19 @@ export function validateAsset(body: unknown): { ok: true; value: AssetInput } | 
       notes: opt(b.notes, 1000),
       contact_kind: ["client", "owner", "agent", "other"].includes(str(b.contact_kind, 10)) ? str(b.contact_kind, 10) : null,
       contact_name: opt(b.contact_name, 120), contact_phone: opt(b.contact_phone, 40),
+      ...geoOf(b),
     }, null),
   };
+}
+
+/** The point found in the form, when it is one ("lat, lng" inside Romania, with a known source). */
+function geoOf(b: Record<string, unknown>): Pick<AssetInput, "geo" | "geo_source" | "geo_note"> {
+  const m = str(b.geo, 60).match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
+  const src = ["cadastru", "adresa", "localitate"].includes(str(b.geo_source, 20)) ? (str(b.geo_source, 20) as "cadastru" | "adresa" | "localitate") : null;
+  if (!m || !src) return { geo: null, geo_source: null, geo_note: null };
+  const lat = Number(m[1]), lng = Number(m[2]);
+  if (!(lat > 43.5 && lat < 48.4 && lng > 20.2 && lng < 29.8)) return { geo: null, geo_source: null, geo_note: null };
+  return { geo: `${lat}, ${lng}`, geo_source: src, geo_note: opt(b.geo_note, 300) };
 }
 
 export type PropertyHit = { id: string; type: string | null; category: string | null; full_address: string | null; city: string | null; cf_number: string | null;
@@ -77,8 +88,9 @@ export async function addAsset(db: D1Database, actor: string, reportId: string, 
       return { ok: false as const, error: "Proprietatea este deja în acest raport." };
   } else {
     propertyId = uuid();
-    await db.prepare(`INSERT INTO crm_properties (id, ${PROP_COLS.join(", ")}, created_at, updated_at) VALUES (?, ${PROP_COLS.map(() => "?").join(", ")}, ?, ?)`)
-      .bind(propertyId, ...propValues(v), t, t).run();
+    // with the point found in the form (the plans are asked again in the background, and win over an address point)
+    await db.prepare(`INSERT INTO crm_properties (id, ${PROP_COLS.join(", ")}, geo, geo_source, geo_note, geo_checked_at, created_at, updated_at) VALUES (?, ${PROP_COLS.map(() => "?").join(", ")}, ?, ?, ?, ?, ?, ?)`)
+      .bind(propertyId, ...propValues(v), v.geo ?? null, v.geo ? v.geo_source ?? null : null, v.geo ? v.geo_note ?? null : null, v.geo ? t : null, t, t).run();
   }
   const first = !(await db.prepare("SELECT 1 AS x FROM assets WHERE report_id = ?").bind(reportId).first());
   const main = v.is_main || first;
@@ -103,6 +115,9 @@ export async function updateAsset(db: D1Database, actor: string, reportId: strin
     db.prepare("UPDATE crm_properties SET geo = NULL, geo_checked_at = NULL WHERE id = ? AND geo_source IN ('adresa', 'localitate') AND (COALESCE(full_address, '') <> ? OR COALESCE(city, '') <> ?)")
       .bind(a.property_id, v.full_address ?? "", v.city ?? ""),
     db.prepare(`UPDATE crm_properties SET ${PROP_COLS.map((c) => `${c} = ?`).join(", ")}, updated_at = ? WHERE id = ?`).bind(...propValues(v), t, a.property_id),
+    // the point found in the form: over nothing, or over an address point when this one comes from the plans
+    ...(v.geo ? [db.prepare(`UPDATE crm_properties SET geo = ?, geo_source = ?, geo_note = ?, geo_checked_at = ? WHERE id = ?
+        AND (geo IS NULL OR geo = '' OR (geo_source IN ('adresa', 'localitate') AND ? = 'cadastru'))`).bind(v.geo, v.geo_source ?? null, v.geo_note ?? null, t, a.property_id, v.geo_source ?? "")] : []),
     ...(v.is_main ? [db.prepare("UPDATE assets SET is_main = 0 WHERE report_id = ? AND id <> ?").bind(reportId, assetId)] : []),
     db.prepare("UPDATE assets SET is_main = CASE WHEN ? THEN 1 ELSE is_main END, value = ?, approach = ?, notes = ?, contact_kind = ?, contact_name = ?, contact_phone = ? WHERE id = ?")
       .bind(v.is_main ? 1 : 0, v.value, v.approach, v.notes, v.contact_kind, v.contact_name, v.contact_phone, assetId),

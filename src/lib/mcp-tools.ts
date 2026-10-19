@@ -103,6 +103,7 @@ export const TOOLS: Tool[] = [
       onorariu: N("Onorariul fără TVA, în lei."), termen_zile: N("Termenul propus, în zile lucrătoare."), valabila_zile: N("Câte zile e valabilă oferta (implicit 14)."),
       transmisa_prin: S("email | whatsapp | phone | meeting — dacă oferta a fost deja transmisă clientului; lipsă = încă netrimisă.", { enum: ["email", "whatsapp", "phone", "meeting"] }),
       urgent: { type: "boolean", description: "Clientul are nevoie repede." }, note: S("Ce s-a discutat, condiții, de urmărit."),
+      plata: S("avans50 (implicit) | avans30 | integral (la acceptare) | livrare (integral la livrare), sau textul condițiilor de plată.", { enum: ["avans50", "avans30", "integral", "livrare"] }),
     }, required: ["client", "bun"] },
     write: true,
     run: async (c, a) => {
@@ -111,7 +112,7 @@ export const TOOLS: Tool[] = [
       const r = await createQuote(c.db, c.user.id, {
         client_name: str(a, "client"), client_phone: str(a, "telefon"), client_email: str(a, "email"), client_kind: a.firma === true ? "company" : "person", client_cui: str(a, "cui"),
         purpose: str(a, "scop"), report_type: str(a, "tip_raport") || "Raport de evaluare", fee: num(a, "onorariu"), term_days: num(a, "termen_zile") ?? 3, valid_until: valid,
-        urgent: a.urgent === true, notes: str(a, "note"), sent_via: str(a, "transmisa_prin") || undefined,
+        urgent: a.urgent === true, notes: str(a, "note"), sent_via: str(a, "transmisa_prin") || undefined, payment: str(a, "plata") || "avans50", payment_terms: str(a, "plata"),
         assets: [{ type: guessType(str(a, "bun")), full_address: str(a, "adresa"), city: str(a, "localitate"), county: str(a, "judet"), usable_area: num(a, "suprafata") != null ? String(num(a, "suprafata")) : "" }],
       });
       if (!r.ok) return { eroare: r.error };

@@ -5,6 +5,7 @@ import { contractChoices } from "@/lib/contract-orders";
 import { getBilling } from "@/lib/billing";
 import { getQuote, quoteAssets, quoteCode } from "@/lib/quotes";
 import { emptyAsset, type AssetForm } from "@/lib/asset-labels";
+import { PAYMENT_PRESETS } from "@/lib/order-labels";
 import { CrmShell } from "@/components/CrmShell";
 import { QuoteForm, type QuoteInitial } from "../../QuoteForm";
 
@@ -22,7 +23,9 @@ export default async function EditQuote({ params }: { params: Promise<{ id: stri
   const initial: QuoteInitial = {
     id: q.id, client_id: q.client_id ?? "", client_kind: q.client_kind === "company" ? "company" : "person", client_name: q.client_name, client_phone: q.client_phone ?? "", client_email: q.client_email ?? "", client_cui: q.client_cui ?? "",
     purpose: q.purpose ?? "", report_type: q.report_type ?? "Raport de evaluare", fee: q.fee != null ? String(q.fee) : "", term_days: q.term_days != null ? String(q.term_days) : "", valid_until: q.valid_until ?? "",
-    urgent: !!q.urgent, channel: q.channel ?? "", collaboration_id: q.collaboration_id ?? "", sent_via: q.sent_via ?? "", inspection_notes: q.inspection_notes ?? "", notes: q.notes ?? "", assets,
+    urgent: !!q.urgent, channel: q.channel ?? "", collaboration_id: q.collaboration_id ?? "", sent_via: q.sent_via ?? "",
+    payment: !q.payment_terms ? "avans50" : PAYMENT_PRESETS.find(([, l]) => l === q.payment_terms)?.[0] ?? "custom", payment_terms: q.payment_terms ?? "",
+    inspection_notes: q.inspection_notes ?? "", notes: q.notes ?? "", assets,
   };
   return (
     <CrmShell user={user} base={base} active="quotes" title={`Oferta ${quoteCode(q)}`} subtitle="Modifică oferta" actions={<a href={`${base}/oferte/${id}`} className="btn btnGhost btnSm">← Ofertă</a>}>

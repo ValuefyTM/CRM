@@ -6,7 +6,14 @@ import { getOrder } from "@/lib/orders";
 import { offerByToken } from "@/lib/offers";
 import { OfferView } from "@/components/OfferView";
 import { quoteAsOffer, quoteByToken } from "@/lib/quote-public";
-import { quoteCode } from "@/lib/quotes";
+import { quoteAssets, quoteCode } from "@/lib/quotes";
+import { parseGeo } from "@/lib/registry";
+import type { MiniPoint } from "@/components/MiniMap";
+
+const pointOf = (geo: string | null | undefined, source: string | null | undefined): MiniPoint | null => {
+  const ll = parseGeo(geo ?? null);
+  return ll ? { lat: ll[0], lng: ll[1], source: source === "cadastru" || source === "localitate" ? source : "adresa" } : null;
+};
 
 export const metadata: Metadata = { title: "Ofertă de evaluare | VALUEFY", robots: { index: false, follow: false }, referrer: "no-referrer" };
 export const dynamic = "force-dynamic";
@@ -26,7 +33,8 @@ export default async function OfferPage({ params }: { params: Promise<{ token: s
       await audit(db, "client:offer", "quote.viewed", "quote", q.id, quoteCode(q));
     }
     const v = await quoteAsOffer(db, q);
-    return <OfferView offer={v.offer} order={v.order} code={quoteCode(q)} />;
+    const a = quoteAssets(q)[0];
+    return <OfferView offer={v.offer} order={v.order} code={quoteCode(q)} point={pointOf(typeof a?.geo === "string" ? a.geo : null, typeof a?.geo_source === "string" ? a.geo_source : null)} />;
   }
   if (offer.status === "draft") notFound();
   const order = await getOrder(db, offer.order_id);
@@ -40,5 +48,8 @@ export default async function OfferPage({ params }: { params: Promise<{ token: s
     ? await db.prepare(`SELECT r.delivered_at FROM reports r WHERE r.order_id = ? AND r.delivered_at IS NOT NULL
         AND EXISTS (SELECT 1 FROM report_documents d WHERE d.report_id = r.id AND d.kind = 'final' AND d.status = 'uploaded') LIMIT 1`).bind(order.id).first<{ delivered_at: string }>()
     : null;
-  return <OfferView offer={offer} order={order} delivered={rep?.delivered_at ?? null} />;
+  // the main property of the order's report, when it has a point
+  const prop = await db.prepare(`SELECT p.geo, p.geo_source FROM reports r JOIN assets a ON a.report_id = r.id AND a.is_main = 1 JOIN crm_properties p ON p.id = a.property_id
+      WHERE r.order_id = ? AND r.status <> 'cancelled' ORDER BY r.created_at LIMIT 1`).bind(order.id).first<{ geo: string | null; geo_source: string | null }>().catch(() => null);
+  return <OfferView offer={offer} order={order} delivered={rep?.delivered_at ?? null} point={pointOf(prop?.geo, prop?.geo_source)} />;
 }

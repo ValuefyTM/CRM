@@ -9,6 +9,10 @@ import { createDirectWork } from "./direct-work";
 import { openDossier } from "./dossier";
 import { fillReportAssets } from "./process-order";
 import { ASSET_CATEGORIES, capType, type AssetInput } from "./asset-labels";
+import { PAYMENT_PRESETS } from "./order-labels";
+import { lookupCadastre } from "./geolocate";
+import { geocodeAddress } from "./geocode";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 export type QuoteStatus = "draft" | "sent" | "accepted" | "declined" | "converted";
 export const QUOTE_STATUS: Record<QuoteStatus, [string, string]> = {
@@ -105,7 +109,7 @@ export async function quoteCounts(db: D1Database, mine?: string | null) {
 // ---------- write ----------
 
 const ASSET_KEYS = ["category", "type", "construction", "county", "city", "full_address", "cf_number", "cad_building", "cad_land", "usable_area", "year_built", "description", "notes",
-  "contact_kind", "contact_name", "contact_phone", "land_area", "rooms", "floor", "height_regime", "vehicle_make", "vehicle_model", "reg_number", "vin", "mileage"];
+  "contact_kind", "contact_name", "contact_phone", "land_area", "rooms", "floor", "height_regime", "vehicle_make", "vehicle_model", "reg_number", "vin", "mileage", "geo", "geo_source", "geo_note"];
 const TYPES = new Set(ASSET_CATEGORIES.flatMap(([, , t]) => t));
 const categoryOf = (type: string) => ASSET_CATEGORIES.find(([, , t]) => t.includes(type))?.[0] ?? "REZIDENTIAL";
 
@@ -163,7 +167,37 @@ function fieldsOf(b: QuoteBody) {
     purpose: str(b.purpose, 120) || null, report_type: str(b.report_type, 120) || "Raport de evaluare", fee: amount(b.fee), term_days: int(b.term_days), valid_until: dateOf(b.valid_until),
     urgent: b.urgent === true ? 1 : 0, assets_json: JSON.stringify(assets), inspection_notes: str(b.inspection_notes, 1000) || null, notes: str(b.notes, 4000) || null,
     channel, collaboration_id: channel === "collab" ? str(b.collaboration_id, 80) || null : null, sent_via: SENT_VIA.some(([k]) => k === b.sent_via) ? (b.sent_via as string) : null,
+    payment_terms: PAYMENT_PRESETS.find(([k]) => k === b.payment)?.[1] ?? (str(b.payment_terms, 300) || null),
   } };
+}
+
+/**
+ * Places the assets of an offer that have no point yet: the cadastral plans (Tools locator) by the cadastral / CF
+ * number first, else the exact address on the map. Quiet, after the answer is sent.
+ */
+export async function locateQuoteAssets(db: D1Database, id: string) {
+  try {
+    const q = await getQuote(db, id);
+    if (!q) return;
+    const assets = quoteAssets(q);
+    let changed = false;
+    for (const [i, a] of assets.entries()) {
+      const s = (k: string) => (typeof a[k] === "string" ? (a[k] as string) : null);
+      const hasCad = !!(s("cad_building") || s("cad_land") || s("cf_number"));
+      // a point from the plans is final; one from the address is kept until a cadastral number is given
+      if (a.geo && (a.geo_source === "cadastru" || !hasCad)) continue;
+      if (!hasCad && !s("full_address") && !s("city")) continue;
+      const cad = hasCad ? await lookupCadastre({ city: s("city"), county: s("county"), cad_building: s("cad_building"), cad_land: s("cad_land"), cf_number: s("cf_number") }) : null;
+      const hit = cad ?? (a.geo ? null : await geocodeAddress({ address: s("full_address"), city: s("city"), county: s("county") }));
+      if (hit) { assets[i] = { ...a, geo: `${hit.lat}, ${hit.lng}`, geo_source: hit.source, geo_note: hit.note }; changed = true; }
+      else if (!a.geo) { assets[i] = { ...a, geo_note: "nici planurile, nici adresa nu au dat un punct" }; changed = true; }
+    }
+    if (changed) await db.prepare("UPDATE quotes SET assets_json = ? WHERE id = ? AND assets_json = ?").bind(JSON.stringify(assets), id, q.assets_json).run();
+  } catch (e) { console.error("locate quote", e); }
+}
+export function locateQuoteLater(db: D1Database, id: string) {
+  const job = locateQuoteAssets(db, id);
+  try { getCloudflareContext().ctx.waitUntil(job); } catch { /* outside the worker: the promise still runs */ }
 }
 
 export async function createQuote(db: D1Database, actor: string, b: QuoteBody) {
@@ -176,14 +210,15 @@ export async function createQuote(db: D1Database, actor: string, b: QuoteBody) {
     const seq = ((await db.prepare("SELECT MAX(seq) AS m FROM quotes").first<{ m: number | null }>())?.m ?? 0) + 1;
     try {
       await db.prepare(`INSERT INTO quotes (id, seq, status, client_id, client_kind, client_name, client_phone, client_email, client_cui, purpose, report_type, fee, term_days, valid_until, urgent,
-          assets_json, inspection_notes, notes, channel, collaboration_id, sent_at, sent_via, created_by, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          assets_json, inspection_notes, notes, channel, collaboration_id, sent_at, sent_via, payment_terms, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .bind(id, seq, sent ? "sent" : "draft", v.client_id, v.client_kind, v.client_name, v.client_phone, v.client_email, v.client_cui, v.purpose, v.report_type, v.fee, v.term_days, v.valid_until, v.urgent,
-          v.assets_json, v.inspection_notes, v.notes, v.channel, v.collaboration_id, sent ? t : null, v.sent_via, actor, t, t).run();
+          v.assets_json, v.inspection_notes, v.notes, v.channel, v.collaboration_id, sent ? t : null, v.sent_via, v.payment_terms, actor, t, t).run();
       break;
     } catch (e) { if (!String(e).includes("UNIQUE") || attempt >= 4) throw e; }
   }
   await audit(db, `user:${actor}`, "quote.create", "quote", id, `${v.client_name}${v.fee ? ` · ${v.fee} lei` : ""}`);
+  locateQuoteLater(db, id);
   return { ok: true as const, id };
 }
 
@@ -195,10 +230,11 @@ export async function updateQuote(db: D1Database, actor: string, id: string, b: 
   if (!f.ok) return f;
   const v = f.v;
   await db.prepare(`UPDATE quotes SET client_id = ?, client_kind = ?, client_name = ?, client_phone = ?, client_email = ?, client_cui = ?, purpose = ?, report_type = ?, fee = ?, term_days = ?, valid_until = ?,
-      urgent = ?, assets_json = ?, inspection_notes = ?, notes = ?, channel = ?, collaboration_id = ?, sent_via = COALESCE(?, sent_via), updated_at = ? WHERE id = ?`)
+      urgent = ?, assets_json = ?, inspection_notes = ?, notes = ?, channel = ?, collaboration_id = ?, sent_via = COALESCE(?, sent_via), payment_terms = ?, updated_at = ? WHERE id = ?`)
     .bind(v.client_id, v.client_kind, v.client_name, v.client_phone, v.client_email, v.client_cui, v.purpose, v.report_type, v.fee, v.term_days, v.valid_until, v.urgent, v.assets_json,
-      v.inspection_notes, v.notes, v.channel, v.collaboration_id, v.sent_via, now(), id).run();
+      v.inspection_notes, v.notes, v.channel, v.collaboration_id, v.sent_via, v.payment_terms, now(), id).run();
   await audit(db, `user:${actor}`, "quote.update", "quote", id, v.client_name);
+  locateQuoteLater(db, id);
   return { ok: true as const };
 }
 
