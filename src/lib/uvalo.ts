@@ -219,11 +219,11 @@ export async function pushInspection(db: D1Database, id: string) {
  * (its address, cadastral numbers, areas changed in the CRM), so the inspector sees the change and the documents
  * uploaded or ticked since. Runs after the answer.
  */
-export async function resyncUvalo(db: D1Database, by: { reportId?: string; propertyId?: string }, notice?: "docs") {
-  const where = by.reportId ? "i.report_id = ?" : "a.property_id = ?";
+export async function resyncUvalo(db: D1Database, by: { reportId?: string; propertyId?: string; all?: true }, notice?: "docs") {
+  const where = by.all ? "1 = ?" : by.reportId ? "i.report_id = ?" : "a.property_id = ?";
   const { results } = await db.prepare(`SELECT i.id FROM inspections i JOIN assets a ON a.id = i.asset_id
       WHERE ${where} AND i.status IN ('to_schedule', 'scheduled') AND i.glide_id IS NULL AND i.uvalo_id IS NOT NULL
-        AND COALESCE(i.uvalo_status, '') NOT IN ('deleted', 'gata', 'pred')`).bind(by.reportId ?? by.propertyId).all<{ id: string }>().catch(() => ({ results: [] as { id: string }[] }));
+        AND COALESCE(i.uvalo_status, '') NOT IN ('deleted', 'gata', 'pred')`).bind(by.all ? 1 : by.reportId ?? by.propertyId).all<{ id: string }>().catch(() => ({ results: [] as { id: string }[] }));
   // `notice`: after the update, the valuer is told on the phone (the list of documents they now have).
   for (const x of results) await later(pushInspection(db, x.id).then((r) => (r.ok && notice ? notifyDocs(db, x.id) : null)));
   return results.length;
@@ -425,4 +425,14 @@ export async function onHook(db: D1Database, h: HookEvent) {
     .bind(scheduled ? "scheduled" : "to_schedule", h.scheduled_at, h.scheduled_at, h.scheduled_at, h.status === "lucru" ? h.started_at ?? t : null, h.status, t, t, ins.id).run();
   if (h.event === "inspection.scheduled" && ins.report_id && h.scheduled_at) await audit(db, "system:uvalo", "report.inspection_schedule", "report", ins.report_id, `programată în UVALO: ${h.scheduled_at.replace("T", " ")}`);
   return { ok: true as const };
+}
+
+/**
+ * A resend of every open inspection asked once (by a migration, after a change of what is sent): done at the CRM's
+ * first activity. The flag is removed first, so only one request does it.
+ */
+export async function resendPending(db: D1Database) {
+  const r = await db.prepare("DELETE FROM settings WHERE key = 'uvalo_resend_pending'").run().catch(() => null);
+  if (!r?.meta.changes) return 0;
+  return resyncUvalo(db, { all: true });
 }

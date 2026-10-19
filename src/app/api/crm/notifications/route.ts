@@ -2,6 +2,7 @@ import { staffApi } from "@/lib/api";
 import { basePath } from "@/lib/site";
 import { markSeen, notificationsFor } from "@/lib/notifications";
 import { pushSweep } from "@/lib/push";
+import { resendPending } from "@/lib/uvalo";
 
 /** The bell: the user's notifications (GET) and "seen" when the list is opened (POST). */
 export async function GET() {
@@ -9,6 +10,8 @@ export async function GET() {
   if ("res" in a) return a.res;
   // the push dispatcher's safety net: whenever someone has the CRM open, at most once a minute
   pushSweep(a.db);
+  // a resend of the open UVALO inspections asked by a deploy: once, in the background
+  await resendPending(a.db).catch(() => 0);
   return Response.json(await notificationsFor(a.db, a.user, await basePath("crm")));
 }
 

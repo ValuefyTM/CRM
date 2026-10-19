@@ -36,7 +36,8 @@ export async function POST(req: Request) {
   // the open inspections already in UVALO sent again (their asset's details, contact, documents); started sheets keep their answers
   if (action === "resend") {
     if (!can(a.user, "templates.E")) return err("Doar cine modifică fișele de inspecție poate face asta.", 403);
-    const { results } = await a.db.prepare("SELECT id FROM inspections WHERE uvalo_id IS NOT NULL AND status IN ('to_schedule', 'scheduled') LIMIT 200").all<{ id: string }>();
+    const { results } = await a.db.prepare(`SELECT id FROM inspections WHERE uvalo_id IS NOT NULL AND status IN ('to_schedule', 'scheduled') AND glide_id IS NULL
+        AND COALESCE(uvalo_status, '') NOT IN ('deleted', 'gata', 'pred') LIMIT 200`).all<{ id: string }>();
     let bad = 0;
     for (const x of results) if (!(await pushInspection(a.db, x.id)).ok) bad++;
     return Response.json({ ok: true, sent: results.length - bad, failed: bad });
