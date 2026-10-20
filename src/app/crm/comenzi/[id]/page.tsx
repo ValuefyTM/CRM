@@ -66,7 +66,16 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
     : [];
   const toBill = billable.find((x) => !("error" in x.d))?.id ?? null;
   const why = billable.length && !toBill ? ("error" in billable[0].d ? billable[0].d.error : "") : "";
-  const orderInvoices = dossier ? (await Promise.all(reports.map((rep) => invoicesFor(db, { report: rep.id })))).flat() : [];
+  // The invoices of the order: the ones of its reports, and of the classic contract they belong to (direct work).
+  const seesInvoices = can(user, "billing");
+  const orderInvoices = dossier && seesInvoices ? await (async () => {
+    const classic = (await db.prepare("SELECT DISTINCT k.id FROM reports r JOIN contracts k ON k.id = r.contract_id WHERE r.order_id = ? AND k.kind = 'classic'").bind(o.id).all<{ id: string }>()).results;
+    const lists = await Promise.all([...reports.map((rep) => invoicesFor(db, { report: rep.id })), ...classic.map((k) => invoicesFor(db, { contract: k.id }))]);
+    const seen = new Set<string>();
+    return lists.flat().filter((i) => (seen.has(i.id) ? false : (seen.add(i.id), true)));
+  })() : [];
+  // the invoices in force: a PDF button each, in the page header
+  const liveInvoices = orderInvoices.filter((i) => i.kind === "invoice" && i.status !== "cancelled");
   const contractOrder = o.source === "bank" || o.source === "collab";
   let offerInitial: OfferInput | null = null;
   if (offerable) {
@@ -88,6 +97,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
       subtitle={`${SOURCE_LABEL[o.source]} · ${orderWhat(o)}${o.address ? ` · ${orderPlace(o)}` : ""} · ${o.glide_id ? `din ${fmtDate(o.ordered_on ?? o.created_at)}` : `primită ${fmtDate(o.created_at, true)}`}`}
       actions={<>
         <a href={backTo} className="btn btnGhost btnSm">← Comenzi</a>
+        {liveInvoices.map((i) => <a key={i.id} href={`/api/crm/invoices/${i.id}/pdf`} target="_blank" rel="noopener" className="btn btnGold btnSm" title={`Factura ${i.series} ${i.number}`}>PDF factură {i.series} {i.number}</a>)}
         {can(user, "orders.D") && <DeleteOrder id={o.id} label={orderCode(o)} back={backTo} links={await orderLinks(db, o.id)} />}
       </>}
     >
