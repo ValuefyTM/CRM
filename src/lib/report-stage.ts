@@ -63,7 +63,8 @@ export function segmentsOf(r: StageRow, today: string): { seg: SegState[]; capti
     seg[0] = seg[1] = seg[2] = "done";
     const when = r.delivered_at ?? r.report_date;
     seg[3] = r.invoiced ? "done" : "now";
-    caption = `${when ? `predat ${short(when)}` : "predat"}${r.invoiced ? " și facturat" : " · factura neemisă"}`;
+    // only the date here; the invoice shows in its own segment and in Facturare
+    caption = when ? `predat ${short(when)}` : "predat";
   }
   if (r.status === "cancelled") caption = "anulat";
   return { seg, caption };
