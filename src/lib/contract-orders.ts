@@ -61,11 +61,22 @@ async function clientOf(db: D1Database, actor: string, b: Record<string, unknown
   return id;
 }
 
-/** The collaborator who brought the work (an entity of kind "broker"), when given and real. */
+/** The collaborator who brought the work: a collaborator's account (Utilizatori → Colaboratori), when given and real. */
 export async function referralOf(db: D1Database, v: unknown) {
   const id = str(v, 80);
   if (!/^[\w-]{1,80}$/.test(id)) return null;
-  return (await db.prepare("SELECT id FROM entities WHERE id = ? AND kind = 'broker'").bind(id).first<{ id: string }>())?.id ?? null;
+  return (await db.prepare("SELECT id FROM users WHERE id = ? AND kind = 'partner' AND status <> 'deleted'").bind(id).first<{ id: string }>())?.id ?? null;
+}
+
+/** The collaborators' accounts to pick from ("Recomandată de"): name, contact and firm. */
+export async function referralPeople(db: D1Database, q: string) {
+  const s = q.trim().replace(/[%_]/g, "");
+  const like = `%${s}%`;
+  const { results } = await db.prepare(`SELECT u.id, COALESCE(NULLIF(u.name, ''), u.email) AS name, u.phone, u.email, p.name AS firm
+      FROM users u LEFT JOIN partners p ON p.id = u.partner_id WHERE u.kind = 'partner' AND u.status <> 'deleted'
+      ${s ? "AND (u.name LIKE ?1 OR u.email LIKE ?1 OR u.phone LIKE ?1 OR p.name LIKE ?1)" : ""} ORDER BY u.status = 'active' DESC, name LIMIT 30`)
+    .bind(...(s ? [like] : [])).all<{ id: string; name: string; phone: string | null; email: string | null; firm: string | null }>();
+  return results;
 }
 
 /**
@@ -127,7 +138,7 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
       ordered, t, actor, t, t)
     .run();
   if (feeGross != null) await db.prepare("UPDATE orders SET fee_gross = ? WHERE id = ?").bind(feeGross, id).run();
-  if (referral) await db.prepare("UPDATE orders SET referral_id = ? WHERE id = ?").bind(referral, id).run();
+  if (referral) await db.prepare("UPDATE orders SET referral_user_id = ? WHERE id = ?").bind(referral, id).run();
   if (kind === "collab") {
     await db.prepare("UPDATE orders SET seq = (SELECT COALESCE(MAX(seq), 0) + 1 FROM orders) WHERE id = ? AND seq IS NULL").bind(id).run();
     // The collaborating firm's number of the report (VALUEFY's reports are numbered automatically).

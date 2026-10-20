@@ -27,7 +27,7 @@ const Step = ({ n, title, sub, done }: { n: number; title: string; sub?: string;
 );
 const Req = () => <span className="req" aria-label="obligatoriu">*</span>;
 
-export function QuoteForm({ base, initial, collabs, vatPercent, canAddClient }: { base: string; initial: QuoteInitial | null; collabs: Collab[]; vatPercent: number; canAddClient: boolean }) {
+export function QuoteForm({ base, initial, collabs, vatPercent, canAddReferral }: { base: string; initial: QuoteInitial | null; collabs: Collab[]; vatPercent: number; canAddReferral: boolean }) {
   const [referral, setReferral] = useState<Referral | null>(initial?.referral ?? null);
   const [f, setF] = useState(initial ?? {
     id: "", client_id: "", client_kind: "person" as "person" | "company", client_name: "", client_phone: "", client_email: "", client_cui: "",
@@ -101,7 +101,7 @@ export function QuoteForm({ base, initial, collabs, vatPercent, canAddClient }: 
             <label className="field"><span className="fLabel">Email <small>(sau telefon)</small></span><input className="input" type="email" value={f.client_email} onChange={set("client_email")} placeholder="nume@exemplu.ro" /></label>
           </div>
           {f.client_kind === "company" && <label className="field"><span className="fLabel">CUI <small>(opțional)</small></span><input className="input mono" value={f.client_cui} onChange={set("client_cui")} placeholder="ex. 12345678" disabled={!!picked} /></label>}
-          <ReferralPick value={referral} onChange={setReferral} canAdd={canAddClient} />
+          <ReferralPick value={referral} onChange={setReferral} canAdd={!!canAddReferral} />
         </section>
 
         <section className="card nwCard">

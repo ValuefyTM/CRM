@@ -83,7 +83,7 @@ export function ContractOrderForm(p: {
   /** The firm's VAT (Setări → Facturare): a grid "cu TVA" is turned into the net fee. */
   vatPercent?: number;
   /** may add a collaborator on the spot (clients.A) */
-  canAddClient?: boolean;
+  canAddReferral?: boolean;
 }) {
   const [referral, setReferral] = useState<Referral | null>(null);
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
@@ -305,7 +305,7 @@ export function ContractOrderForm(p: {
             <label className="field"><span className="fLabel">Email <small>(opțional)</small></span><input className="input" type="email" value={f.client_email} onChange={set("client_email")} placeholder="nume@exemplu.ro" /></label>
           </div>
           {f.client_kind === "company" && <label className="field"><span className="fLabel">CUI <small>(opțional)</small></span><input className="input mono" value={f.client_cui} onChange={set("client_cui")} placeholder="ex. 12345678" disabled={!!picked} /></label>}
-          <ReferralPick value={referral} onChange={setReferral} canAdd={!!p.canAddClient} />
+          <ReferralPick value={referral} onChange={setReferral} canAdd={!!p.canAddReferral} />
         </section>
       </div>
 

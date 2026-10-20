@@ -121,7 +121,7 @@ export async function createDirectWork(db: D1Database, actor: { id: string; name
       if (!String(e).includes("UNIQUE") || attempt >= 4) throw e;
     }
   }
-  if (referral) await db.prepare("UPDATE orders SET referral_id = ? WHERE id = ?").bind(referral, id).run();
+  if (referral) await db.prepare("UPDATE orders SET referral_user_id = ? WHERE id = ?").bind(referral, id).run();
   await audit(db, `user:${actor.id}`, "order.create", "order", id, `lucrare directă · ${c.name}${mode === "offer" ? " · cu ofertă" : ""}`);
   if (mode === "offer") return { ok: true as const, order: id, report: null, contract: null, client: c };
 

@@ -223,7 +223,7 @@ async function openClaimed(db: D1Database, o: Order, actor: { id: string; name: 
       VALUES (?, CASE WHEN ? THEN ${NEXT_OWN_NUMBER} ELSE ? END, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'in_progress', ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .bind(id, ownSeries ? 1 : 0, own, j === 0 ? firmNumber : null, reportLabel || null, issuer?.id ?? null, o.contract_id, o.id, clientId, recipientId, o.bank_branch, sp?.report_type || o.report_type,
         specs.length ? kindOf(sp?.assets) : "EPI", sp?.purpose || o.purpose,
-        accepted?.value_type ?? null, day, several ? sp?.fee ?? null : (accepted ? fee : sp?.fee ?? fee) ?? null, Number(day.slice(0, 4)), o.source === "partner" ? o.created_by : null,
+        accepted?.value_type ?? null, day, several ? sp?.fee ?? null : (accepted ? fee : sp?.fee ?? fee) ?? null, Number(day.slice(0, 4)), o.referral_user_id ?? (o.source === "partner" ? o.created_by : null),
         opts.notes ?? null, urgentDays ?? sp?.term_days ?? term ?? null, opts.due_on ?? null, accepted?.id ?? null, actor?.id ?? null, at(j), at(j));
   const members = (id: string) => [
     ...(evaluator ? [db.prepare("INSERT OR IGNORE INTO report_members (report_id, user_id, role, added_at, added_by) VALUES (?, ?, 'evaluator', ?, ?)").bind(id, evaluator, t, actor?.id ?? null)] : []),

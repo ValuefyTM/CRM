@@ -129,7 +129,7 @@ export function ContractForm(p: {
   client: PickedClient | null; existing: Existing | null; contractProps: ContractProp[];
   /** converting an offer: classic contract, accepted now, everything filled in from it */
   quote?: FromQuote | null;
-  canAddClient?: boolean;
+  canAddReferral?: boolean;
 }) {
   const q = p.quote ?? null;
   const [referral, setReferral] = useState<Referral | null>(q?.referral ?? null);
@@ -258,7 +258,7 @@ export function ContractForm(p: {
               <div className="ctPicked"><span className="ctPickedAv" aria-hidden>{KIND[client.kind] ?? "?"}</span>
                 <span className="who"><b>{client.name}</b><span className="muted">Clientul contractului nr. {p.existing.number}</span></span></div>
             ) : <ClientPicker value={client} onChange={setClient} fresh={fresh} setFresh={setFresh} />}
-            {!p.existing && <ReferralPick value={referral} onChange={setReferral} canAdd={!!p.canAddClient} />}
+            {!p.existing && <ReferralPick value={referral} onChange={setReferral} canAdd={!!p.canAddReferral} />}
           </section>
 
           <section className="card">

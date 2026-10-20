@@ -12,6 +12,7 @@ import { getLead, leadStatus } from "@/lib/leads";
 import { CrmShell } from "@/components/CrmShell";
 import { History } from "@/components/History";
 import { OrderDocuments, OrderInfo, OrderStatusCard } from "@/components/OrderDetails";
+import { ReferralEdit } from "@/components/ReferralPick";
 import { ReportList } from "@/components/ReportList";
 import { hasDuty, dutySql } from "@/lib/labels";
 import { isExpired, money, offerDocs, offerDraft, offerForOrder, offerTotals, type OfferInput } from "@/lib/offers";
@@ -77,6 +78,9 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
   // the invoices in force: a PDF button each, in the page header
   const liveInvoices = orderInvoices.filter((i) => i.kind === "invoice" && i.status !== "cancelled");
   const contractOrder = o.source === "bank" || o.source === "collab";
+  // "Recomandată de": the collaborator's account, changed in place (also on its reports)
+  const refEdit = <ReferralEdit order={o.id} base={base} canEdit={can(user, "orders.E")} canAdd={can(user, "users.A")}
+    value={o.referral_user_id ? { id: o.referral_user_id, name: o.referral_name ?? "colaborator" } : null} />;
   let offerInitial: OfferInput | null = null;
   if (offerable) {
     const draft = offerDraft(o, docs, evaluators.find((e) => e.id === user.id && e.role === "evaluator") ?? evaluators.find((e) => e.role === "evaluator") ?? null);
@@ -141,7 +145,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
                 <div><dt>Client</dt><dd>{o.client_id ? <a className="rowLink" href={`${base}/clienti/${o.client_id}`}>{o.client_name ?? "—"}</a> : o.client_name ?? "—"}</dd></div>
                 {o.client_phone && <div><dt>Telefon</dt><dd><a href={`tel:${o.client_phone}`}>{o.client_phone}</a></dd></div>}
                 {o.client_email && <div><dt>Email</dt><dd><a href={`mailto:${o.client_email}`}>{o.client_email}</a></dd></div>}
-                {o.referral_id && <div><dt>Recomandată de</dt><dd><a className="rowLink" href={`${base}/clienti/${o.referral_id}`}>{o.referral_name ?? "colaborator"}</a></dd></div>}
+                <div><dt>Recomandată de</dt><dd>{refEdit}</dd></div>
                 {o.report_type && <div><dt>Tip raport</dt><dd>{o.report_type}</dd></div>}
                 {o.purpose && <div><dt>Scop</dt><dd>{o.purpose}</dd></div>}
                 <div><dt>Onorariu fără TVA</dt><dd>{lei(o.fee)}</dd></div>
@@ -159,7 +163,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
                 {o.bank_branch && <div><dt>Agenție</dt><dd>{o.bank_branch}</dd></div>}
                 {o.contract_number && <div><dt>Contract</dt><dd>{o.contract_kind === "framework" ? "Cadru" : "Clasic"} nr. {o.contract_number}</dd></div>}
                 <div><dt>Client</dt><dd>{o.client_name ?? "—"}</dd></div>
-                {o.referral_id && <div><dt>Recomandată de</dt><dd><a className="rowLink" href={`${base}/clienti/${o.referral_id}`}>{o.referral_name ?? "colaborator"}</a></dd></div>}
+                <div><dt>Recomandată de</dt><dd>{refEdit}</dd></div>
                 {o.report_type && <div><dt>Tip raport</dt><dd>{o.report_type}</dd></div>}
                 <div><dt>Tarif</dt><dd>{lei(o.fee)}</dd></div>
                 {o.share != null && <div><dt>Cota VALUEFY</dt><dd>{Math.round(o.share * 100)}% · {lei(o.fee_net)}</dd></div>}
@@ -219,6 +223,9 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
           )}
           <ReportList reports={reports} base={base} title="Rapoarte pentru această comandă" empty="Niciun raport legat de comandă." />
           {(portal || o.source === "site" || o.address) && <OrderInfo o={o} />}
+          {o.source !== "direct" && o.source !== "bank" && o.source !== "collab" && !o.glide_id && (
+            <section className="card"><dl className="dl"><div><dt>Recomandată de</dt><dd>{refEdit}</dd></div></dl></section>
+          )}
           {!o.glide_id && o.source !== "site" && <OrderDocuments o={o} docs={docs} canUpload={false} href={(d) => `/api/crm/orders/${o.id}/documents/${d.id}`} />}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>

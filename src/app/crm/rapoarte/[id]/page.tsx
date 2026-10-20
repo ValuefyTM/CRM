@@ -17,6 +17,7 @@ import { InspSheet } from "./InspSheet";
 import { inspectionSheetDoc } from "@/lib/insp-sheet-doc";
 import { getFirm } from "@/lib/settings";
 import { ReportDocs, type DocItem } from "./ReportDocs";
+import { ReferralEdit } from "@/components/ReferralPick";
 import type { AccessDoc } from "@/components/DocAccess";
 import { AssetEditor, RemoveAsset } from "./AssetEditor";
 import { assetProfile, emptyAsset, FIELD_LABELS, type AssetForm, type ProfileField } from "@/lib/asset-labels";
@@ -356,7 +357,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                 <Row k="Contract">{r.contract_number ? link("contracts", `/contracte/${r.contract_id}`, "link", <>{r.contract_kind === "framework" ? "cadru · " : ""}nr. {r.contract_number}</>) : null}</Row>
                 <Row k="Tip client">{r.client_kind ? KIND[r.client_kind] ?? r.client_kind : null}</Row>
                 {r.bank_branch && <Row k="Agenție bancară">{r.bank_branch}</Row>}
-                {r.referral_name && <Row k="Referral">{link("users", `/utilizatori/${r.referral_id}`, "link", r.referral_name)}</Row>}
+                <Row k="Recomandată de"><ReferralEdit report={r.id} base={base} canEdit={c.edit} canAdd={can(user, "users.A")}
+                  value={r.referral_id ? { id: r.referral_id, name: r.referral_name ?? "colaborator" } : null} /></Row>
                 <Row k="Emitent">{r.issuer_name}</Row>
               </dl>
             </section>

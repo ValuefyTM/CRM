@@ -4,7 +4,7 @@
 import { now, uuid } from "./db";
 import { audit } from "./auth";
 import { parseAssets } from "./process-order";
-import { createContractOrder } from "./contract-orders";
+import { createContractOrder, referralOf } from "./contract-orders";
 import { createDirectWork } from "./direct-work";
 import { openDossier } from "./dossier";
 import { fillReportAssets } from "./process-order";
@@ -37,7 +37,7 @@ export type Quote = {
   converted_at: string | null; order_id: string | null; contract_id: string | null; report_id: string | null;
   created_by: string | null; created_at: string; updated_at: string;
   /** the public page (portal /oferta/<token>) and the client's answer on it */
-  referral_id: string | null;
+  referral_id: string | null; referral_user_id: string | null;
   token: string | null; sent_to: string | null; message: string | null; payment_terms: string | null; viewed_at: string | null;
   accepted_name: string | null; signature: string | null; accepted_ip: string | null; content_hash: string | null;
   // joined
@@ -66,7 +66,7 @@ const int = (v: unknown) => { const n = typeof v === "number" ? v : parseInt(Str
 const dateOf = (v: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(str(v, 10)) ? str(v, 10) : null);
 
 const SELECT = `SELECT q.*, COALESCE(NULLIF(u.name, ''), u.email) AS author, e.name AS collab_firm, r.number AS report_number, o.seq AS order_seq, k.number AS contract_number,
-    (SELECT x.name FROM entities x WHERE x.id = q.referral_id) AS referral_name
+    COALESCE((SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE x.id = q.referral_user_id), (SELECT x.name FROM entities x WHERE x.id = q.referral_id)) AS referral_name
   FROM quotes q LEFT JOIN users u ON u.id = q.created_by LEFT JOIN collaborations cb ON cb.id = q.collaboration_id LEFT JOIN entities e ON e.id = cb.firm_id
   LEFT JOIN reports r ON r.id = q.report_id LEFT JOIN orders o ON o.id = q.order_id LEFT JOIN contracts k ON k.id = q.contract_id`;
 
@@ -207,13 +207,14 @@ export async function createQuote(db: D1Database, actor: string, b: QuoteBody) {
   const f = fieldsOf(b);
   if (!f.ok) return f;
   const v = f.v;
+  v.referral_id = await referralOf(db, v.referral_id);
   const id = uuid(), t = now();
   const sent = b.sent === true || !!v.sent_via;
   for (let attempt = 0; ; attempt++) {
     const seq = ((await db.prepare("SELECT MAX(seq) AS m FROM quotes").first<{ m: number | null }>())?.m ?? 0) + 1;
     try {
       await db.prepare(`INSERT INTO quotes (id, seq, status, client_id, client_kind, client_name, client_phone, client_email, client_cui, purpose, report_type, fee, term_days, valid_until, urgent,
-          assets_json, inspection_notes, notes, channel, collaboration_id, sent_at, sent_via, payment_terms, referral_id, created_by, created_at, updated_at)
+          assets_json, inspection_notes, notes, channel, collaboration_id, sent_at, sent_via, payment_terms, referral_user_id, created_by, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .bind(id, seq, sent ? "sent" : "draft", v.client_id, v.client_kind, v.client_name, v.client_phone, v.client_email, v.client_cui, v.purpose, v.report_type, v.fee, v.term_days, v.valid_until, v.urgent,
           v.assets_json, v.inspection_notes, v.notes, v.channel, v.collaboration_id, sent ? t : null, v.sent_via, v.payment_terms, v.referral_id, actor, t, t).run();
@@ -232,8 +233,9 @@ export async function updateQuote(db: D1Database, actor: string, id: string, b: 
   const f = fieldsOf(b);
   if (!f.ok) return f;
   const v = f.v;
+  v.referral_id = await referralOf(db, v.referral_id);
   await db.prepare(`UPDATE quotes SET client_id = ?, client_kind = ?, client_name = ?, client_phone = ?, client_email = ?, client_cui = ?, purpose = ?, report_type = ?, fee = ?, term_days = ?, valid_until = ?,
-      urgent = ?, assets_json = ?, inspection_notes = ?, notes = ?, channel = ?, collaboration_id = ?, sent_via = COALESCE(?, sent_via), payment_terms = ?, referral_id = ?, updated_at = ? WHERE id = ?`)
+      urgent = ?, assets_json = ?, inspection_notes = ?, notes = ?, channel = ?, collaboration_id = ?, sent_via = COALESCE(?, sent_via), payment_terms = ?, referral_user_id = ?, updated_at = ? WHERE id = ?`)
     .bind(v.client_id, v.client_kind, v.client_name, v.client_phone, v.client_email, v.client_cui, v.purpose, v.report_type, v.fee, v.term_days, v.valid_until, v.urgent, v.assets_json,
       v.inspection_notes, v.notes, v.channel, v.collaboration_id, v.sent_via, v.payment_terms, v.referral_id, now(), id).run();
   await audit(db, `user:${actor}`, "quote.update", "quote", id, v.client_name);
@@ -288,7 +290,7 @@ export async function convertQuote(db: D1Database, user: { id: string; name: str
   const assets: AssetInput[] = parsed.assets;
   const due = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$/.test(str(b.due_on, 16)) ? str(b.due_on, 16) : null;
   const common = { client_id: q.client_id, client_kind: q.client_kind, client_name: q.client_name, client_phone: q.client_phone ?? "", client_email: q.client_email ?? "", client_cui: q.client_cui ?? "",
-    purpose: q.purpose ?? "", report_type: q.report_type ?? "Raport de evaluare", fee: q.fee, urgent: !!q.urgent, inspection_notes: q.inspection_notes ?? "", notes: [q.notes, `Din oferta ${quoteCode(q)}`].filter(Boolean).join("\n"), referral_id: q.referral_id };
+    purpose: q.purpose ?? "", report_type: q.report_type ?? "Raport de evaluare", fee: q.fee, urgent: !!q.urgent, inspection_notes: q.inspection_notes ?? "", notes: [q.notes, `Din oferta ${quoteCode(q)}`].filter(Boolean).join("\n"), referral_id: q.referral_user_id };
   let order: string, report: string | null, contract: string | null = null;
   if (mode === "collab") {
     const collab = str(b.collaboration_id, 80) || q.collaboration_id || "";

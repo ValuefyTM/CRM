@@ -32,7 +32,8 @@ export type Order = Nullable<Pick<PortalFields, "property_type" | "city" | "addr
   /** The fee with VAT when known as such (a grid "cu TVA"): the invoice is issued on it, VAT included. */
   fee_gross?: number | null;
   /** the collaborator who brought the work (entity of kind "broker") */
-  referral_id?: string | null; referral_name?: string | null;
+  /** "Recomandată de": the collaborator's account (referral_id: an older pick among the entities) */
+  referral_id?: string | null; referral_user_id?: string | null; referral_name?: string | null;
   // joined
   creator_name: string | null; creator_email: string | null; partner_name: string | null; doc_count: number;
   collab_firm: string | null; contract_number: string | null; contract_kind: string | null;
@@ -45,7 +46,7 @@ export type OrderDocument = {
   uploader_name: string | null; uploader_kind: string | null;
 };
 
-const SELECT = `SELECT o.*, u.name AS creator_name, u.email AS creator_email, p.name AS partner_name, (SELECT x.name FROM entities x WHERE x.id = o.referral_id) AS referral_name,
+const SELECT = `SELECT o.*, u.name AS creator_name, u.email AS creator_email, p.name AS partner_name, COALESCE((SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE x.id = o.referral_user_id), (SELECT x.name FROM entities x WHERE x.id = o.referral_id)) AS referral_name,
   (SELECT COUNT(*) FROM order_documents d WHERE d.order_id = o.id) AS doc_count,
   (SELECT e.name FROM collaborations c JOIN entities e ON e.id = c.firm_id WHERE c.id = o.collaboration_id) AS collab_firm,
   k.number AS contract_number, k.kind AS contract_kind, (SELECT x.lead_id FROM order_leads x WHERE x.order_id = o.id) AS lead_id,
