@@ -94,9 +94,9 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
               <tbody>
                 {rows.map((i) => (
                   <ClickRow key={i.id} href={i.contract_id && !own ? `${base}/contracte/${i.contract_id}` : `/api/crm/invoices/${i.id}/pdf`}>
-                    <td><b className="mono">{i.series} {i.number}</b><div className="muted">{i.kind === "proforma" ? "Proformă" : "Factură"} · {day(i.issue_date)}</div>
+                    <td><b className="mono">{i.series} {i.number}</b><div className="muted">{i.kind === "proforma" ? "Proformă" : "Factură"} · {day(i.issue_date)}</div></td>
+                    <td>{i.client_id && !own ? <a className="rowLink" href={`${base}/clienti/${i.client_id}`}>{niceName(i.client_name)}</a> : niceName(i.client_name)}
                       {i.reports.length > 0 && <div className="invRefs">{i.reports.map((x, n) => <span key={x.id}>{n > 0 && " · "}<a className="rowLink mono" href={`${base}/rapoarte/${x.id}`}>{x.label}</a></span>)}</div>}</td>
-                    <td>{i.client_id && !own ? <a className="rowLink" href={`${base}/clienti/${i.client_id}`}>{niceName(i.client_name)}</a> : niceName(i.client_name)}</td>
                     <td>{i.contract_number ? `nr. ${i.contract_number}` : "—"}</td>
                     <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{lei(i.total)}</td>
                     <td>{i.kind === "invoice" ? day(i.due_date) : "—"}</td>
