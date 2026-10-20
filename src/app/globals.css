@@ -3255,3 +3255,12 @@ span.rdPick { display: inline-block; }
 .stFilter { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); font-weight: 600; }
 .stFilter .select { height: 36px; min-width: 200px; }
 @media (max-width: 1100px) { .stKpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stMonth { flex-wrap: wrap; } }
+.fcSplits { display: flex; flex-direction: column; gap: 6px; }
+.fcSplit { display: grid; grid-template-columns: minmax(0, 1fr) 90px minmax(90px, auto); gap: 10px; align-items: center; font-size: 13.5px; }
+.fcSplit .input { height: 36px; text-align: right; }
+.stSummary dl { margin: 0; display: flex; flex-direction: column; gap: 8px; max-width: 520px; }
+.stSummary dl div { display: flex; justify-content: space-between; gap: 16px; font-size: 14px; }
+.stSummary dt { color: var(--muted); }
+.stSummary dd { margin: 0; font-weight: 700; }
+.stSummary .stSumTotal { border-top: 2px solid var(--line); padding-top: 8px; font-size: 16px; }
+.stSummary .stSumTotal dt { color: var(--ink); font-weight: 800; }

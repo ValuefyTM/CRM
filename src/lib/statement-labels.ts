@@ -36,4 +36,5 @@ export type Line = {
 };
 export const totalOf = (lines: Line[]) => Math.round(lines.filter((l) => !l.removed).reduce((s, l) => s + l.amount, 0) * 100) / 100;
 
-export type FixedCost = { id: string; label: string; amount: number; from_period: string; to_period: string | null; notes: string | null };
+/** `splits`: the share (percent) each administrator carries, by user id. */
+export type FixedCost = { id: string; label: string; amount: number; from_period: string; to_period: string | null; notes: string | null; splits: Record<string, number> };

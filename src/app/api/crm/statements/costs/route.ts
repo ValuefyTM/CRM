@@ -1,11 +1,12 @@
 import { err, json, staffApi } from "@/lib/api";
-import { deleteFixedCost, listFixedCosts, saveFixedCost } from "@/lib/statements";
+import { deleteFixedCost, listFixedCosts, memberChoices, saveFixedCost } from "@/lib/statements";
 
 /** The fixed monthly costs (Borderouri → Cheltuieli fixe). */
 export async function GET() {
   const a = await staffApi("statements.all");
   if ("res" in a) return a.res;
-  return Response.json({ costs: await listFixedCosts(a.db) });
+  const [costs, admins] = await Promise.all([listFixedCosts(a.db), memberChoices(a.db)]);
+  return Response.json({ costs, admins });
 }
 
 export async function POST(req: Request) {

@@ -453,13 +453,28 @@ export async function monthRevenue(db: D1Database, period: string, memberId?: st
 // ---------- fixed monthly costs ----------
 
 
-export const listFixedCosts = async (db: D1Database) =>
-  (await db.prepare("SELECT id, label, amount, from_period, to_period, notes FROM fixed_costs ORDER BY to_period IS NOT NULL, label").all<FixedCost>()).results;
+type CostRow = Omit<FixedCost, "splits"> & { splits: string | null };
+const costOf = (r: CostRow): FixedCost => {
+  let splits: Record<string, number> = {};
+  try { splits = r.splits ? (JSON.parse(r.splits) as Record<string, number>) : {}; } catch { splits = {}; }
+  return { ...r, splits };
+};
 
-/** The fixed costs running in a month, and their sum. */
-export async function monthFixedCosts(db: D1Database, period: string) {
-  const { results } = await db.prepare("SELECT id, label, amount, from_period, to_period, notes FROM fixed_costs WHERE from_period <= ?1 AND (to_period IS NULL OR to_period >= ?1) ORDER BY label").bind(period).all<FixedCost>();
-  return { items: results, total: round2(results.reduce((s, c) => s + c.amount, 0)) };
+export const listFixedCosts = async (db: D1Database) =>
+  (await db.prepare("SELECT id, label, amount, from_period, to_period, notes, splits FROM fixed_costs ORDER BY to_period IS NOT NULL, label").all<CostRow>()).results.map(costOf);
+
+/**
+ * The fixed costs running in a month and their sum; seen through an administrator, only the costs they share, each
+ * with their percent of it.
+ */
+export async function monthFixedCosts(db: D1Database, period: string, memberId?: string | null) {
+  const { results } = await db.prepare("SELECT id, label, amount, from_period, to_period, notes, splits FROM fixed_costs WHERE from_period <= ?1 AND (to_period IS NULL OR to_period >= ?1) ORDER BY label")
+    .bind(period).all<CostRow>();
+  const items = results.map(costOf).map((c) => {
+    const pct = memberId ? c.splits[memberId] ?? 0 : 100;
+    return { ...c, pct, share: round2(c.amount * pct / 100) };
+  }).filter((c) => c.share > 0);
+  return { items, total: round2(items.reduce((s, c) => s + c.share, 0)) };
 }
 
 export async function saveFixedCost(db: D1Database, actor: string, b: Record<string, unknown>) {
@@ -472,9 +487,20 @@ export async function saveFixedCost(db: D1Database, actor: string, b: Record<str
   if (to && (!validPeriod(to) || to < from)) return { ok: false as const, error: "Luna de sfârșit e înaintea celei de început." };
   const id = typeof b.id === "string" && b.id ? b.id : uuid(), t = now();
   const notes = typeof b.notes === "string" ? b.notes.trim().slice(0, 500) || null : null;
+  // the administrators' shares: percents between 0 and 100, together at most 100
+  const splits: Record<string, number> = {};
+  if (b.splits && typeof b.splits === "object") {
+    const admins = new Set((await memberChoices(db)).map((a) => a.id));
+    for (const [k, v] of Object.entries(b.splits as Record<string, unknown>)) {
+      const n = typeof v === "string" ? Number(v.replace(",", ".")) : Number(v);
+      if (admins.has(k) && Number.isFinite(n) && n > 0) splits[k] = Math.min(100, round2(n));
+    }
+  }
+  if (Object.values(splits).reduce((a, n) => a + n, 0) > 100.001) return { ok: false as const, error: "Procentele administratorilor depășesc 100%." };
+  const sp = Object.keys(splits).length ? JSON.stringify(splits) : null;
   const prev = await db.prepare("SELECT id FROM fixed_costs WHERE id = ?").bind(id).first();
-  if (prev) await db.prepare("UPDATE fixed_costs SET label = ?, amount = ?, from_period = ?, to_period = ?, notes = ?, updated_at = ? WHERE id = ?").bind(label, round2(amount), from, to, notes, t, id).run();
-  else await db.prepare("INSERT INTO fixed_costs (id, label, amount, from_period, to_period, notes, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(id, label, round2(amount), from, to, notes, actor, t, t).run();
+  if (prev) await db.prepare("UPDATE fixed_costs SET label = ?, amount = ?, from_period = ?, to_period = ?, notes = ?, splits = ?, updated_at = ? WHERE id = ?").bind(label, round2(amount), from, to, notes, sp, t, id).run();
+  else await db.prepare("INSERT INTO fixed_costs (id, label, amount, from_period, to_period, notes, splits, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(id, label, round2(amount), from, to, notes, sp, actor, t, t).run();
   await audit(db, `user:${actor}`, prev ? "fixed_cost.update" : "fixed_cost.create", "fixed_cost", id, `${label}: ${round2(amount)} lei/lună din ${from}${to ? ` până în ${to}` : ""}`);
   return { ok: true as const, id };
 }

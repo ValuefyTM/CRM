@@ -64,11 +64,11 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
   const who = admins.find((a) => a.id === sp.evaluator) ?? null;
   const member = who ? await memberReports(db, who.id) : null;
   const [payouts, receivables, issued, choices, rev, costs] = await Promise.all([
-    monthBoard(db, period, "payout", member), monthBoard(db, period, "receivable", member), listStatements(db, { limit: 80 }), partyChoices(db), monthRevenue(db, period, who?.id), monthFixedCosts(db, period),
+    monthBoard(db, period, "payout", member), monthBoard(db, period, "receivable", member), listStatements(db, { limit: 80 }), partyChoices(db), monthRevenue(db, period, who?.id), monthFixedCosts(db, period, who?.id),
   ]);
   const past = issued.filter((s) => s.period !== period && s.status !== "open");
   const sum = (rows: Row[]) => rows.reduce((s, r) => s + r.total, 0);
-  const paid = sum(payouts), due = sum(receivables), fixed = who ? 0 : costs.total, profit = Math.round((rev.total - paid - fixed) * 100) / 100;
+  const paid = sum(payouts), due = sum(receivables), fixed = costs.total, profit = Math.round((rev.total - paid - fixed) * 100) / 100;
   const q = who ? `&evaluator=${who.id}` : "";
   const link = (p: string) => `${here}?luna=${p}${q}`;
   const group = (kind: Kind, rows: Row[]) => (
@@ -108,17 +108,48 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
         <span className="stMonthFill" />
         <MemberFilter value={who?.id ?? ""} choices={admins} period={period} here={here} />
       </div>
-      {who && <div className="note"><b>Filtrat după {who.name}.</b> Veniturile și borderourile de mai jos cuprind doar rapoartele în care a fost în echipă; borderourile fără niciun astfel de raport nu apar, iar cele cu linii fixe sau manuale le arată doar pe cele legate de rapoarte. Cheltuielile fixe nu se împart pe persoane, așa că profitul de aici nu le scade.</div>}
+      {who && <div className="note"><b>Filtrat după {who.name}.</b> Veniturile și borderourile de mai jos cuprind doar rapoartele în care a fost în echipă; borderourile fără niciun astfel de raport nu apar, iar cele cu linii fixe sau manuale le arată doar pe cele legate de rapoarte. Cheltuielile fixe intră cu partea lui (splitul setat la fiecare cheltuială) și se scad din venituri, împreună cu borderourile de plată.</div>}
       <div className="dbKpis stKpis">
         <div className="dbKpi" title="Onorariile rapoartelor predate în lună: lucrările proprii (clienți direcți, contracte cadru) cu tot onorariul, colaborările cu partea firmei"><span className="dbKpiLabel"><i style={{ background: "var(--ink)" }} />Venituri lună</span><b className="ctKpiMoney">{lei2(rev.total)}</b><small className="ctKpiFoot">proprii {lei2(rev.own)} ({rev.ownN}) · colaborări {lei2(rev.collab)} ({rev.collabN})</small></div>
         <a className="dbKpi" href="#receivable"><span className="dbKpiLabel"><i style={{ background: "var(--acc)" }} />De încasat pe borderouri</span><b className="ctKpiMoney">{lei2(due)}</b><small className="ctKpiFoot">{receivables.length} borderouri · bănci și colaborări</small></a>
         <a className="dbKpi" href="#payout"><span className="dbKpiLabel"><i style={{ background: "var(--err)" }} />Plăți colaboratori</span><b className="ctKpiMoney">{lei2(paid)}</b><small className="ctKpiFoot">{payouts.length} borderouri</small></a>
-        <a className="dbKpi" href={`${here}/cheltuieli`} style={who ? { opacity: 0.6 } : undefined}><span className="dbKpiLabel"><i style={{ background: "var(--muted)" }} />Cheltuieli fixe</span><b className="ctKpiMoney">{lei2(costs.total)}</b><small className="ctKpiFoot">{costs.items.length ? costs.items.map((c) => c.label).join(", ") : "nicio cheltuială setată"}</small></a>
-        <div className="dbKpi"><span className="dbKpiLabel"><i style={{ background: profit >= 0 ? "var(--ok, #2e8b57)" : "var(--err)" }} />{profit >= 0 ? "Profit" : "Pierdere"}</span><b className="ctKpiMoney" style={profit < 0 ? { color: "var(--err)" } : undefined}>{lei2(profit)}</b><small className="ctKpiFoot">venituri − plăți{who ? "" : " − cheltuieli fixe"}{rev.total ? ` · marjă ${Math.round(profit / rev.total * 100)}%` : ""}</small></div>
+        <a className="dbKpi" href="#fixe"><span className="dbKpiLabel"><i style={{ background: "var(--muted)" }} />Cheltuieli fixe{who ? " (partea lui)" : ""}</span><b className="ctKpiMoney">{lei2(costs.total)}</b><small className="ctKpiFoot">{costs.items.length ? costs.items.map((c) => c.label).join(", ") : who ? "nicio cheltuială împărțită cu el" : "nicio cheltuială setată"}</small></a>
+        <div className="dbKpi"><span className="dbKpiLabel"><i style={{ background: profit >= 0 ? "var(--ok, #2e8b57)" : "var(--err)" }} />{profit >= 0 ? "Profit" : "Pierdere"}</span><b className="ctKpiMoney" style={profit < 0 ? { color: "var(--err)" } : undefined}>{lei2(profit)}</b><small className="ctKpiFoot">venituri − plăți − cheltuieli fixe{rev.total ? ` · marjă ${Math.round(profit / rev.total * 100)}%` : ""}</small></div>
       </div>
 
       {group("payout", payouts)}
       {group("receivable", receivables)}
+
+      <section className="card flush" id="fixe">
+        <div className="cardHead"><h2>Cheltuieli fixe · {periodLabel(period)}</h2><span className="muted">{who ? `partea lui ${who.name}` : "toată firma"} · <b>{lei2(costs.total)}</b> · <a className="link" href={`${here}/cheltuieli`}>setează</a></span></div>
+        {costs.items.length === 0 ? <p className="hint pad">{who ? "Nicio cheltuială fixă împărțită cu acest administrator în luna aceasta." : "Nicio cheltuială fixă în luna aceasta."}</p> : (
+          <div className="tableWrap">
+            <table className="table">
+              <thead><tr><th>Cheltuială</th><th style={{ textAlign: "right" }}>Lunar</th>{who && <th style={{ textAlign: "right" }}>Split</th>}<th style={{ textAlign: "right" }}>{who ? "Partea lui" : "Se scade"}</th></tr></thead>
+              <tbody>
+                {costs.items.map((c) => (
+                  <tr key={c.id}>
+                    <td><b>{c.label}</b>{c.notes && <div className="muted">{c.notes}</div>}</td>
+                    <td style={{ textAlign: "right" }} className="mono">{lei2(c.amount)}</td>
+                    {who && <td style={{ textAlign: "right" }}>{c.pct}%</td>}
+                    <td style={{ textAlign: "right" }} className="mono"><b>{lei2(c.share)}</b></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="card stSummary">
+        <h2>Rezultatul lunii{who ? ` · ${who.name}` : ""}</h2>
+        <dl>
+          <div><dt>Venituri {who ? "(rapoartele unde a fost în echipă)" : "(proprii + colaborări)"}</dt><dd className="mono">{lei2(rev.total)}</dd></div>
+          <div><dt>− Borderouri de plată</dt><dd className="mono">{lei2(paid)}</dd></div>
+          <div><dt>− Cheltuieli fixe{who ? " (partea lui)" : ""}</dt><dd className="mono">{lei2(fixed)}</dd></div>
+          <div className="stSumTotal"><dt>{profit >= 0 ? "Profit" : "Pierdere"}</dt><dd className="mono" style={profit < 0 ? { color: "var(--err)" } : undefined}>{lei2(profit)}</dd></div>
+        </dl>
+      </section>
 
       <section className="card flush">
         <div className="cardHead"><h2>Borderouri anterioare</h2><span className="muted">validate sau emise, din alte luni</span></div>
