@@ -5,7 +5,7 @@ const kindOf = (v: unknown) => (v === "collab" ? "collab" : "contract");
 
 /** The invoice text of a framework contract / collaboration (?kind=&id=) with sample values from a recent report. */
 export async function GET(req: Request) {
-  const a = await staffApi("billing");
+  const a = await staffApi("billing.E");
   if ("res" in a) return a.res;
   const sp = new URL(req.url).searchParams;
   const kind = kindOf(sp.get("kind")), id = sp.get("id") ?? "";

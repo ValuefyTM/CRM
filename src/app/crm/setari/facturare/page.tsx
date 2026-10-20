@@ -14,16 +14,15 @@ export const dynamic = "force-dynamic";
 
 /** Billing settings: the Oblio connection, series, VAT and product, the flow for direct clients, and per framework contract / collaboration when invoices are issued. */
 export default async function BillingSettingsPage() {
-  const { db, user, base } = await staffPage("billing");
+  const { db, user, base } = await staffPage("billing.E");
   const [settings, rules, log] = await Promise.all([getBilling(db), billingRules(db), history(db, ["billing"])]);
   const c = oblioCredentials();
   return (
     <CrmShell user={user} base={base} active="settings" title="Setări · Facturare" subtitle="Oblio: conexiune, serii, TVA, reguli de facturare pe tip de client">
       <SettingsTabs base={base} active="facturare" user={user} />
-      {!can(user, "billing.E") && <div className="note">Doar proprietarul și administratorii pot modifica setările de facturare.</div>}
       <div className="cols">
         <div style={{ minWidth: 0 }}>
-          <BillingPanel edit={can(user, "billing.E")} initial={settings} creds={{ email: c.email?.name ?? null, secret: c.secret?.name ?? null }}
+          <BillingPanel edit initial={settings} creds={{ email: c.email?.name ?? null, secret: c.secret?.name ?? null }}
             rules={rules} modes={BILLING_MODES} flows={DIRECT_FLOWS} />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>

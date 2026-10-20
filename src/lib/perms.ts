@@ -37,7 +37,7 @@ export const MODULES = [
     hint: "Proprietățile evaluate în rapoartele pe care le vede (din echipa lui) sau pe care le conduce / verifică; comparabilele se caută tot printre ele. Raportul unei proprietăți se deschide doar dacă îl vede." },
   { k: "fees", l: "Onorarii și sume", group: "Financiar", rights: [], scope: [["all", "Toate sumele"], ["own", "Doar cota lui"], ["lead", "Toate sumele unde e evaluator / verificator"]] },
   { k: "billing", l: "Facturare", group: "Financiar", rights: ["A", "E", "D"], scope: [["all", "Toate"], ["own", "Doar ale lui"]], sp: [["issue", "Emite factura"]], offSp: true,
-    hint: "„Doar ale lui”: rapoartele de facturat unde e evaluator principal și facturile emise de el (evaluatorii care își fac singuri facturile). „Emite factura” merge și fără modulul din meniu: atunci lista „De facturat” apare pe tabloul de bord, pe scopul ales." },
+    hint: "„Doar ale lui”: rapoartele de facturat unde e evaluator principal și facturile emise de el (evaluatorii care își fac singuri facturile). „Emite factura” merge și fără modulul din meniu: atunci lista „De facturat” apare pe tabloul de bord, pe scopul ales. Setările de facturare (Oblio, serii, reguli) le văd și le schimbă doar rolurile cu „E”." },
   { k: "statements", l: "Borderouri", group: "Financiar", rights: ["A", "E", "D"], scope: [["all", "Toate"], ["own", "Doar al lui"]] },
   { k: "dashboard", l: "Tablou de bord", group: "Administrare", rights: [], scope: [["all", "Al firmei"], ["own", "Personal"]] },
   { k: "users", l: "Utilizatori", group: "Administrare", rights: ["A", "E", "D"] },
@@ -97,6 +97,8 @@ export const DEFAULT_CONFIG: PermConfig = {
     { id: "evaluator", name: "Evaluator", cells: {
       tenders: cell(), reports: cell([], { scope: "own" }), inspections: cell(["E"], { scope: "own" }), properties: cell(),
       fees: cell([], { scope: "own" }), dashboard: cell([], { scope: "own" }),
+      // their own reports to invoice and the invoices they issued; the billing settings stay with "E" (owner, administrators)
+      billing: cell([], { scope: "own", sp: ["issue"] }),
     } },
   ],
   team: {

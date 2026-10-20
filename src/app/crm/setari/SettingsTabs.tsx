@@ -5,7 +5,8 @@ const tabsOf = (user: WithPerms): [string, string, string, boolean][] => [
   ["contract", "Model contract", "/contract", can(user, "settings")],
   ["permisiuni", "Permisiuni", "/permisiuni", can(user, "users")],
   ["fise", "Fișe de inspecție", "/fise", can(user, "templates")],
-  ["facturare", "Facturare · Oblio", "/facturare", can(user, "billing")],
+  // the billing settings (Oblio, series, rules) are for those who may change them; the evaluators who only invoice their reports do not see them
+  ["facturare", "Facturare · Oblio", "/facturare", can(user, "billing.E")],
   ["alerte", "Alerte", "/alerte", can(user, "settings")],
   ["claude", "Conexiuni Claude", "/claude", can(user, "settings")],
   ["import", "Import istoric", "/import", user.role === "owner"],
