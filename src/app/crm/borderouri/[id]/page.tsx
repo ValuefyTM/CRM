@@ -1,0 +1,68 @@
+import type { Metadata } from "next";
+import { notFound, redirect } from "next/navigation";
+import { fmtDate, staffPage } from "@/lib/guard";
+import { can } from "@/lib/perms";
+import { getStatement, KIND_LABEL, linesOf, periodLabel, ruleFor, statementLog, STATUS_LABEL, BASIS_PICK, totalOf } from "@/lib/statements";
+import { CrmShell } from "@/components/CrmShell";
+import { History } from "@/components/History";
+import { LinesTable, lei2 } from "../LinesTable";
+import { NotesEdit, StatementActions } from "../StatementActions";
+import { AddLine } from "../LineActions";
+
+export const metadata: Metadata = { title: "Borderou | CRM VALUEFY" };
+export const dynamic = "force-dynamic";
+
+/** One statement: its lines (live while open, frozen after validation), the adjustments with their reasons, the history. */
+export default async function StatementPage({ params }: { params: Promise<{ id: string }> }) {
+  const { db, user, base } = await staffPage("statements");
+  const { id } = await params;
+  const s = await getStatement(db, id);
+  if (!s) notFound();
+  const all = can(user, "statements.all");
+  if (!all && s.user_id !== user.id) redirect(`${base}/borderouri`);
+  const canEdit = all && can(user, "statements.E");
+  const [lines, rule, log] = await Promise.all([linesOf(db, s), ruleFor(db, s.party), statementLog(db, id)]);
+  const [st, cls] = STATUS_LABEL[s.status];
+  const back = `${base}/borderouri`;
+  const total = s.status === "open" ? totalOf(lines) : s.total ?? totalOf(lines);
+  const criteria = s.criteria ? (JSON.parse(s.criteria) as { basis?: string }) : null;
+  const basis = BASIS_PICK.find(([k]) => k === (criteria?.basis ?? rule?.basis ?? "delivered"))?.[1];
+  return (
+    <CrmShell user={user} base={base} active="statements" title={`${s.number ? `Borderou ${s.number}` : "Borderou"} · ${s.name}`}
+      subtitle={`${KIND_LABEL[s.kind]} · ${periodLabel(s.period)}${s.sub ? ` · ${s.sub}` : ""}`}
+      actions={<>
+        <a href={back} className="btn btnGhost btnSm">← Borderouri</a>
+        <StatementActions id={s.id} status={s.status} canEdit={canEdit} canDelete={all && can(user, "statements.D")} back={back} lines={lines.filter((l) => !l.removed).length} />
+      </>}>
+      <div className="stHead">
+        <span className={`pill ${cls}`}><i />{st}</span>
+        <b className="stTotal">{lei2(total)}</b>
+        <span className="muted">
+          {s.status === "open" ? "se calculează din datele de azi; se îngheață la validare" : s.status === "validated" ? `validat ${fmtDate(s.validated_at, true)}${s.validated_name ? ` de ${s.validated_name}` : ""}; se mai poate ajusta până la emitere` : `emis ${fmtDate(s.issued_on)}${s.issued_name ? ` de ${s.issued_name}` : ""}`}
+          {basis ? ` · ${basis.toLowerCase()}` : ""}
+        </span>
+      </div>
+      {s.status === "open" && !all && <div className="note">Borderoul e în curs: se actualizează pe măsură ce lucrările se predau. La final de lună îl validează și îl emite firma; orice ajustare apare aici, cu motivul.</div>}
+      <section className="card flush">
+        <div className="cardHead"><h2>Linii</h2>{canEdit && s.status !== "issued" && <AddLine statement={s.id} />}</div>
+        <LinesTable lines={lines} base={base} statement={s.id} canEdit={canEdit && s.status !== "issued"} />
+      </section>
+      <div className="dGrid2">
+          <section className="card">
+            <h2>Detalii</h2>
+            <dl className="dl">
+              <div><dt>Pentru</dt><dd>{s.user_id && all ? <a className="link" href={`${base}/utilizatori/${s.user_id}`}>{s.name}</a> : s.contract_id ? <a className="link" href={`${base}/contracte/${s.contract_id}`}>{s.name}</a> : s.name}</dd></div>
+              <div><dt>Luna</dt><dd>{periodLabel(s.period)}</dd></div>
+              <div><dt>Număr</dt><dd>{s.number ?? <span className="muted">la emitere</span>}</dd></div>
+              <div><dt>Linii</dt><dd>{lines.filter((l) => !l.removed).length}{lines.some((l) => l.removed) ? ` (+${lines.filter((l) => l.removed).length} scoase)` : ""}</dd></div>
+              {rule ? <div><dt>Regula</dt><dd>{rule.recurrence === "monthly" ? "lunar" : "la cerere"} · {basis?.toLowerCase()}{all && <> · <a className="link" href={`${back}/reguli`}>reguli</a></>}</dd></div>
+                : all ? <div><dt>Regula</dt><dd><span className="muted">fără regulă (toate cotele)</span> · <a className="link" href={`${back}/reguli`}>adaugă</a></dd></div> : null}
+            </dl>
+            <div className="section">Observații</div>
+            <NotesEdit id={s.id} notes={s.notes} canEdit={canEdit && s.status !== "issued"} />
+          </section>
+          <History log={log} />
+      </div>
+    </CrmShell>
+  );
+}

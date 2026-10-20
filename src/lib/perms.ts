@@ -101,6 +101,8 @@ export const DEFAULT_CONFIG: PermConfig = {
       fees: cell([], { scope: "own" }), dashboard: cell([], { scope: "own" }),
       // their own reports to invoice and the invoices they issued; the billing settings stay with "E" (owner, administrators)
       billing: cell([], { scope: "own", sp: ["issue"] }),
+      // their own monthly statement (what the firm owes them), read-only
+      statements: cell([], { scope: "own" }),
     } },
   ],
   team: {

@@ -3229,3 +3229,24 @@ span.rdPick { display: inline-block; }
 .frPicked span { flex: 1; }
 .frItem .rcLogo, .frPicked .rcLogo { width: 30px; height: 30px; border: 1px solid var(--divider); }
 @media (max-width: 560px) { .frGrid { grid-template-columns: 1fr; } }
+
+/* Borderouri (statements) */
+.stMonth { display: flex; align-items: center; gap: 10px; font-size: 16px; }
+.stMonth b { min-width: 160px; text-align: center; text-transform: capitalize; }
+.stHead { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 13px; }
+.stTotal { font-size: 22px; letter-spacing: -0.02em; font-family: var(--mono); }
+.stNotes { margin: 0; font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; }
+.stLines tfoot td { border-top: 2px solid var(--line); padding-top: 10px; font-size: 14px; }
+.stLines tr.stRemoved td { opacity: 0.55; }
+.stLines tr.stRemoved td b { text-decoration: line-through; }
+.stLines tr.stChanged { background: var(--acc-soft); }
+.stReason { margin-top: 4px; font-size: 12px; color: var(--acc-text, #8a5a00); }
+.stReason.off { color: var(--err); }
+.stLineActs { display: inline-flex; gap: 8px; white-space: nowrap; }
+.stPrintPage { max-width: 900px; margin: 0 auto; padding: 32px 24px; font-size: 13px; color: #111; background: #fff; }
+.stPrintPage header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; border-bottom: 2px solid #111; padding-bottom: 12px; margin-bottom: 18px; }
+.stPrintPage h1 { margin: 0; font-size: 22px; }
+.stPrintPage .table { width: 100%; border-collapse: collapse; }
+.stPrintPage .table th, .stPrintPage .table td { border-bottom: 1px solid #ddd; padding: 7px 8px; vertical-align: top; text-align: left; font-size: 12.5px; }
+.stGrand { text-align: right; font-size: 16px; margin: 16px 0; }
+@media print { .stPrintPage { padding: 0; } }
