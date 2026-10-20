@@ -6,7 +6,7 @@
 // reason (the person sees every adjustment), then issues it (numbered).
 import { bucharestDay, now, uuid } from "./db";
 import { audit } from "./auth";
-import { niceName } from "./labels";
+import { dutySql, niceName } from "./labels";
 
 export type { Kind, Status, Basis, Recurrence, Source, Rule, Line } from "./statement-labels";
 export { KIND_LABEL, STATUS_LABEL, BASIS_PICK, RECURRENCE_PICK, SOURCE_LABEL, totalOf } from "./statement-labels";
@@ -41,11 +41,12 @@ export const partyCols = (party: string) => {
   return { user_id: t === "u" ? id : null, contract_id: t === "k" ? id : null, collaboration_id: t === "c" ? id : null, kind: (t === "u" ? "payout" : "receivable") as Kind };
 };
 
-/** The parties a rule can be made for: the users (the firm's people and the collaborators' accounts), the open framework contracts, the collaborations. */
+/** The parties a rule can be made for: the firm's evaluators (ticked as such, also without an active account), the open framework contracts, the collaborations. */
 export async function partyChoices(db: D1Database) {
   const [users, contracts, collabs] = await Promise.all([
-    db.prepare(`SELECT 'u:' || id AS party, COALESCE(NULLIF(name, ''), email) AS name, CASE WHEN kind = 'partner' THEN 'colaborator' WHEN engagement = 'contractor' THEN 'colaborator extern' ELSE 'intern' END AS sub
-      FROM users WHERE status = 'active' AND kind IN ('internal', 'partner') ORDER BY kind = 'partner', name`).all<{ party: string; name: string; sub: string }>(),
+    db.prepare(`SELECT 'u:' || id AS party, COALESCE(NULLIF(name, ''), email) AS name,
+        (CASE WHEN engagement = 'contractor' THEN 'colaborator extern' ELSE 'intern' END) || (CASE status WHEN 'active' THEN '' WHEN 'invited' THEN ' · cont neactivat' ELSE ' · cont inactiv' END) AS sub
+      FROM users WHERE kind = 'internal' AND status <> 'deleted' AND ${dutySql("evaluator")} ORDER BY status <> 'active', name`).all<{ party: string; name: string; sub: string }>(),
     db.prepare(`SELECT 'k:' || k.id AS party, COALESCE(e.name, '—') AS name, 'contract cadru nr. ' || COALESCE(k.number, '—') AS sub FROM contracts k LEFT JOIN entities e ON e.id = k.client_id
       WHERE k.kind = 'framework' AND k.closed_on IS NULL ORDER BY e.name`).all<{ party: string; name: string; sub: string }>(),
     db.prepare(`SELECT 'c:' || c.id AS party, e.name, 'colaborare' || COALESCE(' nr. ' || c.number, '') AS sub FROM collaborations c JOIN entities e ON e.id = c.firm_id ORDER BY e.name`).all<{ party: string; name: string; sub: string }>(),

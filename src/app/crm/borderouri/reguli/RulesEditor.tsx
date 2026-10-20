@@ -81,7 +81,7 @@ export function RulesEditor({ canEdit, canDelete }: { canEdit: boolean; canDelet
             <label className="field">Pentru cine
               <select className="select" value={form.party} disabled={!!editing} onChange={(e) => set("party", e.target.value)}>
                 <option value="">— alege —</option>
-                <optgroup label="Plată colaborator (persoană)">{d.users.filter((c) => editing || !taken.has(c.party)).map((c) => <option key={c.party} value={c.party}>{c.name} · {c.sub}</option>)}</optgroup>
+                <optgroup label="Plată evaluator">{d.users.filter((c) => editing || !taken.has(c.party)).map((c) => <option key={c.party} value={c.party}>{c.name} · {c.sub}</option>)}</optgroup>
                 <optgroup label="De încasat · contract cadru">{d.contracts.filter((c) => editing || !taken.has(c.party)).map((c) => <option key={c.party} value={c.party}>{c.name} · {c.sub}</option>)}</optgroup>
                 <optgroup label="De încasat · colaborare">{d.collabs.filter((c) => editing || !taken.has(c.party)).map((c) => <option key={c.party} value={c.party}>{c.name} · {c.sub}</option>)}</optgroup>
               </select>

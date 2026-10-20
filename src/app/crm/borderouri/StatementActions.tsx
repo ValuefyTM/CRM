@@ -115,7 +115,7 @@ export function NewStatement({ period, base, users, contracts, collabs }: { peri
             <label className="field">Pentru cine
               <select className="select" value={party} onChange={(e) => setParty(e.target.value)}>
                 <option value="">— alege —</option>
-                <optgroup label="Plată colaborator (persoană)">{users.map((c) => <option key={c.party} value={c.party}>{c.name} · {c.sub}</option>)}</optgroup>
+                <optgroup label="Plată evaluator">{users.map((c) => <option key={c.party} value={c.party}>{c.name} · {c.sub}</option>)}</optgroup>
                 <optgroup label="De încasat · contract cadru">{contracts.map((c) => <option key={c.party} value={c.party}>{c.name} · {c.sub}</option>)}</optgroup>
                 <optgroup label="De încasat · colaborare">{collabs.map((c) => <option key={c.party} value={c.party}>{c.name} · {c.sub}</option>)}</optgroup>
               </select>
