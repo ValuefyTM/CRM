@@ -3,6 +3,8 @@
 // CRM, or added), 3 the assets, 4 the report and its team. A bar at the bottom sums it up and says what is missing.
 import { billingLabel } from "@/lib/billing-modes";
 import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
+import { dutyIn } from "@/lib/labels";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PURPOSES } from "@/lib/order-labels";
 import { assetProfile, capType, emptyAsset, type AssetForm } from "@/lib/asset-labels";
@@ -90,7 +92,7 @@ export function ContractOrderForm(p: {
   const [f, setF] = useState({
     contract_id: preset?.id ?? "", collaboration_id: "", bank_ref: "", bank_branch: "", ordered_on: today, report_type: kindOf(preset?.report_type), purpose: preset?.purpose || "Garantare bancară",
     fee: preset?.fee ? String(preset.fee) : "", fee_later: false, report_number: "", client_id: "", client_kind: "person" as "person" | "company", client_name: "", client_phone: "", client_email: "", client_cui: "",
-    inspection_notes: "", notes: "", evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "", verifier_id: "", inspector_id: "", due_on: inThreeDays(), urgent: false,
+    inspection_notes: "", notes: "", evaluator_id: p.evaluators.some((e) => e.id === p.me && dutyIn(e.duties, "evaluator")) ? p.me : "", verifier_id: "", inspector_id: "", due_on: inThreeDays(), urgent: false,
   });
   // The fee field unlocked by hand (an exception to the grid).
   const [feeFree, setFeeFree] = useState(false);
@@ -320,11 +322,11 @@ export function ContractOrderForm(p: {
         <Step n={4} title="Raport și echipă" sub="Doar evaluatorul principal e obligatoriu; restul se pot alege și după creare." done={!now.evaluator_id} />
         <div className="nwTeam">
           <div className="field"><span className="fLabel">Evaluator principal <Req /></span>
-            <PersonPicker label="Evaluator principal" value={f.evaluator_id} onChange={(v) => { setF({ ...f, evaluator_id: v }); setErrors((x) => ({ ...x, evaluator_id: "" })); }} people={p.evaluators} me={p.me} />
+            <PersonPicker label="Evaluator principal" value={f.evaluator_id} onChange={(v) => { setF({ ...f, evaluator_id: v }); setErrors((x) => ({ ...x, evaluator_id: "" })); }} people={p.evaluators.filter((x) => dutyIn(x.duties, "evaluator"))} me={p.me} />
             {err("evaluator_id")}
           </div>
           <div className="field"><span className="fLabel">Verificator <small>(opțional)</small></span>
-            <PersonPicker label="Verificator" value={f.verifier_id} onChange={(v) => setF({ ...f, verifier_id: v })} people={p.evaluators.filter((x) => x.id !== f.evaluator_id)} me={p.me}
+            <PersonPicker label="Verificator" value={f.verifier_id} onChange={(v) => setF({ ...f, verifier_id: v })} people={p.evaluators.filter((x) => x.id !== f.evaluator_id && dutyIn(x.duties, "verifier"))} me={p.me}
               extras={[{ value: "", label: "Mai târziu", hint: "se alege după creare" }]} placeholder="Mai târziu" />
           </div>
           <div className="field"><span className="fLabel">Inspector <small>(opțional · pentru toate bunurile)</small></span>

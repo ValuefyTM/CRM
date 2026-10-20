@@ -3,6 +3,8 @@
 import { BillingModePick } from "@/components/BillingModePick";
 import { useEffect, useState } from "react";
 import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
+import { dutyIn } from "@/lib/labels";
+
 import { AssetsEditor } from "@/components/AssetsEditor";
 import { emptyAsset, type AssetForm } from "@/lib/asset-labels";
 import { ReferralPick, type Referral } from "@/components/ReferralPick";
@@ -137,7 +139,7 @@ export function ContractForm(p: {
   const [fresh, setFresh] = useState({ on: !!q?.fresh, kind: "person" as "person" | "company", name: "", cui: "", phone: "", email: "", city: "", ...(q?.fresh ?? {}) });
   const [f, setF] = useState({
     fee: p.existing?.fee ? String(p.existing.fee) : "", purpose: p.existing?.purpose ?? "", report_type: p.existing?.report_type ?? "Raport de evaluare", ordered_on: today(),
-    evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "", verifier_id: "", due_on: "", urgent: q?.urgent ?? false, send_contract: true, inspection_notes: q?.inspection_notes ?? "", notes: q?.notes ?? "",
+    evaluator_id: p.evaluators.some((e) => e.id === p.me && dutyIn(e.duties, "evaluator")) ? p.me : "", verifier_id: "", due_on: "", urgent: q?.urgent ?? false, send_contract: true, inspection_notes: q?.inspection_notes ?? "", notes: q?.notes ?? "",
   });
   // where the contract goes for signing (asked when converting an offer)
   const [sendTo, setSendTo] = useState(q?.email ?? "");
@@ -338,10 +340,10 @@ export function ContractForm(p: {
               <h2>Echipă</h2>
               <div className="formRow">
                 <div className="field">Evaluator principal
-                  <PersonPicker label="Evaluator principal" value={f.evaluator_id} onChange={(v) => setF({ ...f, evaluator_id: v })} people={p.evaluators} me={p.me} />
+                  <PersonPicker label="Evaluator principal" value={f.evaluator_id} onChange={(v) => setF({ ...f, evaluator_id: v })} people={p.evaluators.filter((x) => dutyIn(x.duties, "evaluator"))} me={p.me} />
                 </div>
                 <div className="field">Verificator <small>(opțional)</small>
-                  <PersonPicker label="Verificator" value={f.verifier_id} onChange={(v) => setF({ ...f, verifier_id: v })} people={p.evaluators.filter((x) => x.id !== f.evaluator_id)} me={p.me}
+                  <PersonPicker label="Verificator" value={f.verifier_id} onChange={(v) => setF({ ...f, verifier_id: v })} people={p.evaluators.filter((x) => x.id !== f.evaluator_id && dutyIn(x.duties, "verifier"))} me={p.me}
                     extras={[{ value: "", label: "Mai târziu", hint: "se alege după creare" }]} placeholder="Mai târziu" />
                 </div>
                 <label className="field">Termen predare <small>(opțional)</small><input className="input" type="date" value={f.due_on} onChange={set("due_on")} /></label>

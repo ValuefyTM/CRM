@@ -4,6 +4,8 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
+import { dutyIn } from "@/lib/labels";
+
 
 type Collab = { id: string; firm: string; number: string | null };
 const SENT_VIA: [string, string][] = [["email", "Email"], ["whatsapp", "WhatsApp"], ["phone", "Telefon"], ["meeting", "La birou / întâlnire"]];
@@ -41,7 +43,7 @@ export function QuoteActions({ id, status, base, canEdit, canDelete, canConvert,
   const [sentBox, setSentBox] = useState(false);
   const [via, setVia] = useState("email");
   const [conv, setConv] = useState(false);
-  const [c, setC] = useState({ mode: channel === "collab" ? "collab" : "direct", collaboration_id: collaborationId ?? "", evaluator_id: evaluators.some((e) => e.id === me) ? me : "", verifier_id: "", due_on: "", send_contract: true });
+  const [c, setC] = useState({ mode: channel === "collab" ? "collab" : "direct", collaboration_id: collaborationId ?? "", evaluator_id: evaluators.some((e) => e.id === me && dutyIn(e.duties, "evaluator")) ? me : "", verifier_id: "", due_on: "", send_contract: true });
   useEffect(() => {
     if (!conv && !sentBox && !sendBox) return;
     const k = (e: KeyboardEvent) => { if (e.key === "Escape") { setConv(false); setSentBox(false); setSendBox(false); } };
@@ -163,10 +165,10 @@ export function QuoteActions({ id, status, base, canEdit, canDelete, canConvert,
               <>
                 <div className="formRow">
                   <div className="field">Evaluator principal
-                    <PersonPicker label="Evaluator principal" value={c.evaluator_id} onChange={(v) => setC({ ...c, evaluator_id: v })} people={evaluators} me={me} />
+                    <PersonPicker label="Evaluator principal" value={c.evaluator_id} onChange={(v) => setC({ ...c, evaluator_id: v })} people={evaluators.filter((x) => dutyIn(x.duties, "evaluator"))} me={me} />
                   </div>
                   <div className="field">Verificator <small>(opțional)</small>
-                    <PersonPicker label="Verificator" value={c.verifier_id} onChange={(v) => setC({ ...c, verifier_id: v })} people={evaluators.filter((x) => x.id !== c.evaluator_id)} me={me}
+                    <PersonPicker label="Verificator" value={c.verifier_id} onChange={(v) => setC({ ...c, verifier_id: v })} people={evaluators.filter((x) => x.id !== c.evaluator_id && dutyIn(x.duties, "verifier"))} me={me}
                       extras={[{ value: "", label: "Mai târziu", hint: "se alege după creare" }]} placeholder="Mai târziu" />
                   </div>
                 </div>

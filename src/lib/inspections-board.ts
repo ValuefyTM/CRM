@@ -1,4 +1,5 @@
 // Server-only: all the team's inspections for the CRM (list, week calendar, map), with filters and counts.
+import { dutySql } from "./labels";
 import { photoUrl, presenceOf, type Presence } from "./presence";
 import { parseGeo } from "./registry";
 import { can, leadSql, type WithPerms } from "./perms";
@@ -113,7 +114,7 @@ export async function inspectionBoard(db: D1Database, f: BoardFilters, viewer?: 
     db.prepare(`SELECT u.id, COALESCE(NULLIF(u.name, ''), u.email) AS name, u.last_seen_at, u.avatar_at,
         (SELECT COUNT(*) FROM inspections i LEFT JOIN reports r ON r.id = i.report_id WHERE i.inspector_id = u.id AND ${ACTIVE}) AS active
       FROM users u WHERE u.kind = 'internal' AND u.status NOT IN ('disabled', 'deleted')
-        AND (u.role IN ('evaluator', 'inspector') OR ',' || COALESCE(u.duties, '') || ',' LIKE '%,inspector,%' OR EXISTS (SELECT 1 FROM inspections i WHERE i.inspector_id = u.id AND i.glide_id IS NULL))
+        AND (${dutySql("inspector", "u.duties")} OR EXISTS (SELECT 1 FROM inspections i WHERE i.inspector_id = u.id AND i.glide_id IS NULL))
       ORDER BY active DESC, name`).all<{ id: string; name: string; last_seen_at: string | null; avatar_at: string | null; active: number }>(),
   ]);
   const canOpen = await openable(db, viewer, [...new Set([...rows.results, ...week.results].map((r) => r.report_id).filter((x): x is string => !!x))]);

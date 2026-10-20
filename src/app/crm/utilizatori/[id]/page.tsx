@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { dutiesOf } from "@/lib/labels";
 import { notFound } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { redirect } from "next/navigation";
@@ -87,7 +88,7 @@ export default async function UserPage({ params, searchParams }: { params: Promi
             kind={u.kind} base={base} userId={u.id} firms={firms} readOnly={!canManage} lockRole={self || u.role === "owner"} canMakeOwner={me.role === "owner"}
             roles={roleOptions} shares={u.kind === "internal" && (me.role === "owner" || self || can(me, "fees.all"))} editShares={me.role === "owner"}
             initial={{
-              name: u.name, email: u.email, phone: u.phone ?? "", role: u.role, engagement: u.engagement ?? "employee", anevar_no: u.anevar_no ?? "", duties: [],
+              name: u.name, email: u.email, phone: u.phone ?? "", role: u.role, engagement: u.engagement ?? "employee", anevar_no: u.anevar_no ?? "", duties: dutiesOf(u),
               specializations: u.specializations ? u.specializations.split(",") : [], coverage: u.coverage ?? "", partner_id: u.partner_id ?? "",
               client_type: u.client_type ?? "person", company: u.company ?? "", cui: u.cui ?? "", city: u.city ?? "", notes: u.notes ?? "",
               share_evaluator: numStr(shares?.share_evaluator), share_verifier: numStr(shares?.share_verifier),

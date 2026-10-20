@@ -9,14 +9,26 @@ export const INTERNAL_ROLES = [
   ["evaluator", "Evaluator"],
   ["operator", "Secretariat"],
 ] as const;
-/** Before Permisiuni v2: work a team member did besides the role (kept for old accounts; not edited any more). Work, whatever their role in the CRM (several can be ticked). */
+/**
+ * What a team member may be in a report's team (ticks on the profile, whatever their role in the CRM): main evaluator,
+ * verifier, inspector. Ticked only with the ANEVAR card filled in. Kept in users.duties as "evaluator,verifier".
+ */
 export const DUTIES = [
-  ["evaluator", "Evaluator"],
+  ["evaluator", "Evaluator principal"],
+  ["verifier", "Verificator"],
   ["inspector", "Inspector"],
 ] as const;
-export const dutiesOf = (u: { role: string; duties?: string | null }) =>
-  Array.from(new Set([...(u.duties ?? "").split(",").filter(Boolean), ...(u.role === "evaluator" || u.role === "inspector" ? [u.role] : [])]));
-export const hasDuty = (u: { role: string; duties?: string | null }, d: "evaluator" | "inspector") => dutiesOf(u).includes(d);
+export type Duty = (typeof DUTIES)[number][0];
+/** The duties of a user; an account saved before the ticks existed (duties NULL) goes by its role. */
+export const dutiesOf = (u: { role: string; duties?: string | null }): Duty[] =>
+  u.duties == null
+    ? (u.role === "evaluator" || u.role === "owner" || u.role === "admin" ? ["evaluator", "verifier", "inspector"] : u.role === "inspector" ? ["inspector"] : [])
+    : (u.duties.split(",").filter((d): d is Duty => DUTIES.some(([k]) => k === d)));
+export const hasDuty = (u: { role: string; duties?: string | null }, d: Duty) => dutiesOf(u).includes(d);
+/** The duties string of a person in a picker list carries the tick. */
+export const dutyIn = (duties: string | null | undefined, d: Duty) => `,${duties ?? ""},`.includes(`,${d},`);
+/** SQL: the user (column `col`) has the duty. */
+export const dutySql = (d: Duty, col = "duties") => `',' || COALESCE(${col}, '') || ',' LIKE '%,${d},%'`;
 
 export const PARTNER_ROLES = [
   ["owner", "Administrator cont"],

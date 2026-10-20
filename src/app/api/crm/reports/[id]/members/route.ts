@@ -2,6 +2,7 @@ import { audit } from "@/lib/auth";
 import { now } from "@/lib/db";
 import { err, json, reportApi } from "@/lib/api";
 import { ROLE_LABEL } from "@/lib/reports";
+import { hasDuty, type Duty } from "@/lib/labels";
 import { pushLater } from "@/lib/push";
 import { mailAssignment } from "@/lib/dossier";
 
@@ -13,8 +14,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const b = await json(req);
   const role = typeof b.role === "string" && ROLE_LABEL[b.role] ? b.role : null;
   if (!role) return err("Alege rolul.");
-  const u = await a.db.prepare("SELECT id, COALESCE(NULLIF(name, ''), email) AS name FROM users WHERE id = ? AND kind = 'internal'").bind(String(b.user ?? "")).first<{ id: string; name: string }>();
+  const u = await a.db.prepare("SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role, duties FROM users WHERE id = ? AND kind = 'internal'").bind(String(b.user ?? "")).first<{ id: string; name: string; role: string; duties: string | null }>();
   if (!u) return err("Alege persoana.");
+  if (role !== "assistant" && !hasDuty(u, role as Duty)) return err(`${u.name} nu are bifa „${ROLE_LABEL[role]}” pe profil (Utilizatori).`);
   if (!(await a.db.prepare("SELECT id FROM reports WHERE id = ?").bind(id).first())) return err("Raportul nu există.", 404);
   await a.db.prepare("INSERT OR IGNORE INTO report_members (report_id, user_id, role, added_at, added_by) VALUES (?, ?, ?, ?, ?)").bind(id, u.id, role, now(), a.user.id).run();
   await a.db.prepare("UPDATE reports SET updated_at = ? WHERE id = ?").bind(now(), id).run();

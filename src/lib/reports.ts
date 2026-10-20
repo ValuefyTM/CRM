@@ -260,8 +260,8 @@ export async function reportTeam(db: D1Database, id: string) {
 
 /** People who can be put on a report: active internal accounts. */
 export async function teamCandidates(db: D1Database) {
-  return withPresence((await db.prepare("SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role, last_seen_at, avatar_at FROM users WHERE kind = 'internal' AND status NOT IN ('disabled', 'deleted') ORDER BY name")
-    .all<{ id: string; name: string; role: string; last_seen_at: string | null; avatar_at: string | null }>()).results);
+  return withPresence((await db.prepare("SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role, duties, last_seen_at, avatar_at FROM users WHERE kind = 'internal' AND status NOT IN ('disabled', 'deleted') ORDER BY name")
+    .all<{ id: string; name: string; role: string; duties: string | null; last_seen_at: string | null; avatar_at: string | null }>()).results);
 }
 
 export type ReportDocument = {

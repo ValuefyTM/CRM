@@ -73,7 +73,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
             )}
             <QuoteActions id={q.id} status={q.status} base={base} canEdit={can(user, "orders.E")} canDelete={can(user, "orders.D")} canConvert={can(user, "orders.A")}
               collabs={collabs.map((c) => ({ id: c.id, firm: c.firm, number: c.number }))} me={user.id} channel={q.channel} collaborationId={q.collaboration_id} hasEmail={!!q.client_email} email={q.client_email ?? ""} hasFee={!!q.fee} publicLink={publicLink}
-              evaluators={evaluators.map((e) => ({ id: e.id, name: e.name, sub: e.sub, presence: e.presence, seen: e.seen, photo: e.photo }))} />
+              evaluators={evaluators.map((e) => ({ id: e.id, name: e.name, sub: e.sub, presence: e.presence, seen: e.seen, photo: e.photo, duties: e.duties }))} />
           </section>
           <section className="card">
             <h2>Bunuri de evaluat <span className="muted">· {assets.length}</span></h2>

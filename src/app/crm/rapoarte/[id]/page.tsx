@@ -619,7 +619,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
       </div>
       {tab !== "documente" && <aside className="dSide">
         <section className="card">
-          <div className="cardHead"><h2>Echipa</h2>{c.members && <AddMember id={r.id} people={people.map((x) => ({ ...x, sub: ROLE_NAME[x.role] ?? x.role }))} />}</div>
+          <div className="cardHead"><h2>Echipa</h2>{c.members && <AddMember id={r.id} people={people.map((x) => ({ ...x, sub: ROLE_NAME[x.role] ?? x.role, duties: x.duties }))} />}</div>
           {team.length === 0 ? <p className="hint">Nimeni alocat încă.</p> : (
             <ul className="dTeam">
               {/* One line per person: someone who is both evaluator and inspector shows once, with both roles. */}

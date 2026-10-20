@@ -6,7 +6,7 @@ import type { Kind } from "./site";
 export type { Kind } from "./site";
 
 export * from "./labels";
-import { CLIENT_TYPES, ENGAGEMENTS, INTERNAL_ROLES, SPECIALIZATIONS } from "./labels";
+import { CLIENT_TYPES, ENGAGEMENTS, INTERNAL_ROLES, SPECIALIZATIONS , DUTIES } from "./labels";
 
 export type User = {
   id: string; kind: Kind; email: string; name: string; phone: string | null; role: string; status: "invited" | "active" | "disabled" | "deleted";
@@ -107,9 +107,11 @@ export function validateUser(kind: Kind, body: unknown, currentRole?: string, by
       v.role = role;
     }
     v.engagement = oneOf(ENGAGEMENTS, b.engagement) ?? "employee";
-    // No duties any more: evaluators also inspect; the role in a report's team says who does what.
-    v.duties = null;
     v.anevar_no = opt(b.anevar_no, 40);
+    // The ticks (evaluator, verifier, inspector): who can be what in a report's team; only with the ANEVAR card filled in.
+    const duties = Array.isArray(b.duties) ? b.duties : String(b.duties ?? "").split(",");
+    v.duties = DUTIES.map(([k]) => k as string).filter((k) => duties.includes(k)).join(",");
+    if (v.duties && !v.anevar_no) return { ok: false, error: "Bifele de evaluator, verificator sau inspector se pot pune doar cu nr. de legitimație ANEVAR completat." };
     const specs = Array.isArray(b.specializations) ? b.specializations : String(b.specializations ?? "").split(",");
     v.specializations = SPECIALIZATIONS.map(([k]) => k).filter((k) => specs.includes(k)).join(",") || null;
     v.coverage = opt(b.coverage, 200);

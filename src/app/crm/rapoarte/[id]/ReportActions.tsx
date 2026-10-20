@@ -2,6 +2,7 @@
 
 import { DOC_KINDS } from "@/lib/doc-kinds";
 import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
+import { dutyIn, type Duty } from "@/lib/labels";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -431,7 +432,7 @@ export function AddMember({ id, people }: { id: string; people: PickPerson[] }) 
       if (error) return setMsg(error);
       location.reload();
     }}>
-      <div style={{ minWidth: 280 }}><PersonPicker label="Persoana" value={user} onChange={setUser} people={people} placeholder="Alege persoana…" /></div>
+      <div style={{ minWidth: 280 }}><PersonPicker label="Persoana" value={user} onChange={setUser} people={role === "assistant" ? people : people.filter((x) => dutyIn(x.duties, role as Duty))} placeholder="Alege persoana…" /></div>
       <select className="select" value={role} onChange={(e) => setRole(e.target.value)} aria-label="Rol">{ROLES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
       <button type="submit" className="btn btnNavy btnSm">Adaugă</button>
       <button type="button" className="btn btnGhost btnSm" onClick={() => setOpen(false)}>Renunță</button>

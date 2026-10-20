@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CLIENT_TYPES, ENGAGEMENTS, INTERNAL_ROLES, PARTNER_ROLES, SPECIALIZATIONS } from "@/lib/labels";
+import { CLIENT_TYPES, DUTIES, ENGAGEMENTS, INTERNAL_ROLES, PARTNER_ROLES, SPECIALIZATIONS } from "@/lib/labels";
 import type { Kind } from "@/lib/site";
 
 export type UserValues = {
@@ -127,8 +127,21 @@ export function UserForm(props: {
           <>
             <div className="section">Evaluări și inspecții</div>
             <div className="grid2">
-              <label className="field"><span>Nr. legitimație ANEVAR <small>(opțional)</small></span><input className="input" value={f.anevar_no} onChange={set("anevar_no")} placeholder="ex. 12345" /></label>
+              <label className="field"><span>Nr. legitimație ANEVAR <small>(opțional)</small></span><input className="input" value={f.anevar_no} onChange={(e) => setF({ ...f, anevar_no: e.target.value, duties: e.target.value.trim() ? f.duties : [] })} placeholder="ex. 12345" /></label>
               <label className="field"><span>Zonă acoperită <small>(opțional)</small></span><input className="input" value={f.coverage} onChange={set("coverage")} placeholder="ex. Timiș, Arad, Caraș-Severin" /></label>
+            </div>
+            <div className="field"><span>Roluri în rapoarte <small>{f.anevar_no.trim() ? "(apare în listele de alocare pentru ce bifezi)" : "(se bifează doar cu nr. de legitimație ANEVAR completat)"}</small></span>
+              <div className="chips">
+                {DUTIES.map(([k, l]) => {
+                  const on = f.duties.includes(k), ok = !!f.anevar_no.trim();
+                  return (
+                    <label key={k} className="check" style={{ alignItems: "center", padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 999, background: on ? "var(--acc-soft)" : "#fff", opacity: ok ? 1 : 0.55 }}>
+                      <input type="checkbox" checked={on} disabled={!ok || props.readOnly} onChange={() => setF({ ...f, duties: on ? f.duties.filter((d) => d !== k) : [...f.duties, k] })} />
+                      <span><b>{l}</b></span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
             <div className="field">Specializări
               <div className="chips">

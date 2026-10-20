@@ -5,7 +5,9 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Presence } from "@/lib/presence";
 import { Avatar, PersonLine } from "./Avatar";
 
-export type PickPerson = { id: string; name: string; sub?: string | null; presence?: Presence | null; seen?: string | null; photo?: string | null };
+export type PickPerson = { id: string; name: string; sub?: string | null; presence?: Presence | null; seen?: string | null; photo?: string | null;
+  /** "evaluator,verifier,inspector": what the person may be in a team (the pickers filter on it) */
+  duties?: string | null };
 export type PickExtra = { value: string; label: string; hint?: string; after?: boolean };
 
 export function PersonPicker({ value, onChange, people, me, placeholder = "Alege…", extras = [], label, disabled }: {

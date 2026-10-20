@@ -13,7 +13,7 @@ import { CrmShell } from "@/components/CrmShell";
 import { History } from "@/components/History";
 import { OrderDocuments, OrderInfo, OrderStatusCard } from "@/components/OrderDetails";
 import { ReportList } from "@/components/ReportList";
-import { hasDuty } from "@/lib/labels";
+import { hasDuty, dutySql } from "@/lib/labels";
 import { isExpired, money, offerDocs, offerDraft, offerForOrder, offerTotals, type OfferInput } from "@/lib/offers";
 import { offerLink } from "@/lib/offer-emails";
 import { OfferEditor } from "./OfferEditor";
@@ -53,7 +53,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
   const offerable = !o.glide_id && (portal || o.source === "site" || o.source === "direct");
   const offer = offerable ? await offerForOrder(db, id) : null;
   const evaluators = !o.glide_id
-    ? (await db.prepare("SELECT id, COALESCE(NULLIF(name, ''), email) AS name, anevar_no, role, duties, last_seen_at, avatar_at FROM users WHERE kind = 'internal' AND status NOT IN ('disabled', 'deleted') AND (role IN ('evaluator', 'owner', 'admin') OR ',' || COALESCE(duties, '') || ',' LIKE '%,evaluator,%' OR NULLIF(TRIM(anevar_no), '') IS NOT NULL) ORDER BY name")
+    ? (await db.prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, anevar_no, role, duties, last_seen_at, avatar_at FROM users WHERE kind = 'internal' AND status NOT IN ('disabled', 'deleted') AND (${dutySql("evaluator")} OR ${dutySql("verifier")}) ORDER BY name`)
       .all<{ id: string; name: string; anevar_no: string | null; role: string; duties: string | null; last_seen_at: string | null; avatar_at: string | null }>()).results
       .map((e) => ({ ...e, ...presenceOf(e.last_seen_at), photo: photoUrl(e.id, e.avatar_at), role: hasDuty(e, "evaluator") ? "evaluator" : e.role }))
     : [];
@@ -185,7 +185,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
                     <a className="btn btnGold" href={`${base}/comenzi/${o.id}/procesare`}>Procesează: client, bunuri, echipă →</a>
                   ) : <DossierOpen
                     order={o.id} base={base} me={user.id} evaluator={offer?.evaluator_id ?? null}
-                    evaluators={evaluators.map((e) => ({ id: e.id, name: e.name, sub: e.anevar_no ? `Evaluator ANEVAR ${e.anevar_no}` : "Evaluator", presence: e.presence, seen: e.seen, photo: e.photo }))}
+                    evaluators={evaluators.map((e) => ({ id: e.id, name: e.name, sub: e.anevar_no ? `Evaluator ANEVAR ${e.anevar_no}` : "Evaluator", presence: e.presence, seen: e.seen, photo: e.photo, duties: e.duties }))}
                     label={contractOrder || offer?.status === "accepted" ? "Creează raportul" : "Creează raportul acum"}
                     primary={contractOrder || offer?.status === "accepted"}
                     hint={`${orderWhat(o)}${o.address ? ` · ${orderPlace(o)}` : ""} · ${o.client_name ?? ""}. Evaluatorul principal primește raportul pe email.`}

@@ -1,13 +1,15 @@
 "use client";
 
 import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
+import { dutyIn } from "@/lib/labels";
+
 import { useEffect, useRef, useState } from "react";
 import { capType, emptyAsset, type AssetForm } from "@/lib/asset-labels";
 import { feeKindLabel, feeKindOf, gridRate, netFromGrid, parseFeeGrid } from "@/lib/fee-grid";
 import { PURPOSES } from "@/lib/order-labels";
 import { AssetsEditor } from "@/components/AssetsEditor";
 
-type Person = { id: string; name: string; role: string };
+type Person = { id: string; name: string; role: string; duties?: string | null };
 type OrderInfo = {
   id: string; bank: string | null; ref: string | null; client: string | null; phone: string | null; email: string | null; branch: string | null; link: string | null;
   contract_id: string | null; fee: number | null; report_type: string | null; purpose: string | null; urgent: boolean; source: string; city: string | null; address: string | null;
@@ -44,7 +46,7 @@ export function ProcessWizard(p: {
   const [bank, setBank] = useState({ branch: o.branch ?? "", consultant: "", purpose: o.purpose ?? "Credit bancar", report_type: o.report_type ?? "", notes: "" });
   const [assets, setAssets] = useState<AssetForm[]>([{ ...emptyAsset({ city: o.city }), full_address: o.address ?? "", is_main: true }]);
   const [dos, setDos] = useState({
-    contract_id: o.contract_id ?? "", fee: o.fee ? String(o.fee) : "", fee_later: false, report_number: "", urgent: o.urgent, evaluator_id: p.evaluators.some((e) => e.id === p.me) ? p.me : "",
+    contract_id: o.contract_id ?? "", fee: o.fee ? String(o.fee) : "", fee_later: false, report_number: "", urgent: o.urgent, evaluator_id: p.evaluators.some((e) => e.id === p.me && dutyIn(e.duties, "evaluator")) ? p.me : "",
     verifier_id: "", due_on: "",
   });
   const [feeFree, setFeeFree] = useState(false);
@@ -260,10 +262,10 @@ export function ProcessWizard(p: {
               : <p className="hint" style={{ margin: 0 }}>Nr. raport: automat, următorul din seria VALUEFY.</p>}
             <div className="formRow">
               <div className="field">Evaluator principal
-                <PersonPicker label="Evaluator principal" value={dos.evaluator_id} onChange={(v) => setDos({ ...dos, evaluator_id: v })} people={p.evaluators} me={p.me} />
+                <PersonPicker label="Evaluator principal" value={dos.evaluator_id} onChange={(v) => setDos({ ...dos, evaluator_id: v })} people={p.evaluators.filter((x) => dutyIn(x.duties, "evaluator"))} me={p.me} />
               </div>
               <div className="field">Verificator <small>(opțional)</small>
-                <PersonPicker label="Verificator" value={dos.verifier_id} onChange={(v) => setDos({ ...dos, verifier_id: v })} people={p.evaluators.filter((x) => x.id !== dos.evaluator_id)} me={p.me}
+                <PersonPicker label="Verificator" value={dos.verifier_id} onChange={(v) => setDos({ ...dos, verifier_id: v })} people={p.evaluators.filter((x) => x.id !== dos.evaluator_id && dutyIn(x.duties, "verifier"))} me={p.me}
                   extras={[{ value: "", label: "Mai târziu", hint: "se alege după creare" }]} placeholder="Mai târziu" />
               </div>
               <label className="field">Termen predare raport<input className="input" type="date" value={dos.due_on} onChange={(e) => setDos({ ...dos, due_on: e.target.value })} /></label>

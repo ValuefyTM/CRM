@@ -1,6 +1,7 @@
 // Server-only: inspection tasks given from the CRM report page. The main evaluator of the report (or an owner /
 // administrator) gives the inspection of an asset to themselves or to a colleague; the inspector schedules it in the app.
 import { now, uuid } from "./db";
+import { dutySql, hasDuty } from "./labels";
 import { appUrl } from "./site";
 import { audit } from "./auth";
 import { esc, layout, sendEmail } from "./email";
@@ -26,7 +27,7 @@ export async function canAssign(db: D1Database, user: User, reportId: string) {
 export async function inspectorChoices(db: D1Database, me: string) {
   return (await db
     .prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role, coverage, last_seen_at, avatar_at FROM users
-      WHERE kind = 'internal' AND status NOT IN ('disabled', 'deleted') ORDER BY id = ? DESC, name`)
+      WHERE kind = 'internal' AND status NOT IN ('disabled', 'deleted') AND ${dutySql("inspector")} ORDER BY id = ? DESC, name`)
     .bind(me)
     .all<{ id: string; name: string; role: string; coverage: string | null; last_seen_at: string | null; avatar_at: string | null }>()).results
     .map((u) => ({ ...u, ...presenceOf(u.last_seen_at), photo: photoUrl(u.id, u.avatar_at) }));
@@ -58,6 +59,7 @@ export async function assignInspection(db: D1Database, user: User, reportId: str
     .bind(str(b.inspector, 80))
     .first<{ id: string; email: string; name: string; role: string; duties: string | null; anevar_no: string | null }>();
   if (!inspector) return { ok: false as const, error: "Alege inspectorul: tu sau un coleg din echipă." };
+  if (!hasDuty(inspector, "inspector")) return { ok: false as const, error: `${inspector.name} nu are bifa „Inspector” pe profil (Utilizatori).` };
   // Inspections through UVALO: the inspector needs a UVALO account with the same ANEVAR card (checked before anything is saved).
   const viaUvalo = (await inspChannel(db)) === "uvalo";
   if (viaUvalo) {
