@@ -3204,3 +3204,10 @@ span.rdPick { display: inline-block; }
 .rpNotes li:last-child { border-bottom: 0; }
 .rdFinalBar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 0 clamp(16px, 2.4vw, 22px) 12px; padding: 10px 14px; border-radius: 12px; background: var(--err-bg); border: 1px solid color-mix(in srgb, var(--err) 25%, transparent); font-size: 13px; }
 .rdFinalBar.empty { display: block; padding: 0; background: none; border: 0; }
+.rdHeadActs { display: inline-flex; align-items: center; gap: 12px; }
+.rdViewRow { display: flex; justify-content: flex-end; padding: 10px clamp(16px, 2.4vw, 22px) 0; }
+.rdPlus { margin-left: auto; width: 30px; height: 30px; min-width: 30px; padding: 0 !important; border-radius: 50%; border: 1px solid var(--line); background: var(--acc); color: var(--ink); font-size: 18px; font-weight: 700; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; align-self: center; }
+.rdPlus:hover { background: var(--acc-ink); color: #fff; }
+.rdPlus:disabled { opacity: .5; cursor: wait; }
+.rdTabs .rdPlus { margin: 0 0 4px auto; border: 1px solid var(--acc-ink); padding: 0; background: var(--acc); color: var(--ink); }
+.rdTabs .rdPlus:hover { background: var(--acc-ink); color: #fff; }

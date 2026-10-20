@@ -120,7 +120,7 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
     </>
   );
 
-  const upload = async (list: FileList | File[]) => {
+  const upload = async (list: FileList | File[], to: string = target) => {
     const files = [...list];
     const bad = files.filter((f) => !OK.test(f.name));
     setMsg(bad.length ? `Nu se pot atașa: ${bad.map((f) => f.name).join(", ")} (acceptăm PDF, imagini, Word, Excel, ZIP).` : "");
@@ -129,7 +129,7 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
       setBusy((n) => n + 1);
       const body = new FormData();
       body.set("file", file); body.set("kind", "source"); body.set("doc_type", guessDocKind(file.name));
-      if (target) body.set("asset", target);
+      if (to) body.set("asset", to);
       const r = await fetch(`/api/crm/reports/${report}/documents`, { method: "POST", body }).catch(() => null);
       const d = (await r?.json().catch(() => ({}))) as { error?: string };
       setBusy((n) => n - 1);
@@ -162,23 +162,39 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
             onChange={(e) => { if (e.target.files?.length) upload(e.target.files); e.target.value = ""; }} />
         </div>
   );
-  const choose = (k: string) => { setFilter(k); if (k && k !== "report") setTarget(k); else if (k === "report") setTarget(""); };
+  const choose = (k: string) => { setFilter(k); setTarget(k && k !== "report" ? k : ""); };
+  // "+" on the tabs: adds to the selected tab (an asset), else to the report's general folder
+  const plus = useRef<HTMLInputElement>(null);
   return (
     <div className={`rdLayout${deliver ? "" : " noDeliver"}`}>
     <section className="card flush rdCard">
       <div className="cardHead rdHead">
         <h2>Acte{filter ? <span className="muted"> · {nav.find(([k]) => k === filter)?.[1]}</span> : null}</h2>
-        <span className="muted">{shown.length} {shown.length === 1 ? "act" : "acte"}</span>
+        <span className="rdHeadActs">
+          <span className="muted">{shown.length} {shown.length === 1 ? "act" : "acte"}</span>
+          {downloadable > 0 && <a className="btn btnGhost btnSm" href={zipHref([])} title="Toate actele, câte un folder pentru raport și pentru fiecare bun">Descarcă tot dosarul (ZIP)</a>}
+        </span>
       </div>
-      {nav.length > 1 && (
-        <div className="rdTabs" role="tablist" aria-label="Acte pe bunuri">
-          {nav.map(([k, l, sub]) => (
-            <button key={k || "all"} type="button" role="tab" aria-selected={filter === k} title={sub ?? undefined} onClick={() => choose(k)}>
-              {l}<em>{count(k)}</em>
-            </button>
-          ))}
+      {items.length > 0 && (
+        <div className="rdViewRow">
+          <div className="segment rdViews" role="group" aria-label="Afișare">
+            {VIEWS.map(([k, l]) => <button key={k} type="button" aria-pressed={view === k} onClick={() => pickView(k)}>{l}</button>)}
+          </div>
         </div>
       )}
+      <div className="rdTabs" role="tablist" aria-label="Acte pe bunuri">
+        {nav.map(([k, l, sub]) => (
+          <button key={k || "all"} type="button" role="tab" aria-selected={filter === k} title={sub ?? undefined} onClick={() => choose(k)}>
+            {l}<em>{count(k)}</em>
+          </button>
+        ))}
+        {edit && <>
+          <button type="button" className="rdPlus" disabled={busy > 0} onClick={() => plus.current?.click()}
+            title={filter && filter !== "report" ? `Adaugă acte la ${nav.find(([k]) => k === filter)?.[1]}` : "Adaugă acte în dosarul general al raportului"} aria-label="Adaugă acte">+</button>
+          <input ref={plus} type="file" multiple hidden accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.webp,.doc,.docx,.xls,.xlsx,.zip"
+            onChange={(e) => { if (e.target.files?.length) upload(e.target.files, filter && filter !== "report" ? filter : ""); e.target.value = ""; }} />
+        </>}
+      </div>
 
       {edit && !deliver && dropZone}
       {msg && <p className="adMsg pad" role="alert">{msg}</p>}
@@ -191,9 +207,6 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
 
       {shown.length > 0 && (
         <div className="rdBar">
-          <div className="segment rdViews" role="group" aria-label="Afișare">
-            {VIEWS.map(([k, l]) => <button key={k} type="button" aria-pressed={view === k} onClick={() => pickView(k)}>{l}</button>)}
-          </div>
           {selectable.length > 0 && (
             <label className="check rdAll"><input type="checkbox" checked={allOn} ref={(el) => { if (el) el.indeterminate = picked.length > 0 && !allOn; }}
               onChange={(e) => setSel(e.target.checked ? new Set(selectable.map(keyOf)) : new Set())} /><span>{picked.length ? `${picked.length} selectate` : "Selectează tot"}</span></label>
@@ -202,7 +215,7 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
             {picked.length > 0 ? <>
               <a className="btn btnGhost btnSm" href={zipHref(picked)}>Descarcă selecția (ZIP)</a>
               {remove && picked.some((d) => d.origin === "report") && <button type="button" className="btn btnDanger btnSm" disabled={busy > 0} onClick={removePicked}>Șterge selecția</button>}
-            </> : downloadable > 0 && <a className="btn btnGhost btnSm" href={zipHref([])}>Descarcă tot (ZIP)</a>}
+            </> : null}
           </span>
         </div>
       )}

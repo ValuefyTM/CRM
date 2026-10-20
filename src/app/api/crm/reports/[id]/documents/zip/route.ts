@@ -22,9 +22,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!rep) return new Response("Raportul nu există.", { status: 404 });
   const [own, ord] = await Promise.all([
     all || rIds.length
-      ? a.db.prepare(`SELECT id, filename, kind, r2_key, size_bytes FROM report_documents WHERE report_id = ? AND status = 'uploaded' AND r2_key IS NOT NULL
+      ? a.db.prepare(`SELECT id, filename, kind, r2_key, size_bytes, asset_id FROM report_documents WHERE report_id = ? AND status = 'uploaded' AND r2_key IS NOT NULL
           ${all ? "" : `AND id IN (${rIds.map(() => "?").join(", ")})`} ORDER BY kind = 'final' DESC, created_at`).bind(id, ...(all ? [] : rIds))
-        .all<{ id: string; filename: string; kind: string; r2_key: string; size_bytes: number | null }>().then((x) => x.results)
+        .all<{ id: string; filename: string; kind: string; r2_key: string; size_bytes: number | null; asset_id: string | null }>().then((x) => x.results)
       : Promise.resolve([]),
     rep.order_id && (all || oIds.length)
       ? a.db.prepare(`SELECT id, filename, r2_key, size_bytes FROM order_documents WHERE order_id = ? AND r2_key IS NOT NULL
@@ -32,7 +32,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         .all<{ id: string; filename: string; r2_key: string; size_bytes: number | null }>().then((x) => x.results)
       : Promise.resolve([]),
   ]);
-  const files = [...own.map((d) => ({ ...d, dir: d.kind === "final" ? "Raport final/" : "" })), ...ord.map((d) => ({ ...d, dir: "Din comandă/" }))];
+  // one folder per tab of the page: "Raport" (the report's own documents, the signed report and the order's), and one per asset
+  const assets = (await a.db.prepare(`SELECT a.id, p.type, COALESCE(NULLIF(p.full_address, ''), p.city) AS place FROM assets a JOIN crm_properties p ON p.id = a.property_id
+      WHERE a.report_id = ? ORDER BY a.is_main DESC, a.rowid`).bind(id).all<{ id: string; type: string | null; place: string | null }>()).results;
+  const dirOf = new Map(assets.map((x, i) => [x.id, `${clean(`${i + 1}. ${x.type ? x.type.charAt(0) + x.type.slice(1).toLowerCase() : "Bun"}${x.place ? ` - ${x.place}` : ""}`).slice(0, 80)}/`]));
+  const files = [
+    ...own.map((d) => ({ ...d, dir: d.kind === "final" ? "Raport/Raport semnat/" : d.asset_id && dirOf.has(d.asset_id) ? dirOf.get(d.asset_id)! : "Raport/" })),
+    ...ord.map((d) => ({ ...d, dir: "Raport/Din comandă/" })),
+  ];
   if (!files.length) return new Response("Nu există acte de descărcat.", { status: 404 });
   if (files.reduce((s, f) => s + (f.size_bytes ?? 0), 0) > MAX_BYTES) return new Response("Actele depășesc 90 MB: alege mai puține și descarcă-le pe rând.", { status: 413 });
   const r2 = await bucket();
