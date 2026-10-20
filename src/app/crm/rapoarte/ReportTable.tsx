@@ -92,7 +92,12 @@ export function ReportTable({ rows, base, today, sort, sortHref, scope = true }:
                           <small>{caption}</small>
                         </div>
                       </td>
-                      <td><span className={`pill ${cls}`}><i />{label}</span></td>
+                      <td>
+                        <div className="two">
+                          <span className={`pill ${cls}`}><i />{label}</span>
+                          {r.status === "done" && r.report_date && <small className="repDate">raport din {fmtDate(r.report_date)}</small>}
+                        </div>
+                      </td>
                       <td style={{ textAlign: "right" }}>
                         <span className={`days${d.delivered ? " done" : d.late ? " late" : ""}`}>
                           <b>{d.days}</b>

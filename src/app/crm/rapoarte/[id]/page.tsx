@@ -319,8 +319,9 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             {SEGMENTS.map((t, i) => (
               <div key={t} className={`dSeg ${seg[i]}`}><i /><b>{t}</b><small>{segNote[i] || "—"}</small></div>
             ))}
-            <div className={`dDays${d.late ? " late" : d.delivered ? " done" : ""}`} title={`Zile calendaristice de la comandă · termen ${d.term} zile`}>
+            <div className={`dDays${d.late ? " late" : d.delivered ? " done" : ""}`} title={`Zile lucrătoare de la comandă · termen ${d.term} zile`}>
               <b>{d.days}</b><small>{d.late ? `din ${d.term} zile · +${d.over}` : `din ${d.term} zile`}</small>
+              {d.delivered && r.report_date && <small className="dDaysDate">raport din {fmtDate(r.report_date)}</small>}
             </div>
           </div>
         )}

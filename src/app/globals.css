@@ -3164,3 +3164,5 @@ span.rdPick { display: inline-block; }
 .anvForm th:last-child, .anvForm td:last-child { padding-right: clamp(16px, 2.4vw, 22px); }
 .anvForm th:not(:first-child), .anvForm td:not(:first-child) { width: 118px; }
 .anvForm td:first-child { white-space: normal; }
+.repDate { font-size: 11px; color: var(--muted-2); white-space: nowrap; }
+.dDaysDate { opacity: 0.85; font-weight: 600; }
