@@ -9,6 +9,8 @@ import { bucket } from "./orders";
 import { getFirm } from "./settings";
 import { DEFAULT_TEXT, fillText, type BillingText } from "./billing-text";
 import { oblioCancel, oblioCollect, oblioCreate, oblioDelete, OblioError } from "./oblio";
+import { feeKindLabel, feeKindOf, gridRate, parseFeeGrid } from "./fee-grid";
+import { niceName } from "./labels";
 
 export type BillingSettings = {
   cif: string; invoiceSeries: string; proformaSeries: string; vatName: string; vatPercent: number; vatPayer: boolean;
@@ -113,9 +115,13 @@ const totals = (lines: InvoiceLine[], vat: number) => {
   return { net, vat: v, total: round2(net + v) };
 };
 
+const lei2 = (n: number) => `${n.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} lei`;
+
 export type Draft = {
   kind: "invoice" | "proforma"; party: Party; lines: InvoiceLine[]; totals: ReturnType<typeof totals>; series: string; contractId: string | null; collaborationId: string | null;
   mentions: string; problems: string[];
+  /** Worth a look before issuing, but not blocking (the total differs from the bank's grid, say). */
+  warnings: string[];
   // For the preview, laid out like the invoice: the supplier, dates, unit and VAT.
   supplier: { name: string; cui: string; reg: string; address: string; iban: string }; issueDate: string; dueDate: string | null; unit: string; vatPercent: number;
 };
@@ -197,11 +203,14 @@ export const FINISHED_HERE = `(r.delivered_at >= (SELECT COALESCE(MAX(value), '9
 
 export async function draftForReport(db: D1Database, reportId: string): Promise<Draft | { error: string }> {
   const b = await getBilling(db);
-  const r = await db.prepare(`SELECT r.id, r.fee, r.fee_gross, r.delivered_at, r.status, r.glide_id, r.invoice_id, r.billed_outside_at, r.contract_id, k.kind AS contract_kind, k.client_id AS party_id, k.billing_mode, k.billing_text,
+  const r = await db.prepare(`SELECT r.id, r.fee, r.fee_gross, r.delivered_at, r.status, r.glide_id, r.invoice_id, r.billed_outside_at, r.contract_id, k.kind AS contract_kind, k.client_id AS party_id, k.billing_mode, k.billing_text, k.fee_grid,
+      (SELECT p.category FROM assets a JOIN crm_properties p ON p.id = a.property_id WHERE a.report_id = r.id ORDER BY a.is_main DESC LIMIT 1) AS asset_category,
+      (SELECT p.type FROM assets a JOIN crm_properties p ON p.id = a.property_id WHERE a.report_id = r.id ORDER BY a.is_main DESC LIMIT 1) AS asset_type,
       ${FINISHED_HERE} AS finished_here,
       o.collaboration_id, o.fee_net, c.billing_mode AS collab_mode, c.billing_text AS collab_text, c.firm_id
     FROM reports r LEFT JOIN contracts k ON k.id = r.contract_id LEFT JOIN orders o ON o.id = r.order_id LEFT JOIN collaborations c ON c.id = o.collaboration_id WHERE r.id = ?`).bind(reportId)
     .first<{ id: string; fee: number | null; fee_gross: number | null; delivered_at: string | null; status: string; glide_id: string | null; invoice_id: string | null; billed_outside_at: string | null; contract_id: string | null; contract_kind: string | null; party_id: string | null; finished_here: number;
+      fee_grid: string | null; asset_category: string | null; asset_type: string | null;
       billing_mode: BillingMode | null; billing_text: string | null; collaboration_id: string | null; fee_net: number | null; collab_mode: BillingMode | null; collab_text: string | null; firm_id: string | null }>();
   if (!r) return { error: "Raportul nu există." };
   if (r.invoice_id) return { error: "Raportul este deja facturat." };
@@ -223,7 +232,18 @@ export async function draftForReport(db: D1Database, reportId: string): Promise<
   const fine = Math.abs(price * 100 - Math.round(price * 100)) > 1e-6;
   const gross = !b.vatPayer ? null : !collab && r.fee_gross != null ? r.fee_gross : fine ? round2(price * (1 + b.vatPercent / 100)) : null;
   const lines: InvoiceLine[] = [{ name: text.product || b.product, price, quantity: 1, reportId: r.id, description: fillText(text.line, vals), gross }];
-  return finishDraft(db, b, "invoice", party, lines, collab ? null : r.contract_id, r.collaboration_id, fillText(text.mentions, vals));
+  const draft = await finishDraft(db, b, "invoice", party, lines, collab ? null : r.contract_id, r.collaboration_id, fillText(text.mentions, vals));
+  // Framework contract: the total with VAT is checked against the bank's fee grid for the main asset's kind.
+  if (!collab && r.contract_kind === "framework") {
+    const grid = parseFeeGrid(r.fee_grid), kind = feeKindOf(r.asset_category, r.asset_type), rate = gridRate(grid, kind);
+    if (!grid) draft.warnings.push("contractul cadru nu are grilă de onorarii setată, deci totalul nu a putut fi verificat");
+    else if (!kind || rate == null) draft.warnings.push(`bunul principal (${r.asset_type ?? "fără tip"}) nu are tarif în grila contractului, deci totalul nu a putut fi verificat`);
+    else {
+      const expected = grid.vat ? rate : round2(rate * (1 + draft.vatPercent / 100));
+      if (Math.abs(draft.totals.total - expected) > 0.005) draft.warnings.push(`totalul cu TVA (${lei2(draft.totals.total)}) diferă de grila contractului cadru pentru ${feeKindLabel(kind).toLowerCase()}: ${lei2(expected)}`);
+    }
+  }
+  return draft;
 }
 
 async function finishDraft(db: D1Database, b: BillingSettings, kind: "invoice" | "proforma", party: Party, lines: InvoiceLine[], contractId: string | null, collaborationId: string | null, mention: string): Promise<Draft> {
@@ -237,7 +257,7 @@ async function finishDraft(db: D1Database, b: BillingSettings, kind: "invoice" |
     !party.address && "clientul nu are adresă de facturare",
   ].filter(Boolean) as string[];
   return {
-    kind, party, lines, totals: totals(lines, b.vatPayer ? b.vatPercent : 0), series, contractId, collaborationId, mentions: [mention, b.mentions].filter(Boolean).join(" "), problems,
+    kind, party, lines, totals: totals(lines, b.vatPayer ? b.vatPercent : 0), series, contractId, collaborationId, mentions: [mention, b.mentions].filter(Boolean).join(" "), problems, warnings: [],
     supplier: { name: firm.name, cui: firm.cui, reg: firm.reg, address: firm.address, iban: firm.iban }, issueDate,
     dueDate: kind === "invoice" ? new Date(Date.parse(`${issueDate}T12:00:00Z`) + b.dueDays * 86400000).toISOString().slice(0, 10) : null,
     unit: b.unit, vatPercent: b.vatPayer ? b.vatPercent : 0,
@@ -302,7 +322,13 @@ export async function storePdf(db: D1Database, id: string, link: string | null |
 }
 
 export type InvoiceRow = { id: string; kind: string; series: string; number: string; issue_date: string; due_date: string | null; client_id: string | null; client_name: string | null;
-  contract_id: string | null; contract_number: string | null; total: number | null; status: string; paid_at: string | null; r2_key: string | null; oblio_link: string | null };
+  contract_id: string | null; contract_number: string | null; total: number | null; status: string; paid_at: string | null; r2_key: string | null; oblio_link: string | null;
+  /** the reports the document was issued for: "RE<nr>-<client>-<utilizator desemnat>" */
+  reports: { id: string; label: string }[] };
+type InvoiceRaw = Omit<InvoiceRow, "reports"> & { reports_json: string | null };
+/** "RE2690-Popescu Ion-BRD": the report's number, its client and its designated user (the bank). */
+export const reportRef = (x: { number: string | null; client: string | null; bank: string | null }) =>
+  ["RE" + (x.number ?? "?"), niceName(x.client ?? "") || "—", x.bank ?? "—"].join("-");
 
 export async function invoicesFor(db: D1Database, f: { contract?: string; report?: string; status?: string; kind?: string; q?: string; limit?: number; createdBy?: string }) {
   const w: string[] = [], a: (string | number)[] = [];
@@ -314,9 +340,16 @@ export async function invoicesFor(db: D1Database, f: { contract?: string; report
   else if (f.status === "scadente") { w.push("i.kind = 'invoice' AND i.status = 'issued' AND i.due_date < ?"); a.push(bucharestDay()); }
   else if (f.status) { w.push("i.status = ?"); a.push(f.status); }
   if (f.q?.trim()) { const like = `%${f.q.trim().replace(/[%_]/g, "")}%`; w.push("(i.client_name LIKE ? OR (i.series || ' ' || i.number) LIKE ? OR i.number = ?)"); a.push(like, like, f.q.trim()); }
-  return (await db.prepare(`SELECT i.id, i.kind, i.series, i.number, i.issue_date, i.due_date, i.client_id, i.client_name, i.contract_id, k.number AS contract_number, i.total, i.status, i.paid_at, i.r2_key, i.oblio_link
+  const { results } = await db.prepare(`SELECT i.id, i.kind, i.series, i.number, i.issue_date, i.due_date, i.client_id, i.client_name, i.contract_id, k.number AS contract_number, i.total, i.status, i.paid_at, i.r2_key, i.oblio_link,
+      (SELECT json_group_array(json_object('id', r.id, 'number', r.number, 'client', c.name, 'bank', COALESCE(b.code, b.name)))
+        FROM json_each(i.report_ids) j JOIN reports r ON r.id = j.value LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id) AS reports_json
       FROM invoices i LEFT JOIN contracts k ON k.id = i.contract_id ${w.length ? `WHERE ${w.join(" AND ")}` : ""} ORDER BY i.issue_date DESC, i.created_at DESC LIMIT ${f.limit ?? 200}`)
-    .bind(...a).all<InvoiceRow>()).results;
+    .bind(...a).all<InvoiceRaw>();
+  return results.map(({ reports_json, ...i }): InvoiceRow => {
+    let list: { id: string; number: string | null; client: string | null; bank: string | null }[] = [];
+    try { list = reports_json ? JSON.parse(reports_json) : []; } catch { /* none */ }
+    return { ...i, reports: list.map((x) => ({ id: x.id, label: reportRef(x) })) };
+  });
 }
 
 /** Records the payment in Oblio and here. */

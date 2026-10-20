@@ -80,6 +80,7 @@ export function IssueInvoice({ contract, report, kind = "invoice", label, primar
                 {d.mentions && <div className="invDocNote"><small>Mențiuni</small>{d.mentions}</div>}
               </div>
               {d.problems.length > 0 && <div className="error" role="alert">De rezolvat întâi: {d.problems.join("; ")}.</div>}
+              {d.warnings?.length > 0 && <div className="invWarn" role="alert"><b>Verifică înainte de emitere:</b> {d.warnings.join("; ")}.</div>}
             </>
           )}
           {msg && <div className="error" role="alert">{msg}</div>}
@@ -118,6 +119,7 @@ export function InvoiceList({ rows, admin, empty }: { rows: InvoiceRow[]; admin:
             <span className="who">
               <b className="mono">{i.series} {i.number}</b>
               <small className="muted">{day(i.issue_date)}{i.kind === "invoice" && i.due_date ? ` · scadentă ${day(i.due_date)}` : ""} · {lei(i.total)}</small>
+              {i.reports?.length > 0 && <small className="invRefs">{i.reports.map((r) => r.label).join(" · ")}</small>}
             </span>
             <span className={`pill ${i.status === "paid" ? "pillOk" : i.status === "cancelled" ? "" : i.kind === "invoice" && i.due_date && i.due_date < today() ? "pillErr" : "pillWarn"}`}><i />
               {i.status === "paid" ? `Încasată ${day(i.paid_at)}` : i.status === "cancelled" ? "Anulată" : i.kind === "proforma" ? "Emisă" : i.due_date && i.due_date < today() ? "Scadentă" : "De încasat"}</span>

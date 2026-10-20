@@ -10,7 +10,6 @@ import { STAGE_LABEL } from "@/lib/dossier";
 import { niceName } from "@/lib/labels";
 import { CrmShell } from "@/components/CrmShell";
 import { Avatar } from "@/components/Avatar";
-import { TrendChart } from "./acasa/TrendChart";
 
 export const metadata: Metadata = { title: "Acasă | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -240,11 +239,6 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
           </section>
         </div>
       </div>
-
-      <section className="card">
-        <div className="cardHead"><h2>Evoluție pe 12 luni</h2><a className="link" href={`${base}/rapoarte?status=done`}>Toate rapoartele predate</a></div>
-        <TrendChart months={d.months} money={money} base={base} />
-      </section>
 
       <div className="dbGrid team">
         <section className="card flush">
