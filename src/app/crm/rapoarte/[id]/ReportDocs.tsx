@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { PdfThumb } from "@/components/PdfThumb";
 import { useRouter } from "next/navigation";
 import { DOC_KIND_KEYS, docKindLabel, guessDocKind } from "@/lib/doc-kinds";
-import { DeleteDoc, DocTypeSelect, UploadButton } from "./ReportActions";
+import { DeleteDoc, DocTypeSelect, FinalDrop, UploadButton } from "./ReportActions";
 
 export type DocItem = {
   id: string; name: string; kind: string | null; asset_id: string | null; status: "uploaded" | "missing"; origin: "report" | "order" | "glide";
@@ -138,7 +138,8 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
     if (done) router.refresh();
   };
 
-  const nav: [string, string, string | null | undefined][] = [["", "Toate actele", null], ...(many ? [["report", "Tot raportul", "acte comune tuturor bunurilor"] as [string, string, string]] : []),
+  // "Doar raport": the documents of the report itself (not of an asset) — the signed report among them
+  const nav: [string, string, string | null | undefined][] = [["", "Toate actele", null], ["report", "Doar raport", "actele raportului, nu ale unui bun: și raportul semnat"],
     ...assets.map((a): [string, string, string | null | undefined] => [a.id, a.label, a.sub])];
   // "Adaugă acte noi": on the right, above the deliverables (in the list's card when there is no right column).
   const dropZone = (
@@ -152,7 +153,7 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
           {assets.length > 0 && (
             <label className="rdTarget">Atribuie la
               <select className="select selectSm" value={target} onChange={(e) => setTarget(e.target.value)}>
-                <option value="">Dosarul general (tot raportul)</option>
+                <option value="">Doar raport (nu pe un bun)</option>
                 {assets.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
               </select>
             </label>
@@ -181,6 +182,12 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
 
       {edit && !deliver && dropZone}
       {msg && <p className="adMsg pad" role="alert">{msg}</p>}
+      {/* "Doar raport": the deliverable (the signed report) is uploaded here too */}
+      {filter === "report" && edit && (
+        items.some((d) => d.final)
+          ? <div className="rdFinalBar"><span><b>Raportul semnat</b> e încărcat (primul din listă, cu roșu).</span><UploadButton id={report} kind="final" label="Înlocuiește raportul semnat" className="linkBtn" /></div>
+          : <div className="rdFinalBar empty"><FinalDrop id={report} /></div>
+      )}
 
       {shown.length > 0 && (
         <div className="rdBar">
@@ -213,7 +220,7 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
                       <td><span className="rdTName"><span className={`rdExt sm k-${d.status === "missing" ? "miss" : k}`}>{d.status === "missing" ? "!" : ext(d.name)}</span><b title={d.name}>{d.name}</b></span>
                         {d.origin !== "report" && <small className="muted">{d.origin === "order" ? "din comandă" : "în vechiul CRM"}</small>}</td>
                       <td>{d.status === "missing" ? <span className="errTxt">lipsă</span> : d.final ? <b className="errTxt">Raport final</b> : d.origin === "report" && edit ? <DocTypeSelect id={report} doc={d.id} assets={many ? assets : null} value={`${k}:${d.asset_id ?? ""}`} /> : docKindLabel(k)}</td>
-                      {many && <td className="rdTAsset" title={d.asset_id ? labelOf(d.asset_id) : "tot raportul"}>{d.asset_id ? labelOf(d.asset_id) : "tot raportul"}</td>}
+                      {many && <td className="rdTAsset" title={d.asset_id ? labelOf(d.asset_id) : "raport"}>{d.asset_id ? labelOf(d.asset_id) : "raport"}</td>}
                       <td style={{ whiteSpace: "nowrap" }}>{short(d.at)}</td>
                       <td style={{ whiteSpace: "nowrap" }}>{size(d.size)}</td>
                       <td>{tick(d)}</td>
@@ -245,7 +252,7 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
                   </div>
                   <div className="rdCardBody">
                     <b title={d.name}>{d.name}</b>
-                    <small>{d.status === "missing" ? "lipsă · blochează predarea" : <>{d.final ? <b className="errTxt">Raport final</b> : docKindLabel(k)}{many && <> · {d.asset_id ? labelOf(d.asset_id) : "tot raportul"}</>}{d.at && ` · ${day(d.at)}`}</>}</small>
+                    <small>{d.status === "missing" ? "lipsă · blochează predarea" : <>{d.final ? <b className="errTxt">Raport final</b> : docKindLabel(k)}{many && <> · {d.asset_id ? labelOf(d.asset_id) : "raport"}</>}{d.at && ` · ${day(d.at)}`}</>}</small>
                     <span className="rdCardActs">{tick(d)}{acts(d)}</span>
                   </div>
                 </li>
@@ -265,7 +272,7 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
                   <small>
                     {d.status === "missing" ? <>solicitat {day(d.at)} · <span className="errTxt">blochează predarea</span></> : <>
                       <span className={`rdKind${d.final ? " errTxt" : ""}`}>{kindLabel(d)}</span>
-                      {many && <> · {d.asset_id ? labelOf(d.asset_id) : "tot raportul"}</>}
+                      {many && <> · {d.asset_id ? labelOf(d.asset_id) : "raport"}</>}
                       {d.origin === "order" && " · din comandă"}{d.origin === "glide" && " · în vechiul CRM, nemutat încă"}
                       {d.at && ` · ${day(d.at)}`}{d.size ? ` · ${size(d.size)}` : ""}{d.by ? ` · ${d.by}` : ""}
                     </>}
