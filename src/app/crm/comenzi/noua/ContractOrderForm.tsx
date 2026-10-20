@@ -10,6 +10,7 @@ import { PURPOSES } from "@/lib/order-labels";
 import { assetProfile, capType, emptyAsset, type AssetForm } from "@/lib/asset-labels";
 import { feeKindLabel, feeKindOf, gridRate, netFromGrid, parseFeeGrid } from "@/lib/fee-grid";
 import { AssetsEditor, newUid } from "@/components/AssetsEditor";
+import { NoteParentPick } from "@/components/NoteParentPick";
 import type { DraftDoc } from "@/components/AssetDocs";
 import { docKindLabel } from "@/lib/doc-kinds";
 import { SafeImg } from "@/app/crm/rapoarte/[id]/ReportActions";
@@ -98,6 +99,9 @@ export function ContractOrderForm(p: {
   const [feeFree, setFeeFree] = useState(false);
   const [picked, setPicked] = useState<Hit | null>(null);
   const [assets, setAssets] = useState<AssetForm[]>([{ ...emptyAsset(), uid: newUid(), full_address: "", is_main: true }]);
+  // a valuation note: the client's initial report it belongs to (its property fills the asset)
+  const [parent, setParent] = useState<string | null>(null);
+  const note = f.report_type === "Notă de evaluare";
   const [drafts, setDrafts] = useState<Record<string, DraftDoc[]>>({});
   // Which dropped documents the inspector may open ("<asset uid>:<index>"), chosen when the inspector is picked.
   const [inspDocs, setInspDocs] = useState<string[] | null>(null);
@@ -177,7 +181,7 @@ export function ContractOrderForm(p: {
       return;
     }
     setBusy(true); setMsg("");
-    const r = await fetch("/api/crm/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, kind, referral_id: referral?.id ?? "", assets: assets.map((a, i) => ({
+    const r = await fetch("/api/crm/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, kind, referral_id: referral?.id ?? "", parent_report_id: note ? parent ?? "" : "", assets: assets.map((a, i) => ({
       ...a, is_main: i === 0, ...(a.contact_kind === "client" ? { contact_name: f.client_name, contact_phone: f.client_phone } : {}),
     })) }) }).catch(() => null);
     const d = (await r?.json().catch(() => ({}))) as { report?: string; error?: string; inspections?: number; assets?: string[] } | undefined;
@@ -311,6 +315,15 @@ export function ContractOrderForm(p: {
 
       <section className="card nwCard">
         <Step n={3} title="Bunuri evaluate" sub="Fiecare bun separat: are valoarea și inspecția lui. Primul e bunul principal." done={assetsDone} />
+        {note && (
+          <div className="npBox">
+            <div className="npHead"><b>Raportul inițial</b><small>nota se leagă de el și folosește același bun, fără o proprietate nouă</small></div>
+            <NoteParentPick client={f.client_id} value={parent} onPick={(c) => {
+              setParent(c?.id ?? null);
+              if (c?.asset) setAssets([{ ...c.asset, uid: newUid(), is_main: true, contact_kind: assets[0]?.contact_kind ?? "client", contact_name: assets[0]?.contact_name ?? "", contact_phone: assets[0]?.contact_phone ?? "" }, ...assets.slice(1)]);
+            }} />
+          </div>
+        )}
         <AssetsEditor assets={assets} setAssets={(a) => { setAssets(a); setErrors((x) => Object.fromEntries(Object.entries(x).filter(([k]) => !k.startsWith("asset")))); }}
           client={{ name: f.client_name, phone: f.client_phone }} docs={{ files: drafts, set: (uid, files) => setDrafts((d) => ({ ...d, [uid]: files })) }} />
         {assets.map((_, i) => <span key={i} style={{ display: "contents" }}>{err(`asset${i}`)}</span>)}

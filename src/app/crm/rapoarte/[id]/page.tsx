@@ -18,6 +18,8 @@ import { inspectionSheetDoc } from "@/lib/insp-sheet-doc";
 import { getFirm } from "@/lib/settings";
 import { ReportDocs, type DocItem } from "./ReportDocs";
 import { ReferralEdit } from "@/components/ReferralPick";
+import { NoteParentEdit } from "@/components/NoteParentPick";
+import { isNote, notesOf } from "@/lib/notes";
 import type { AccessDoc } from "@/components/DocAccess";
 import { AssetEditor, RemoveAsset } from "./AssetEditor";
 import { assetProfile, emptyAsset, FIELD_LABELS, type AssetForm, type ProfileField } from "@/lib/asset-labels";
@@ -99,6 +101,12 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const c = acc.can, fees = acc.fee === "all";
   const link = (perm: Perm, path: string, cls: string, body: React.ReactNode) => (can(user, perm) ? <a className={cls} href={`${base}${path}`}>{body}</a> : <span>{body}</span>);
   const messages = await messagesOf(db, "report", r.id, user.id);
+  // valuation notes: the initial report of a note; the notes made on a report
+  const note = isNote(r.report_type);
+  const [parentRep, notes] = await Promise.all([
+    note && r.parent_report_id ? db.prepare("SELECT id, number FROM reports WHERE id = ?").bind(r.parent_report_id).first<{ id: string; number: string | null }>() : Promise.resolve(null),
+    note ? Promise.resolve([]) : notesOf(db, id),
+  ]);
   const [team, assets, docs, orderDocs, people] = await Promise.all([
     reportTeam(db, id), reportAssets(db, id), reportDocuments(db, id), reportOrderDocuments(db, r.order_id), teamCandidates(db),
   ]);
@@ -359,9 +367,27 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                 {r.bank_branch && <Row k="Agenție bancară">{r.bank_branch}</Row>}
                 <Row k="Recomandată de"><ReferralEdit report={r.id} base={base} canEdit={c.edit} canAdd={can(user, "users.A")}
                   value={r.referral_id ? { id: r.referral_id, name: r.referral_name ?? "colaborator" } : null} /></Row>
+                {note && <Row k="Raport inițial"><NoteParentEdit note={r.id} client={r.client_id} parent={parentRep ?? null} canEdit={c.edit} base={base} /></Row>}
                 <Row k="Emitent">{r.issuer_name}</Row>
               </dl>
             </section>
+            {notes.length > 0 && (
+              <section className="card">
+                <div className="cardHead"><h2>Note de evaluare</h2><span className="muted">{notes.length} {notes.length === 1 ? "notă" : "note"} pe acest raport</span></div>
+                <ul className="rpNotes">
+                  {notes.map((n) => {
+                    const [nl, nc] = REPORT_STATUS[n.status] ?? [n.status, ""];
+                    return (
+                      <li key={n.id}>
+                        <a className="link" href={`${base}/rapoarte/${n.id}`}>{n.number ? `Notă nr. ${n.number}` : n.label ?? "Notă de evaluare"}</a>
+                        <span className="muted">{fmtDate(n.date)}{fees && n.fee ? ` · ${lei(n.fee, "RON")}` : ""}</span>
+                        <span className={`pill ${nc}`}><i />{nl}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            )}
             <section className="card">
               <div className="cardHead"><h2>Bunul principal</h2>{main && <a className="link" href={href("bunuri")}>bunuri & inspecții →</a>}</div>
               {!main ? <p className="hint">Raportul nu are bunuri înregistrate.</p> : (

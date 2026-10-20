@@ -122,6 +122,8 @@ export async function createDirectWork(db: D1Database, actor: { id: string; name
     }
   }
   if (referral) await db.prepare("UPDATE orders SET referral_user_id = ? WHERE id = ?").bind(referral, id).run();
+  const parent = typeof b.parent_report_id === "string" ? b.parent_report_id.trim() : "";
+  if (parent && /^[\w-]{1,80}$/.test(parent)) await db.prepare("UPDATE orders SET parent_report_id = (SELECT id FROM reports WHERE id = ?) WHERE id = ?").bind(parent, id).run();
   await audit(db, `user:${actor.id}`, "order.create", "order", id, `lucrare directă · ${c.name}${mode === "offer" ? " · cu ofertă" : ""}`);
   if (mode === "offer") return { ok: true as const, order: id, report: null, contract: null, client: c };
 

@@ -226,7 +226,7 @@ export function RegistryView(p: {
         <a key={r.id} href={`${p.base}/proprietati/${r.id}`} {...rowProps(r)} className={`rgItem${picked === r.id ? " picked" : ""}${hover === r.id ? " hover" : ""}`}>
           {thumb(r)}
           <span className="rgMid">
-            <b>{cap(r.type) || "Proprietate"}</b>{r.construction === "under_construction" && <span className="rgBuild">în construcție</span>}
+            <span className="rgTitle"><b>{cap(r.type) || "Proprietate"}</b>{r.construction === "under_construction" && <span className="rgBuild">în construcție</span>}</span>
             <small>{r.full_address ?? r.city ?? "—"}</small>
             <span className="rgMeta">
               <span>{date(r.last_date)}</span>

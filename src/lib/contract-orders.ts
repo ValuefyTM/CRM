@@ -139,6 +139,8 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
     .run();
   if (feeGross != null) await db.prepare("UPDATE orders SET fee_gross = ? WHERE id = ?").bind(feeGross, id).run();
   if (referral) await db.prepare("UPDATE orders SET referral_user_id = ? WHERE id = ?").bind(referral, id).run();
+  const parent = str(b.parent_report_id, 80);
+  if (parent && /^[\w-]{1,80}$/.test(parent)) await db.prepare("UPDATE orders SET parent_report_id = (SELECT id FROM reports WHERE id = ?) WHERE id = ?").bind(parent, id).run();
   if (kind === "collab") {
     await db.prepare("UPDATE orders SET seq = (SELECT COALESCE(MAX(seq), 0) + 1 FROM orders) WHERE id = ? AND seq IS NULL").bind(id).run();
     // The collaborating firm's number of the report (VALUEFY's reports are numbered automatically).

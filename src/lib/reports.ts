@@ -221,6 +221,8 @@ export type Report = ReportRow & {
   client_kind: string | null; client_phone: string | null; client_email: string | null; client_cui: string | null; client_address: string | null;
   bank_name: string | null; contract_number: string | null; contract_kind: string | null; contract_date: string | null; contract_fee: number | null;
   referral_name: string | null; referral_id: string | null;
+  /** a valuation note: its initial report */
+  parent_report_id?: string | null;
   notes: string | null; delivered_at: string | null; delivered_by_name: string | null; updated_at: string;
   stage: string | null; term_days: number | null; due_on: string | null; offer_id: string | null; client_notified_at: string | null;
   order_seq: number | null; order_bank_ref: string | null; order_source: string | null; statement_number: string | null; client_code: string | null;

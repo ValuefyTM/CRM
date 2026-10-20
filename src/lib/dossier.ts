@@ -17,6 +17,7 @@ import { NEXT_OWN_NUMBER, ownIssuerId } from "./report-numbers";
 import type { AssetInput } from "./asset-labels";
 import { ROLE_LABEL } from "./reports";
 import { assignmentMailWanted } from "./alerts";
+import { linkNote } from "./notes";
 
 // ---------- stages and deadline ----------
 
@@ -277,6 +278,8 @@ async function openClaimed(db: D1Database, o: Order, actor: { id: string; name: 
   // the team hears of the report by email only if the "Raport alocat" alert asks for it (what one did oneself is no news)
   if (evaluator && evaluator !== actor?.id) await mailAssignment(db, reportId, evaluator, "evaluator", actor?.name ?? null, !!accepted);
   if (opts.verifier_id && opts.verifier_id !== actor?.id) await mailAssignment(db, reportId, opts.verifier_id, "verifier", actor?.name ?? null);
+  // a valuation note: linked to its initial report, on the same property
+  if (o.parent_report_id) await linkNote(db, by, reportId, o.parent_report_id).catch((e) => console.error("note link", e));
   return { ok: true as const, id: reportId, created: true, assetId, contract };
 }
 

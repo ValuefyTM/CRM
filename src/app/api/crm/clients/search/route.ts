@@ -14,13 +14,17 @@ export async function GET(req: Request) {
   const scope = scopeFilter(a.user, "clients", "e");
   const like = `%${q.replace(/[%_]/g, "")}%`;
   const digits = q.replace(/\D/g, "");
-  const { results } = await a.db.prepare(`SELECT e.id, e.kind, e.name, e.cui, e.phone, e.email, e.city,
+  const sql = `SELECT e.id, e.kind, e.name, e.cui, e.phone, e.email, e.city,
       (SELECT COUNT(*) FROM reports r WHERE r.client_id = e.id) AS reports,
       (SELECT MAX(k.signed_on) FROM contracts k WHERE k.client_id = e.id) AS last_contract
     FROM entities e WHERE e.kind <> 'valuation_firm' ${kind ? "AND e.kind = ?4" : ""} ${scope ? `AND ${scope.sql.replace(/\?/g, (() => { let n = 5; return () => `?${n++}`; })())}` : ""}
       AND (?1 = '%%' OR e.name LIKE ?1 OR e.cui LIKE ?1 OR e.email LIKE ?1
       OR (length(?2) >= 6 AND replace(replace(replace(e.phone, ' ', ''), '.', ''), '-', '') LIKE '%' || ?2 || '%'))
-    ORDER BY e.name LIKE ?3 DESC, reports DESC LIMIT 12`).bind(like, digits, `${q.replace(/[%_]/g, "")}%`, kind ?? "", ...(scope?.binds ?? []))
+    ORDER BY e.name LIKE ?3 DESC, reports DESC LIMIT 12`;
+  // D1 wants exactly as many bindings as the highest numbered placeholder (?4 only with a kind)
+  const binds = [like, digits, `${q.replace(/[%_]/g, "")}%`, kind ?? "", ...(scope?.binds ?? [])];
+  const used = Math.max(...[...sql.matchAll(/\?(\d+)/g)].map((m) => Number(m[1])));
+  const { results } = await a.db.prepare(sql).bind(...binds.slice(0, used))
     .all<{ id: string; kind: string; name: string; cui: string | null; phone: string | null; email: string | null; city: string | null; reports: number; last_contract: string | null }>();
   return Response.json({ results });
 }
