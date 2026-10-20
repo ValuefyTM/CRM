@@ -53,7 +53,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
   const offerable = !o.glide_id && (portal || o.source === "site" || o.source === "direct");
   const offer = offerable ? await offerForOrder(db, id) : null;
   const evaluators = !o.glide_id
-    ? (await db.prepare("SELECT id, COALESCE(NULLIF(name, ''), email) AS name, anevar_no, role, duties, last_seen_at, avatar_at FROM users WHERE kind = 'internal' AND status NOT IN ('disabled', 'deleted') AND (role IN ('evaluator', 'owner', 'admin') OR ',' || COALESCE(duties, '') || ',' LIKE '%,evaluator,%') ORDER BY name")
+    ? (await db.prepare("SELECT id, COALESCE(NULLIF(name, ''), email) AS name, anevar_no, role, duties, last_seen_at, avatar_at FROM users WHERE kind = 'internal' AND status NOT IN ('disabled', 'deleted') AND (role IN ('evaluator', 'owner', 'admin') OR ',' || COALESCE(duties, '') || ',' LIKE '%,evaluator,%' OR NULLIF(TRIM(anevar_no), '') IS NOT NULL) ORDER BY name")
       .all<{ id: string; name: string; anevar_no: string | null; role: string; duties: string | null; last_seen_at: string | null; avatar_at: string | null }>()).results
       .map((e) => ({ ...e, ...presenceOf(e.last_seen_at), photo: photoUrl(e.id, e.avatar_at), role: hasDuty(e, "evaluator") ? "evaluator" : e.role }))
     : [];

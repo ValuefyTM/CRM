@@ -377,10 +377,10 @@ ${lead ? `<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A4A">Pasu
   return true;
 }
 
-/** Team members who can lead a report: evaluators (by role or duty), owners and administrators. */
+/** Team members who can lead a report: evaluators (by role, by duty, or with an ANEVAR number — roles can be custom), owners and administrators. */
 export async function evaluatorChoices(db: D1Database) {
   return withPresence((await db.prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role, anevar_no, last_seen_at, avatar_at FROM users WHERE kind = 'internal' AND status NOT IN ('disabled', 'deleted')
-      AND (role IN ('evaluator', 'owner', 'admin') OR ',' || COALESCE(duties, '') || ',' LIKE '%,evaluator,%') ORDER BY name`)
+      AND (role IN ('evaluator', 'owner', 'admin') OR ',' || COALESCE(duties, '') || ',' LIKE '%,evaluator,%' OR NULLIF(TRIM(anevar_no), '') IS NOT NULL) ORDER BY name`)
     .all<{ id: string; name: string; role: string; anevar_no: string | null; last_seen_at: string | null; avatar_at: string | null }>()).results)
     .map((u) => ({ ...u, sub: u.anevar_no ? `Evaluator ANEVAR ${u.anevar_no}` : u.role === "owner" ? "Proprietar" : u.role === "admin" ? "Administrator" : "Evaluator" }));
 }
