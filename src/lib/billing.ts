@@ -265,9 +265,12 @@ export async function issue(db: D1Database, actor: string, d: Draft) {
   };
   let doc;
   try { doc = await oblioCreate(db, d.kind, payload); }
-  catch (e) { return { ok: false as const, error: e instanceof OblioError ? `Oblio: ${e.message}` : "Oblio nu a putut emite documentul." }; }
+  catch (e) { return { ok: false as const, error: e instanceof OblioError ? `Oblio: ${e.message}` : `Oblio nu a putut emite documentul (${e instanceof Error ? e.message : String(e)}).` }; }
+  if (!doc?.seriesName || doc.number == null) return { ok: false as const, error: "Oblio a răspuns fără seria și numărul documentului. Verifică în Oblio dacă s-a emis, apoi încearcă din nou." };
   const id = uuid(), t = now();
   const reportIds = d.lines.map((l) => l.reportId).filter(Boolean) as string[];
+  // From here on the document exists in Oblio: a failure must say so, not let it be issued twice.
+  try {
   await db.batch([
     db.prepare(`INSERT INTO invoices (id, kind, series, number, issue_date, due_date, client_id, client_name, contract_id, collaboration_id, report_ids, lines, net, vat, total, oblio_link, created_by, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
@@ -275,7 +278,12 @@ export async function issue(db: D1Database, actor: string, d: Draft) {
         JSON.stringify(reportIds), JSON.stringify(d.lines), d.totals.net, d.totals.vat, d.totals.total, doc.link ?? null, actor, t, t),
     ...(d.kind === "invoice" ? reportIds.map((r) => db.prepare("UPDATE reports SET invoice_id = ? WHERE id = ? AND invoice_id IS NULL").bind(id, r)) : []),
   ]);
-  await storePdf(db, id, doc.link);
+  } catch (e) {
+    console.error("invoice save", e);
+    return { ok: false as const, error: `Documentul ${doc.seriesName} ${doc.number} s-a emis în Oblio, dar nu s-a putut salva în CRM (${e instanceof Error ? e.message : String(e)}). Nu îl emite din nou: anunță administratorul.` };
+  }
+  // our PDF copy is a convenience: without it the Oblio link still works
+  await storePdf(db, id, doc.link).catch((e) => console.error("invoice pdf", e));
   await audit(db, `user:${actor}`, d.kind === "invoice" ? "invoice.issue" : "proforma.issue", "contract", d.contractId ?? d.collaborationId ?? id, `${doc.seriesName} ${doc.number} · ${d.totals.total} lei · ${d.party.name}`);
   return { ok: true as const, id, series: doc.seriesName, number: String(doc.number) };
 }

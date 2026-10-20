@@ -27,7 +27,7 @@ export function IssueInvoice({ contract, report, kind = "invoice", label, primar
     const q = report ? `report=${encodeURIComponent(report)}` : `contract=${encodeURIComponent(contract ?? "")}&kind=${kind}`;
     const r = await fetch(`/api/crm/billing/draft?${q}`).catch(() => null);
     const j = (await r?.json().catch(() => ({}))) as Draft & { error?: string };
-    if (!r?.ok) setMsg(j?.error || "Nu am putut pregăti documentul."); else setD(j);
+    if (!r?.ok) setMsg(j?.error || (r ? `Nu am putut pregăti documentul (eroare ${r.status} de la server).` : "Nu am putut pregăti documentul: nu s-a putut contacta serverul.")); else setD(j);
   };
   const go = async () => {
     if (!d) return;
@@ -35,7 +35,7 @@ export function IssueInvoice({ contract, report, kind = "invoice", label, primar
     const r = await fetch("/api/crm/billing/issue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contract, report, kind, total: d.totals.total }) }).catch(() => null);
     const j = (await r?.json().catch(() => ({}))) as { error?: string };
     setBusy(false);
-    if (!r?.ok) return setMsg(j?.error || "Nu am putut emite documentul.");
+    if (!r?.ok) return setMsg(j?.error || (r ? `Nu am putut emite documentul (eroare ${r.status} de la server).` : "Nu am putut emite documentul: nu s-a putut contacta serverul."));
     location.reload();
   };
   return (
