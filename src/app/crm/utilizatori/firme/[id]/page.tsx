@@ -9,6 +9,9 @@ import { History } from "@/components/History";
 import { PartnerForm } from "../PartnerForm";
 import { PeoplePanel } from "./PeoplePanel";
 import { StatusToggle } from "./StatusToggle";
+import { DeleteFirm } from "./DeleteFirm";
+import { can } from "@/lib/perms";
+import { listPartners } from "@/lib/partners";
 
 export const metadata: Metadata = { title: "Firmă parteneră | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -19,6 +22,7 @@ export default async function PartnerPage({ params, searchParams }: { params: Pr
   const p = await getPartner(db, id);
   if (!p) notFound();
   const people = await partnerPeople(db, id);
+  const firms = can(user, "partners.D") ? (await listPartners(db)).map((f) => ({ id: f.id, name: f.name })) : [];
   const log = await history(db, [id, ...people.map((u) => u.id)]);
   const nou = (await searchParams).nou;
 
@@ -26,7 +30,7 @@ export default async function PartnerPage({ params, searchParams }: { params: Pr
     <CrmShell
       user={user} base={base} active="users" title={p.name}
       subtitle={`Firmă parteneră · ${kindLabel(p.kind)}${p.city ? ` · ${p.city}` : ""} · adăugată ${fmtDate(p.created_at)}`}
-      actions={<><a href={`${base}/utilizatori?tab=colaboratori&vezi=firme`} className="btn btnGhost btnSm">← Firme partenere</a><StatusToggle partnerId={p.id} status={p.status} canChange={isAdmin(user)} /></>}
+      actions={<><a href={`${base}/utilizatori?tab=colaboratori&vezi=firme`} className="btn btnGhost btnSm">← Firme partenere</a><StatusToggle partnerId={p.id} status={p.status} canChange={isAdmin(user)} />{can(user, "partners.D") && <DeleteFirm id={p.id} name={p.name} base={base} firms={firms} people={people.filter((u) => u.status !== "deleted").length} />}</>}
     >
       {nou && (
         <div className={nou === "invitat" ? "okMsg" : "note"}>

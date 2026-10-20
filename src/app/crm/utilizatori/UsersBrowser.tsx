@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { FilterSelect } from "@/components/FilterSelect";
 import { STATUS_LABEL } from "@/lib/labels";
 import { PartnersTable, type FirmRow } from "./firme/PartnersTable";
@@ -58,6 +58,15 @@ const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,
 function Status({ s }: { s: string }) {
   const [label, cls] = STATUS_LABEL[s] ?? [s, ""];
   return <span className={`pill ${cls}`}><i />{label}</span>;
+}
+
+/** The collaborators, one block per firm (by firm name; without a firm last), each block headed by its firm. */
+function byFirm(list: Row[]) {
+  const sorted = [...list].sort((a, b) => (a.partnerName ?? "\uffff").localeCompare(b.partnerName ?? "\uffff", "ro") || a.name.localeCompare(b.name, "ro"));
+  const count = new Map<string, number>();
+  for (const r of sorted) count.set(r.partnerId ?? "", (count.get(r.partnerId ?? "") ?? 0) + 1);
+  return sorted.map((r, i) => ({ r, head: i === 0 || (sorted[i - 1].partnerId ?? "") !== (r.partnerId ?? "")
+    ? { id: r.partnerId, name: r.partnerName ?? "Fără firmă", n: count.get(r.partnerId ?? "") ?? 0 } : null }));
 }
 
 /** The three account tabs; the "Colaboratori" tab switches between people and partner firms. */
@@ -138,7 +147,7 @@ export function UsersBrowser(props: { rows: Row[]; firms: FirmRow[]; base: strin
                   <tr>
                     <th>Nume</th>
                     {tab === "interni" && <><th>Rol</th><th>Relație</th><th>ANEVAR</th></>}
-                    {tab === "colaboratori" && <><th>Firmă</th><th>Rol în cont</th><th>Telefon</th></>}
+                    {tab === "colaboratori" && <><th>Rol în cont</th><th>Telefon</th></>}
                     {tab === "clienti" && <><th>Tip</th><th>Telefon</th><th>Localitate</th></>}
                     <th>Activitate</th>
                     <th>Status</th>
@@ -146,8 +155,17 @@ export function UsersBrowser(props: { rows: Row[]; firms: FirmRow[]; base: strin
                   </tr>
                 </thead>
                 <tbody>
-                  {shown.map((r) => (
-                    <tr key={r.id}>
+                  {(tab === "colaboratori" ? byFirm(shown) : shown.map((r) => ({ r, head: null as null | { id: string | null; name: string; n: number } }))).map(({ r, head }) => (
+                    <Fragment key={r.id}>
+                    {head && (
+                      <tr className="ubFirm">
+                        <td colSpan={7}>
+                          {head.id ? <a className="rowLink" href={`${base}/utilizatori/firme/${head.id}`}><b>{head.name}</b></a> : <b>{head.name}</b>}
+                          <small>{head.n} {head.n === 1 ? "persoană" : "persoane"}</small>
+                        </td>
+                      </tr>
+                    )}
+                    <tr>
                       <td>
                         <span className="userCell">
                           <Avatar id={r.id} name={r.name} size={38} photo={r.photo} presence={r.status === "disabled" ? null : r.presence} title={`${r.name} · ${r.seen}`} />
@@ -167,7 +185,6 @@ export function UsersBrowser(props: { rows: Row[]; firms: FirmRow[]; base: strin
                       )}
                       {tab === "colaboratori" && (
                         <>
-                          <td>{r.partnerId ? <a className="rowLink" href={`${base}/utilizatori/firme/${r.partnerId}`}>{r.partnerName}</a> : "—"}</td>
                           <td>{r.roleLabel}</td>
                           <td>{r.phone || <span className="muted">—</span>}</td>
                         </>
@@ -192,6 +209,7 @@ export function UsersBrowser(props: { rows: Row[]; firms: FirmRow[]; base: strin
                         </span>
                       </td>
                     </tr>
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
