@@ -3166,3 +3166,9 @@ span.rdPick { display: inline-block; }
 .anvForm td:first-child { white-space: normal; }
 .repDate { font-size: 11px; color: var(--muted-2); white-space: nowrap; }
 .dDaysDate { opacity: 0.85; font-weight: 600; }
+/* the final report among the documents: red */
+.rdExt.k-final { background: var(--err); color: #fff; }
+.rdList li.rdFinal, .rdCards li.rdFinal { background: var(--err-bg); box-shadow: inset 3px 0 0 var(--err); }
+.rdTable tr.rdFinal td { background: var(--err-bg); }
+.rdTable tr.rdFinal td:first-child { box-shadow: inset 3px 0 0 var(--err); }
+.rdList li.rdFinal .rdName b, .rdCards li.rdFinal .rdCardBody b, .rdTable tr.rdFinal .rdTName b { color: var(--err); }

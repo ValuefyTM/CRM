@@ -233,6 +233,9 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
       WHERE l.entity = 'report' AND l.entity_id = ? AND l.action IN ('report.document_insp', 'report.inspection_assign') ORDER BY l.at DESC LIMIT 1`).bind(r.id)
     .first<{ at: string; who: string | null }>().catch(() => null);
   const docItems: DocItem[] = [
+    // the final report first, in red, among the report's own documents (not on an asset)
+    ...(final ? [{ id: final.id, name: final.filename, kind: "final", asset_id: null, status: "uploaded", origin: "report", href: `/api/crm/reports/${r.id}/documents/${final.id}`,
+      size: final.size_bytes, at: final.created_at, by: final.uploaded_by_name, final: true } satisfies DocItem] : []),
     ...sources.map((x): DocItem => ({ id: x.id, name: x.filename, kind: x.doc_type ?? guessDocKind(x.filename), asset_id: x.asset_id, status: x.status === "missing" ? "missing" : "uploaded", origin: "report",
       href: x.status === "missing" ? null : `/api/crm/reports/${r.id}/documents/${x.id}`, size: x.size_bytes, at: x.status === "missing" ? x.requested_at : x.created_at, by: x.uploaded_by_name,
       insp: x.kind === "source" && x.status !== "missing" ? inspVisible(x.insp_visible, typeOfReportDoc(x.doc_type, x.filename)) : undefined })),
