@@ -20,12 +20,16 @@ export default async function StatementPage({ params, searchParams }: { params: 
   const s = await getStatement(db, id);
   if (!s) notFound();
   const all = can(user, "statements.all");
-  if (!all && s.user_id !== user.id) redirect(`${base}/borderouri`);
+  const mine = s.user_id === user.id;
+  // "Profitabilitatea lui": any statement, but only its lines on the user's reports (none: not shown)
+  const self = !all && !mine && can(user, "statements.lead");
+  if (!all && !mine && !self) redirect(`${base}/borderouri`);
   // Seen through one administrator (?evaluator=): only the lines on reports they were in the team of; read-only.
-  const who = all && evaluator ? (await memberChoices(db)).find((a) => a.id === evaluator) ?? null : null;
+  const who = self ? { id: user.id, name: user.name || user.email } : all && evaluator ? (await memberChoices(db)).find((a) => a.id === evaluator) ?? null : null;
   const canEdit = all && can(user, "statements.E") && !who;
   const [allLines, rule, log] = await Promise.all([linesOf(db, s), ruleFor(db, s.party), statementLog(db, id)]);
   const lines = who ? linesWith(allLines, await memberReports(db, who.id)) : allLines;
+  if (self && !lines.length) redirect(`${base}/borderouri`);
   const [st, cls] = STATUS_LABEL[s.status];
   const back = `${base}/borderouri`;
   const total = who || s.status === "open" ? totalOf(lines) : s.total ?? totalOf(lines);
@@ -46,8 +50,8 @@ export default async function StatementPage({ params, searchParams }: { params: 
           {basis ? ` · ${basis.toLowerCase()}` : ""}
         </span>
       </div>
-      {who && <div className="note"><b>Filtrat după {who.name}:</b> doar {lines.length} din {allLines.length} linii, cele pe rapoartele în care a fost în echipă. <a className="link" href={`${back}/${s.id}`}>Vezi tot borderoul</a>.</div>}
-      {s.status === "open" && !all && <div className="note">Borderoul e în curs: se actualizează pe măsură ce lucrările se predau. La final de lună îl validează și îl emite firma; orice ajustare apare aici, cu motivul.</div>}
+      {who && <div className="note"><b>Filtrat după {who.name}:</b> doar {lines.length} din {allLines.length} linii, cele pe rapoartele în care a fost în echipă. {!self && <a className="link" href={`${back}/${s.id}`}>Vezi tot borderoul</a>}.</div>}
+      {s.status === "open" && !all && !self && <div className="note">Borderoul e în curs: se actualizează pe măsură ce lucrările se predau. La final de lună îl validează și îl emite firma; orice ajustare apare aici, cu motivul.</div>}
       <section className="card flush">
         <div className="cardHead"><h2>Linii</h2>{canEdit && s.status !== "issued" && <AddLine statement={s.id} />}</div>
         <LinesTable lines={lines} base={base} statement={s.id} canEdit={canEdit && s.status !== "issued"} />

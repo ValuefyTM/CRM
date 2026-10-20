@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { can } from "@/lib/perms";
 import { getFirm } from "@/lib/settings";
-import { getStatement, KIND_LABEL, linesOf, periodLabel, STATUS_LABEL, totalOf } from "@/lib/statements";
+import { getStatement, KIND_LABEL, linesOf, linesWith, memberReports, periodLabel, STATUS_LABEL, totalOf } from "@/lib/statements";
 import { LinesTable, lei2 } from "../../LinesTable";
 
 export const metadata: Metadata = { title: "Borderou | CRM VALUEFY" };
@@ -15,9 +15,13 @@ export default async function StatementPrint({ params }: { params: Promise<{ id:
   const { id } = await params;
   const s = await getStatement(db, id);
   if (!s) notFound();
-  if (!can(user, "statements.all") && s.user_id !== user.id) redirect(`${base}/borderouri`);
-  const [lines, firm] = await Promise.all([linesOf(db, s), getFirm(db)]);
-  const total = s.status === "open" ? totalOf(lines) : s.total ?? totalOf(lines);
+  const self = !can(user, "statements.all") && s.user_id !== user.id;
+  if (self && !can(user, "statements.lead")) redirect(`${base}/borderouri`);
+  const [allLines, firm] = await Promise.all([linesOf(db, s), getFirm(db)]);
+  // "Profitabilitatea lui": only the lines on the user's reports
+  const lines = self ? linesWith(allLines, await memberReports(db, user.id)) : allLines;
+  if (self && !lines.length) redirect(`${base}/borderouri`);
+  const total = self || s.status === "open" ? totalOf(lines) : s.total ?? totalOf(lines);
   return (
     <main className="stPrintPage">
       <header>

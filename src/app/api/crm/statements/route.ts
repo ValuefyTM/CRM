@@ -1,10 +1,13 @@
 import { err, json, staffApi } from "@/lib/api";
+import { can } from "@/lib/perms";
 import { openStatement, validPeriod } from "@/lib/statements";
 
 /** Opens (or finds) the statement of a party for a month: `{ party, period }` → `{ id }`. */
 export async function POST(req: Request) {
   const a = await staffApi("statements.A", true);
   if ("res" in a) return a.res;
+  // only who sees every statement changes them ("Profitabilitatea lui" / "Doar al lui" are read-only)
+  if (!can(a.user, "statements.all")) return err("Nu ai drepturi pentru această acțiune.", 403);
   const b = await json(req);
   if (!validPeriod(b.period)) return err("Alege luna.");
   const r = await openStatement(a.db, a.user.id, String(b.party ?? ""), b.period);

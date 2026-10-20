@@ -29,8 +29,10 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
   const period = validPeriod(sp.luna) ? sp.luna : thisMonth();
   const here = `${base}/borderouri`;
   const all = can(user, "statements.all");
+  // "Profitabilitatea lui": the month's figures, always filtered on the user's own reports, read-only.
+  const self = !all && can(user, "statements.lead");
 
-  if (!all) {
+  if (!all && !self) {
     // one's own: the current month, live, and the statements already opened / validated / issued
     const mine = await listStatements(db, { userId: user.id, limit: 60 });
     const cur = mine.find((s) => s.period === thisMonth());
@@ -60,8 +62,8 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
   }
 
   // Seen through one administrator: only the reports they were in the team of (revenue and statement lines alike).
-  const admins = await memberChoices(db);
-  const who = admins.find((a) => a.id === sp.evaluator) ?? null;
+  const admins = self ? [] : await memberChoices(db);
+  const who = self ? { id: user.id, name: user.name || user.email } : admins.find((a) => a.id === sp.evaluator) ?? null;
   const member = who ? await memberReports(db, who.id) : null;
   const [payouts, receivables, issued, choices, rev, costs] = await Promise.all([
     monthBoard(db, period, "payout", member), monthBoard(db, period, "receivable", member), listStatements(db, { limit: 80 }), partyChoices(db), monthRevenue(db, period, who?.id), monthFixedCosts(db, period, who?.id),
@@ -87,7 +89,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
                   <td>{r.lines}</td>
                   <td className="mono">{r.statement?.number ?? "—"}</td>
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }} className="mono"><b>{lei2(r.total)}</b></td>
-                  <td>{r.statement ? <a className="btn btnGhost btnSm" href={`${here}/${r.statement.id}${who ? `?evaluator=${who.id}` : ""}`}>Deschide</a> : can(user, "statements.A") ? <OpenStatement party={r.party} period={period} base={here} /> : null}</td>
+                  <td>{r.statement ? <a className="btn btnGhost btnSm" href={`${here}/${r.statement.id}${who ? `?evaluator=${who.id}` : ""}`}>Deschide</a> : !self && can(user, "statements.A") ? <OpenStatement party={r.party} period={period} base={here} /> : null}</td>
                 </>;
                 return r.statement ? <ClickRow key={r.party} href={`${here}/${r.statement.id}${who ? `?evaluator=${who.id}` : ""}`}>{cells}</ClickRow> : <tr key={r.party}>{cells}</tr>;
               })}
@@ -99,14 +101,14 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
   );
   return (
     <CrmShell user={user} base={base} active="statements" title="Borderouri" subtitle="Lunar: ce plătește firma colaboratorilor și ce încasează de la bănci și firmele colaboratoare; în curs până la validare, apoi înghețate și emise"
-      actions={<><a href={`${here}/cheltuieli`} className="btn btnGhost btnSm">Cheltuieli fixe</a><a href={`${here}/reguli`} className="btn btnGhost btnSm">Reguli</a><NewStatement period={period} base={here} {...choices} /></>}>
+      actions={self ? undefined : <><a href={`${here}/cheltuieli`} className="btn btnGhost btnSm">Cheltuieli fixe</a><a href={`${here}/reguli`} className="btn btnGhost btnSm">Reguli</a><NewStatement period={period} base={here} {...choices} /></>}>
       <div className="stMonth">
         <a className="btn btnGhost btnSm" href={link(shift(period, -1))} aria-label="Luna anterioară">‹</a>
         <b>{periodLabel(period)}</b>
         <a className="btn btnGhost btnSm" href={link(shift(period, 1))} aria-label="Luna următoare">›</a>
         {period !== thisMonth() && <a className="link" href={link(thisMonth())}>luna curentă</a>}
         <span className="stMonthFill" />
-        <MemberFilter value={who?.id ?? ""} choices={admins} period={period} here={here} />
+        {!self && <MemberFilter value={who?.id ?? ""} choices={admins} period={period} here={here} />}
       </div>
       {who && <div className="note"><b>Filtrat după {who.name}.</b> Veniturile și borderourile de mai jos cuprind doar rapoartele în care a fost în echipă; borderourile fără niciun astfel de raport nu apar, iar cele cu linii fixe sau manuale le arată doar pe cele legate de rapoarte. Cheltuielile fixe intră cu partea lui (splitul setat la fiecare cheltuială) și se scad din venituri, împreună cu borderourile de plată.</div>}
       <div className="dbKpis stKpis">
@@ -121,7 +123,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
       {group("receivable", receivables)}
 
       <section className="card flush" id="fixe">
-        <div className="cardHead"><h2>Cheltuieli fixe · {periodLabel(period)}</h2><span className="muted">{who ? `partea lui ${who.name}` : "toată firma"} · <b>{lei2(costs.total)}</b> · <a className="link" href={`${here}/cheltuieli`}>setează</a></span></div>
+        <div className="cardHead"><h2>Cheltuieli fixe · {periodLabel(period)}</h2><span className="muted">{who ? `partea lui ${who.name}` : "toată firma"} · <b>{lei2(costs.total)}</b>{!self && <> · <a className="link" href={`${here}/cheltuieli`}>setează</a></>}</span></div>
         {costs.items.length === 0 ? <p className="hint pad">{who ? "Nicio cheltuială fixă împărțită cu acest administrator în luna aceasta." : "Nicio cheltuială fixă în luna aceasta."}</p> : (
           <div className="tableWrap">
             <table className="table">
