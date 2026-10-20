@@ -14,16 +14,17 @@ import { lookupCadastre } from "./geolocate";
 import { geocodeAddress } from "./geocode";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-export type QuoteStatus = "draft" | "sent" | "accepted" | "declined" | "converted";
+export type QuoteStatus = "draft" | "sent" | "accepted" | "declined" | "converted" | "cancelled";
 export const QUOTE_STATUS: Record<QuoteStatus, [string, string]> = {
   draft: ["De trimis", ""],
   sent: ["Trimisă", "pillInfo"],
   accepted: ["Acceptată", "pillOk"],
   declined: ["Refuzată", "pillErr"],
   converted: ["Convertită", "pillOk"],
+  cancelled: ["Anulată", "pillErr"],
 };
 export const SENT_VIA: [string, string][] = [["email", "Email"], ["whatsapp", "WhatsApp"], ["phone", "Telefon"], ["meeting", "La birou / întâlnire"]];
-export const QUOTE_TABS: [string, string][] = [["deschise", "Deschise"], ["acceptate", "Acceptate"], ["convertite", "Convertite"], ["refuzate", "Refuzate / expirate"], ["toate", "Toate"]];
+export const QUOTE_TABS: [string, string][] = [["deschise", "Deschise"], ["acceptate", "Acceptate"], ["convertite", "Convertite"], ["refuzate", "Refuzate / anulate / expirate"], ["toate", "Toate"]];
 
 /** An asset of an offer: the form's fields, as typed (validated only at conversion). */
 export type QuoteAsset = Record<string, string | boolean | null | undefined> & { category?: string; type?: string; city?: string; county?: string; full_address?: string; usable_area?: string };
@@ -79,7 +80,7 @@ export async function listQuotes(db: D1Database, f: { tab?: string; q?: string; 
   switch (f.tab ?? "deschise") {
     case "acceptate": w.push("q.status = 'accepted'"); break;
     case "convertite": w.push("q.status = 'converted'"); break;
-    case "refuzate": w.push("(q.status = 'declined' OR (q.status IN ('draft', 'sent') AND q.valid_until IS NOT NULL AND q.valid_until < ?))"); p.push(t); break;
+    case "refuzate": w.push("(q.status IN ('declined', 'cancelled') OR (q.status IN ('draft', 'sent') AND q.valid_until IS NOT NULL AND q.valid_until < ?))"); p.push(t); break;
     case "toate": break;
     default: w.push("q.status IN ('draft', 'sent') AND (q.valid_until IS NULL OR q.valid_until >= ?)"); p.push(t);
   }
@@ -103,7 +104,7 @@ export async function quoteCounts(db: D1Database, mine?: string | null) {
   const t = today();
   const r = await db.prepare(`SELECT
       SUM(status IN ('draft', 'sent') AND (valid_until IS NULL OR valid_until >= ?1)) AS deschise, SUM(status = 'accepted') AS acceptate, SUM(status = 'converted') AS convertite,
-      SUM(status = 'declined' OR (status IN ('draft', 'sent') AND valid_until IS NOT NULL AND valid_until < ?1)) AS refuzate, COUNT(*) AS toate
+      SUM(status IN ('declined', 'cancelled') OR (status IN ('draft', 'sent') AND valid_until IS NOT NULL AND valid_until < ?1)) AS refuzate, COUNT(*) AS toate
     FROM quotes ${mine ? "WHERE created_by = ?2" : ""}`).bind(t, ...(mine ? [mine] : [])).first<Record<string, number | null>>();
   return Object.fromEntries(QUOTE_TABS.map(([k]) => [k, r?.[k] ?? 0])) as Record<string, number>;
 }
@@ -257,6 +258,15 @@ export async function setQuoteStatus(db: D1Database, actor: string, id: string, 
     const reason = status === "declined" ? str(extra.reason, 300) || null : null;
     await db.prepare("UPDATE quotes SET status = ?, decided_at = ?, decline_reason = ?, updated_at = ? WHERE id = ?").bind(status, t, reason, t, id).run();
     await audit(db, `user:${actor}`, status === "accepted" ? "quote.accepted" : "quote.declined", "quote", id, reason ?? undefined);
+  } else if (status === "cancelled") {
+    const reason = str(extra.reason, 300);
+    if (!reason) return { ok: false as const, error: "Scrie motivul anulării." };
+    await db.prepare("UPDATE quotes SET status = 'cancelled', decided_at = ?, decline_reason = ?, updated_at = ? WHERE id = ?").bind(t, reason, t, id).run();
+    await audit(db, `user:${actor}`, "quote.cancelled", "quote", id, reason);
+  } else if (status === "reopen") {
+    // a cancelled offer back to where it was: sent if it had been sent
+    await db.prepare("UPDATE quotes SET status = CASE WHEN sent_at IS NULL THEN 'draft' ELSE 'sent' END, decided_at = NULL, decline_reason = NULL, updated_at = ? WHERE id = ?").bind(t, id).run();
+    await audit(db, `user:${actor}`, "quote.reopened", "quote", id);
   } else if (status === "draft") {
     await db.prepare("UPDATE quotes SET status = 'draft', decided_at = NULL, decline_reason = NULL, updated_at = ? WHERE id = ?").bind(t, id).run();
     await audit(db, `user:${actor}`, "quote.reopen", "quote", id);

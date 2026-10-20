@@ -77,7 +77,7 @@ export async function dashboard(db: D1Database, base: string) {
     db.prepare(`SELECT o.id, o.seq, o.client_name, o.created_at FROM orders o WHERE o.source IN ('partner', 'client', 'site') AND o.glide_id IS NULL AND o.status = 'received'
       AND NOT EXISTS (SELECT 1 FROM offers f WHERE f.order_id = o.id AND f.status IN ('sent', 'accepted')) AND NOT EXISTS (SELECT 1 FROM reports r WHERE r.order_id = o.id)
       ORDER BY o.created_at`).all<{ id: string; seq: number; client_name: string | null; created_at: string }>(),
-    db.prepare(`SELECT f.order_id, f.sent_at, o.seq, o.client_name FROM offers f JOIN orders o ON o.id = f.order_id WHERE f.status = 'sent' AND f.sent_at < ? ORDER BY f.sent_at`)
+    db.prepare(`SELECT f.order_id, f.sent_at, o.seq, o.client_name FROM offers f JOIN orders o ON o.id = f.order_id WHERE f.status = 'sent' AND o.status <> 'cancelled' AND f.sent_at < ? ORDER BY f.sent_at`)
       .bind(ago(3)).all<{ order_id: string; sent_at: string; seq: number; client_name: string | null }>(),
     countNewLeads(db),
     db.prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, role, duties, last_seen_at, avatar_at FROM users WHERE kind = 'internal' AND status = 'active' ORDER BY name`)

@@ -3,6 +3,7 @@
 // (direct, with a classic contract, or an order under a collaboration), choosing the team.
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { CancelReason } from "@/components/CancelReason";
 import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
 import { dutyIn } from "@/lib/labels";
 
@@ -91,6 +92,8 @@ export function QuoteActions({ id, status, base, canEdit, canDelete, canConvert,
       {(status === "draft" || status === "sent") && canEdit && <button type="button" className="btn btnGhost btnSm" disabled={busy} onClick={() => run({ status: "accepted" })}>✓ Acceptată</button>}
       {(status === "draft" || status === "sent") && canEdit && <button type="button" className="btn btnGhost btnSm" disabled={busy} onClick={decline}>✕ Refuzată</button>}
       {open && canConvert && <button type="button" className="btn btnGold btnSm" disabled={busy} onClick={() => setConv(true)}>Convertește în lucrare →</button>}
+      {(status === "draft" || status === "sent" || status === "accepted") && canEdit && <CancelReason url={`/api/crm/quotes/${id}`} what="oferta" />}
+      {status === "cancelled" && canEdit && <CancelReason url={`/api/crm/quotes/${id}`} what="oferta" reopen />}
       {status === "declined" && canEdit && <button type="button" className="btn btnGhost btnSm" disabled={busy} onClick={() => run({ status: "draft" })}>Redeschide</button>}
       {status !== "converted" && canEdit && <a className="btn btnGhost btnSm" href={`${base}/oferte/${id}/editare`}>Modifică</a>}
       {status !== "converted" && canDelete && <button type="button" className="btn btnGhost btnSm qtDel" disabled={busy} onClick={remove}>Șterge</button>}

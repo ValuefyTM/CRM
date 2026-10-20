@@ -107,7 +107,7 @@ const SQL: Record<AlertKind, string> = {
   order_new: `SELECT o.id AS key, NULL AS assigned_id, NULL AS inspector_id, NULL AS who, NULL AS place, o.created_at AS anchor, NULL AS extra,
       NULL AS rid, o.id AS oid, NULL AS number, NULL AS label, o.client_name AS client, o.bank, NULL AS fee,
       (SELECT k.id FROM contracts k WHERE k.id = o.contract_id AND k.kind = 'framework') AS kid, o.collaboration_id AS cid, NULL AS my_roles, o.seq, o.bank_ref, o.source
-    FROM orders o WHERE o.viewed_at IS NULL AND o.created_at > ?2`,
+    FROM orders o WHERE o.viewed_at IS NULL AND o.status <> 'cancelled' AND o.created_at > ?2`,
 };
 
 /** Bucharest time (the inspections' local times have no zone) as a moment; dates alone count from 8 in the morning. */

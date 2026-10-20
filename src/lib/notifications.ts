@@ -44,7 +44,7 @@ export async function notificationsFor(db: D1Database, u: WithPerms & { id: stri
     // New orders nobody opened yet (for those who process orders).
     can(u, "orders")
       ? db.prepare(`SELECT o.id, o.created_at AS at, o.seq, o.bank_ref, o.source, o.bank, o.client_name AS client
-          FROM orders o WHERE o.viewed_at IS NULL AND o.created_at > ?1 ORDER BY o.created_at DESC LIMIT 10`).bind(since)
+          FROM orders o WHERE o.viewed_at IS NULL AND o.status <> 'cancelled' AND o.created_at > ?1 ORDER BY o.created_at DESC LIMIT 10`).bind(since)
           .all<{ id: string; at: string; seq: number | null; bank_ref: string | null; source: string | null; bank: string | null; client: string | null }>().then((x) => x.results).catch(() => [])
       : Promise.resolve([]),
     // The configurable alerts (Setări → Alerte): inspections done, reports not collected or to invoice, late work…

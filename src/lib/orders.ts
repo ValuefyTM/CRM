@@ -22,6 +22,7 @@ export type Order = Nullable<Pick<PortalFields, "property_type" | "city" | "addr
   Omit<PortalFields, "property_type" | "city" | "address" | "purpose" | "client_name" | "client_phone"> & {
   id: string; seq: number | null; source: "partner" | "client" | "bank" | "collab" | "site" | "direct"; lead_id: string | null; created_by: string | null; partner_id: string | null;
   status: string; docs_missing: number; viewed_at: string | null; viewed_by: string | null; created_at: string; updated_at: string;
+  cancel_reason?: string | null; cancelled_at?: string | null;
   // bank / collaboration / Glide orders
   glide_id: string | null; contract_id: string | null; collaboration_id: string | null; client_id: string | null; bank_id: string | null;
   bank_branch: string | null; bank_ref: string | null; report_type: string | null; fee: number | null; share: number | null; fee_net: number | null;
@@ -281,4 +282,30 @@ export async function deleteOrder(db: D1Database, actor: string, id: string, con
   await db.prepare("INSERT INTO audit_log (actor, action, entity, entity_id, details) VALUES (?, 'order.delete', 'order', ?, ?)")
     .bind(actor, id, `${ref}${o.client_name ? ` · ${o.client_name}` : ""} · ${o.source}${what ? ` · cu ${what}` : ""}`).run().catch(() => null);
   return { ok: true as const, source: o.source, deleted: done };
+}
+
+/**
+ * Cancels an order with the reason (or reopens it): it stays in the list as cancelled and leaves the alerts. An order
+ * already worked in a report is cancelled from the report. A website request is closed on the website too.
+ */
+export async function cancelOrder(db: D1Database, actor: string, id: string, cancel: boolean, reason: string) {
+  const o = await db.prepare("SELECT id, status, source FROM orders WHERE id = ?").bind(id).first<{ id: string; status: string; source: string }>();
+  if (!o) return { ok: false as const, error: "Comanda nu există." };
+  const t = now();
+  if (cancel) {
+    if (!reason) return { ok: false as const, error: "Scrie motivul anulării." };
+    const rep = await db.prepare("SELECT id FROM reports WHERE order_id = ? AND status <> 'cancelled' LIMIT 1").bind(id).first();
+    if (rep) return { ok: false as const, error: "Comanda are deja raport: anulează raportul (din „Schimbă status”)." };
+    await db.prepare(`UPDATE orders SET status = 'cancelled', cancel_reason = ?, cancelled_at = ?, cancelled_by = ?, viewed_at = COALESCE(viewed_at, ?), updated_at = ? WHERE id = ?`)
+      .bind(reason, t, actor.replace(/^user:/, ""), t, t, id).run();
+  } else {
+    if (o.status !== "cancelled") return { ok: true as const };
+    await db.prepare("UPDATE orders SET status = 'received', cancel_reason = NULL, cancelled_at = NULL, cancelled_by = NULL, updated_at = ? WHERE id = ?").bind(t, id).run();
+  }
+  // the website's request (same table as the site's admin panel)
+  await db.prepare(`UPDATE leads SET status = ?, updated_at = ? WHERE id IN (SELECT lead_id FROM order_leads WHERE order_id = ?)`)
+    .bind(cancel ? "LOST" : "CONTACTED", t, id).run().catch(() => null);
+  await db.prepare("INSERT INTO audit_log (actor, action, entity, entity_id, details) VALUES (?, ?, 'order', ?, ?)")
+    .bind(actor, cancel ? "order.cancel" : "order.reopen", id, cancel ? reason : null).run();
+  return { ok: true as const };
 }

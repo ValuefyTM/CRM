@@ -20,6 +20,7 @@ import { offerLink } from "@/lib/offer-emails";
 import { OfferEditor } from "./OfferEditor";
 import { DossierOpen } from "./DossierOpen";
 import { DeleteOrder } from "./DeleteOrder";
+import { CancelReason } from "@/components/CancelReason";
 import { Messages } from "@/components/Messages";
 import { messagesOf } from "@/lib/messages";
 import { photoUrl, presenceOf } from "@/lib/presence";
@@ -102,10 +103,13 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
       actions={<>
         <a href={backTo} className="btn btnGhost btnSm">← Comenzi</a>
         {liveInvoices.map((i) => <a key={i.id} href={`/api/crm/invoices/${i.id}/pdf`} target="_blank" rel="noopener" className="btn btnGold btnSm" title={`Factura ${i.series} ${i.number}`}>PDF factură {i.series} {i.number}</a>)}
+        {can(user, "orders.E") && !o.glide_id && (o.status === "cancelled" ? <CancelReason url={`/api/crm/orders/${o.id}`} what="comanda" reopen />
+          : o.status === "received" || o.status === "draft" ? <CancelReason url={`/api/crm/orders/${o.id}`} what="comanda" /> : null)}
         {can(user, "orders.D") && <DeleteOrder id={o.id} label={orderCode(o)} back={backTo} links={await orderLinks(db, o.id)} />}
       </>}
     >
       {o.glide_id && <div className="note">Comandă importată din vechiul CRM.</div>}
+      {o.status === "cancelled" && !o.glide_id && <div className="note"><b>Comandă anulată{o.cancelled_at ? ` pe ${fmtDate(o.cancelled_at, true)}` : ""}.</b>{o.cancel_reason ? ` Motiv: ${o.cancel_reason}` : ""}</div>}
       <div className="cols">
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
           {o.source === "site" ? (

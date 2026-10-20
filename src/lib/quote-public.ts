@@ -54,7 +54,7 @@ export async function quoteAsOffer(db: D1Database, q: Quote): Promise<{ offer: O
   };
   const object = objectFor(order), valueType = valueTypeFor(q.purpose);
   const type = (order.property_type && DOCS[order.property_type as PropertyType] ? order.property_type : "other") as PropertyType;
-  const status: Offer["status"] = q.status === "accepted" || q.status === "converted" ? "accepted" : q.status === "declined" ? "declined" : q.status === "sent" ? "sent" : "draft";
+  const status: Offer["status"] = q.status === "accepted" || q.status === "converted" ? "accepted" : q.status === "declined" || q.status === "cancelled" ? "declined" : q.status === "sent" ? "sent" : "draft";
   const offer: Offer = {
     id: q.id, order_id: q.id, number: quoteCode(q), token: q.token ?? "", status,
     client_name: q.client_name, client_email: q.client_email,
@@ -77,6 +77,7 @@ export async function sendQuote(db: D1Database, actor: string, id: string, to: s
   const q = await getQuote(db, id);
   if (!q) return { ok: false as const, error: "Oferta nu există." };
   if (q.status === "converted" || q.status === "accepted") return { ok: false as const, error: "Oferta e deja acceptată." };
+  if (q.status === "cancelled") return { ok: false as const, error: "Oferta e anulată: redeschide-o întâi." };
   if (!q.fee) return { ok: false as const, error: "Completează onorariul înainte de a trimite oferta." };
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return { ok: false as const, error: "Emailul clientului nu pare corect." };
   const t = now();
@@ -94,6 +95,7 @@ export async function sendQuote(db: D1Database, actor: string, id: string, to: s
 export async function answerQuote(db: D1Database, q: Quote, b: Record<string, unknown>, req: Request) {
   if (q.status === "accepted" || q.status === "converted") return { ok: false as const, error: "Oferta a fost deja acceptată.", status: 409 };
   if (q.status === "declined") return { ok: false as const, error: "Oferta a fost refuzată. Contactează-ne pentru o ofertă nouă.", status: 409 };
+  if (q.status === "cancelled") return { ok: false as const, error: "Oferta nu mai este valabilă. Contactează-ne pentru o ofertă nouă.", status: 409 };
   const { offer, order } = await quoteAsOffer(db, q);
   if (offer.valid_until < new Date().toISOString().slice(0, 10)) return { ok: false as const, error: "Oferta a expirat. Contactează-ne pentru o ofertă actualizată.", status: 410 };
   const at = now();

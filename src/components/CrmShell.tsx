@@ -29,7 +29,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
     ? await Promise.all([
         // Sales offered on the website are not shown for now: only unopened orders count.
         // (only the orders the user works on: "Pe ce date" of Comenzi, or the contracts they are accredited on)
-        can(props.user, "orders") ? (() => { const f = scopeFilter(props.user, "orders", "o"); return db.prepare(`SELECT COUNT(*) AS n FROM orders o WHERE o.viewed_at IS NULL${f ? ` AND ${f.sql}` : ""}`).bind(...(f?.binds ?? [])).first<{ n: number }>().then((r) => r?.n ?? 0).catch(() => 0); })() : 0,
+        can(props.user, "orders") ? (() => { const f = scopeFilter(props.user, "orders", "o"); return db.prepare(`SELECT COUNT(*) AS n FROM orders o WHERE o.viewed_at IS NULL AND o.status <> 'cancelled'${f ? ` AND ${f.sql}` : ""}`).bind(...(f?.binds ?? [])).first<{ n: number }>().then((r) => r?.n ?? 0).catch(() => 0); })() : 0,
         db.prepare("SELECT COUNT(*) AS n FROM reports WHERE status IN ('draft', 'in_progress') AND delivered_at IS NULL").first<{ n: number }>().then((r) => r?.n ?? 0).catch(() => 0),
         // Viewing / report requests from the listings on valuefy.ro not handled yet.
         can(props.user, "listings") ? countNewInquiries(db) : 0,

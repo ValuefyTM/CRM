@@ -29,6 +29,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   if (isExpired(offer)) return err("Oferta a expirat. Contactează-ne pentru o ofertă actualizată.", 410);
   const order = await getOrder(db, offer.order_id);
   if (!order) return err("Oferta nu există.", 404);
+  if (order.status === "cancelled") return err("Oferta nu mai este valabilă. Contactează-ne pentru o ofertă nouă.", 409);
   const b = await json(req);
 
   if (b.action === "decline") {
