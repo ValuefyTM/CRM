@@ -427,3 +427,20 @@ export async function statementLog(db: D1Database, id: string) {
     .all<{ at: string; actor: string; action: string; details: string | null; actor_name: string | null }>();
   return results;
 }
+
+/**
+ * The month's revenue: the fees of the reports delivered in the month — own work (direct clients, framework
+ * contracts: the whole fee) and collaborations (the firm's share of the fee). For the profit / loss next to the
+ * month's payouts.
+ */
+export async function monthRevenue(db: D1Database, period: string) {
+  const r = await db.prepare(`SELECT
+      SUM(CASE WHEN o.collaboration_id IS NULL THEN 1 ELSE 0 END) AS own_n, SUM(CASE WHEN o.collaboration_id IS NULL THEN COALESCE(r.fee, 0) ELSE 0 END) AS own,
+      SUM(CASE WHEN o.collaboration_id IS NOT NULL THEN 1 ELSE 0 END) AS collab_n,
+      SUM(CASE WHEN o.collaboration_id IS NOT NULL THEN COALESCE(o.fee_net, r.fee * COALESCE(o.share, c.share), r.fee, 0) ELSE 0 END) AS collab
+    FROM reports r LEFT JOIN orders o ON o.id = r.order_id LEFT JOIN collaborations c ON c.id = o.collaboration_id
+    WHERE r.status = 'done' AND substr(COALESCE(r.report_date, r.delivered_at), 1, 7) = ?`).bind(period)
+    .first<{ own_n: number | null; own: number | null; collab_n: number | null; collab: number | null }>();
+  const own = round2(r?.own ?? 0), collab = round2(r?.collab ?? 0);
+  return { own, ownN: r?.own_n ?? 0, collab, collabN: r?.collab_n ?? 0, total: round2(own + collab) };
+}
