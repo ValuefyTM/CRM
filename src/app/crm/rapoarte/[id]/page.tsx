@@ -18,6 +18,10 @@ import { inspectionSheetDoc } from "@/lib/insp-sheet-doc";
 import { getFirm } from "@/lib/settings";
 import { ReportDocs, type DocItem } from "./ReportDocs";
 import { ReferralEdit } from "@/components/ReferralPick";
+import { FramingEdit, type Party } from "./FramingEdit";
+import { PURPOSES } from "@/lib/order-labels";
+import { VALUE_TYPES } from "@/lib/contract-terms";
+import { CONTRACT_PURPOSES, REPORT_KINDS } from "@/lib/contracts";
 import { NoteParentEdit } from "@/components/NoteParentPick";
 import { isNote, notesOf } from "@/lib/notes";
 import type { AccessDoc } from "@/components/DocAccess";
@@ -38,7 +42,7 @@ import { isOwnIssuer } from "@/lib/report-numbers";
 import { draftForReport, invoicesFor } from "@/lib/billing";
 import { can, type Perm } from "@/lib/perms";
 import { feeShare } from "@/lib/perms-db";
-import { reportAccess } from "@/lib/perms-db";
+import { canFrame, reportAccess } from "@/lib/perms-db";
 import { IssueInvoice, InvoiceList } from "@/components/Invoices";
 import { BilledOutside } from "@/components/BilledOutside";
 import { issuerColor } from "@/lib/issuer-color";
@@ -101,6 +105,11 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const c = acc.can, fees = acc.fee === "all";
   const link = (perm: Perm, path: string, cls: string, body: React.ReactNode) => (can(user, perm) ? <a className={cls} href={`${base}${path}`}>{body}</a> : <span>{body}</span>);
   const messages = await messagesOf(db, "report", r.id, user.id);
+  // The institutions a report is made for (banks first), to correct its designated user.
+  const frame = canFrame(user, acc);
+  const parties: Party[] = tab === "general" && frame ? (await db.prepare(`SELECT id, name, kind, logo_url FROM entities
+      WHERE kind IN ('bank', 'ifn', 'uat', 'anaf', 'broker', 'other') ORDER BY kind <> 'bank', kind, name`).all<{ id: string; name: string; kind: string; logo_url: string | null }>())
+    .results.map((e) => ({ id: e.id, name: niceName(e.name) || e.name, kind: e.kind, logo: fileSrc(e.logo_url) })) : [];
   // valuation notes: the initial report of a note; the notes made on a report
   const note = isNote(r.report_type);
   const [parentRep, notes] = await Promise.all([
@@ -169,10 +178,10 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   // The result: in euro (as given at delivery), with the lei equivalent when the BNR rate was known; older reports in lei only.
   const result = (eur: number | null | undefined, ron: number | null | undefined, c = cur) => (eur ? <><span className="mono num">{lei(eur, "€")}</span>{ron ? <small className="muted"> · {lei(ron, c)}</small> : null}</> : ron ? <span className="mono num">{lei(ron, c)}</span> : null);
   const order = r.order_id ? orderCode({ id: r.order_id, seq: r.order_seq, bank_ref: r.order_bank_ref, bank: r.bank_code, source: r.order_source ?? undefined }) : null;
-  type Recipient = { id: string; name: string; kind: string | null; role: string; contact: string; link?: boolean };
+  type Recipient = { id: string; name: string; kind: string | null; role: string; contact: string; link?: boolean; logo?: string | null };
   const recipients: Recipient[] = [];
-  if (r.recipient_id) recipients.push({ id: r.recipient_id, name: niceName(r.bank_name) || "—", kind: r.recipient_kind, role: "Finanțator / utilizator desemnat", contact: [r.recipient_email, r.recipient_phone, r.recipient_code && `cod ${r.recipient_code}`].filter(Boolean).join(" · ") });
-  if (r.client_id) recipients.push({ id: r.client_id, name: niceName(r.client_name) || "—", kind: r.client_kind, role: r.recipient_id ? "Client / proprietar" : "Client / utilizator desemnat", contact: [r.client_phone, r.client_email].filter(Boolean).join(" · "), link: true });
+  if (r.recipient_id) recipients.push({ id: r.recipient_id, name: niceName(r.bank_name) || "—", kind: r.recipient_kind, role: "Finanțator / utilizator desemnat", contact: [r.recipient_email, r.recipient_phone, r.recipient_code && `cod ${r.recipient_code}`].filter(Boolean).join(" · "), logo: fileSrc(r.bank_logo) });
+  if (r.client_id) recipients.push({ id: r.client_id, name: niceName(r.client_name) || "—", kind: r.client_kind, role: r.recipient_id ? "Client / proprietar" : "Client / utilizator desemnat", contact: [r.client_phone, r.client_email].filter(Boolean).join(" · "), link: true, logo: fileSrc(r.client_logo) });
   const checks: [state: "ok" | "miss" | "todo", text: string, note?: string][] = [
     main?.no_inspection ? ["ok", "Bun principal fără inspecție", main.no_inspection] : [main?.sheet_photo || main?.inspection_status === "done" ? "ok" : "todo", "Fișă inspecție bun principal atașată"],
     [assets.length > 0 && assets.every((a) => a.value != null) ? "ok" : "todo", "Valori completate pe toate bunurile", assets.length ? `${assets.filter((a) => a.value != null).length} din ${assets.length}` : "niciun bun"],
@@ -356,7 +365,14 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
         <>
           <div className="dGrid2">
             <section className="card">
-              <h2>Încadrare evaluare</h2>
+              <div className="cardHead"><h2>Încadrare evaluare</h2>{frame && (
+                <FramingEdit id={r.id} parties={parties} purposes={[...new Set([...CONTRACT_PURPOSES, ...PURPOSES])]} valueTypes={VALUE_TYPES.map(([, l]) => l)}
+                  reportTypes={[...new Set([...REPORT_KINDS, "Notă de evaluare"])]}
+                  client={r.client_id ? { id: r.client_id, name: niceName(r.client_name) || "client", kind: r.client_kind, logo: fileSrc(r.client_logo) } : null}
+                  recipient={r.recipient_id && r.recipient_id !== r.client_id ? { id: r.recipient_id, name: niceName(r.bank_name) || "utilizator", kind: r.recipient_kind, logo: fileSrc(r.bank_logo) } : null}
+                  initial={{ purpose: r.purpose ?? "", value_type: r.value_type ?? "", report_type: r.report_type ?? "", valuation_types: r.valuation_types ?? "",
+                    valuation_date: r.valuation_date?.slice(0, 10) ?? "", currency: r.currency === "EUR" ? "EUR" : "RON", bank_branch: r.bank_branch ?? "" }} />
+              )}</div>
               <dl className="kv">
                 <Row k="Scop">{r.purpose ? cap(r.purpose) : null}</Row>
                 <Row k="Tip valoare">{r.value_type}</Row>
@@ -424,7 +440,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                   <tbody>
                     {recipients.map((x) => (
                       <tr key={x.id + x.role}>
-                        <td>{x.link && can(user, "clients") ? <a className="rowLink" href={`${base}/clienti/${x.id}`}>{x.name}</a> : <b>{x.name}</b>}</td>
+                        <td><span className="rcWho">{x.logo ? <SafeImg src={x.logo} className="rcLogo" fallback={<i className="rcLogo">{initials(x.name, "c")}</i>} /> : <i className="rcLogo">{initials(x.name, "c")}</i>}
+                          {x.link && can(user, "clients") ? <a className="rowLink" href={`${base}/clienti/${x.id}`}>{x.name}</a> : <b>{x.name}</b>}</span></td>
                         <td><span className="pill"><i />{(x.kind ? KIND[x.kind] ?? x.kind : "—").toUpperCase()}</span></td>
                         <td>{x.role}</td>
                         <td className="muted">{x.contact || "—"}</td>

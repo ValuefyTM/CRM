@@ -7,7 +7,7 @@ import { STAGE_LABEL } from "@/lib/dossier";
 import { esc, layout, sendEmail } from "@/lib/email";
 import { appUrl } from "@/lib/site";
 import { addMessage } from "@/lib/messages";
-import { isFinished } from "@/lib/perms-db";
+import { canFrame, isFinished } from "@/lib/perms-db";
 import type { TeamRight } from "@/lib/perms";
 import { pushLater } from "@/lib/push";
 import { checkFirmNumber, isOwnIssuer } from "@/lib/report-numbers";
@@ -45,6 +45,43 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (dup) return err(dup);
     await a.db.prepare("UPDATE reports SET number = ?, updated_at = ? WHERE id = ?").bind(number, now(), id).run();
     await audit(a.db, actor, "report.number", "report", id, `${x!.number ?? "fără număr"} → ${number}`);
+    return Response.json({ ok: true });
+  }
+
+  // The report's framing (Încadrare evaluare): purpose, value type, kind, the designated user… Corrected also once the
+  // report is finished (orders entered wrong). The designated user is required unless only the client uses the report.
+  if (b.framing && typeof b.framing === "object") {
+    if (!canFrame(a.user, a.access)) return err("Nu poți edita acest raport.", 403);
+    const f = b.framing as Record<string, unknown>;
+    const txt = (v: unknown, n: number) => (typeof v === "string" ? v.trim().slice(0, n) || null : null);
+    const cur = await a.db.prepare(`SELECT r.client_id, r.recipient_id, r.purpose, r.value_type, r.report_type, r.valuation_types, r.valuation_date, r.currency, r.bank_branch,
+        b.name AS recipient FROM reports r LEFT JOIN entities b ON b.id = r.recipient_id WHERE r.id = ?`).bind(id)
+      .first<Record<string, string | null>>();
+    let recipient: string | null = null, recipientName: string | null = null;
+    if (f.client_only !== true) {
+      recipient = txt(f.recipient_id, 64);
+      if (!recipient) return err("Alege utilizatorul desemnat al raportului sau bifează „Doar clientul”.");
+      const e = await a.db.prepare("SELECT id, name, kind FROM entities WHERE id = ?").bind(recipient).first<{ id: string; name: string; kind: string }>();
+      if (!e || e.kind === "valuation_firm") return err("Utilizatorul ales nu există.");
+      recipientName = e.name;
+      if (recipient === cur?.client_id) recipient = null;
+    }
+    const day = txt(f.valuation_date, 10);
+    if (day && !/^\d{4}-\d{2}-\d{2}$/.test(day)) return err("Data evaluării nu e validă.");
+    const next: Record<string, string | null> = {
+      purpose: txt(f.purpose, 120), value_type: txt(f.value_type, 160), report_type: txt(f.report_type, 120),
+      valuation_types: txt(f.valuation_types, 40), valuation_date: day, currency: f.currency === "EUR" ? "EUR" : "RON", bank_branch: txt(f.bank_branch, 120), recipient_id: recipient,
+    };
+    if (!next.purpose) return err("Alege scopul evaluării.");
+    const LABEL: Record<string, string> = { purpose: "scop", value_type: "tip valoare", report_type: "tip raport", valuation_types: "tip evaluare", valuation_date: "data evaluării",
+      currency: "monedă", bank_branch: "agenție", recipient_id: "utilizator" };
+    const changed = Object.keys(next).filter((k) => (next[k] ?? null) !== (cur?.[k] ?? null));
+    if (!changed.length) return Response.json({ ok: true });
+    await a.db.prepare(`UPDATE reports SET purpose = ?, value_type = ?, report_type = ?, valuation_types = ?, valuation_date = ?, currency = ?, bank_branch = ?, recipient_id = ?,
+        updated_at = ? WHERE id = ?`)
+      .bind(next.purpose, next.value_type, next.report_type, next.valuation_types, next.valuation_date, next.currency, next.bank_branch, next.recipient_id, now(), id).run();
+    const show = (k: string, v: string | null) => (k === "recipient_id" ? (v ? (v === cur?.recipient_id ? cur?.recipient : recipientName) ?? "—" : "doar clientul") : v ?? "—");
+    await audit(a.db, actor, "report.framing", "report", id, changed.map((k) => `${LABEL[k]}: ${show(k, cur?.[k] ?? null)} → ${show(k, next[k])}`).join(" · "));
     return Response.json({ ok: true });
   }
 

@@ -79,6 +79,9 @@ export async function reportAccess(db: D1Database, u: Viewer, r: { id: string; s
   return { view, can: right as Record<TeamRight, boolean>, fee, roles, all, locked: done };
 }
 
+/** Who corrects a report's framing (purpose, designated user…), also once it is finished: its editors and its main evaluator. */
+export const canFrame = (u: WithPerms, acc: ReportAccess) => acc.view && (acc.can.edit || (acc.locked && (can(u, "reports.E") || acc.can.status)));
+
 /**
  * "Rapoarte: unde e evaluator / verificator": being the inspector of a report does not show it (the inspector has the
  * inspection, in Inspecții, not the report). With "din echipa lui" the team matrix decides, inspector row included.
