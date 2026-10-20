@@ -94,6 +94,8 @@ export default async function ContractsPage({ searchParams }: { searchParams: Pr
     ];
   }
 
+  // the yearly value is a total: only for "all the amounts"
+  if (!can(user, "fees.all")) cards = cards.filter(([l]) => !l.startsWith("Valoare"));
   const actions = collab ? null : tab === "cadru"
     ? <a href={`${base}/contracte/nou?tip=cadru`} className="btn btnGold btnSm">+ Contract cadru</a>
     : <a href={`${base}/contracte/nou`} className="btn btnGold btnSm">+ Contract nou</a>;

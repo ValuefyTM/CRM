@@ -654,7 +654,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             {r.delivered_at && <Row k="Predat">{fmtDate(r.delivered_at)}{r.delivered_by_name ? ` · ${r.delivered_by_name}` : ""}</Row>}
             {fees && <Row k="Onorariu">{r.fee != null ? <span className="mono num">{lei(r.fee, "RON")}</span> : null}</Row>}
             {fees && r.collab_fee != null && <Row k="Tarif colaborator"><span className="mono num">{lei(r.collab_fee, "RON")}</span></Row>}
-            {fees && <Row k="Încasat">{c.status ? <CollectedToggle id={r.id} collected={!!r.collected} at={r.collected_at} /> : r.collected ? "da" : <span className="muted">nu încă</span>}</Row>}
+            {fees && <Row k="Încasat">{c.status || can(user, "reports.E") ? <CollectedToggle id={r.id} collected={!!r.collected} at={r.collected_at} /> : r.collected ? "da" : <span className="muted">nu încă</span>}</Row>}
             {!fees && myShare && <Row k="Cota ta">{myShare}</Row>}
             <Row k="Borderou">{r.statement_number ? `B-${r.statement_number}` : <span className="muted">neinclus</span>}</Row>
           </dl>

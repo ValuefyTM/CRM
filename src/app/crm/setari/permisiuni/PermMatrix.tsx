@@ -12,7 +12,7 @@ const GROUPS = [...new Set(MODULES.map((m) => m.group))].map((g) => [g, MODULES.
 const OFF: Cell = { on: false, r: [], sp: [] };
 const scopeOf = (m: Mod): readonly (readonly [Scope, string])[] | null => ("scope" in m ? m.scope : null);
 /** Short label in a cell for a restricted scope. */
-const SCOPE_SHORT: Record<Scope, string> = { all: "", own: "ale lui", lead: "ca evaluator" };
+const SCOPE_SHORT: Record<Scope, string> = { all: "", own: "ale lui", lead: "ca evaluator", each: "fără totaluri" };
 const spOf = (m: Mod): readonly (readonly [string, string])[] => ("sp" in m ? m.sp : []);
 const hintOf = (m: Mod) => ("hint" in m ? m.hint : "");
 

@@ -36,6 +36,8 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
   if (!d || !(await inScope(db, user, "contracts", id))) notFound();
   const k = d.contract;
   const framework = k.kind === "framework";
+  // amounts: every fee for "fees"; the sums only for "all the amounts"
+  const fees = can(user, "fees"), money = can(user, "fees.all");
   const [log, doc, sign, invoices, accredited] = await Promise.all([history(db, [id]), framework ? null : contractDoc(db, id), framework ? null : signContractById(db, id), invoicesFor(db, { contract: id }),
     framework ? accreditedUsers(db, id) : Promise.resolve([])]);
   const admin = can(user, "billing");
@@ -65,8 +67,8 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
         <div className="dbKpi"><span className="dbKpiLabel"><i style={{ background: "var(--ok)" }} />Finalizate</span><b>{t.done.toLocaleString("ro-RO")}</b></div>
         {framework
           ? <div className="dbKpi"><span className="dbKpiLabel"><i style={{ background: "var(--info)" }} />Comenzi luna aceasta</span><b>{t.month}</b></div>
-          : <div className="dbKpi"><span className="dbKpiLabel"><i style={{ background: "var(--acc-ink)" }} />Onorariu contract</span><b className="ctKpiMoney">{lei(k.fee)}</b></div>}
-        <div className="dbKpi"><span className="dbKpiLabel"><i style={{ background: "var(--muted)" }} />Onorarii rapoarte</span><b className="ctKpiMoney">{lei(Math.round(t.fees))}</b></div>
+          : fees ? <div className="dbKpi"><span className="dbKpiLabel"><i style={{ background: "var(--acc-ink)" }} />Onorariu contract</span><b className="ctKpiMoney">{lei(k.fee)}</b></div> : null}
+        {money && <div className="dbKpi"><span className="dbKpiLabel"><i style={{ background: "var(--muted)" }} />Onorarii rapoarte</span><b className="ctKpiMoney">{lei(Math.round(t.fees))}</b></div>}
       </div>
       <div className="cols">
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
@@ -136,7 +138,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
                       <span className="who">
                         <a className="rowLink" href={`${base}/rapoarte/${r.id}`}>{r.number ? `Raport ${r.number}` : r.label ?? "Raport"}</a>
                         <span className="muted">{[cap(type), address].filter(Boolean).join(" · ") || r.label}</span>
-                        <span className="muted">{fmtDate(r.received_on ?? r.report_date)} · {r.evaluator ?? "—"}{r.fee ? ` · ${lei(r.fee)}` : ""}</span>
+                        <span className="muted">{fmtDate(r.received_on ?? r.report_date)} · {r.evaluator ?? "—"}{fees && r.fee ? ` · ${lei(r.fee)}` : ""}</span>
                       </span>
                       <span className={`pill ${cls}`}><i />{label}</span>
                     </li>

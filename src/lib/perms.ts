@@ -12,7 +12,8 @@ export const RIGHTS: [Right | "V", string][] = [["V", "Vede"], ["A", "Adaugă"],
 
 /** On which records a role works in a module: all, the user's own (created / team / assigned), or where the user is
  * main evaluator or verifier of the report they belong to (managers who answer only for their reports). */
-export type Scope = "all" | "own" | "lead";
+/** "each" (Onorarii only): every report's own fee, but no totals or summaries. */
+export type Scope = "all" | "own" | "lead" | "each";
 type ModDef = { k: string; l: string; group: string; rights: Right[]; scope?: readonly (readonly [Scope, string])[]; sp?: [string, string][]; hint?: string;
   /** the special actions (and the scope) can be given without the module itself (no menu entry) */
   offSp?: true;
@@ -35,7 +36,8 @@ export const MODULES = [
   { k: "inspections", l: "Inspecții", group: "Operațional", rights: ["E"], scope: [["all", "Toate"], ["own", "Alocate lui"], ["lead", "Alocate lui și din rapoartele unde e evaluator / verificator"]], sp: [["assign", "Alocă inspectorul"]] },
   { k: "properties", l: "Proprietăți", group: "Operațional", rights: ["E"], scope: [["all", "Toate"], ["own", "Din echipa lui"], LEAD],
     hint: "Proprietățile evaluate în rapoartele pe care le vede (din echipa lui) sau pe care le conduce / verifică; comparabilele se caută tot printre ele. Raportul unei proprietăți se deschide doar dacă îl vede." },
-  { k: "fees", l: "Onorarii și sume", group: "Financiar", rights: [], scope: [["all", "Toate sumele"], ["own", "Doar cota lui"], ["lead", "Toate sumele unde e evaluator / verificator"]] },
+  { k: "fees", l: "Onorarii și sume", group: "Financiar", rights: [], scope: [["all", "Toate sumele"], ["each", "Tarifele fiecărui raport, fără totaluri și centralizări"], ["own", "Doar cota lui"], ["lead", "Toate sumele unde e evaluator / verificator"]],
+    hint: "„Tarifele fiecărui raport”: vede onorariul pe raport și bifa de încasat, dar nu sume pe lună, pe contract sau pe firmă (secretariat)." },
   { k: "billing", l: "Facturare", group: "Financiar", rights: ["A", "E", "D"], scope: [["all", "Toate"], ["own", "Doar ale lui"]], sp: [["issue", "Emite factura"]], offSp: true,
     hint: "„Doar ale lui”: rapoartele de facturat unde e evaluator principal și facturile emise de el (evaluatorii care își fac singuri facturile). „Emite factura” merge și fără modulul din meniu: atunci lista „De facturat” apare pe tabloul de bord, pe scopul ales. Setările de facturare (Oblio, serii, reguli) le văd și le schimbă doar rolurile cu „E”." },
   { k: "statements", l: "Borderouri", group: "Financiar", rights: ["A", "E", "D"], scope: [["all", "Toate"], ["own", "Doar al lui"]] },
@@ -51,7 +53,7 @@ export type ModKey = (typeof MODULES)[number]["k"];
 type SpOf<M> = M extends { k: infer K extends string; sp: readonly (readonly [infer S extends string, string])[] } ? `${K}:${S}` : never;
 /** A permission: a module (sees it), a right on it, "all" or "lead" records, or a special action.
  * "orders.contract": the orders of the framework contracts the user is accredited on (agreeri, see accreditations.ts). */
-export type Perm = ModKey | `${ModKey}.${Right}` | `${ModKey}.all` | `${ModKey}.lead` | SpOf<(typeof MODULES)[number]> | "orders.contract";
+export type Perm = ModKey | `${ModKey}.${Right}` | `${ModKey}.all` | `${ModKey}.lead` | `${ModKey}.each` | SpOf<(typeof MODULES)[number]> | "orders.contract";
 
 export type Cell = { on: boolean; r: Right[]; scope?: Scope; sp: string[];
   /** Clienți: only these kinds of entities (empty / missing = all) */
@@ -92,7 +94,7 @@ export const DEFAULT_CONFIG: PermConfig = {
       clients: cell(["A", "E"]), partners: cell(["A", "E"]), contracts: cell(["A", "E"], { sp: ["sign"] }),
       orders: cell(["A", "E"], { sp: ["process", "offer"] }), tenders: cell(), listings: cell(["A", "E"]),
       reports: cell(["A", "E"], { sp: ["team"] }), inspections: cell(["E"], { sp: ["assign"] }), properties: cell(),
-      dashboard: cell(), settings: cell(),
+      fees: cell([], { scope: "each" }), dashboard: cell(), settings: cell(),
     } },
     { id: "evaluator", name: "Evaluator", cells: {
       tenders: cell(), reports: cell([], { scope: "own" }), inspections: cell(["E"], { scope: "own" }), properties: cell(),
@@ -168,6 +170,7 @@ export function permsFor(cfg: PermConfig, role: string): string[] {
     const scope = c.scope ?? "all";
     if (scope === "all") out.push(`${m.k}.all`);
     if (scope === "lead") out.push(`${m.k}.lead`);
+    if (scope === "each") out.push(`${m.k}.each`);
     // only some kinds of entities: "clients.kind:person"… (none = all kinds)
     if ("kinds" in m && c.kinds?.length) out.push(...c.kinds.map((k) => `${m.k}.kind:${k}`));
   }
