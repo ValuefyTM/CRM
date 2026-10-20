@@ -199,7 +199,7 @@ export function RegistryView(p: {
                 <span className="rgNameCell">
                   {thumb(r)}
                   <span className="rgNameText">
-                    <a className="rgName" href={`${p.base}/proprietati/${r.id}`}><b>{cap(r.type) || "Proprietate"}</b>{geoMark(r.id)}</a>
+                    <a className="rgName" href={`${p.base}/proprietati/${r.id}`}><b>{cap(r.type) || "Proprietate"}</b>{r.construction === "under_construction" && <span className="rgBuild">în construcție</span>}{geoMark(r.id)}</a>
                     <span className="rgSub">{catTag(r.category)}<span className="muted">{r.full_address ?? "—"}</span></span>
                   </span>
                 </span>
@@ -226,7 +226,7 @@ export function RegistryView(p: {
         <a key={r.id} href={`${p.base}/proprietati/${r.id}`} {...rowProps(r)} className={`rgItem${picked === r.id ? " picked" : ""}${hover === r.id ? " hover" : ""}`}>
           {thumb(r)}
           <span className="rgMid">
-            <b>{cap(r.type) || "Proprietate"}</b>
+            <b>{cap(r.type) || "Proprietate"}</b>{r.construction === "under_construction" && <span className="rgBuild">în construcție</span>}
             <small>{r.full_address ?? r.city ?? "—"}</small>
             <span className="rgMeta">
               <span>{date(r.last_date)}</span>

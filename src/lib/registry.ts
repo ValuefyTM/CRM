@@ -17,7 +17,7 @@ export type RegistryFilters = {
 export type RegistryViewer = { id: string; all: boolean; team?: TeamMatrix; noInspector?: boolean; scope?: PropertyScope };
 
 export type RegistryRow = {
-  id: string; category: string | null; type: string | null; county: string | null; city: string | null; full_address: string | null; geo: string | null;
+  id: string; category: string | null; type: string | null; construction?: string | null; county: string | null; city: string | null; full_address: string | null; geo: string | null;
   cf_number: string | null; cad_building: string | null; usable_area: number | null; year_built: number | null; image_url: string | null;
   valuations: number | null; last_date: string | null; report_id: string | null; report_number: string | null; value: number | null; sqm: number | null;
   photo?: string | null;
@@ -49,7 +49,7 @@ export const BASE = `WITH v0 AS (
     FROM v0
   ),
   p AS (
-    SELECT p.id, p.category, p.type, p.county, p.city, p.full_address, p.street, p.geo, p.cf_number, p.cad_building, p.cad_land, p.usable_area, p.year_built, p.image_url,
+    SELECT p.id, p.category, p.type, p.construction, p.county, p.city, p.full_address, p.street, p.geo, p.cf_number, p.cad_building, p.cad_land, p.usable_area, p.year_built, p.image_url,
       v.n AS valuations, v.d AS last_date, v.report_id, v.number AS report_number, v.value,
       CASE WHEN v.value > 0 AND p.usable_area > 0 THEN v.value / p.usable_area END AS sqm
     FROM crm_properties p LEFT JOIN v ON v.property_id = p.id AND v.rn = 1
@@ -155,7 +155,7 @@ export async function registryFacets(db: D1Database, county?: string, cat?: stri
 
 /** One property with all its valuations. */
 export async function registryProperty(db: D1Database, id: string) {
-  const p = await db.prepare(`${BASE} SELECT p.*, x.construction, x.description, x.zone, x.cf_file, x.plan_file, x.geo_source, x.geo_note, x.geo_checked_at FROM p JOIN crm_properties x ON x.id = p.id WHERE p.id = ?`).bind(id)
+  const p = await db.prepare(`${BASE} SELECT p.*, x.description, x.zone, x.cf_file, x.plan_file, x.geo_source, x.geo_note, x.geo_checked_at FROM p JOIN crm_properties x ON x.id = p.id WHERE p.id = ?`).bind(id)
     .first<RegistryRow & { construction: string | null; description: string | null; zone: string | null; cad_land: string | null; cf_file: string | null; plan_file: string | null; geo_source: string | null; geo_note: string | null; geo_checked_at: string | null }>();
   if (!p) return null;
   const valuations = (await db.prepare(`SELECT a.id, a.value, a.is_main, a.approach, r.id AS report_id, r.number, r.status, r.delivered_at, r.result_value, r.currency, r.purpose,
