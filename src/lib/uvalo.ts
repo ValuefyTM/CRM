@@ -194,24 +194,69 @@ export async function pushInspection(db: D1Database, id: string) {
       prop_type: (r.category ?? "").toUpperCase() === "BUN MOBIL" ? MOVABLE : PROP[type], area_util: r.usable_area, area_land: r.land_area, contact_name: r.contact_name, contact_phone: r.contact_phone,
       contact_role: r.contact_kind ? CONTACT_ROLE[r.contact_kind] ?? null : null, facts: factsOf(r), client: r.client, report_user: r.report_user, instructions: r.instructions, due_on: r.due_on, ...(key ? { template_ref: tplRef(key) } : {}),
     }) });
-    // the documents the inspector may open, each sent once
-    const sent = new Set(parseJson<string[]>(r.uvalo_docs, []));
+    // the documents the inspector may open, as ticked in the report: the new ones are sent (once each), the ones
+    // unticked since are taken back from the inspection in UVALO
     const docs = r.report_id ? await docsForInspection(db, id, r.report_id, [r.asset_id]) : [];
-    const r2 = await bucket();
-    for (const doc of docs) {
-      if (sent.has(doc.ref) || !doc.key || !r2) continue;
-      const obj = await r2.get(doc.key);
-      if (!obj) continue;
-      const form = new FormData();
-      form.set("file", new File([await obj.arrayBuffer()], doc.name, { type: doc.content_type ?? obj.httpMetadata?.contentType ?? "application/pdf" }));
-      form.set("kind", doc.type === "cf" ? "cf" : doc.type === "rlv" ? "releveu" : "doc");
-      form.set("name", doc.name);
-      await call(`/inspections/${encodeURIComponent(r.id)}/files`, { method: "POST", body: form }).then(() => sent.add(doc.ref)).catch(() => {});
-    }
+    const sent = await syncDocs(db, r.id, r.uvalo_docs, docs);
     await db.prepare("UPDATE inspections SET uvalo_id = ?, uvalo_code = ?, uvalo_status = COALESCE(uvalo_status, 'prog'), uvalo_error = NULL, uvalo_docs = ?, uvalo_synced_at = ? WHERE id = ?")
-      .bind(d.id, d.code, JSON.stringify([...sent]), now(), id).run();
+      .bind(d.id, d.code, JSON.stringify(sent), now(), id).run();
     return { ok: true as const, code: d.code };
   } catch (e) { return fail(db, id, e); }
+}
+
+/** A document sent to UVALO: its ref in the CRM, the file it became there and its name. */
+type SentDoc = { ref: string; file?: string | null; name?: string | null };
+
+/** The name a document had in the CRM (for the documents sent before their UVALO file was kept). */
+async function nameOfRef(db: D1Database, ref: string) {
+  if (ref.startsWith("r-")) return (await db.prepare("SELECT filename AS n FROM report_documents WHERE id = ?").bind(ref.slice(2)).first<{ n: string }>())?.n ?? null;
+  if (ref.startsWith("o-")) return (await db.prepare("SELECT filename AS n FROM order_documents WHERE id = ?").bind(ref.slice(2)).first<{ n: string }>())?.n ?? null;
+  const g = ref.match(/^g-(.+)-(cf|rlv)$/);
+  if (!g) return null;
+  if (g[2] === "rlv") return "Releveu";
+  const cf = (await db.prepare("SELECT p.cf_number AS n FROM assets a JOIN crm_properties p ON p.id = a.property_id WHERE a.id = ?").bind(g[1]).first<{ n: string | null }>())?.n;
+  return `Extras CF${cf ? ` ${cf}` : ""}`;
+}
+
+/**
+ * The inspection's documents in UVALO made equal to the ones ticked in the report: the unticked ones are deleted
+ * there, the new ones uploaded. Returns what is sent now (kept on the inspection).
+ */
+async function syncDocs(db: D1Database, ref: string, stored: string | null, docs: Awaited<ReturnType<typeof docsForInspection>>): Promise<SentDoc[]> {
+  const prev = parseJson<(string | SentDoc)[]>(stored, []).map((x) => (typeof x === "string" ? { ref: x } : x));
+  const wanted = new Set(docs.map((d) => d.ref));
+  const keep: SentDoc[] = prev.filter((x) => wanted.has(x.ref));
+  const stale = prev.filter((x) => !wanted.has(x.ref));
+  const path = `/inspections/${encodeURIComponent(ref)}`;
+  // the documents already there (for the ones sent before their file id was kept: found by name)
+  let there: { id: string; kind: string; name: string | null }[] | null = null;
+  type F = { id: string; kind: string; name: string | null };
+  const remote = async () => there ??= await call<{ inspection?: { files?: F[] }; files?: F[] }>(path)
+    .then((d) => (d.inspection?.files ?? d.files ?? []).filter((f) => ["cf", "releveu", "doc"].includes(f.kind))).catch(() => []);
+  for (const x of stale) {
+    let file = x.file ?? null;
+    if (!file) {
+      const name = x.name ?? (await nameOfRef(db, x.ref));
+      file = name ? (await remote()).find((f) => f.name === name)?.id ?? null : null;
+    }
+    // gone already, or not found: nothing more to take back
+    // deleted there, or already gone (UVALO says so); any other answer: kept, tried again at the next sync
+    if (file) await call(`${path}/files/${encodeURIComponent(file)}`, { method: "DELETE" })
+      .catch((e: UvaloError) => { if (!(e.status === 404 && /documentul nu există/i.test(e.message))) keep.push(x); });
+  }
+  const r2 = await bucket();
+  const have = new Set(keep.map((x) => x.ref));
+  for (const doc of docs) {
+    if (have.has(doc.ref) || !doc.key || !r2) continue;
+    const obj = await r2.get(doc.key);
+    if (!obj) continue;
+    const form = new FormData();
+    form.set("file", new File([await obj.arrayBuffer()], doc.name, { type: doc.content_type ?? obj.httpMetadata?.contentType ?? "application/pdf" }));
+    form.set("kind", doc.type === "cf" ? "cf" : doc.type === "rlv" ? "releveu" : "doc");
+    form.set("name", doc.name);
+    await call<{ id?: string }>(`${path}/files`, { method: "POST", body: form }).then((d) => { keep.push({ ref: doc.ref, file: d?.id ?? null, name: doc.name }); }).catch(() => {});
+  }
+  return keep;
 }
 
 /**
