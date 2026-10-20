@@ -5,6 +5,8 @@ import { DEFAULT_CONFIG, type TeamMatrix } from "./perms";
 // Server-only: the register of valued properties — every property with its latest valuation (date, value, value per
 // m²), filters, statistics and the points for the map.
 export type RegistryFilters = {
+  /** "constructie" | "finalizat": the stage of the building */
+  stadiu?: string;
   q?: string; cat?: string; county?: string; city?: string; year?: string; geo?: string; sort?: string; page?: number;
   /** Comparables search: property type, usable area (m²), year built, valued in the last n months. */
   tip?: string; smin?: string; smax?: string; amin?: string; amax?: string; luni?: string;
@@ -70,6 +72,9 @@ function where(f: RegistryFilters, viewer?: RegistryViewer) {
   if (f.year && /^\d{4}$/.test(f.year)) { w.push("substr(p.last_date, 1, 4) = ?"); a.push(f.year); }
   if (f.geo === "1") w.push(HAS_GEO);
   if (f.tip) { w.push("LOWER(TRIM(p.type)) = LOWER(?)"); a.push(f.tip.trim()); }
+  // stage of a building: under construction, or finished (existing)
+  if (f.stadiu === "constructie") w.push("EXISTS (SELECT 1 FROM crm_properties sx WHERE sx.id = p.id AND sx.construction = 'under_construction')");
+  if (f.stadiu === "finalizat") w.push("EXISTS (SELECT 1 FROM crm_properties sx WHERE sx.id = p.id AND COALESCE(sx.construction, 'existing') <> 'under_construction')");
   const n = (v?: string) => (v && /^\d+(?:[.,]\d+)?$/.test(v.trim()) ? Number(v.replace(",", ".")) : null);
   if (n(f.smin) != null) { w.push("p.usable_area >= ?"); a.push(n(f.smin)!); }
   if (n(f.smax) != null) { w.push("p.usable_area <= ?"); a.push(n(f.smax)!); }

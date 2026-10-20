@@ -10,7 +10,10 @@ import { CAT_COLOR, CAT_LABEL } from "@/lib/registry-labels";
 export type RegistryQuery = {
   q?: string; cat?: string; county?: string; city?: string; year?: string; geo?: string; sort?: string; vezi?: string;
   tip?: string; smin?: string; smax?: string; amin?: string; amax?: string; luni?: string;
+  /** "constructie": buildings under construction; "finalizat": finished ones */
+  stadiu?: string;
 };
+const STAGES: [string, string][] = [["finalizat", "Finalizate"], ["constructie", "În construcție"]];
 const PERIODS: [string, string][] = [["6", "Ultimele 6 luni"], ["12", "Ultimele 12 luni"], ["24", "Ultimii 2 ani"], ["36", "Ultimii 3 ani"]];
 
 /** Two number boxes (from – to), applied on Enter or when leaving the box. */
@@ -98,7 +101,7 @@ export function RegistryView(p: {
   // the address changed from outside (reset, back): the box follows
   const qBox = useRef<HTMLInputElement>(null);
   useEffect(() => { if (document.activeElement !== qBox.current) setQ(c.q ?? ""); }, [c.q]);
-  const active = [c.q, c.cat, c.county, c.city, c.year, c.geo, c.tip, c.smin || c.smax, c.amin || c.amax, c.luni].filter(Boolean).length;
+  const active = [c.q, c.cat, c.county, c.city, c.year, c.geo, c.tip, c.stadiu, c.smin || c.smax, c.amin || c.amax, c.luni].filter(Boolean).length;
   const withGeo = new Set(p.points.map((x) => x.id));
 
   // Brings a row into view inside the list (not the page), centred when it is outside.
@@ -133,6 +136,7 @@ export function RegistryView(p: {
         <input ref={qBox} className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută adresă, CF, nr. raport, client, bancă… (mai multe, cu virgulă)" title="Mai mulți termeni separați prin virgulă: toți trebuie găsiți, în proprietate sau în rapoartele ei (client, utilizatorul raportului / banca, evaluator, scop, nr. raport)" aria-label="Caută" />
         <FilterSelect label="Categorie" value={c.cat ?? ""} options={p.cats} onChange={(v) => go({ cat: v || undefined, tip: undefined })} />
         <FilterSelect label="Tip" value={c.tip ?? ""} options={p.types} onChange={(v) => go({ tip: v || undefined })} />
+        <FilterSelect label="Stadiu" value={c.stadiu ?? ""} options={STAGES} onChange={(v) => go({ stadiu: v || undefined })} all="Toate" />
         <FilterSelect label="Județ" value={c.county ?? ""} options={p.counties} onChange={(v) => go({ county: v || undefined, city: undefined })} all="Toate" />
         <FilterSelect label="Localitate" value={c.city ?? ""} options={p.cities} onChange={(v) => go({ city: v || undefined })} />
         <FilterSelect label="Evaluat în" value={c.year ?? ""} options={p.years} onChange={(v) => go({ year: v || undefined, luni: undefined })} all="Orice an" />

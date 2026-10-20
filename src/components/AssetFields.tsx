@@ -71,10 +71,9 @@ export function AssetFields({ value: f, onChange, docs }: { value: AssetForm; on
 
   const field = (k: ProfileField) => {
     if (k === "construction") return (
-      <label key={k} className="field">Stadiu
-        <select className="select" value={f.construction} onChange={(e) => onChange({ construction: e.target.value })}>
-          <option value="existing">Existent</option><option value="under_construction">În construcție</option>
-        </select>
+      <label key={k} className={`afBuild${f.construction === "under_construction" ? " on" : ""}`} title="Bifează dacă imobilul nu e finalizat (lucrări în curs)">
+        <input type="checkbox" checked={f.construction === "under_construction"} onChange={(e) => onChange({ construction: e.target.checked ? "under_construction" : "existing" })} />
+        <span><b>În construcție</b><small>lucrări neterminate</small></span>
       </label>
     );
     return (
