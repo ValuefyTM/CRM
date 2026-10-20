@@ -4,7 +4,7 @@
 export type AlertKind =
   | "report_assigned" | "insp_done" | "insp_not_scheduled" | "insp_overdue"
   | "uncollected_after_insp" | "delivered_uncollected" | "to_invoice"
-  | "review_waiting" | "overdue" | "order_new";
+  | "review_waiting" | "overdue" | "order_new" | "docs_missing";
 
 export type AlertRule = {
   id: string; kind: AlertKind;
@@ -21,6 +21,8 @@ export type AlertRule = {
   enabled: boolean;
   /** an own title instead of the situation's */
   title?: string;
+  /** a lasting situation: told again every this many hours while it lasts (0 / none = once) */
+  every?: number;
 };
 
 export type KindInfo = {
@@ -45,6 +47,7 @@ export const ALERT_KINDS: Record<AlertKind, KindInfo> = {
   to_invoice: { label: "Raport de facturat", hint: "predat pe contract facturat per raport, fără factură", from: "de la predare", group: "Bani", tone: "warn", lasting: true, roles: ["evaluator", "ops", "admins", "all"] },
   review_waiting: { label: "Raport la verificare", hint: "așteaptă verificatorul", from: "de la trimiterea la verificare", group: "Rapoarte", tone: "warn", lasting: true, roles: ["verifier", "evaluator", "team", "admins", "all"] },
   overdue: { label: "Raport nepredat la termen", hint: "termenul de predare a trecut", from: "de la ziua următoare termenului", group: "Rapoarte", tone: "err", lasting: true, roles: ["evaluator", "verifier", "team", "ops", "admins", "all"] },
+  docs_missing: { label: "Documente lipsă", hint: "un act cerut (marcat lipsă) nu a fost încă încărcat", from: "de la marcarea ca lipsă", group: "Rapoarte", tone: "err", lasting: true, roles: ["evaluator", "team", "ops", "orders", "admins", "all"] },
   order_new: { label: "Comandă neprocesată", hint: "nimeni nu a deschis comanda", from: "de la primirea comenzii", group: "Comenzi", tone: "warn", lasting: true, roles: ["orders", "admins", "all"] },
 };
 
@@ -61,6 +64,9 @@ export const ALERT_TO: [string, string, string][] = [
 ];
 
 export const DAY_CHOICES: [number, string][] = [[0, "imediat"], [1, "după 1 zi"], [2, "după 2 zile"], [3, "după 3 zile"], [5, "după 5 zile"], [7, "după 7 zile"], [14, "după 14 zile"], [30, "după 30 de zile"]];
+
+/** How often a lasting alert is told again while the situation lasts (hours; 0 = once). */
+export const EVERY_CHOICES: [number, string][] = [[0, "o singură dată"], [1, "la fiecare oră"], [2, "la 2 ore"], [4, "la 4 ore"], [8, "la 8 ore"], [12, "la 12 ore"], [24, "o dată pe zi"], [48, "la 2 zile"], [72, "la 3 zile"], [168, "o dată pe săptămână"]];
 
 /** The rules of a firm that set none yet. */
 export const DEFAULT_RULES: AlertRule[] = [

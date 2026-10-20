@@ -2,7 +2,7 @@
 // The list of alert rules: each one a card with the situation, the delay, the recipients, the scope and the places it
 // shows. Saved all at once.
 import { useState } from "react";
-import { ALERT_KINDS, ALERT_TO, DAY_CHOICES, newRuleId, type AlertKind, type AlertRule } from "@/lib/alert-kinds";
+import { ALERT_KINDS, ALERT_TO, DAY_CHOICES, EVERY_CHOICES, newRuleId, type AlertKind, type AlertRule } from "@/lib/alert-kinds";
 
 type Scope = { v: string; label: string; group: string };
 type Person = { id: string; name: string; role: string };
@@ -40,6 +40,14 @@ function Rule({ r, edit, people, scopes, onChange, onRemove }: { r: AlertRule; e
             {customDays && <input className="input alDays" type="number" min={0} max={365} value={r.days} disabled={!edit} onChange={(e) => set({ days: Math.max(0, Math.min(365, Number(e.target.value) || 0)) })} aria-label="Zile" />}
           </span>
           <small className="muted">{k.from}</small>
+          {k.lasting && (
+            <span className="alWhen" style={{ marginTop: 6 }}>
+              <select className="select" value={String(r.every ?? 0)} disabled={!edit} onChange={(e) => set({ every: Number(e.target.value) || undefined })} aria-label="Repetă">
+                {EVERY_CHOICES.map(([h, l]) => <option key={h} value={h}>{h ? `repetă ${l}` : "o singură dată"}</option>)}
+              </select>
+            </span>
+          )}
+          {k.lasting && !!r.every && <small className="muted">cât timp situația durează</small>}
         </label>
         <fieldset className="field alTo">
           <legend>Cui</legend>

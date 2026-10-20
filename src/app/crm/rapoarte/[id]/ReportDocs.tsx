@@ -116,7 +116,8 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
     <>
       {d.status === "missing" && edit && <UploadButton id={report} doc={d.id} label="Încarcă" className="linkBtn" />}
       {d.href && <a className="link" href={d.href} target="_blank" rel="noopener">Deschide</a>}
-      {d.origin === "report" && remove && !d.final && <DeleteDoc id={report} doc={d.id} name={d.name} />}
+      {d.status === "missing" ? edit && <DeleteDoc id={report} doc={d.id} name={d.name} missing />
+        : d.origin === "report" && remove && !d.final && <DeleteDoc id={report} doc={d.id} name={d.name} />}
     </>
   );
 
@@ -239,9 +240,10 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
                       <td>{tick(d)}</td>
                       <td><span className="rdActs rdTActs">
                         {d.status === "missing" && edit && <UploadButton id={report} doc={d.id} label="Încarcă" className="linkBtn" />}
+                        {d.status === "missing" && edit && <DeleteDoc id={report} doc={d.id} name={d.name} missing />}
                         {d.href && <a className="rdIco" href={d.href} target="_blank" rel="noopener" title="Deschide" aria-label={`Deschide ${d.name}`}>
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg></a>}
-                        {d.origin === "report" && remove && !d.final && <DeleteDoc id={report} doc={d.id} name={d.name} />}
+                        {d.origin === "report" && remove && !d.final && d.status !== "missing" && <DeleteDoc id={report} doc={d.id} name={d.name} />}
                       </span></td>
                     </tr>
                   );

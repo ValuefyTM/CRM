@@ -1,3 +1,4 @@
+import { getDb } from "@/lib/db";
 import { audit } from "@/lib/auth";
 import { now, uuid } from "@/lib/db";
 import { err, json, reportApi } from "@/lib/api";
@@ -145,13 +146,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const a = await reportApi(id, "docsDelete", true);
-  if ("res" in a) return a.res;
   const docId = new URL(req.url).searchParams.get("doc") ?? "";
-  const d = await a.db.prepare("SELECT id, filename, r2_key FROM report_documents WHERE id = ? AND report_id = ?").bind(docId, id).first<{ id: string; filename: string; r2_key: string | null }>();
+  // a document only asked for (marked missing, nothing uploaded): cancelled by whoever handles the documents
+  const asked = await getDb().then((db) => db?.prepare("SELECT status FROM report_documents WHERE id = ? AND report_id = ?").bind(docId, id).first<{ status: string }>()).catch(() => null);
+  const a = await reportApi(id, asked?.status === "missing" ? "docs" : "docsDelete", true);
+  if ("res" in a) return a.res;
+  const d = await a.db.prepare("SELECT id, filename, r2_key, status FROM report_documents WHERE id = ? AND report_id = ?").bind(docId, id).first<{ id: string; filename: string; r2_key: string | null; status: string }>();
   if (!d) return err("Documentul nu există.", 404);
   if (d.r2_key) await (await bucket())?.delete(d.r2_key);
   await a.db.prepare("DELETE FROM report_documents WHERE id = ?").bind(d.id).run();
-  await audit(a.db, `user:${a.user.id}`, "report.document_remove", "report", id, d.filename);
+  await audit(a.db, `user:${a.user.id}`, d.status === "missing" ? "report.document_unrequest" : "report.document_remove", "report", id, d.status === "missing" ? `${d.filename}: nu mai e cerut` : d.filename);
   return Response.json({ ok: true });
 }

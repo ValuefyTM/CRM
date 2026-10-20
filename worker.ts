@@ -40,9 +40,13 @@ export default {
     return app.fetch(new Request(req, { headers }), env, ctx);
   },
 
-  /** Every morning: new SEAP notices for valuations (Licitații in the CRM) and the email with them. */
-  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+  /** Every morning: new SEAP notices for valuations (Licitații in the CRM) and the email with them. Every hour: the alerts. */
+  async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
     for (const [k, v] of Object.entries(env)) if (typeof v === "string") process.env[k] = v;
+    if (event.cron === "13 * * * *") {
+      ctx.waitUntil(dispatchPush(env.DB, env.CRM_URL || "https://crm.valuefy.ro").then((n) => console.log("alerts:", n)).catch((e) => console.error("alerts", e)));
+      return;
+    }
     ctx.waitUntil((async () => {
       const r = await runTenders(env.DB, 2);
       console.log("tenders:", JSON.stringify({ ok: r.info.ok, fetched: r.info.fetched, matched: r.info.matched, added: r.info.added, error: r.info.error }));

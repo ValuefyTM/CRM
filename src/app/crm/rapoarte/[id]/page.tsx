@@ -158,6 +158,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const sources = docs.filter((d) => d.kind === "source");
   const missing = sources.filter((d) => d.status === "missing");
   const final = docs.find((d) => d.kind === "final" && d.status === "uploaded");
+  const missingCount = docs.filter((d) => d.status === "missing").length;
   const glideFiles = assets.flatMap((a) => [
     a.cf_file ? { name: `Extras CF ${a.cf_number ?? ""}`.trim(), path: a.cf_file } : null,
     a.plan_file ? { name: `Releveu ${cap(a.type)}`.trim(), path: a.plan_file } : null,
@@ -301,6 +302,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                 {!ownIssuer && c.edit && <ReportNumberEdit id={r.id} number={r.number} firm={r.issuer_name ?? "firma colaboratoare"} />}</h2>
               <span className={`pill ${cls}`}><i />{label}{finished && r.report_date ? ` · ${fmtDate(r.report_date)}` : ""}</span>
               {r.status !== "cancelled" && <span className={`pill ${stage === "delivered" ? "pillOk" : "pillWarn"}`}><i />{STAGE_LABEL[stage]}</span>}
+              {missingCount > 0 && r.status !== "cancelled" && <a className="pill pillErr dMissing" href={href("documente")} title={docs.filter((x) => x.status === "missing").map((x) => x.filename).join(", ")}><i />{missingCount === 1 ? "Lipsește 1 document" : `Lipsesc ${missingCount} documente`}</a>}
               {!!r.urgent && !finished && <span className="dUrgent" title="Comanda a fost marcată urgentă"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" /></svg>Urgent</span>}
             </div>
             <div className="rChips">

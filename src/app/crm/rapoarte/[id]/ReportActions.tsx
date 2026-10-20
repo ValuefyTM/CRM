@@ -214,14 +214,14 @@ export function DocTypeSelect({ id, doc, value, assets }: { id: string; doc: str
   );
 }
 
-export function DeleteDoc({ id, doc, name }: { id: string; doc: string; name: string }) {
+export function DeleteDoc({ id, doc, name, missing = false }: { id: string; doc: string; name: string; missing?: boolean }) {
   return (
     <button type="button" className="linkBtn danger" onClick={async () => {
-      if (!confirm(`Ștergi „${name}”?`)) return;
+      if (!confirm(missing ? `Anulezi cererea pentru „${name}”? Actul nu mai apare ca lipsă și nu mai blochează predarea.` : `Ștergi „${name}”?`)) return;
       const error = await send(`/api/crm/reports/${id}/documents?doc=${doc}`, { method: "DELETE" });
       if (error) return alert(error);
       location.reload();
-    }}>Șterge</button>
+    }}>{missing ? "Anulează" : "Șterge"}</button>
   );
 }
 
