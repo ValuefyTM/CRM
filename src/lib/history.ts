@@ -10,7 +10,7 @@ export const ACTION_LABEL: Record<string, string> = {
   "partner_user.disable": "Acces dezactivat", "partner_user.enable": "Acces reactivat", "partner_user.role": "Rol schimbat", "partner_user.profile": "Profil actualizat",
   "statement.open": "Borderou deschis", "statement.validate": "Borderou validat (liniile înghețate)", "statement.issue": "Borderou emis", "statement.reopen": "Borderou redeschis", "statement.delete": "Borderou șters",
   "statement.notes": "Observații modificate", "statement.line_add": "Linie adăugată", "statement.line_remove": "Linie scoasă", "statement.line_change": "Sumă modificată", "statement.line_restore": "Linie pusă la loc", "statement.line_delete": "Linie manuală ștearsă",
-  "statement_rule.create": "Regulă de borderou creată", "statement_rule.update": "Regulă de borderou modificată", "statement_rule.delete": "Regulă de borderou ștearsă",
+  "fixed_cost.create": "Cheltuială fixă adăugată", "fixed_cost.update": "Cheltuială fixă modificată", "fixed_cost.delete": "Cheltuială fixă ștearsă", "statement_rule.create": "Regulă de borderou creată", "statement_rule.update": "Regulă de borderou modificată", "statement_rule.delete": "Regulă de borderou ștearsă",
   "order.cancel": "Comandă anulată", "order.reopen": "Comandă redeschisă", "quote.cancelled": "Ofertă anulată", "quote.reopened": "Ofertă redeschisă", "report.framing": "Încadrare modificată",
   "staff.create": "Adăugat în echipă", "staff.role": "Rol schimbat", "staff.disable": "Cont dezactivat", "staff.enable": "Cont reactivat", "staff.bootstrap": "Cont de proprietar creat",
 };

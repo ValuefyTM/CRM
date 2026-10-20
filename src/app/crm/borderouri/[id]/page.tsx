@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { can } from "@/lib/perms";
-import { getStatement, KIND_LABEL, linesOf, periodLabel, ruleFor, statementLog, STATUS_LABEL, BASIS_PICK, totalOf } from "@/lib/statements";
+import { getStatement, KIND_LABEL, linesOf, linesWith, memberChoices, memberReports, periodLabel, ruleFor, statementLog, STATUS_LABEL, BASIS_PICK, totalOf } from "@/lib/statements";
 import { CrmShell } from "@/components/CrmShell";
 import { History } from "@/components/History";
 import { LinesTable, lei2 } from "../LinesTable";
@@ -13,18 +13,22 @@ export const metadata: Metadata = { title: "Borderou | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
 
 /** One statement: its lines (live while open, frozen after validation), the adjustments with their reasons, the history. */
-export default async function StatementPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function StatementPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ evaluator?: string }> }) {
   const { db, user, base } = await staffPage("statements");
   const { id } = await params;
+  const { evaluator } = await searchParams;
   const s = await getStatement(db, id);
   if (!s) notFound();
   const all = can(user, "statements.all");
   if (!all && s.user_id !== user.id) redirect(`${base}/borderouri`);
-  const canEdit = all && can(user, "statements.E");
-  const [lines, rule, log] = await Promise.all([linesOf(db, s), ruleFor(db, s.party), statementLog(db, id)]);
+  // Seen through one administrator (?evaluator=): only the lines on reports they were in the team of; read-only.
+  const who = all && evaluator ? (await memberChoices(db)).find((a) => a.id === evaluator) ?? null : null;
+  const canEdit = all && can(user, "statements.E") && !who;
+  const [allLines, rule, log] = await Promise.all([linesOf(db, s), ruleFor(db, s.party), statementLog(db, id)]);
+  const lines = who ? linesWith(allLines, await memberReports(db, who.id)) : allLines;
   const [st, cls] = STATUS_LABEL[s.status];
   const back = `${base}/borderouri`;
-  const total = s.status === "open" ? totalOf(lines) : s.total ?? totalOf(lines);
+  const total = who || s.status === "open" ? totalOf(lines) : s.total ?? totalOf(lines);
   const criteria = s.criteria ? (JSON.parse(s.criteria) as { basis?: string }) : null;
   const basis = BASIS_PICK.find(([k]) => k === (criteria?.basis ?? rule?.basis ?? "delivered"))?.[1];
   return (
@@ -42,6 +46,7 @@ export default async function StatementPage({ params }: { params: Promise<{ id: 
           {basis ? ` · ${basis.toLowerCase()}` : ""}
         </span>
       </div>
+      {who && <div className="note"><b>Filtrat după {who.name}:</b> doar {lines.length} din {allLines.length} linii, cele pe rapoartele în care a fost în echipă. <a className="link" href={`${back}/${s.id}`}>Vezi tot borderoul</a>.</div>}
       {s.status === "open" && !all && <div className="note">Borderoul e în curs: se actualizează pe măsură ce lucrările se predau. La final de lună îl validează și îl emite firma; orice ajustare apare aici, cu motivul.</div>}
       <section className="card flush">
         <div className="cardHead"><h2>Linii</h2>{canEdit && s.status !== "issued" && <AddLine statement={s.id} />}</div>

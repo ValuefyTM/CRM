@@ -8,9 +8,9 @@ import { bucharestDay, now, uuid } from "./db";
 import { audit } from "./auth";
 import { dutySql, niceName } from "./labels";
 
-export type { Kind, Status, Basis, Recurrence, Source, Rule, Line } from "./statement-labels";
+export type { Kind, Status, Basis, Recurrence, Source, Rule, Line, FixedCost } from "./statement-labels";
 export { KIND_LABEL, STATUS_LABEL, BASIS_PICK, RECURRENCE_PICK, SOURCE_LABEL, totalOf } from "./statement-labels";
-import { totalOf, type Kind, type Status, type Basis, type Recurrence, type Rule, type Line } from "./statement-labels";
+import { totalOf, type Kind, type Status, type Basis, type Recurrence, type Rule, type Line, type FixedCost } from "./statement-labels";
 
 export type Statement = {
   id: string; kind: Kind; party: string; period: string; number: string | null; issued_on: string | null; total: number | null; status: Status;
@@ -403,19 +403,23 @@ export async function deleteLine(db: D1Database, actor: string, id: string, line
 }
 
 /** The month's board: every active rule with its statement of the month (existing, or computed live), for the list. */
-export async function monthBoard(db: D1Database, period: string, kind: Kind) {
+export async function monthBoard(db: D1Database, period: string, kind: Kind, member?: Set<string> | null) {
   const [rules, existing] = await Promise.all([listRules(db, kind), listStatements(db, { period, kind })]);
   const rows: { party: string; name: string; sub: string | null; statement: Statement | null; total: number; lines: number; rule: Rule | null }[] = [];
   const seen = new Set<string>();
   for (const s of existing) {
     seen.add(s.party);
-    const lines = await linesOf(db, s);
-    rows.push({ party: s.party, name: s.name, sub: s.sub, statement: s, total: s.status === "open" ? totalOf(lines) : s.total ?? totalOf(lines), lines: lines.filter((l) => !l.removed).length, rule: rules.find((r) => r.party === s.party) ?? null });
+    const lines = linesWith(await linesOf(db, s), member ?? null);
+    // filtered by a team member: a statement with none of their reports is left out
+    if (member && !lines.length) continue;
+    rows.push({ party: s.party, name: s.name, sub: s.sub, statement: s, total: member || s.status === "open" ? totalOf(lines) : s.total ?? totalOf(lines), lines: lines.filter((l) => !l.removed).length, rule: rules.find((r) => r.party === s.party) ?? null });
   }
   for (const r of rules) {
     // a manual rule shows up only once its statement is opened
     if (seen.has(r.party) || !r.active || r.recurrence === "manual") continue;
-    const lines = await autoLines(db, criteriaOf(r, partyCols(r.party)!), period);
+    const auto = await autoLines(db, criteriaOf(r, partyCols(r.party)!), period);
+    const lines = member ? auto.filter((l) => l.report_id && member.has(l.report_id)) : auto;
+    if (member && !lines.length) continue;
     rows.push({ party: r.party, name: r.name, sub: r.sub, statement: null, total: round2(lines.reduce((s, l) => s + l.amount, 0)), lines: lines.length, rule: r });
   }
   return rows.sort((a, b) => a.name.localeCompare(b.name, "ro"));
@@ -433,14 +437,66 @@ export async function statementLog(db: D1Database, id: string) {
  * contracts: the whole fee) and collaborations (the firm's share of the fee). For the profit / loss next to the
  * month's payouts.
  */
-export async function monthRevenue(db: D1Database, period: string) {
+export async function monthRevenue(db: D1Database, period: string, memberId?: string | null) {
   const r = await db.prepare(`SELECT
       SUM(CASE WHEN o.collaboration_id IS NULL THEN 1 ELSE 0 END) AS own_n, SUM(CASE WHEN o.collaboration_id IS NULL THEN COALESCE(r.fee, 0) ELSE 0 END) AS own,
       SUM(CASE WHEN o.collaboration_id IS NOT NULL THEN 1 ELSE 0 END) AS collab_n,
       SUM(CASE WHEN o.collaboration_id IS NOT NULL THEN COALESCE(o.fee_net, r.fee * COALESCE(o.share, c.share), r.fee, 0) ELSE 0 END) AS collab
     FROM reports r LEFT JOIN orders o ON o.id = r.order_id LEFT JOIN collaborations c ON c.id = o.collaboration_id
-    WHERE r.status = 'done' AND substr(COALESCE(r.report_date, r.delivered_at), 1, 7) = ?`).bind(period)
+    WHERE r.status = 'done' AND substr(COALESCE(r.report_date, r.delivered_at), 1, 7) = ?1
+      AND (?2 = '' OR EXISTS (SELECT 1 FROM report_members m WHERE m.report_id = r.id AND m.user_id = ?2))`).bind(period, memberId ?? "")
     .first<{ own_n: number | null; own: number | null; collab_n: number | null; collab: number | null }>();
   const own = round2(r?.own ?? 0), collab = round2(r?.collab ?? 0);
   return { own, ownN: r?.own_n ?? 0, collab, collabN: r?.collab_n ?? 0, total: round2(own + collab) };
 }
+
+// ---------- fixed monthly costs ----------
+
+
+export const listFixedCosts = async (db: D1Database) =>
+  (await db.prepare("SELECT id, label, amount, from_period, to_period, notes FROM fixed_costs ORDER BY to_period IS NOT NULL, label").all<FixedCost>()).results;
+
+/** The fixed costs running in a month, and their sum. */
+export async function monthFixedCosts(db: D1Database, period: string) {
+  const { results } = await db.prepare("SELECT id, label, amount, from_period, to_period, notes FROM fixed_costs WHERE from_period <= ?1 AND (to_period IS NULL OR to_period >= ?1) ORDER BY label").bind(period).all<FixedCost>();
+  return { items: results, total: round2(results.reduce((s, c) => s + c.amount, 0)) };
+}
+
+export async function saveFixedCost(db: D1Database, actor: string, b: Record<string, unknown>) {
+  const label = typeof b.label === "string" ? b.label.trim().slice(0, 120) : "";
+  const amount = typeof b.amount === "string" ? Number(b.amount.replace(/\s/g, "").replace(",", ".")) : Number(b.amount);
+  const from = typeof b.from_period === "string" ? b.from_period : "", to = typeof b.to_period === "string" && b.to_period ? b.to_period : null;
+  if (!label) return { ok: false as const, error: "Scrie ce cheltuială e." };
+  if (!Number.isFinite(amount) || amount <= 0) return { ok: false as const, error: "Scrie suma lunară." };
+  if (!validPeriod(from)) return { ok: false as const, error: "Alege luna de la care se aplică." };
+  if (to && (!validPeriod(to) || to < from)) return { ok: false as const, error: "Luna de sfârșit e înaintea celei de început." };
+  const id = typeof b.id === "string" && b.id ? b.id : uuid(), t = now();
+  const notes = typeof b.notes === "string" ? b.notes.trim().slice(0, 500) || null : null;
+  const prev = await db.prepare("SELECT id FROM fixed_costs WHERE id = ?").bind(id).first();
+  if (prev) await db.prepare("UPDATE fixed_costs SET label = ?, amount = ?, from_period = ?, to_period = ?, notes = ?, updated_at = ? WHERE id = ?").bind(label, round2(amount), from, to, notes, t, id).run();
+  else await db.prepare("INSERT INTO fixed_costs (id, label, amount, from_period, to_period, notes, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(id, label, round2(amount), from, to, notes, actor, t, t).run();
+  await audit(db, `user:${actor}`, prev ? "fixed_cost.update" : "fixed_cost.create", "fixed_cost", id, `${label}: ${round2(amount)} lei/lună din ${from}${to ? ` până în ${to}` : ""}`);
+  return { ok: true as const, id };
+}
+
+export async function deleteFixedCost(db: D1Database, actor: string, id: string) {
+  const c = await db.prepare("SELECT label FROM fixed_costs WHERE id = ?").bind(id).first<{ label: string }>();
+  if (!c) return { ok: false as const, error: "Cheltuiala nu există." };
+  await db.prepare("DELETE FROM fixed_costs WHERE id = ?").bind(id).run();
+  await audit(db, `user:${actor}`, "fixed_cost.delete", "fixed_cost", id, c.label);
+  return { ok: true as const };
+}
+
+// ---------- the member filter ----------
+
+/** The reports of a month's statements and revenue in which a user was in the team (any role). */
+export const memberReports = async (db: D1Database, userId: string) =>
+  new Set((await db.prepare("SELECT report_id FROM report_members WHERE user_id = ?").bind(userId).all<{ report_id: string }>()).results.map((r) => r.report_id));
+
+/** Only the lines on reports the user was part of (manual and fixed lines have no report: left out). */
+export const linesWith = (lines: Line[], reports: Set<string> | null) => (reports ? lines.filter((l) => l.report_id && reports.has(l.report_id)) : lines);
+
+/** The filter's choices: the administrators (owner and admins) of the firm. */
+export const memberChoices = async (db: D1Database) =>
+  (await db.prepare(`SELECT u.id, COALESCE(NULLIF(u.name, ''), u.email) AS name FROM users u WHERE u.kind = 'internal' AND u.status <> 'deleted' AND u.role IN ('owner', 'admin') ORDER BY name`)
+    .all<{ id: string; name: string }>()).results;
