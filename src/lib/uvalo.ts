@@ -207,47 +207,37 @@ export async function pushInspection(db: D1Database, id: string) {
 /** A document sent to UVALO: its ref in the CRM, the file it became there and its name. */
 type SentDoc = { ref: string; file?: string | null; name?: string | null };
 
-/** The name a document had in the CRM (for the documents sent before their UVALO file was kept). */
-async function nameOfRef(db: D1Database, ref: string) {
-  if (ref.startsWith("r-")) return (await db.prepare("SELECT filename AS n FROM report_documents WHERE id = ?").bind(ref.slice(2)).first<{ n: string }>())?.n ?? null;
-  if (ref.startsWith("o-")) return (await db.prepare("SELECT filename AS n FROM order_documents WHERE id = ?").bind(ref.slice(2)).first<{ n: string }>())?.n ?? null;
-  const g = ref.match(/^g-(.+)-(cf|rlv)$/);
-  if (!g) return null;
-  if (g[2] === "rlv") return "Releveu";
-  const cf = (await db.prepare("SELECT p.cf_number AS n FROM assets a JOIN crm_properties p ON p.id = a.property_id WHERE a.id = ?").bind(g[1]).first<{ n: string | null }>())?.n;
-  return `Extras CF${cf ? ` ${cf}` : ""}`;
-}
-
 /**
- * The inspection's documents in UVALO made equal to the ones ticked in the report: the unticked ones are deleted
- * there, the new ones uploaded. Returns what is sent now (kept on the inspection).
+ * The inspection's documents in UVALO made exactly equal to the ones ticked in the report: every document the firm
+ * gave there (by the integration) that is not ticked now — unticked, deleted, a duplicate, an old one — is deleted;
+ * the ticked ones missing there are uploaded. What the valuer added from the app stays. Returns what is there now.
  */
 async function syncDocs(db: D1Database, ref: string, stored: string | null, docs: Awaited<ReturnType<typeof docsForInspection>>): Promise<SentDoc[]> {
   const prev = parseJson<(string | SentDoc)[]>(stored, []).map((x) => (typeof x === "string" ? { ref: x } : x));
-  const wanted = new Set(docs.map((d) => d.ref));
-  const keep: SentDoc[] = prev.filter((x) => wanted.has(x.ref));
-  const stale = prev.filter((x) => !wanted.has(x.ref));
   const path = `/inspections/${encodeURIComponent(ref)}`;
-  // the documents already there (for the ones sent before their file id was kept: found by name)
-  let there: { id: string; kind: string; name: string | null }[] | null = null;
-  type F = { id: string; kind: string; name: string | null };
-  const remote = async () => there ??= await call<{ inspection?: { files?: F[] }; files?: F[] }>(path)
-    .then((d) => (d.inspection?.files ?? d.files ?? []).filter((f) => ["cf", "releveu", "doc"].includes(f.kind))).catch(() => []);
-  for (const x of stale) {
-    let file = x.file ?? null;
-    if (!file) {
-      const name = x.name ?? (await nameOfRef(db, x.ref));
-      file = name ? (await remote()).find((f) => f.name === name)?.id ?? null : null;
-    }
-    // gone already, or not found: nothing more to take back
-    // deleted there, or already gone (UVALO says so); any other answer: kept, tried again at the next sync
-    if (file) await call(`${path}/files/${encodeURIComponent(file)}`, { method: "DELETE" })
-      .catch((e: UvaloError) => { if (!(e.status === 404 && /documentul nu există/i.test(e.message))) keep.push(x); });
+  type F = { id: string; kind: string; name: string | null; source?: string };
+  // the firm's documents there now (not the valuer's photos, signature or own files)
+  const there = await call<{ inspection?: { files?: F[] }; files?: F[] }>(path)
+    .then((d) => (d.inspection?.files ?? d.files ?? []).filter((f) => ["cf", "releveu", "doc"].includes(f.kind) && f.source !== "app"))
+    .catch(() => null);
+  const keep: SentDoc[] = [];
+  const claimed = new Set<string>();
+  const missing: typeof docs = [];
+  for (const doc of docs) {
+    const before = prev.find((x) => x.ref === doc.ref);
+    // the very file sent for it, else (sent before its file was kept) one with its name
+    const f = there?.find((x) => !claimed.has(x.id) && x.id === before?.file) ?? there?.find((x) => !claimed.has(x.id) && x.name === doc.name);
+    if (f) { claimed.add(f.id); keep.push({ ref: doc.ref, file: f.id, name: doc.name }); }
+    else if (!there && before) keep.push(before); // UVALO not readable now: what was sent stays as it was
+    else missing.push(doc);
+  }
+  // everything else the firm gave there goes
+  for (const f of there ?? []) {
+    if (!claimed.has(f.id)) await call(`${path}/files/${encodeURIComponent(f.id)}`, { method: "DELETE" }).catch((e) => console.error("uvalo doc delete", (e as Error).message));
   }
   const r2 = await bucket();
-  const have = new Set(keep.map((x) => x.ref));
-  for (const doc of docs) {
-    if (have.has(doc.ref) || !doc.key || !r2) continue;
+  for (const doc of missing) {
+    if (!doc.key || !r2) continue;
     const obj = await r2.get(doc.key);
     if (!obj) continue;
     const form = new FormData();
