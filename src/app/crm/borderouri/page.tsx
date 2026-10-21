@@ -132,7 +132,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
       {group("receivable", receivables)}
 
       <section className="card flush" id="directe">
-        <div className="cardHead"><h2>Lucrări directe · {periodLabel(period)}</h2><span className="muted">clienți direcți și colaborări (contractele cadru sunt pe borderourile băncilor) · {direct.length} {direct.length === 1 ? "raport" : "rapoarte"} · <b>{lei2(directTotal)}</b></span></div>
+        <div className="cardHead"><h2>Lucrări directe · {periodLabel(period)}</h2><span className="muted">clienți direcți, contracte cadru și colaborări · {direct.length} {direct.length === 1 ? "raport" : "rapoarte"} · <b>{lei2(directTotal)}</b></span></div>
         {direct.length === 0 ? <p className="hint pad">Niciun raport predat în luna aceasta{who ? " cu el în echipă" : ""}.</p> : (
           <div className="tableWrap">
             <table className="table stWork">

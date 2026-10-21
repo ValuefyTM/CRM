@@ -640,24 +640,25 @@ export async function exportStatement(db: D1Database, s: Statement, lines: Line[
 export type WorkLine = Line & { group: string; bank: string };
 
 /**
- * The month's own work: reports delivered in the month that are not under a framework contract (those are on the
- * bank's statement) — direct clients with their fee, and the collaborations with the firm's share of it. Grouped by
- * the kind of work, then by bank.
+ * The month's own work: reports delivered in the month — direct clients and framework contracts with their fee, the
+ * collaborations with the firm's share of it. Grouped by the kind of work (direct, framework contract, each
+ * collaboration), then by bank.
  */
 export async function directLines(db: D1Database, period: string, member?: Set<string> | null): Promise<WorkLine[]> {
-  const { results } = await db.prepare(`SELECT ${REPORT_COLS}, ${DATE_OF.delivered} AS on_date, b.name AS bank_name, cf.name AS collab, o.fee_net, COALESCE(o.share, cb.share) AS share
+  const { results } = await db.prepare(`SELECT ${REPORT_COLS}, ${DATE_OF.delivered} AS on_date, b.name AS bank_name, cf.name AS collab, o.fee_net, COALESCE(o.share, cb.share) AS share,
+      k.kind = 'framework' AS framework
       ${REPORT_BASE} LEFT JOIN orders o ON o.id = r.order_id LEFT JOIN contracts k ON k.id = r.contract_id
       LEFT JOIN collaborations cb ON cb.id = o.collaboration_id LEFT JOIN entities cf ON cf.id = cb.firm_id
-      WHERE r.status = 'done' AND substr(${DATE_OF.delivered}, 1, 7) = ?1 AND COALESCE(k.kind, '') <> 'framework'
+      WHERE r.status = 'done' AND substr(${DATE_OF.delivered}, 1, 7) = ?1
       ORDER BY cf.name IS NOT NULL, cf.name, b.name IS NULL, b.name, on_date, r.number`).bind(period)
-    .all<RepRow & { bank_name: string | null; collab: string | null; fee_net: number | null; share: number | null }>();
+    .all<RepRow & { bank_name: string | null; collab: string | null; fee_net: number | null; share: number | null; framework: number | null }>();
   return results.filter((r) => !member || member.has(r.id)).map((r, i) => {
     const collab = !!r.collab;
     const amount = collab ? r.fee_net ?? (r.fee != null && r.share != null ? round2(r.fee * r.share) : r.fee ?? 0) : r.fee ?? 0;
     return {
       id: null, key: `rep:${r.id}:direct`, source: "report", report_id: r.id, inspection_id: null, label: repLabel(r), detail: repDetail(r), on_date: r.on_date,
       base: r.fee, rate: collab && r.fee_net == null && r.share != null ? `${Math.round(r.share * 100)}%` : null, auto_amount: amount, amount, removed: 0, reason: null, changed_by: null, changed_at: null,
-      sort: i, number: r.number, group: collab ? `Colaborare · ${niceName(r.collab ?? "") || r.collab}` : "Direct", bank: niceName(r.bank_name ?? "") || r.bank_name || "Fără bancă (doar clientul)",
+      sort: i, number: r.number, group: collab ? `Colaborare · ${niceName(r.collab ?? "") || r.collab}` : r.framework ? "Contract cadru" : "Direct", bank: niceName(r.bank_name ?? "") || r.bank_name || "Fără bancă (doar clientul)",
     };
   });
 }
@@ -672,8 +673,9 @@ export const groupWork = (lines: WorkLine[]) => {
     if (!b) g.banks.push(b = { bank: l.bank, total: 0, lines: [] });
     b.lines.push(l); b.total = round2(b.total + l.amount); g.total = round2(g.total + l.amount);
   }
-  // direct first, then the collaborations; inside, the biggest banks first
-  out.sort((a, b) => (a.group === "Direct" ? -1 : b.group === "Direct" ? 1 : a.group.localeCompare(b.group, "ro")));
+  // direct first, the framework contracts, then the collaborations; inside, the biggest banks first
+  const rank = (g: string) => (g === "Direct" ? 0 : g === "Contract cadru" ? 1 : 2);
+  out.sort((a, b) => rank(a.group) - rank(b.group) || a.group.localeCompare(b.group, "ro"));
   for (const g of out) g.banks.sort((a, b) => b.total - a.total);
   return out;
 };
@@ -715,7 +717,7 @@ export async function exportMonth(db: D1Database, period: string, keys: string[]
   };
   const paid = await block("Plăți colaboratori", payouts, "payout");
   const due = await block("De încasat", receivables, "receivable");
-  head("Lucrări directe și colaborări (fără contracte cadru)");
+  head("Lucrări: directe, contracte cadru și colaborări");
   bold.push(sum.length); sum.push(["Tip", "Bancă", null, null, "Rapoarte", "Total (lei)"]);
   for (const g of groupWork(direct)) {
     for (const b of g.banks) sum.push([g.group, b.bank, null, null, b.lines.length, b.total]);
