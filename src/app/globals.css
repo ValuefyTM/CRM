@@ -3443,3 +3443,5 @@ span.rdPick { display: inline-block; }
   .topBack { height: 30px; padding: 0 9px; }
   .topBack > span:last-child { max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
 }
+.stShares { margin-top: 14px; border-top: 1px solid var(--divider); padding-top: 12px; }
+.stShares h3 { margin: 0 0 8px; font-size: 14px; }

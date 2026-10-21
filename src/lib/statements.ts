@@ -30,16 +30,20 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 // ---------- the party ----------
 
-const PARTY_SQL = `COALESCE(u.name, ke.name, ce.name, '—') AS name,
-  CASE WHEN u.id IS NOT NULL THEN COALESCE(NULLIF(u.email, ''), '') WHEN k.id IS NOT NULL THEN 'contract cadru nr. ' || COALESCE(k.number, '—') ELSE 'colaborare' || COALESCE(' nr. ' || c.number, '') END AS sub`;
+/** The direct clients' work (no framework contract, no collaboration): one receivable statement a month. */
+export const DIRECT = "d:direct";
+
+const PARTY_SQL = `CASE WHEN x.party = '${DIRECT}' THEN 'Clienți direcți' ELSE COALESCE(u.name, ke.name, ce.name, '—') END AS name,
+  CASE WHEN x.party = '${DIRECT}' THEN 'lucrări directe (fără contract cadru sau colaborare)' WHEN u.id IS NOT NULL THEN COALESCE(NULLIF(u.email, ''), '') WHEN k.id IS NOT NULL THEN 'contract cadru nr. ' || COALESCE(k.number, '—') ELSE 'colaborare' || COALESCE(' nr. ' || c.number, '') END AS sub`;
 const PARTY_JOINS = `LEFT JOIN users u ON u.id = x.user_id LEFT JOIN contracts k ON k.id = x.contract_id LEFT JOIN entities ke ON ke.id = k.client_id
   LEFT JOIN collaborations c ON c.id = x.collaboration_id LEFT JOIN entities ce ON ce.id = c.firm_id`;
 
 /** "u:<id>" / "k:<id>" / "c:<id>" → the columns. */
 export const partyCols = (party: string) => {
+  if (party === DIRECT) return { user_id: null, contract_id: null, collaboration_id: null, kind: "receivable" as Kind, direct: true };
   const [t, id] = [party.slice(0, 1), party.slice(2)];
   if (!id || !["u", "k", "c"].includes(t)) return null;
-  return { user_id: t === "u" ? id : null, contract_id: t === "k" ? id : null, collaboration_id: t === "c" ? id : null, kind: (t === "u" ? "payout" : "receivable") as Kind };
+  return { user_id: t === "u" ? id : null, contract_id: t === "k" ? id : null, collaboration_id: t === "c" ? id : null, kind: (t === "u" ? "payout" : "receivable") as Kind, direct: false };
 };
 
 /** The parties a rule can be made for: the firm's evaluators (ticked as such, also without an active account), the open framework contracts, the collaborations. */
@@ -106,9 +110,10 @@ export async function deleteRule(db: D1Database, actor: string, id: string) {
 // ---------- the automatic lines ----------
 
 type AutoLine = Omit<Line, "id" | "removed" | "reason" | "changed_by" | "changed_at" | "sort">;
-const criteriaOf = (rule: Rule | null, cols: NonNullable<ReturnType<typeof partyCols>>) => ({
-  basis: (rule?.basis ?? "delivered") as Basis, inc_evaluator: rule?.inc_evaluator ?? 1, inc_verifier: rule?.inc_verifier ?? 1, inc_inspector: rule?.inc_inspector ?? 1,
-  referral_pct: rule?.referral_pct ?? null, fixed_amount: rule?.fixed_amount ?? null, fixed_label: rule?.fixed_label ?? null, ...cols,
+// No rules any more: every statement is made from the month's data — a person's by the shares on their user page
+// (evaluator / verifier %, inspection fee), a receivable by its source (direct clients, framework contract, collaboration).
+export const criteriaOf = (cols: NonNullable<ReturnType<typeof partyCols>>) => ({
+  basis: "delivered" as Basis, inc_evaluator: 1, inc_verifier: 1, inc_inspector: 1, referral_pct: null as number | null, fixed_amount: null as number | null, fixed_label: null as string | null, ...cols,
 });
 type Criteria = ReturnType<typeof criteriaOf>;
 
@@ -120,6 +125,9 @@ const DATE_OF: Record<Basis, string> = {
 const REPORT_BASE = `FROM reports r LEFT JOIN invoices i ON i.id = r.invoice_id LEFT JOIN entities cl ON cl.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id
   LEFT JOIN crm_properties p ON p.id = (SELECT a.property_id FROM assets a WHERE a.report_id = r.id ORDER BY a.is_main DESC LIMIT 1)`;
 const REPORT_COLS = `r.id, r.number, r.fee, r.label, COALESCE(cl.name, '') AS client, COALESCE(b.code, b.name) AS bank, p.type, COALESCE(p.full_address, p.city) AS address`;
+// a report's source of revenue: a collaborating firm's, a framework contract's, or a direct client's
+const NO_COLLAB = "NOT EXISTS (SELECT 1 FROM orders o2 WHERE o2.id = r.order_id AND o2.collaboration_id IS NOT NULL)";
+const OWN_DIRECT = `${NO_COLLAB} AND NOT EXISTS (SELECT 1 FROM contracts k2 WHERE k2.id = r.contract_id AND k2.kind = 'framework')`;
 type RepRow = { id: string; number: string | null; fee: number | null; label: string | null; client: string; bank: string | null; type: string | null; address: string | null; on_date: string | null };
 const cap = (s: string | null) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : "");
 const repLabel = (r: RepRow) => `Raport ${r.number ? `nr. ${r.number}` : "fără număr"} · ${niceName(r.client) || r.label || "—"}`;
@@ -164,8 +172,14 @@ export async function autoLines(db: D1Database, c: Criteria, period: string): Pr
         base: r.fee, rate: `${c.referral_pct}%`, auto_amount: r.fee != null ? round2(r.fee * c.referral_pct / 100) : 0, amount: r.fee != null ? round2(r.fee * c.referral_pct / 100) : 0, number: r.number });
     }
     if (c.fixed_amount) out.push({ key: "fixed", source: "fixed", report_id: null, inspection_id: null, label: c.fixed_label || "Sumă fixă lunară", detail: null, on_date: null, base: null, rate: null, auto_amount: c.fixed_amount, amount: c.fixed_amount });
+  } else if (c.direct) {
+    // the reports of direct clients: neither on a framework contract nor through a collaborating firm
+    const { results } = await db.prepare(`SELECT ${REPORT_COLS}, ${DATE_OF[c.basis]} AS on_date ${REPORT_BASE} WHERE ${done} AND ?1 = ?1 AND ${OWN_DIRECT} ORDER BY on_date, r.number`)
+      .bind("", period).all<RepRow>();
+    for (const r of results) out.push({ key: `rep:${r.id}:report`, source: "report", report_id: r.id, inspection_id: null, label: repLabel(r), detail: repDetail(r), on_date: r.on_date,
+      base: r.fee, rate: null, auto_amount: r.fee ?? 0, amount: r.fee ?? 0, number: r.number });
   } else if (c.contract_id) {
-    const { results } = await db.prepare(`SELECT ${REPORT_COLS}, ${DATE_OF[c.basis]} AS on_date ${REPORT_BASE} WHERE ${done} AND r.contract_id = ?1 ORDER BY on_date, r.number`)
+    const { results } = await db.prepare(`SELECT ${REPORT_COLS}, ${DATE_OF[c.basis]} AS on_date ${REPORT_BASE} WHERE ${done} AND r.contract_id = ?1 AND ${NO_COLLAB} ORDER BY on_date, r.number`)
       .bind(c.contract_id, period).all<RepRow>();
     for (const r of results) out.push({ key: `rep:${r.id}:report`, source: "report", report_id: r.id, inspection_id: null, label: repLabel(r), detail: repDetail(r), on_date: r.on_date,
       base: r.fee, rate: null, auto_amount: r.fee ?? 0, amount: r.fee ?? 0, number: r.number });
@@ -211,8 +225,7 @@ export async function openStatement(db: D1Database, actor: string | null, party:
   if (!cols || !validPeriod(period)) return { ok: false as const, error: "Borderou necunoscut." };
   const cur = await db.prepare("SELECT id FROM statements WHERE party = ? AND period = ?").bind(party, period).first<{ id: string }>();
   if (cur) return { ok: true as const, id: cur.id, created: false };
-  const rule = await ruleFor(db, party);
-  if (!rule) {
+  if (!cols.direct) {
     const ok = cols.user_id ? await db.prepare("SELECT 1 AS x FROM users WHERE id = ?").bind(cols.user_id).first()
       : cols.contract_id ? await db.prepare("SELECT 1 AS x FROM contracts WHERE id = ?").bind(cols.contract_id).first()
       : await db.prepare("SELECT 1 AS x FROM collaborations WHERE id = ?").bind(cols.collaboration_id).first();
@@ -233,8 +246,7 @@ export async function linesOf(db: D1Database, s: Statement): Promise<Line[]> {
   const { results: stored } = await db.prepare(`SELECT l.*, COALESCE(NULLIF(u.name, ''), u.email) AS changed_name, r.number FROM statement_lines l
       LEFT JOIN users u ON u.id = l.changed_by LEFT JOIN reports r ON r.id = l.report_id WHERE l.statement_id = ? ORDER BY l.sort, l.created_at`).bind(s.id).all<Line>();
   if (s.status !== "open") return stored;
-  const rule = await ruleFor(db, s.party);
-  const auto = await autoLines(db, criteriaOf(rule, partyCols(s.party)!), s.period);
+  const auto = await autoLines(db, criteriaOf(partyCols(s.party)!), s.period);
   const byKey = new Map(stored.filter((l) => l.key).map((l) => [l.key!, l]));
   const lines: Line[] = auto.map((a, i) => {
     const o = byKey.get(a.key!);
@@ -263,9 +275,8 @@ export async function validateStatement(db: D1Database, actor: string, id: strin
   // the adjusted automatic lines get today's computed amount and labels too
   for (const l of lines.filter((l) => l.id && l.key)) stmts.push(db.prepare("UPDATE statement_lines SET auto_amount = ?, base = ?, rate = ?, on_date = ?, label = ?, detail = ?, sort = ? WHERE id = ?")
     .bind(l.auto_amount, l.base, l.rate, l.on_date, l.label, l.detail, l.sort, l.id));
-  const rule = await ruleFor(db, s.party);
   stmts.push(db.prepare("UPDATE statements SET status = 'validated', validated_at = ?, validated_by = ?, total = ?, criteria = ?, updated_at = ? WHERE id = ?")
-    .bind(t, actor, totalOf(lines), JSON.stringify(criteriaOf(rule, partyCols(s.party)!)), t, id));
+    .bind(t, actor, totalOf(lines), JSON.stringify(criteriaOf(partyCols(s.party)!)), t, id));
   await db.batch(stmts);
   await audit(db, `user:${actor}`, "statement.validate", "statement", id, `${lines.filter((l) => !l.removed).length} linii · ${totalOf(lines)} lei`);
   return { ok: true as const };
@@ -403,27 +414,84 @@ export async function deleteLine(db: D1Database, actor: string, id: string, line
   return { ok: true as const };
 }
 
-/** The month's board: every active rule with its statement of the month (existing, or computed live), for the list. */
+export type RevSource = "direct" | "framework" | "collab" | "person";
+export const SOURCE_OF = (party: string): RevSource => (party === DIRECT ? "direct" : party.startsWith("k:") ? "framework" : party.startsWith("c:") ? "collab" : "person");
+
+/** Who the month concerns: the sources of revenue with reports delivered in it, the people who worked on them. */
+async function monthParties(db: D1Database, period: string, kind: Kind) {
+  const month = `r.status = 'done' AND substr(${DATE_OF.delivered}, 1, 7) = ?1`;
+  if (kind === "receivable") {
+    const [direct, frameworks, collabs] = await Promise.all([
+      db.prepare(`SELECT 1 AS x FROM reports r WHERE ${month} AND ${OWN_DIRECT} LIMIT 1`).bind(period).first(),
+      db.prepare(`SELECT DISTINCT 'k:' || r.contract_id AS party FROM reports r JOIN contracts k ON k.id = r.contract_id AND k.kind = 'framework' WHERE ${month} AND ${NO_COLLAB}`).bind(period).all<{ party: string }>(),
+      db.prepare(`SELECT DISTINCT 'c:' || o.collaboration_id AS party FROM reports r JOIN orders o ON o.id = r.order_id WHERE ${month} AND o.collaboration_id IS NOT NULL`).bind(period).all<{ party: string }>(),
+    ]);
+    return [...(direct ? [DIRECT] : []), ...frameworks.results.map((x) => x.party), ...collabs.results.map((x) => x.party)];
+  }
+  const { results } = await db.prepare(`SELECT DISTINCT 'u:' || m.user_id AS party FROM report_members m JOIN reports r ON r.id = m.report_id WHERE ${month} AND m.role IN ('evaluator', 'verifier')
+      UNION SELECT DISTINCT 'u:' || i.inspector_id FROM inspections i JOIN reports r ON r.id = i.report_id WHERE i.status = 'done' AND substr(i.done_at, 1, 7) = ?1 AND r.status <> 'cancelled' AND i.inspector_id IS NOT NULL`)
+    .bind(period).all<{ party: string }>();
+  return results.map((x) => x.party);
+}
+
+/** A party's name and detail without a statement yet (the same as a statement shows). */
+async function partyName(db: D1Database, party: string) {
+  const c = partyCols(party)!;
+  const r = await db.prepare(`SELECT ${PARTY_SQL} FROM (SELECT ?1 AS party, ?2 AS user_id, ?3 AS contract_id, ?4 AS collaboration_id) x ${PARTY_JOINS}`)
+    .bind(party, c.user_id, c.contract_id, c.collaboration_id).first<{ name: string; sub: string | null }>();
+  return { name: niceName(r?.name ?? "") || r?.name || "—", sub: r?.sub ?? null };
+}
+
+/**
+ * The month's board, made by itself: a statement for every source of revenue (direct clients, each framework
+ * contract, each collaboration) and for every person who worked in the month (their shares) — the stored one when
+ * it was opened / validated / issued, else computed live. Filtered by a member: only their reports.
+ */
 export async function monthBoard(db: D1Database, period: string, kind: Kind, member?: Set<string> | null) {
-  const [rules, existing] = await Promise.all([listRules(db, kind), listStatements(db, { period, kind })]);
-  const rows: { party: string; name: string; sub: string | null; statement: Statement | null; total: number; lines: number; rule: Rule | null }[] = [];
+  const [parties, existing] = await Promise.all([monthParties(db, period, kind), listStatements(db, { period, kind })]);
+  const rows: { party: string; name: string; sub: string | null; source: RevSource; statement: Statement | null; total: number; lines: number }[] = [];
   const seen = new Set<string>();
   for (const s of existing) {
     seen.add(s.party);
     const lines = linesWith(await linesOf(db, s), member ?? null);
-    // filtered by a team member: a statement with none of their reports is left out
     if (member && !lines.length) continue;
-    rows.push({ party: s.party, name: s.name, sub: s.sub, statement: s, total: member || s.status === "open" ? totalOf(lines) : s.total ?? totalOf(lines), lines: lines.filter((l) => !l.removed).length, rule: rules.find((r) => r.party === s.party) ?? null });
+    rows.push({ party: s.party, name: s.name, sub: s.sub, source: SOURCE_OF(s.party), statement: s, total: member || s.status === "open" ? totalOf(lines) : s.total ?? totalOf(lines), lines: lines.filter((l) => !l.removed).length });
   }
-  for (const r of rules) {
-    // a manual rule shows up only once its statement is opened
-    if (seen.has(r.party) || !r.active || r.recurrence === "manual") continue;
-    const auto = await autoLines(db, criteriaOf(r, partyCols(r.party)!), period);
+  for (const party of parties) {
+    const cols = partyCols(party);
+    if (!cols || seen.has(party)) continue;
+    const auto = await autoLines(db, criteriaOf(cols), period);
     const lines = member ? auto.filter((l) => l.report_id && member.has(l.report_id)) : auto;
-    if (member && !lines.length) continue;
-    rows.push({ party: r.party, name: r.name, sub: r.sub, statement: null, total: round2(lines.reduce((s, l) => s + l.amount, 0)), lines: lines.length, rule: r });
+    // a person with no share set (nothing to pay) does not get one
+    if (!lines.length || (kind === "payout" && !lines.some((l) => l.amount))) continue;
+    rows.push({ party, ...(await partyName(db, party)), source: SOURCE_OF(party), statement: null, total: round2(lines.reduce((t, l) => t + l.amount, 0)), lines: lines.length });
   }
-  return rows.sort((a, b) => a.name.localeCompare(b.name, "ro"));
+  const order: Record<RevSource, number> = { direct: 0, framework: 1, collab: 2, person: 3 };
+  return rows.sort((a, b) => order[a.source] - order[b.source] || a.name.localeCompare(b.name, "ro"));
+}
+
+/**
+ * The month's result for one view (all, or filtered by an administrator): revenue (the receivable statements),
+ * payouts, fixed costs, profit — and, for an administrator with a share of the profit, their cut.
+ */
+export async function monthResult(db: D1Database, period: string, who: { id: string } | null) {
+  const member = who ? await memberReports(db, who.id) : null;
+  const [payouts, receivables, costs] = await Promise.all([monthBoard(db, period, "payout", member), monthBoard(db, period, "receivable", member), monthFixedCosts(db, period, who?.id)]);
+  const sum = (rows: { total: number }[]) => round2(rows.reduce((t, r) => t + r.total, 0));
+  const revenue = sum(receivables), paid = sum(payouts), fixed = costs.total, profit = round2(revenue - paid - fixed);
+  return { payouts, receivables, costs, revenue, paid, fixed, profit, bySource: (s: RevSource) => sum(receivables.filter((r) => r.source === s)) };
+}
+
+/** The administrators with a share of the profit, each with the month's profit on their reports and their cut. */
+export async function profitShares(db: D1Database, period: string) {
+  const { results } = await db.prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, profit_share FROM users WHERE kind = 'internal' AND status <> 'deleted' AND profit_share > 0 ORDER BY name`)
+    .all<{ id: string; name: string; profit_share: number }>();
+  const out: { id: string; name: string; pct: number; revenue: number; paid: number; fixed: number; profit: number; cut: number }[] = [];
+  for (const u of results) {
+    const r = await monthResult(db, period, u);
+    out.push({ id: u.id, name: u.name, pct: u.profit_share, revenue: r.revenue, paid: r.paid, fixed: r.fixed, profit: r.profit, cut: r.profit > 0 ? round2(r.profit * u.profit_share / 100) : 0 });
+  }
+  return out;
 }
 
 export async function statementLog(db: D1Database, id: string) {
@@ -686,14 +754,14 @@ export const groupWork = (lines: WorkLine[]) => {
  * The whole month as a workbook: a summary sheet (revenue, statements, fixed costs, result), then one sheet per
  * statement (payouts, then receivables), the direct work and the fixed costs. With `member`: the same filter as the page.
  */
-export async function exportMonth(db: D1Database, period: string, keys: string[], member: { id: string; name: string } | null) {
+export async function exportMonth(db: D1Database, period: string, keys: string[], member: { id: string; name: string } | null, shares = false) {
   const reports = member ? await memberReports(db, member.id) : null;
-  const [payouts, receivables, rev, costs, direct] = await Promise.all([
-    monthBoard(db, period, "payout", reports), monthBoard(db, period, "receivable", reports), monthRevenue(db, period, member?.id), monthFixedCosts(db, period, member?.id), directLines(db, period, reports),
+  const [payouts, receivables, costs, direct] = await Promise.all([
+    monthBoard(db, period, "payout", reports), monthBoard(db, period, "receivable", reports), monthFixedCosts(db, period, member?.id), directLines(db, period, reports),
   ]);
   const linesFor = async (r: (typeof payouts)[number]) => {
     if (r.statement) return linesWith(await linesOf(db, r.statement), reports);
-    const auto = await autoLines(db, criteriaOf(r.rule, partyCols(r.party)!), period);
+    const auto = await autoLines(db, criteriaOf(partyCols(r.party)!), period);
     return linesWith(auto.map((l, i) => ({ ...l, id: null, removed: 0, reason: null, changed_by: null, changed_at: null, sort: i })), reports);
   };
   const sheets: Sheet[] = [];
@@ -709,14 +777,14 @@ export async function exportMonth(db: D1Database, period: string, keys: string[]
       const lines = await linesFor(r);
       const total = totalOf(lines);
       t += total;
-      sum.push([r.name, r.sub, r.statement ? STATUS_LABEL[r.statement.status][0] : "În curs (din regulă)", r.statement?.number ?? null, lines.filter((l) => !l.removed).length, total]);
+      sum.push([r.name, r.sub, r.statement ? STATUS_LABEL[r.statement.status][0] : "În curs", r.statement?.number ?? null, lines.filter((l) => !l.removed).length, total]);
       sheets.push(await linesSheet(db, `${kind === "payout" ? "P" : "I"} ${r.name}`, lines, keys));
     }
     bold.push(sum.length); sum.push(["Total " + title.toLowerCase(), null, null, null, null, round2(t)]); blank();
     return round2(t);
   };
-  const paid = await block("Plăți colaboratori", payouts, "payout");
-  const due = await block("De încasat", receivables, "receivable");
+  const due = await block("Venituri (de încasat, pe surse)", receivables, "receivable");
+  const paid = await block("Cheltuieli · plăți colaboratori", payouts, "payout");
   head("Lucrări: directe, contracte cadru și colaborări");
   bold.push(sum.length); sum.push(["Tip", "Bancă", null, null, "Rapoarte", "Total (lei)"]);
   for (const g of groupWork(direct)) {
@@ -730,11 +798,17 @@ export async function exportMonth(db: D1Database, period: string, keys: string[]
   for (const c of costs.items) sum.push([c.label, c.adjust ? c.adjust_note : c.notes, member ? `${c.pct}%` : c.amount, c.adjust || null, c.month, c.share]);
   bold.push(sum.length); sum.push(["Total cheltuieli fixe", null, null, null, null, costs.total]); blank();
   head("Rezultatul lunii");
-  sum.push([`Venituri${member ? " (rapoartele unde a fost în echipă)" : ""}`, `proprii ${rev.own} lei (${rev.ownN}) · colaborări ${rev.collab} lei (${rev.collabN})`, null, null, null, rev.total]);
+  const src = (k: RevSource) => round2(receivables.filter((r) => r.source === k).reduce((t, r) => t + r.total, 0));
+  sum.push(["Lucrări directe", null, null, null, null, src("direct")]);
+  sum.push(["Contracte cadru", null, null, null, null, src("framework")]);
+  sum.push(["Colaborări", null, null, null, null, src("collab")]);
+  bold.push(sum.length); sum.push([`Venituri${member ? " (rapoartele unde a fost în echipă)" : ""}`, null, null, null, null, due]);
   sum.push(["− Plăți colaboratori", null, null, null, null, paid]);
   sum.push(["− Cheltuieli fixe", null, null, null, null, costs.total]);
-  const profit = round2(rev.total - paid - costs.total);
-  bold.push(sum.length); sum.push([profit >= 0 ? "Profit" : "Pierdere", rev.total ? `marjă ${Math.round(profit / rev.total * 100)}%` : null, null, null, null, profit]);
-  sum.push(["De încasat pe borderouri", null, null, null, null, due]);
+  const profit = round2(due - paid - costs.total);
+  bold.push(sum.length); sum.push([profit >= 0 ? "Profit" : "Pierdere", due ? `marjă ${Math.round(profit / due * 100)}%` : null, null, null, null, profit]);
+  // the cut of the profit: only in the owner's export
+  const pct = member && shares ? (await db.prepare("SELECT profit_share FROM users WHERE id = ?").bind(member.id).first<{ profit_share: number | null }>())?.profit_share ?? 0 : 0;
+  if (pct > 0) sum.push([`Cota lui ${member!.name} din profit (${pct}%)`, null, null, null, null, profit > 0 ? round2(profit * pct / 100) : 0]);
   return xlsxBook([{ name: "Centralizator", headers: [], rows: sum, widths: [42, 40, 18, 16, 8, 16], bold }, ...sheets]);
 }

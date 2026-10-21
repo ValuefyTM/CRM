@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { can } from "@/lib/perms";
-import { getStatement, KIND_LABEL, linesOf, linesWith, memberChoices, memberReports, periodLabel, ruleFor, statementLog, STATUS_LABEL, BASIS_PICK, totalOf } from "@/lib/statements";
+import { getStatement, KIND_LABEL, linesOf, linesWith, memberChoices, memberReports, periodLabel, statementLog, STATUS_LABEL, BASIS_PICK, totalOf } from "@/lib/statements";
 import { CrmShell } from "@/components/CrmShell";
 import { History } from "@/components/History";
 import { LinesTable, lei2 } from "../LinesTable";
@@ -28,14 +28,14 @@ export default async function StatementPage({ params, searchParams }: { params: 
   // Seen through one administrator (?evaluator=): only the lines on reports they were in the team of; read-only.
   const who = self ? { id: user.id, name: user.name || user.email } : all && evaluator ? (await memberChoices(db)).find((a) => a.id === evaluator) ?? null : null;
   const canEdit = all && can(user, "statements.E") && !who;
-  const [allLines, rule, log] = await Promise.all([linesOf(db, s), ruleFor(db, s.party), statementLog(db, id)]);
+  const [allLines, log] = await Promise.all([linesOf(db, s), statementLog(db, id)]);
   const lines = who ? linesWith(allLines, await memberReports(db, who.id)) : allLines;
   if (self && !lines.length) redirect(`${base}/borderouri`);
   const [st, cls] = STATUS_LABEL[s.status];
   const back = `${base}/borderouri`;
   const total = who || s.status === "open" ? totalOf(lines) : s.total ?? totalOf(lines);
   const criteria = s.criteria ? (JSON.parse(s.criteria) as { basis?: string }) : null;
-  const basis = BASIS_PICK.find(([k]) => k === (criteria?.basis ?? rule?.basis ?? "delivered"))?.[1];
+  const basis = BASIS_PICK.find(([k]) => k === (criteria?.basis ?? "delivered"))?.[1];
   return (
     <CrmShell back={{ href: back, label: "Borderouri" }} user={user} base={base} active="statements" title={`${s.number ? `Borderou ${s.number}` : "Borderou"} · ${s.name}`}
       subtitle={`${KIND_LABEL[s.kind]} · ${periodLabel(s.period)}${s.sub ? ` · ${s.sub}` : ""}`}
@@ -65,8 +65,7 @@ export default async function StatementPage({ params, searchParams }: { params: 
               <div><dt>Luna</dt><dd>{periodLabel(s.period)}</dd></div>
               <div><dt>Număr</dt><dd>{s.number ?? <span className="muted">la emitere</span>}</dd></div>
               <div><dt>Linii</dt><dd>{lines.filter((l) => !l.removed).length}{lines.some((l) => l.removed) ? ` (+${lines.filter((l) => l.removed).length} scoase)` : ""}</dd></div>
-              {rule ? <div><dt>Regula</dt><dd>{rule.recurrence === "monthly" ? "lunar" : "la cerere"} · {basis?.toLowerCase()}{all && <> · <a className="link" href={`${back}/reguli`}>reguli</a></>}</dd></div>
-                : all ? <div><dt>Regula</dt><dd><span className="muted">fără regulă (toate cotele)</span> · <a className="link" href={`${back}/reguli`}>adaugă</a></dd></div> : null}
+              <div><dt>Calcul</dt><dd>{s.user_id ? "automat, cu cotele din fișa utilizatorului" : "automat, rapoartele predate în lună"}</dd></div>
             </dl>
             <div className="section">Observații</div>
             <NotesEdit id={s.id} notes={s.notes} canEdit={canEdit && s.status !== "issued"} />

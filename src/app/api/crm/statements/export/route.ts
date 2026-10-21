@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   const fields = a.user.impersonator ? keys : await saveExportFields(a.db, a.user.id, keys);
   const member = self ? { id: a.user.id, name: a.user.name || a.user.email }
     : typeof b.evaluator === "string" ? (await memberChoices(a.db)).find((m) => m.id === b.evaluator) ?? null : null;
-  const file = await exportMonth(a.db, b.period, fields, member);
+  const file = await exportMonth(a.db, b.period, fields, member, a.user.role === "owner");
   const name = `Borderouri ${periodLabel(b.period)}${member ? ` ${member.name}` : ""}`.replace(/[^\p{L}\p{N} ._-]/gu, "").trim();
   return new Response(file, { headers: {
     "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
