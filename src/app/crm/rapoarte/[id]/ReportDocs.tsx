@@ -126,16 +126,23 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
     const bad = files.filter((f) => !OK.test(f.name));
     setMsg(bad.length ? `Nu se pot atașa: ${bad.map((f) => f.name).join(", ")} (acceptăm PDF, imagini, Word, Excel, ZIP).` : "");
     let done = 0;
+    const notes: string[] = [];
     for (const file of files.filter((f) => OK.test(f.name))) {
       setBusy((n) => n + 1);
       const body = new FormData();
       body.set("file", file); body.set("kind", "source"); body.set("doc_type", guessDocKind(file.name));
       if (to) body.set("asset", to);
       const r = await fetch(`/api/crm/reports/${report}/documents`, { method: "POST", body }).catch(() => null);
-      const d = (await r?.json().catch(() => ({}))) as { error?: string };
+      const d = (await r?.json().catch(() => ({}))) as { error?: string; unzipped?: number; skipped?: string[] };
       setBusy((n) => n - 1);
-      if (!r?.ok) setMsg(d?.error ?? `„${file.name}” nu s-a putut încărca.`); else done++;
+      if (!r?.ok) setMsg(d?.error ?? `„${file.name}” nu s-a putut încărca.`);
+      else {
+        done++;
+        // an archive: opened into its files
+        if (d.unzipped) notes.push(`„${file.name}”: ${d.unzipped} ${d.unzipped === 1 ? "act dezarhivat" : "acte dezarhivate"}${d.skipped?.length ? ` (sărite: ${d.skipped.join(", ")})` : ""}.`);
+      }
     }
+    if (notes.length) setMsg(notes.join(" "));
     if (done) router.refresh();
   };
 

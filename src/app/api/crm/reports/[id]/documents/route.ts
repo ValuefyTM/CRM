@@ -5,8 +5,9 @@ import { err, json, reportApi } from "@/lib/api";
 import { bucket } from "@/lib/orders";
 import { fileType } from "@/lib/file-response";
 import { MAX_FILE_MB } from "@/lib/order-labels";
-import { DOC_KIND_KEYS, docKindLabel } from "@/lib/doc-kinds";
+import { DOC_KIND_KEYS, docKindLabel, guessDocKind } from "@/lib/doc-kinds";
 import { resyncUvalo } from "@/lib/uvalo";
+import { isZip, unzipDocs } from "@/lib/unzip-docs";
 
 const OK = /\.(pdf|jpe?g|png|heic|heif|webp|docx?|xlsx?|zip)$/i;
 
@@ -42,6 +43,43 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (kind === "final" && !/\.pdf$/i.test(file.name)) return err("Raportul final se încarcă în format PDF.");
   const r2 = await bucket();
   if (!r2) return err("Stocarea fișierelor nu este disponibilă momentan.", 503);
+
+  // A ZIP of documents: opened, each file kept as its own document (on the same asset / type, when given)
+  if (kind === "source" && isZip(file.name)) {
+    const z = unzipDocs(new Uint8Array(await file.arrayBuffer()));
+    if (!z.ok) return err(z.error);
+    // each file its own kind, by its name (CF extract, survey…): the archive's own name says nothing about them
+    const kindOf = (name: string) => { const g = guessDocKind(name); return DOC_KIND_KEYS.includes(g) ? g : null; };
+    const assetId = form?.get("asset")
+      ? (await a.db.prepare("SELECT id FROM assets WHERE id = ? AND report_id = ?").bind(String(form.get("asset")), id).first<{ id: string }>())?.id ?? null
+      : null;
+    const requested = typeof form?.get("doc") === "string" ? (form.get("doc") as string) : "";
+    const missing = requested
+      ? await a.db.prepare("SELECT id, filename FROM report_documents WHERE id = ? AND report_id = ? AND status = 'missing'").bind(requested, id).first<{ id: string; filename: string }>()
+      : null;
+    const ids: string[] = [];
+    for (const [i, f] of z.files.entries()) {
+      const did = i === 0 && missing ? missing.id : uuid();
+      const safe = f.name.replace(/[^\w.\-() ăâîșțĂÂÎȘȚ]/g, "_").slice(-120) || "document";
+      const key = `reports/${id}/${did}-${safe}`;
+      const type = fileType(safe);
+      await r2.put(key, f.data, { httpMetadata: { contentType: type }, customMetadata: { report: id, kind, zip: file.name.slice(0, 120) } });
+      if (i === 0 && missing) {
+        // the document asked for is fulfilled by the archive (its first file keeps the name it was asked for when it is the only one)
+        const named = z.files.length === 1 ? `${missing.filename.replace(/[^\w.\-() ăâîșțĂÂÎȘȚ]/g, "_")}${safe.match(/\.\w{2,4}$/)?.[0] ?? ""}` : safe;
+        await a.db.prepare("UPDATE report_documents SET filename = ?, content_type = ?, size_bytes = ?, r2_key = ?, status = 'uploaded', uploaded_by = ?, created_at = ?, doc_type = COALESCE(?, doc_type), asset_id = COALESCE(?, asset_id) WHERE id = ?")
+          .bind(named, type, f.data.byteLength, key, a.user.id, now(), kindOf(f.name), assetId, did).run();
+      } else {
+        await a.db.prepare("INSERT INTO report_documents (id, report_id, kind, filename, content_type, size_bytes, r2_key, uploaded_by, doc_type, asset_id) VALUES (?, ?, 'source', ?, ?, ?, ?, ?, ?, ?)")
+          .bind(did, id, safe, type, f.data.byteLength, key, a.user.id, kindOf(f.name), assetId).run();
+      }
+      ids.push(did);
+    }
+    await a.db.prepare("UPDATE reports SET updated_at = ? WHERE id = ?").bind(now(), id).run();
+    await audit(a.db, actor, "report.document", "report", id, `${file.name}: ${z.files.length} ${z.files.length === 1 ? "fișier dezarhivat" : "fișiere dezarhivate"}${z.skipped.length ? ` · sărite: ${z.skipped.slice(0, 10).join(", ")}` : ""}`);
+    await resyncUvalo(a.db, { reportId: id });
+    return Response.json({ ok: true, id: ids[0], ids, unzipped: z.files.length, skipped: z.skipped });
+  }
 
   const docId = uuid();
   const safe = file.name.replace(/[^\w.\-() ăâîșțĂÂÎȘȚ]/g, "_").slice(-120) || "document";
