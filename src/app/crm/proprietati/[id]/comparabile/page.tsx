@@ -47,8 +47,7 @@ export default async function ComparablesPage({ params, searchParams }: { params
   const back = sp.raport ? `${base}/rapoarte/${sp.raport}?tab=bunuri` : `${base}/proprietati/${id}`;
 
   return (
-    <CrmShell user={user} base={base} active="properties" title={`Comparabile · ${cap(s.type) || "Proprietate"}`} subtitle={s.full_address ?? s.city ?? ""}
-      actions={<a className="btn btnGhost btnSm" href={back}>← {sp.raport ? "Raport" : "Fișa proprietății"}</a>}>
+    <CrmShell back={{ href: back, label: sp.raport ? "Raport" : "Fișa proprietății" }} user={user} base={base} active="properties" title={`Comparabile · ${cap(s.type) || "Proprietate"}`} subtitle={s.full_address ?? s.city ?? ""}>
       <section className="card cpFilters">
         {seg("Rază", RADII.map((r) => [r, `${r.replace(".", ",")} km`]), String(st.radius), "raza")}
         {seg("Evaluate în ultimii", YEARS, String(st.years), "ani")}

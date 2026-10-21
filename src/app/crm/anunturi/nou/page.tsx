@@ -10,8 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function NewListingPage() {
   const { user, base } = await staffPage("listings");
   return (
-    <CrmShell user={user} base={base} active="listings" title="Anunț nou" subtitle="Se creează ca ciornă; îl publici după ce adaugi fotografiile.">
-      <a className="linkBtn" href={`${base}/anunturi`}>← Anunțuri imobiliare</a>
+    <CrmShell back={{ href: `${base}/anunturi`, label: "Anunțuri imobiliare" }} user={user} base={base} active="listings" title="Anunț nou" subtitle="Se creează ca ciornă; îl publici după ce adaugi fotografiile.">
       <ListingEditor base={base} canDelete={can(user, "listings.D")} />
     </CrmShell>
   );

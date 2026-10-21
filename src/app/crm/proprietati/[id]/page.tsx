@@ -46,10 +46,9 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
   const change = first && last && series.length > 1 ? Math.round(((last - first) / first) * 100) : null;
 
   return (
-    <CrmShell user={user} base={base} active="properties" title={cap(p.type) || "Proprietate"} subtitle={`Registru proprietăți · ${p.full_address ?? p.city ?? ""}`}
+    <CrmShell back={{ href: `${base}/proprietati`, label: "Proprietăți" }} user={user} base={base} active="properties" title={cap(p.type) || "Proprietate"} subtitle={`Registru proprietăți · ${p.full_address ?? p.city ?? ""}`}
       actions={<>
         <a className="btn btnNavy btnSm" href={`${base}/proprietati/${p.id}/comparabile`}>Comparabile în zonă</a>
-        <a className="btn btnGhost btnSm" href={`${base}/proprietati`}>← Proprietăți</a>
       </>}>
       <section className="rgHero">
         <div>

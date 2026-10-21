@@ -101,11 +101,10 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
 
   const backTo = `${base}/comenzi?tab=${({ site: "site", partner: "parteneri", bank: "banci", collab: "colaborari" } as Record<string, string>)[o.source] ?? "directe"}`;
   return (
-    <CrmShell
+    <CrmShell back={{ href: backTo, label: "Comenzi" }}
       user={user} base={base} active="orders" title={`Comanda ${orderCode(o)}`}
       subtitle={`${SOURCE_LABEL[o.source]} · ${orderWhat(o)}${o.address ? ` · ${orderPlace(o)}` : ""} · ${o.glide_id ? `din ${fmtDate(o.ordered_on ?? o.created_at)}` : `primită ${fmtDate(o.created_at, true)}`}`}
       actions={<>
-        <a href={backTo} className="btn btnGhost btnSm">← Comenzi</a>
         {avId && <AvFormButton id={avId} />}
         {liveInvoices.map((i) => <a key={i.id} href={`/api/crm/invoices/${i.id}/pdf`} target="_blank" rel="noopener" className="btn btnGold btnSm" title={`Factura ${i.series} ${i.number}`}>PDF factură {i.series} {i.number}</a>)}
         {can(user, "orders.E") && !o.glide_id && (o.status === "cancelled" ? <CancelReason url={`/api/crm/orders/${o.id}`} what="comanda" reopen />

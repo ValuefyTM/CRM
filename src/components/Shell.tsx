@@ -14,6 +14,8 @@ export async function Shell(props: {
   me: { id?: string; initials: string; name: string; sub: string; photo?: string | null; profile?: string };
   title: string;
   subtitle?: string;
+  /** The page this one belongs to: a "←" link on the left of the title. */
+  back?: { href: string; label: string };
   actions?: React.ReactNode;
   /** Shown in the top bar between the page title and its actions (the CRM's general search). */
   search?: React.ReactNode;
@@ -51,11 +53,19 @@ export async function Shell(props: {
       <div className="main">
         {props.banner}
         {!props.bare && <header className={props.app === "crm" ? "top topDark" : "top"}>
-          {/* No title on the dashboards: their own greeting says it. */}
-          {props.title && (
-            <div>
-              <h1 className={props.dateTitle ? "topDate" : undefined}>{props.title}</h1>
-              {props.subtitle && <p>{props.subtitle}</p>}
+          {/* No title on the dashboards: their own greeting says it. The way back sits on its left. */}
+          {(props.title || props.back) && (
+            <div className={props.back ? "topHead" : undefined}>
+              {props.back && <a className="topBack" href={props.back.href} title={`Înapoi la ${props.back.label}`}><span aria-hidden="true">←</span><span>{props.back.label}</span></a>}
+              {props.back ? (
+                <div className="topTitle">
+                  {props.title && <h1 className={props.dateTitle ? "topDate" : undefined}>{props.title}</h1>}
+                  {props.subtitle && <p>{props.subtitle}</p>}
+                </div>
+              ) : <>
+                <h1 className={props.dateTitle ? "topDate" : undefined}>{props.title}</h1>
+                {props.subtitle && <p>{props.subtitle}</p>}
+              </>}
             </div>
           )}
           {props.search}

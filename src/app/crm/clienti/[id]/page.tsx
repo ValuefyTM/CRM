@@ -51,10 +51,9 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const nou = (await searchParams).nou;
 
   return (
-    <CrmShell
+    <CrmShell back={{ href: `${base}/clienti`, label: "Clienți" }}
       user={user} base={base} active="clients" title={c.name}
       subtitle={`${kindName(c.kind)}${c.cui ? ` · CUI ${c.cui}` : ""}${c.city ? ` · ${c.city}` : ""} · ${totals?.n ?? 0} rapoarte${totals?.fees ? ` · ${lei(Math.round(totals.fees))} onorarii` : ""}`}
-      actions={<a href={`${base}/clienti`} className="btn btnGhost btnSm">← Clienți</a>}
     >
       {nou && NEW_MSG[nou] && <div className={NEW_MSG[nou][0]}>{NEW_MSG[nou][1]}</div>}
       <div className="cols">

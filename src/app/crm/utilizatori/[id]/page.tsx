@@ -64,12 +64,11 @@ export default async function UserPage({ params, searchParams }: { params: Promi
   const nou = (await searchParams).nou;
 
   return (
-    <CrmShell
+    <CrmShell back={{ href: `${base}/utilizatori?tab=${TAB[u.kind]}`, label: "Utilizatori" }}
       user={me} base={base} active="users" title={displayName(u)}
       subtitle={`${KIND_LABEL[u.kind]} · ${u.kind === "internal" ? teamLabel(u, names) : roleLabel(u.kind, u.role)}${u.partner_name ? ` · ${u.partner_name}` : ""} · adăugat ${fmtDate(u.created_at)}${u.kind === "internal" ? ` · ${presenceOf(u.last_seen_at).seen}` : ""}`}
       actions={<>
         {canDelete && <DeleteUser id={u.id} name={displayName(u)} back={`${base}/utilizatori?tab=${TAB[u.kind]}`} />}
-        <a href={`${base}/utilizatori?tab=${TAB[u.kind]}`} className="btn btnGhost btnSm">← Utilizatori</a>
       </>}
     >
       {nou && NEW_MSG[nou] && <div className={nou === "invitat" ? "okMsg" : "note"}>{NEW_MSG[nou]}</div>}

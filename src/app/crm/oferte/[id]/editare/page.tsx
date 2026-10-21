@@ -29,7 +29,7 @@ export default async function EditQuote({ params }: { params: Promise<{ id: stri
     inspection_notes: q.inspection_notes ?? "", notes: q.notes ?? "", assets, referral: q.referral_user_id ? { id: q.referral_user_id, name: q.referral_name ?? "Colaborator" } : null,
   };
   return (
-    <CrmShell user={user} base={base} active="quotes" title={`Oferta ${quoteCode(q)}`} subtitle="Modifică oferta" actions={<a href={`${base}/oferte/${id}`} className="btn btnGhost btnSm">← Ofertă</a>}>
+    <CrmShell back={{ href: `${base}/oferte/${id}`, label: "Ofertă" }} user={user} base={base} active="quotes" title={`Oferta ${quoteCode(q)}`} subtitle="Modifică oferta">
       <QuoteForm base={base} initial={initial} collabs={collabs.map((c) => ({ id: c.id, firm: c.firm, number: c.number }))} vatPercent={billing.vatPercent} canAddReferral={can(user, "users.A")} />
     </CrmShell>
   );

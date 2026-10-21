@@ -28,9 +28,8 @@ export default async function NewContractOrder({ searchParams }: { searchParams:
   const sp = await searchParams;
   const kind = sp.tip === "colaborare" && !limited ? "collab" : "bank";
   return (
-    <CrmShell user={user} base={base} active="orders" title={limited ? "Comandă nouă" : "Lucrare nouă"}
-      subtitle={limited ? "Comandă pe contractele cadru pe care ești agreat · se procesează direct, fără ofertă" : "Comandă din contract cadru (bancă) sau din colaborare · se procesează direct, fără ofertă"}
-      actions={can(user, "orders") ? <a href={`${base}/comenzi?tab=banci`} className="btn btnGhost btnSm">← Comenzi</a> : <a href={base || "/"} className="btn btnGhost btnSm">← Tablou de bord</a>}>
+    <CrmShell back={can(user, "orders") ? { href: `${base}/comenzi?tab=banci`, label: "Comenzi" } : { href: base || "/", label: "Tablou de bord" }} user={user} base={base} active="orders" title={limited ? "Comandă nouă" : "Lucrare nouă"}
+      subtitle={limited ? "Comandă pe contractele cadru pe care ești agreat · se procesează direct, fără ofertă" : "Comandă din contract cadru (bancă) sau din colaborare · se procesează direct, fără ofertă"}>
       {limited && contracts.length === 0 && <div className="note">Nu ești agreat pe niciun contract cadru deschis. Agreerile le dă un administrator, din fișa ta de utilizator.</div>}
       <ContractOrderForm base={base} me={user.id} initialKind={kind} bankOnly={limited} nextOrder={next?.n ?? 1} initialContract={sp.contract ?? null} vatPercent={billing.vatPercent} canAddReferral={can(user, "users.A")} parties={parties}
         contracts={contracts.map((c) => ({ ...c, logo: fileSrc(c.logo) }))} collabs={limited ? [] : collabs.map((c) => ({ ...c, logo: fileSrc(c.logo) }))}

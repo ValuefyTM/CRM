@@ -27,10 +27,10 @@ export default async function PartnerPage({ params, searchParams }: { params: Pr
   const nou = (await searchParams).nou;
 
   return (
-    <CrmShell
+    <CrmShell back={{ href: `${base}/utilizatori?tab=colaboratori&vezi=firme`, label: "Firme partenere" }}
       user={user} base={base} active="users" title={p.name}
       subtitle={`Firmă parteneră · ${kindLabel(p.kind)}${p.city ? ` · ${p.city}` : ""} · adăugată ${fmtDate(p.created_at)}`}
-      actions={<><a href={`${base}/utilizatori?tab=colaboratori&vezi=firme`} className="btn btnGhost btnSm">← Firme partenere</a><StatusToggle partnerId={p.id} status={p.status} canChange={isAdmin(user)} />{can(user, "partners.D") && <DeleteFirm id={p.id} name={p.name} base={base} firms={firms} people={people.filter((u) => u.status !== "deleted").length} />}</>}
+      actions={<><StatusToggle partnerId={p.id} status={p.status} canChange={isAdmin(user)} />{can(user, "partners.D") && <DeleteFirm id={p.id} name={p.name} base={base} firms={firms} people={people.filter((u) => u.status !== "deleted").length} />}</>}
     >
       {nou && (
         <div className={nou === "invitat" ? "okMsg" : "note"}>

@@ -14,8 +14,7 @@ export default async function NewQuote() {
   const { db, user, base } = await staffPage("orders.A");
   const [{ collabs }, billing] = await Promise.all([contractChoices(db), getBilling(db)]);
   return (
-    <CrmShell user={user} base={base} active="quotes" title="Ofertă nouă" subtitle="Notează oferta făcută clientului; comanda sau contractul se fac la conversie"
-      actions={<a href={`${base}/oferte`} className="btn btnGhost btnSm">← Oferte</a>}>
+    <CrmShell back={{ href: `${base}/oferte`, label: "Oferte" }} user={user} base={base} active="quotes" title="Ofertă nouă" subtitle="Notează oferta făcută clientului; comanda sau contractul se fac la conversie">
       <QuoteForm base={base} initial={null} collabs={collabs.map((c) => ({ id: c.id, firm: c.firm, number: c.number }))} vatPercent={billing.vatPercent} canAddReferral={can(user, "users.A")} />
     </CrmShell>
   );

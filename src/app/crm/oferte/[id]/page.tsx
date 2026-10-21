@@ -33,9 +33,8 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
   const Row = ({ k, children }: { k: string; children?: React.ReactNode }) => (children || children === 0 ? <div><dt>{k}</dt><dd>{children}</dd></div> : null);
   const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : "");
   return (
-    <CrmShell user={user} base={base} active="quotes" title={`Oferta ${quoteCode(q)}`}
-      subtitle={`${q.client_name}${q.fee ? ` · ${lei(q.fee)} fără TVA` : ""} · ${label.toLowerCase()}`}
-      actions={<a href={`${base}/oferte`} className="btn btnGhost btnSm">← Oferte</a>}>
+    <CrmShell back={{ href: `${base}/oferte`, label: "Oferte" }} user={user} base={base} active="quotes" title={`Oferta ${quoteCode(q)}`}
+      subtitle={`${q.client_name}${q.fee ? ` · ${lei(q.fee)} fără TVA` : ""} · ${label.toLowerCase()}`}>
       <div className="cols">
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
           <section className="card">

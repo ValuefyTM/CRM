@@ -12,8 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function CostsPage() {
   const { user, base } = await staffPage("statements.all");
   return (
-    <CrmShell user={user} base={base} active="statements" title="Cheltuieli fixe" subtitle="Costurile lunare ale firmei, scăzute din venituri la profitul lunii"
-      actions={<a href={`${base}/borderouri`} className="btn btnGhost btnSm">← Borderouri</a>}>
+    <CrmShell back={{ href: `${base}/borderouri`, label: "Borderouri" }} user={user} base={base} active="statements" title="Cheltuieli fixe" subtitle="Costurile lunare ale firmei, scăzute din venituri la profitul lunii">
       <CostsEditor canEdit={can(user, "statements.E")} canDelete={can(user, "statements.D")} thisMonth={thisMonth()} />
     </CrmShell>
   );

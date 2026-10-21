@@ -23,8 +23,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const failed = nou?.startsWith("eroare-") ? Number(nou.slice(7)) : 0;
 
   return (
-    <PortalShell user={user} base={base} active="orders" title={`Comanda ${orderCode(o)}`} subtitle={`${orderWhat(o)} · ${orderPlace(o)} · trimisă ${fmtDate(o.created_at, !o.glide_id)}`}>
-      <div className="actions"><a href={`${base}/comenzi`} className="btn btnGhost btnSm">← Comenzi</a></div>
+    <PortalShell back={{ href: `${base}/comenzi`, label: "Comenzi" }} user={user} base={base} active="orders" title={`Comanda ${orderCode(o)}`} subtitle={`${orderWhat(o)} · ${orderPlace(o)} · trimisă ${fmtDate(o.created_at, !o.glide_id)}`}>
       {nou && (
         <div className={failed ? "note" : "okMsg"}>
           {failed

@@ -21,7 +21,7 @@ import { activeInspections } from "@/lib/inspections-board";
 import { scopeOf } from "@/lib/perms";
 import { openQuotes } from "@/lib/quotes";
 
-export async function CrmShell(props: { user: User; base: string; active: string; title: string; subtitle?: string; actions?: React.ReactNode; bare?: boolean; dateTitle?: boolean; children: React.ReactNode }) {
+export async function CrmShell(props: { user: User; base: string; active: string; title: string; subtitle?: string; back?: { href: string; label: string }; actions?: React.ReactNode; bare?: boolean; dateTitle?: boolean; children: React.ReactNode }) {
   const b = props.base;
   // Badge on "Comenzi": orders nobody in the team has opened yet, plus new requests from the website.
   const db = await getDb();
@@ -105,6 +105,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
       me={{ id: props.user.id, photo: photoUrl(props.user.id, props.user.avatar_at), initials: initials(props.user.name, props.user.email), name: props.user.name || props.user.email, sub: roleLabel("internal", props.user.role), profile: `${b}/utilizatori/${props.user.id}` }}
       title={props.title}
       subtitle={props.subtitle}
+      back={props.back}
       actions={props.actions}
     >
       <Heartbeat url="/api/crm/presence" />

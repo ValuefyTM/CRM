@@ -24,10 +24,9 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   const area = [num(l.surface_area, "mp utili"), l.rooms ? `${l.rooms} camere` : null, num(l.land_area, "mp teren")].filter(Boolean).join(" · ");
 
   return (
-    <CrmShell
+    <CrmShell back={{ href: `${base}/comenzi${sale ? "?tab=site" : ""}`, label: sale ? "Vânzări de pe site" : "Comenzi" }}
       user={user} base={base} active="orders" title={`Cerere ${l.id}`}
       subtitle={`${sale ? "Vânzare" : "Evaluare"} · trimisă de pe valuefy.ro ${fmtDate(l.created_at, true)}`}
-      actions={<a href={`${base}/comenzi${sale ? "?tab=site" : ""}`} className="btn btnGhost btnSm">← {sale ? "Vânzări de pe site" : "Comenzi"}</a>}
     >
       {order && <div className="note">Cererea a devenit comanda <a className="rowLink" href={`${base}/comenzi/${order.id}`}>CO-{order.seq} →</a> Procesarea se face din comandă.</div>}
       <div className="cols">

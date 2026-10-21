@@ -45,9 +45,8 @@ export default async function NewContract({ searchParams }: { searchParams: Prom
       : await db.prepare("SELECT id, kind, name, cui, phone, email, city FROM entities WHERE id = ?").bind(clientId).first<PickedClient>()
     : null;
   return (
-    <CrmShell user={user} base={base} active={fromQuote ? "quotes" : "contracts"} title={fromQuote ? `Contract din oferta ${fromQuote.code}` : existing ? `Raport nou pe contractul ${existing.number}` : "Contract nou"}
-      subtitle={fromQuote ? `Detaliile raportului și contractul clasic (nr. ${next}, completat automat), trimis clientului la semnat` : existing ? "Un raport în plus pe contractul clasic existent: fără contract nou" : `Lucrare directă VALUEFY (contract clasic, următorul nr. ${next}) sau contract cadru cu o bancă`}
-      actions={<a href={fromQuote ? `${base}/oferte/${fromQuote.id}` : existing ? `${base}/contracte/${existing.id}` : `${base}/contracte`} className="btn btnGhost btnSm">← {fromQuote ? "Ofertă" : existing ? "Contract" : "Contracte"}</a>}>
+    <CrmShell back={{ href: fromQuote ? `${base}/oferte/${fromQuote.id}` : existing ? `${base}/contracte/${existing.id}` : `${base}/contracte`, label: fromQuote ? "Ofertă" : existing ? "Contract" : "Contracte" }} user={user} base={base} active={fromQuote ? "quotes" : "contracts"} title={fromQuote ? `Contract din oferta ${fromQuote.code}` : existing ? `Raport nou pe contractul ${existing.number}` : "Contract nou"}
+      subtitle={fromQuote ? `Detaliile raportului și contractul clasic (nr. ${next}, completat automat), trimis clientului la semnat` : existing ? "Un raport în plus pe contractul clasic existent: fără contract nou" : `Lucrare directă VALUEFY (contract clasic, următorul nr. ${next}) sau contract cadru cu o bancă`}>
       {sp.oferta && !fromQuote && <div className="note">Oferta nu există sau e deja convertită.</div>}
       <ContractForm base={base} me={user.id} next={next} initialKind={sp.tip === "cadru" && !existing ? "framework" : "classic"} evaluators={evaluators} banks={banks}
         purposes={CONTRACT_PURPOSES} reportKinds={REPORT_KINDS} client={client} contractProps={contractProps}

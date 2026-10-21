@@ -24,9 +24,8 @@ export default async function ProcessOrder({ params }: { params: Promise<{ id: s
   const [{ contracts }, evaluators, inspectors, docs, billing] = await Promise.all([contractChoices(db), evaluatorChoices(db), inspectorChoices(db, user.id), orderDocuments(db, id), getBilling(db)]);
   const screens = docs.filter((d) => d.kind === "bank_screen").map((d) => ({ id: d.id, name: d.filename, href: `/api/crm/orders/${id}/documents/${d.id}` }));
   return (
-    <CrmShell user={user} base={base} active="orders" title={`Procesează ${orderCode(o)}`}
-      subtitle={`${o.client_name ?? "Client necunoscut"}${o.report_type ? ` · ${o.report_type}` : ""} · primită ${fmtDate(o.created_at, true)}`}
-      actions={<a href={`${base}/comenzi/${id}`} className="btn btnGhost btnSm">← Comanda</a>}>
+    <CrmShell back={{ href: `${base}/comenzi/${id}`, label: "Comanda" }} user={user} base={base} active="orders" title={`Procesează ${orderCode(o)}`}
+      subtitle={`${o.client_name ?? "Client necunoscut"}${o.report_type ? ` · ${o.report_type}` : ""} · primită ${fmtDate(o.created_at, true)}`}>
       <ProcessWizard
         order={{ id, bank: o.bank, ref: o.bank_ref, client: o.client_name, phone: o.client_phone, email: o.client_email, branch: o.bank_branch, link: o.bank_link,
           contract_id: o.contract_id, fee: o.fee, report_type: o.report_type, purpose: o.purpose, urgent: !!o.urgent, source: o.source, city: o.city, address: o.address }}

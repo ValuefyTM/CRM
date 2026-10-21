@@ -37,10 +37,9 @@ export default async function StatementPage({ params, searchParams }: { params: 
   const criteria = s.criteria ? (JSON.parse(s.criteria) as { basis?: string }) : null;
   const basis = BASIS_PICK.find(([k]) => k === (criteria?.basis ?? rule?.basis ?? "delivered"))?.[1];
   return (
-    <CrmShell user={user} base={base} active="statements" title={`${s.number ? `Borderou ${s.number}` : "Borderou"} · ${s.name}`}
+    <CrmShell back={{ href: back, label: "Borderouri" }} user={user} base={base} active="statements" title={`${s.number ? `Borderou ${s.number}` : "Borderou"} · ${s.name}`}
       subtitle={`${KIND_LABEL[s.kind]} · ${periodLabel(s.period)}${s.sub ? ` · ${s.sub}` : ""}`}
       actions={<>
-        <a href={back} className="btn btnGhost btnSm">← Borderouri</a>
         <ExportXlsx id={s.id} evaluator={who && !self ? who.id : null} />
         <StatementActions id={s.id} status={s.status} canEdit={canEdit} canDelete={all && can(user, "statements.D")} back={back} lines={lines.filter((l) => !l.removed).length} />
       </>}>

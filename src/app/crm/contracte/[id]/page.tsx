@@ -49,10 +49,9 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
   const t = d.totals;
 
   return (
-    <CrmShell user={user} base={base} active="contracts" title={`Contract ${framework ? "cadru" : "clasic"} nr. ${k.number ?? "—"}`}
+    <CrmShell back={{ href: `${base}/contracte`, label: "Contracte" }} user={user} base={base} active="contracts" title={`Contract ${framework ? "cadru" : "clasic"} nr. ${k.number ?? "—"}`}
       subtitle={`${niceName(k.client) || "Fără client"} · semnat ${fmtDate(k.signed_on)}${k.closed_on ? ` · închis la ${fmtDate(k.closed_on)}` : ""}${k.glide_id ? " · importat din vechiul CRM" : ""}`}
       actions={<>
-        <a href={`${base}/contracte`} className="btn btnGhost btnSm">← Contracte</a>
         {framework && can(user, "contracts.E") && <CloseContract id={k.id} closed={k.closed_on ?? null} signedOn={k.signed_on} />}
         {framework
           ? !k.closed_on && <a href={`${base}/comenzi/noua?contract=${k.id}`} className="btn btnGold btnSm">+ Comandă pe acest contract</a>

@@ -3,7 +3,7 @@ import { displayName, type User } from "@/lib/users";
 import { Shell } from "./Shell";
 
 /** Shared by partner users ("Portal colaboratori") and clients ("Portal client"). */
-export function PortalShell(props: { user: User; base: string; active: string; title: string; subtitle?: string; children: React.ReactNode }) {
+export function PortalShell(props: { user: User; base: string; active: string; title: string; subtitle?: string; back?: { href: string; label: string }; children: React.ReactNode }) {
   const b = props.base;
   const u = props.user;
   const partner = u.kind === "partner";
@@ -21,6 +21,7 @@ export function PortalShell(props: { user: User; base: string; active: string; t
       me={{ initials: initials(u.name, u.email), name: displayName(u), sub: partner ? u.partner_name ?? "" : u.company || "Cont client" }}
       title={props.title}
       subtitle={props.subtitle}
+      back={props.back}
     >
       {props.children}
     </Shell>
