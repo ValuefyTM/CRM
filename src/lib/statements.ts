@@ -503,15 +503,24 @@ export async function monthResult(db: D1Database, period: string, who: { id: str
   return { payouts, receivables, costs, revenue, paid, fixed, profit, bySource: (s: RevSource) => sum(receivables.filter((r) => r.source === s)) };
 }
 
-/** The administrators with a share of the profit, each with the month's profit on their reports and their cut. */
+/**
+ * An associate's cut: their percent of what their reports brought (revenue − the payouts of the collaborators on them),
+ * less their part of the fixed costs.
+ */
+export const associateCut = (revenue: number, paid: number, fixed: number, pct: number) => {
+  const base = round2(revenue - paid), gross = round2(base * pct / 100);
+  return { base, gross, cut: round2(gross - fixed) };
+};
+
+/** The associates with a share of the profit, each with the month's figures on their reports and their cut. */
 export async function profitShares(db: D1Database, period: string) {
   const { results } = await db.prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, profit_share FROM users
       WHERE kind = 'internal' AND status <> 'deleted' AND role <> 'owner' AND pay_mode = 'profit' AND profit_share > 0 ORDER BY name`)
     .all<{ id: string; name: string; profit_share: number }>();
-  const out: { id: string; name: string; pct: number; revenue: number; paid: number; fixed: number; profit: number; cut: number }[] = [];
+  const out: { id: string; name: string; pct: number; revenue: number; paid: number; fixed: number; base: number; gross: number; cut: number }[] = [];
   for (const u of results) {
     const r = await monthResult(db, period, u);
-    out.push({ id: u.id, name: u.name, pct: u.profit_share, revenue: r.revenue, paid: r.paid, fixed: r.fixed, profit: r.profit, cut: r.profit > 0 ? round2(r.profit * u.profit_share / 100) : 0 });
+    out.push({ id: u.id, name: u.name, pct: u.profit_share, revenue: r.revenue, paid: r.paid, fixed: r.fixed, ...associateCut(r.revenue, r.paid, r.fixed, u.profit_share) });
   }
   return out;
 }
@@ -831,6 +840,11 @@ export async function exportMonth(db: D1Database, period: string, keys: string[]
   bold.push(sum.length); sum.push([profit >= 0 ? "Profit" : "Pierdere", due ? `marjă ${Math.round(profit / due * 100)}%` : null, null, null, null, profit]);
   // the cut of the profit: only in the owner's export
   const pct = member && shares ? (await db.prepare("SELECT profit_share FROM users WHERE id = ?").bind(member.id).first<{ profit_share: number | null }>())?.profit_share ?? 0 : 0;
-  if (pct > 0) sum.push([`Cota lui ${member!.name} din profit (${pct}%)`, null, null, null, null, profit > 0 ? round2(profit * pct / 100) : 0]);
+  if (pct > 0) {
+    const c = associateCut(due, paid, costs.total, pct);
+    sum.push([`Cota lui ${member!.name}: (venituri − plăți) × ${pct}%`, `${c.base} lei × ${pct}%`, null, null, null, c.gross]);
+    sum.push(["− cheltuielile fixe aferente", null, null, null, null, costs.total]);
+    bold.push(sum.length); sum.push([`De primit ${member!.name}`, null, null, null, null, c.cut]);
+  }
   return xlsxBook([{ name: "Centralizator", headers: [], rows: sum, widths: [42, 40, 18, 16, 8, 16], bold }, ...sheets]);
 }

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { can } from "@/lib/perms";
 import {
-  autoLines, criteriaOf, KIND_LABEL, listStatements, memberChoices, monthBoard, monthResult, partyCols, periodLabel, profitShares, STATUS_LABEL, thisMonth, validPeriod, type RevSource,
+  autoLines, criteriaOf, KIND_LABEL, listStatements, memberChoices, monthBoard, associateCut, monthResult, partyCols, periodLabel, profitShares, STATUS_LABEL, thisMonth, validPeriod, type RevSource,
 } from "@/lib/statements";
 import { MemberFilter } from "./MemberFilter";
 import { ExportXlsx } from "./ExportXlsx";
@@ -72,7 +72,8 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
   // the shares of the profit: seen only by the owner (set on each administrator's page) — the filtered one's, or all of them
   const shares = owner ? (who ? null : await profitShares(db, period)) : null;
   const pshare = who && owner ? (await db.prepare("SELECT profit_share FROM users WHERE id = ?").bind(who.id).first<{ profit_share: number | null }>())?.profit_share ?? null : null;
-  const cut = pshare != null && pshare > 0 ? { pct: pshare, amount: profit > 0 ? Math.round(profit * pshare) / 100 : 0 } : null;
+  // an associate: (their revenue − the payouts on their reports) × percent − their fixed costs
+  const cut = pshare != null && pshare > 0 ? { pct: pshare, ...associateCut(revenue, paid, fixed, pshare) } : null;
   // the month's adjustments of the fixed costs: who sees and changes every statement
   const editCosts = !self && all && can(user, "statements.E");
   const past = issued.filter((s) => s.period !== period && s.status !== "open");
@@ -208,17 +209,27 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
           {SOURCES.map(([k, l]) => <div key={k} className="stIn"><dt>+ {l}</dt><dd className="mono">{lei2(res.bySource(k))}</dd></div>)}
           <div className="stIn stSub"><dt>Venituri {who ? "(rapoartele unde a fost în echipă)" : ""}</dt><dd className="mono">{lei2(revenue)}</dd></div>
           <div className="stOut"><dt>− Plăți colaboratori ({payouts.length})</dt><dd className="mono">{lei2(paid)}</dd></div>
-          <div className="stOut"><dt>− Cheltuieli fixe{who ? " (partea lui)" : ""}</dt><dd className="mono">{lei2(fixed)}</dd></div>
-          <div className="stSumTotal"><dt>{profit >= 0 ? "Profit net" : "Pierdere"}</dt><dd className="mono" style={{ color: profit >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(profit)}</dd></div>
-          {cut != null && <>
-            <div className="stOut"><dt>− Cota lui {who!.name} din profit ({cut.pct}%)</dt><dd className="mono">{lei2(cut.amount)}</dd></div>
-            <div className="stSumTotal stNet"><dt>Rămâne firmei</dt><dd className="mono">{lei2(Math.round((profit - cut.amount) * 100) / 100)}</dd></div>
+          {cut != null ? <>
+            <div className="stSumTotal"><dt>Bază (venituri − plăți)</dt><dd className="mono">{lei2(cut.base)}</dd></div>
+            <div className="stIn"><dt>× {cut.pct}% cota asociatului</dt><dd className="mono">{lei2(cut.gross)}</dd></div>
+            <div className="stOut"><dt>− Cheltuieli fixe aferente (partea lui)</dt><dd className="mono">{lei2(fixed)}</dd></div>
+            <div className="stSumTotal stNet"><dt>De primit · {who!.name}</dt><dd className="mono" style={{ color: cut.cut >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(cut.cut)}</dd></div>
+          </> : <>
+            <div className="stOut"><dt>− Cheltuieli fixe{who ? " (partea lui)" : ""}</dt><dd className="mono">{lei2(fixed)}</dd></div>
+            <div className="stSumTotal"><dt>{profit >= 0 ? "Profit net" : "Pierdere"}</dt><dd className="mono" style={{ color: profit >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(profit)}</dd></div>
           </>}
           {shares && shares.length > 0 && (() => {
-            const totalCut = Math.round(shares.reduce((t, x) => t + x.cut, 0) * 100) / 100;
-            const net = Math.round((profit - totalCut) * 100) / 100;
+            const r2 = (n: number) => Math.round(n * 100) / 100;
+            // the fixed costs: the associates carry their split, the owner what is left
+            const allocated = r2(shares.reduce((t, x) => t + x.fixed, 0));
+            const mine = r2(fixed - allocated);
+            const base = r2(revenue - paid);
+            const net = r2(base - shares.reduce((t, x) => t + x.gross, 0) - mine);
             return <>
-              {shares.map((x) => <div key={x.id} className="stOut"><dt>− Cota {x.name} ({x.pct}% din {lei2(Math.max(0, x.profit))} profit pe rapoartele unde e în echipă)</dt><dd className="mono">{lei2(x.cut)}</dd></div>)}
+              <div className="stCalcHead"><dt>Net-ul tău · calculul</dt><dd /></div>
+              <div className="stSumTotal"><dt>Bază (venituri − plăți)</dt><dd className="mono">{lei2(base)}</dd></div>
+              {shares.map((x) => <div key={x.id} className="stOut"><dt>− Cota brută asociat {x.name} ({lei2(x.base)} × {x.pct}%)</dt><dd className="mono">{lei2(x.gross)}</dd></div>)}
+              <div className="stOut"><dt>− Cheltuieli fixe rămase la tine ({lei2(fixed)} total − {lei2(allocated)} alocate asociaților)</dt><dd className="mono">{lei2(mine)}</dd></div>
               <div className="stSumTotal stNet"><dt>Net-ul tău (proprietar)</dt><dd className="mono" style={{ color: net >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(net)}</dd></div>
             </>;
           })()}
@@ -226,23 +237,24 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
         {cut != null && <p className="hint" style={{ margin: "8px 0 0" }}>Cota din profit o vezi doar tu; se setează din fișa utilizatorului (Cum e plătit → Procent din profitul net).</p>}
         {shares && shares.length > 0 && (
           <div className="stShares">
-            <h3>Cote din profit · calculul</h3>
+            <h3>Cotele asociaților · calculul</h3>
             <div className="tableWrap">
               <table className="table">
-                <thead><tr><th>Administrator</th><th style={{ textAlign: "right" }}>Venituri (rapoartele lui)</th><th style={{ textAlign: "right" }}>− Plăți</th><th style={{ textAlign: "right" }}>− Fixe (partea lui)</th><th style={{ textAlign: "right" }}>Profit filtrat</th><th style={{ textAlign: "right" }}>Cotă</th><th style={{ textAlign: "right" }}>De primit</th></tr></thead>
+                <thead><tr><th>Asociat</th><th style={{ textAlign: "right" }}>Venituri (rapoartele lui)</th><th style={{ textAlign: "right" }}>− Plăți colaboratori</th><th style={{ textAlign: "right" }}>= Bază</th><th style={{ textAlign: "right" }}>× Cotă</th><th style={{ textAlign: "right" }}>= Cotă brută</th><th style={{ textAlign: "right" }}>− Cheltuieli aferente</th><th style={{ textAlign: "right" }}>De primit</th></tr></thead>
                 <tbody>
                   {shares.map((x) => (
                     <ClickRow key={x.id} href={`${here}?luna=${period}&evaluator=${x.id}`}>
                       <td><b>{x.name}</b></td><td style={{ textAlign: "right" }} className="mono">{lei2(x.revenue)}</td><td style={{ textAlign: "right" }} className="mono">{lei2(x.paid)}</td>
-                      <td style={{ textAlign: "right" }} className="mono">{lei2(x.fixed)}</td><td style={{ textAlign: "right", color: x.profit < 0 ? "var(--err)" : undefined }} className="mono">{lei2(x.profit)}</td>
-                      <td style={{ textAlign: "right" }}>{x.pct}%</td><td style={{ textAlign: "right" }} className="mono"><b>{lei2(x.cut)}</b></td>
+                      <td style={{ textAlign: "right" }} className="mono">{lei2(x.base)}</td><td style={{ textAlign: "right" }}>{x.pct}%</td><td style={{ textAlign: "right" }} className="mono">{lei2(x.gross)}</td>
+                      <td style={{ textAlign: "right" }} className="mono">{lei2(x.fixed)}</td>
+                      <td style={{ textAlign: "right", color: x.cut < 0 ? "var(--err)" : undefined }} className="mono"><b>{lei2(x.cut)}</b></td>
                     </ClickRow>
                   ))}
                 </tbody>
-                <tfoot><tr><td colSpan={6} style={{ textAlign: "right" }}><b>Total cote</b></td><td style={{ textAlign: "right" }} className="mono"><b>{lei2(Math.round(shares.reduce((t, x) => t + x.cut, 0) * 100) / 100)}</b></td></tr></tfoot>
+                <tfoot><tr><td colSpan={7} style={{ textAlign: "right" }}><b>Total cote asociați</b></td><td style={{ textAlign: "right" }} className="mono"><b>{lei2(Math.round(shares.reduce((t, x) => t + x.cut, 0) * 100) / 100)}</b></td></tr></tfoot>
               </table>
             </div>
-            <p className="hint" style={{ margin: "6px 0 0" }}>Profitul filtrat: doar rapoartele în care administratorul a fost în echipă, minus plățile pe ele și partea lui din cheltuielile fixe. Cota se aplică doar pe profit pozitiv. Le vezi doar tu.</p>
+            <p className="hint" style={{ margin: "6px 0 0" }}>Cota asociatului: (veniturile din rapoartele în care e în echipă − plățile colaboratorilor implicați în ele) × procentul lui − cheltuielile fixe aferente lui (splitul de la cheltuieli). Le vezi doar tu.</p>
           </div>
         )}
       </section>

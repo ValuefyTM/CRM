@@ -3464,3 +3464,5 @@ span.rdPick { display: inline-block; }
 .stCalc .stSub { border-top: 1px dashed var(--ok-line); padding-top: 4px; font-weight: 800; }
 .stCalc .stOut dt, .stCalc .stOut dd { color: var(--err); }
 .stCalc .stNet { background: var(--acc-soft); border-radius: 10px; padding: 6px 8px; margin-top: 4px; }
+.stCalc .stCalcHead { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--divider); }
+.stCalc .stCalcHead dt { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--muted-2); }
