@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { cardFound, EMPTY_CARD, readIdCard, validCnp, type IdCard } from "@/lib/id-card";
 
-export type IdMatch = { id: string; kind: string; name: string; cui: string | null; phone: string | null; email: string | null; city: string | null; reports: number; by: "cnp" | "name" };
+export type IdMatch = { id: string; kind: string; name: string; cui: string | null; phone: string | null; email: string | null; city: string | null; reports: number; by: "cnp" | "name" | "similar" };
 export type IdScan = { card: IdCard; photos: Blob[] };
 
 const MAX_SIDE = 2400;
@@ -149,7 +149,7 @@ export function IdCardDrop({ base, onRead, onMatch, onChange, matched, hint }: {
       if (found.length) onRead(card);
       // the same person in the CRM?
       if (validCnp(card.cnp) || card.name) {
-        const r = await fetch(`/api/crm/clients/match?cnp=${card.cnp}&name=${encodeURIComponent(card.name)}`).catch(() => null);
+        const r = await fetch(`/api/crm/clients/match?cnp=${card.cnp}&name=${encodeURIComponent(card.name)}&surname=${encodeURIComponent(card.surname)}`).catch(() => null);
         const d = (await r?.json().catch(() => null)) as { client?: IdMatch | null } | null;
         setHit(d?.client ?? null);
       }
@@ -196,7 +196,7 @@ export function IdCardDrop({ base, onRead, onMatch, onChange, matched, hint }: {
       {hit && hit.id !== matched && (
         <div className="nwClient ok">
           <span className="nwKind person">PF</span>
-          <span><b>{hit.by === "cnp" ? "Clientul există în CRM (același CNP)" : "Există un client cu același nume"}</b><small>{hit.name}{hit.phone ? ` · ${hit.phone}` : ""}{hit.reports ? ` · ${hit.reports} ${hit.reports === 1 ? "raport" : "rapoarte"}` : ""}</small></span>
+          <span><b>{hit.by === "cnp" ? "Clientul există în CRM (același CNP)" : hit.by === "name" ? "Există un client cu același nume" : "Posibil același client (nume asemănător) — verifică"}</b><small>{hit.name}{hit.phone ? ` · ${hit.phone}` : ""}{hit.reports ? ` · ${hit.reports} ${hit.reports === 1 ? "raport" : "rapoarte"}` : ""}</small></span>
           {onMatch ? <button type="button" className="btn btnGhost btnSm" onClick={() => { onMatch(hit); setHit(null); }}>Folosește clientul</button>
             : <a className="btn btnGhost btnSm" href={`${base}/clienti/${hit.id}`} target="_blank" rel="noreferrer">Deschide</a>}
         </div>

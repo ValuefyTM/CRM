@@ -3,14 +3,14 @@
 // prints the CNP on the front. The address is printed only on the old CI ("Domiciliu"); the CEI has none.
 
 export type IdCard = {
-  name: string; cnp: string; series: string; number: string; expires: string; birth: string; sex: "M" | "F" | "";
+  name: string; /** the family name(s) alone: the CRM is searched by it when there is no CNP match */ surname: string; cnp: string; series: string; number: string; expires: string; birth: string; sex: "M" | "F" | "";
   county: string; city: string; street: string; addr_number: string; block: string; stair: string; floor: string; apartment: string; address: string;
   /** where it was read from: the MRZ (checked digits) or only the printed text */
   mrz: boolean; card: "ci" | "cei" | "";
 };
 
 export const EMPTY_CARD: IdCard = {
-  name: "", cnp: "", series: "", number: "", expires: "", birth: "", sex: "", county: "", city: "", street: "", addr_number: "", block: "", stair: "", floor: "",
+  name: "", surname: "", cnp: "", series: "", number: "", expires: "", birth: "", sex: "", county: "", city: "", street: "", addr_number: "", block: "", stair: "", floor: "",
   apartment: "", address: "", mrz: false, card: "",
 };
 
@@ -56,14 +56,33 @@ const yymmdd = (s: string, future: boolean) => {
   return `${year}-${s.slice(2, 4)}-${s.slice(4, 6)}`;
 };
 
-/** The name from the MRZ (surname << given names), with the diacritics the printed text has. */
+/**
+ * The name from the MRZ (surname << given names), as printed on the card: the MRZ has no diacritics and writes a hyphen
+ * as "<" ("ANA<MARIA"), so the printed text gives back "ANA-MARIA" and "ȘTEFAN".
+ */
 function nameOf(raw: string, text: string) {
   const [sur, given = ""] = raw.replace(/^<+|<+$/g, "").split(/<{2,}/);
-  const words = [...toAlpha(sur).split("<"), ...toAlpha(given).split("<")].filter((w) => w.length > 1 || /^[A-Z]$/.test(w)).filter(Boolean);
-  // the printed text spells them with diacritics: "POPESCU" ← "POPESCU", "STEFAN" ← "ȘTEFAN"
+  const split = (part: string) => toAlpha(part).split("<").filter((w) => w.length > 1 || /^[A-Z]$/.test(w));
   const printed = new Map<string, string>();
-  for (const t of text.split(/[^\p{L}-]+/u)) if (t.length > 1 && fold(t) !== t.toUpperCase()) printed.set(fold(t), t.toUpperCase());
-  return title(words.map((w) => printed.get(w) ?? w).join(" "));
+  const tokens = text.replace(/\s*[-‐‑–—]\s*/g, "-").split(/[^\p{L}-]+/u).filter((t) => t.length > 1);
+  for (const t of tokens) {
+    const up = t.toUpperCase().replace(/^-+|-+$/g, "");
+    // the printed spelling wins over the MRZ one: with diacritics or with a hyphen
+    if (fold(up) !== up || up.includes("-")) printed.set(fold(up), up);
+  }
+  const spell = (words: string[]) => {
+    const out: string[] = [];
+    for (let i = 0; i < words.length; i++) {
+      // two (or three) MRZ words that are one hyphenated name on the card
+      const three = words.slice(i, i + 3).join("-"), two = words.slice(i, i + 2).join("-");
+      if (i + 2 < words.length && printed.has(three)) { out.push(printed.get(three)!); i += 2; }
+      else if (i + 1 < words.length && printed.has(two)) { out.push(printed.get(two)!); i += 1; }
+      else out.push(printed.get(words[i]) ?? words[i]);
+    }
+    return out.join(" ");
+  };
+  const surname = title(spell(split(sur)));
+  return { surname, name: title(`${spell(split(sur))} ${spell(split(given))}`.trim()) };
 }
 
 // what OCR reads where a digit is printed
@@ -99,7 +118,7 @@ function readMrz(text: string): Partial<IdCard> | null {
   }
   // the name: "IDROU" + SURNAME<<GIVEN<NAMES (TD2), or a line SURNAME<<GIVEN<NAMES (TD1)
   const nm = flat.match(/[I1][D0]R[O0]{1,2}U([A-Z]+(?:<[A-Z]+)*<<[A-Z]+(?:<[A-Z]+)*)/) ?? flat.match(/(?:^|\n)([A-Z]+(?:<[A-Z]+)*<<[A-Z]+(?:<[A-Z]+)*)<*(?:\n|$)/);
-  if (nm) out.name = nameOf(nm[1], text);
+  if (nm) Object.assign(out, nameOf(nm[1], text));
   return Object.keys(out).length ? out : null;
 }
 
@@ -109,7 +128,7 @@ function printedName(text: string) {
   const after = (re: RegExp) => { const i = ls.findIndex((l) => re.test(l)); const v = i >= 0 ? ls[i + 1] ?? "" : ""; return /^[\p{Lu} -]{2,}$/u.test(v) ? v : ""; };
   // the labels come out noisy ("Numo/NomiLast nama"): any of their three languages
   const sur = after(/^N[uv]m[eo]\b|^N[uv]m[eo]\/|\/\s*Nom\b|Last\s*n/i), given = after(/^Pren[uv]m|Pr[ée]nom|First\s*n/i);
-  return sur ? title(`${sur} ${given}`.trim()) : "";
+  return sur ? { name: title(`${sur} ${given}`.trim()), surname: title(sur) } : null;
 }
 
 /** A 13-digit CNP printed on the card ("CNP 1850101354012"), checked. */
@@ -176,7 +195,8 @@ export function readIdCard(text: string): IdCard {
   const mrz = readMrz(text) ?? {};
   const card: IdCard = { ...EMPTY_CARD, ...readAddress(text), ...Object.fromEntries(Object.entries(mrz).filter(([, v]) => v !== "" && v != null)) };
   if (!card.cnp) card.cnp = printedCnp(text);
-  if (!card.name) card.name = printedName(text);
+  if (!card.name) Object.assign(card, printedName(text) ?? {});
+  if (!card.surname && card.name) card.surname = card.name.split(" ")[0];
   // "Valabilitate 01.01.20-31.12.30": the end date
   if (!card.expires) {
     const v = text.match(/Valabil\S*[^\d]{0,30}\d{2}\.\d{2}\.\d{2,4}\s*[-–]\s*(\d{2})\.(\d{2})\.(\d{2,4})/i);
