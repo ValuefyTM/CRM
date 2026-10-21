@@ -85,7 +85,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
           {(!company || ids.length > 0) && (
-            <IdCardPanel clientId={c.id} docs={ids} cnp={c.cnp ?? null} series={c.id_series ?? null} number={c.id_number ?? null} expires={c.id_expires ?? null} canEdit={can(user, "clients.E")} />
+            <IdCardPanel clientId={c.id} docs={ids} cnp={c.cnp ?? null} series={c.id_series ?? null} number={c.id_number ?? null} expires={c.id_expires ?? null} address={c.billing_address} canEdit={can(user, "clients.E")} />
           )}
           <section className="card">
             <h2>Portal client</h2>

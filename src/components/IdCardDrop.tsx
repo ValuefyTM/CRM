@@ -93,13 +93,10 @@ async function ocr(files: Blob[], progress: (p: number, label: string) => void) 
   }
 }
 
+// the home address is one field ("Domiciliu"): county, city, street and number together
 const F: [keyof IdCard, string, number][] = [
-  ["cnp", "CNP", 2], ["series", "Serie", 1], ["number", "Număr", 1], ["street", "Stradă", 2], ["addr_number", "Nr.", 1], ["block", "Bloc", 1],
-  ["stair", "Scara", 1], ["floor", "Etaj", 1], ["apartment", "Ap.", 1], ["expires", "Valabil până la", 1], ["city", "Localitate", 2], ["county", "Județ", 2],
+  ["cnp", "CNP", 2], ["series", "Serie", 1], ["number", "Număr", 1], ["expires", "Valabil până la", 2], ["address", "Domiciliu", 6],
 ];
-
-const address = (c: IdCard) => [c.street, c.addr_number && `nr. ${c.addr_number}`, c.block && `bl. ${c.block}`, c.stair && `sc. ${c.stair}`, c.floor && `et. ${c.floor}`,
-  c.apartment && `ap. ${c.apartment}`, c.address.match(/Sector \d/)?.[0]].filter(Boolean).join(", ");
 
 export function IdCardDrop({ base, onRead, onMatch, onChange, matched, hint }: {
   base: string;
@@ -144,7 +141,6 @@ export function IdCardDrop({ base, onRead, onMatch, onChange, matched, hint }: {
       }
       const text = `${pdfText}\n${await ocr(images.slice(0, 3), (p, label) => setBusy({ p, label }))}`;
       const card = readIdCard(text);
-      card.address = address(card) || card.address;
       setThumbs(images.slice(0, 3).map((b) => URL.createObjectURL(b)));
       update({ card, photos });
       setOpen(true);
@@ -167,7 +163,6 @@ export function IdCardDrop({ base, onRead, onMatch, onChange, matched, hint }: {
   const set = (k: keyof IdCard) => (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!scan) return;
     const card = { ...scan.card, [k]: e.target.value };
-    card.address = address(card);
     update({ ...scan, card });
   };
   const clear = () => { update(null); setThumbs([]); setHit(null); setMsg(""); };
@@ -218,7 +213,7 @@ export function IdCardDrop({ base, onRead, onMatch, onChange, matched, hint }: {
               {F.map(([k, l, span]) => (
                 <label key={k} className="field" style={{ gridColumn: `span ${span}` }}>
                   <span>{l}{k === "cnp" && c.cnp && !validCnp(c.cnp) && <small className="errTxt"> · CNP invalid</small>}{k === "expires" && expired && <small className="errTxt"> · expirat</small>}</span>
-                  <input className={`input${k === "cnp" ? " mono" : ""}`} value={String(c[k] ?? "")} onChange={set(k)} inputMode={k === "cnp" ? "numeric" : undefined} placeholder={k === "expires" ? "AAAA-LL-ZZ" : undefined} />
+                  <input className={`input${k === "cnp" ? " mono" : ""}`} value={String(c[k] ?? "")} onChange={set(k)} inputMode={k === "cnp" ? "numeric" : undefined} placeholder={k === "expires" ? "AAAA-LL-ZZ" : k === "address" ? (c.card === "cei" ? "cartea electronică nu are domiciliul tipărit" : "jud., localitate, strada, nr.") : undefined} />
                 </label>
               ))}
               <p className="hint" style={{ gridColumn: "1 / -1" }}>{hint ?? "Poza și datele se salvează la client când salvezi formularul."}</p>

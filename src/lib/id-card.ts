@@ -165,8 +165,9 @@ export function readAddress(text: string): Partial<IdCard> {
   }
   // the village belongs to its commune: "Sat Dumbrăvița, Com. Giroc" stays as one city
   if (village) out.city = out.city && out.city !== village ? `${village} (com. ${out.city})` : village;
-  out.address = [out.street, out.addr_number && `nr. ${out.addr_number}`, out.block && `bl. ${out.block}`, out.stair && `sc. ${out.stair}`, out.floor && `et. ${out.floor}`,
-    out.apartment && `ap. ${out.apartment}`, sector].filter(Boolean).join(", ");
+  // the home address in one line, as on the card: county, city, street and number (and the rest)
+  out.address = [out.county && out.county !== "București" && `jud. ${out.county}`, out.city, sector, [out.street, out.addr_number && `nr. ${out.addr_number}`].filter(Boolean).join(" "),
+    out.block && `bl. ${out.block}`, out.stair && `sc. ${out.stair}`, out.floor && `et. ${out.floor}`, out.apartment && `ap. ${out.apartment}`].filter(Boolean).join(", ");
   return out;
 }
 

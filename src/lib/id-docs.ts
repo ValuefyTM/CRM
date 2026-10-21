@@ -14,23 +14,18 @@ export function cleanCard(v: unknown) {
   const expires = str(b.expires, 10);
   return {
     cnp: validCnp(cnp) ? cnp : "", series: str(b.series, 4).toUpperCase(), number: str(b.number, 10).replace(/\D/g, ""), expires: /^\d{4}-\d{2}-\d{2}$/.test(expires) ? expires : "",
-    street: str(b.street), addr_number: str(b.addr_number, 20), block: str(b.block, 20), stair: str(b.stair, 20), floor: str(b.floor, 20), apartment: str(b.apartment, 20),
     city: str(b.city, 80), county: str(b.county, 60), address: str(b.address, 240),
   };
 }
 export type CleanCard = ReturnType<typeof cleanCard>;
 
-/** Saves the card on the client: what was read replaces what the card says (CNP, series, address), the rest stays. */
+/** Saves the card on the client: CNP, series, valid until and the home address (one line); the rest stays. */
 export async function saveIdCard(db: D1Database, entityId: string, c: CleanCard) {
-  const hasAddr = !!(c.street || c.city);
   await db.prepare(`UPDATE entities SET cnp = COALESCE(NULLIF(?1, ''), cnp), id_series = COALESCE(NULLIF(?2, ''), id_series), id_number = COALESCE(NULLIF(?3, ''), id_number),
-      id_expires = COALESCE(NULLIF(?4, ''), id_expires),
-      addr_street = CASE WHEN ?14 THEN NULLIF(?5, '') ELSE addr_street END, addr_number = CASE WHEN ?14 THEN NULLIF(?6, '') ELSE addr_number END,
-      addr_block = CASE WHEN ?14 THEN NULLIF(?7, '') ELSE addr_block END, addr_stair = CASE WHEN ?14 THEN NULLIF(?8, '') ELSE addr_stair END,
-      addr_floor = CASE WHEN ?14 THEN NULLIF(?9, '') ELSE addr_floor END, addr_apartment = CASE WHEN ?14 THEN NULLIF(?10, '') ELSE addr_apartment END,
-      city = COALESCE(NULLIF(?11, ''), city), county = COALESCE(NULLIF(?12, ''), county), billing_address = COALESCE(NULLIF(?13, ''), billing_address), updated_at = ?15
-    WHERE id = ?16`)
-    .bind(c.cnp, c.series, c.number, c.expires, c.street, c.addr_number, c.block, c.stair, c.floor, c.apartment, c.city, c.county, c.address, hasAddr ? 1 : 0, now(), entityId).run();
+      id_expires = COALESCE(NULLIF(?4, ''), id_expires), billing_address = COALESCE(NULLIF(?5, ''), billing_address),
+      city = COALESCE(NULLIF(?6, ''), city), county = COALESCE(NULLIF(?7, ''), county), updated_at = ?8
+    WHERE id = ?9`)
+    .bind(c.cnp, c.series, c.number, c.expires, c.address, c.city, c.county, now(), entityId).run();
 }
 
 const IMG = /^(image\/(jpeg|png|webp)|application\/pdf)$/;

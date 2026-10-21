@@ -3412,8 +3412,8 @@ span.rdPick { display: inline-block; }
   .idTxt small { white-space: normal; }
   .idFields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .idFields .field { grid-column: span 1 !important; }
-  .idFields .field:first-child, .idFields .hint { grid-column: 1 / -1 !important; }
+  .idFields .field:first-child, .idFields .field:nth-child(5), .idFields .hint { grid-column: 1 / -1 !important; }
 }
-@container (max-width: 620px) { .idFields { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container (max-width: 620px) { .idFields { grid-template-columns: repeat(4, minmax(0, 1fr)); } .idFields .field { grid-column: span 2 !important; } .idFields .field:nth-child(2), .idFields .field:nth-child(3) { grid-column: span 1 !important; } .idFields .field:nth-child(5), .idFields .hint { grid-column: 1 / -1 !important; } }
 .idPdf { width: 168px; height: 108px; border-radius: 8px; border: 1px solid var(--line); background: var(--cream); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-weight: 800; color: var(--err); font-size: 18px; text-decoration: none; }
 .idPdf small { font-size: 10.5px; font-weight: 500; color: var(--muted-2); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

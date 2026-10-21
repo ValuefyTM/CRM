@@ -5,8 +5,8 @@ import type { IdDoc } from "@/lib/id-docs";
 
 const date = (d: string | null | undefined) => (d ? d.slice(0, 10).split("-").reverse().join(".") : "");
 
-export function IdCardPanel({ clientId, docs, cnp, series, number, expires, canEdit }: {
-  clientId: string; docs: IdDoc[]; cnp: string | null; series: string | null; number: string | null; expires: string | null; canEdit: boolean;
+export function IdCardPanel({ clientId, docs, cnp, series, number, expires, address, canEdit }: {
+  clientId: string; docs: IdDoc[]; address: string | null; cnp: string | null; series: string | null; number: string | null; expires: string | null; canEdit: boolean;
 }) {
   const [list, setList] = useState(docs);
   const [busy, setBusy] = useState("");
@@ -27,6 +27,7 @@ export function IdCardPanel({ clientId, docs, cnp, series, number, expires, canE
             .filter(Boolean).map((x, i) => <span key={i}>{i ? " · " : ""}{x}</span>)}
         </p>
       )}
+      {address && (cnp || series) && <p className="muted" style={{ margin: 0, fontSize: 13 }}>Domiciliu: <b>{address}</b></p>}
       {list.length ? (
         <div className="idDocs">
           {list.map((d) => (
