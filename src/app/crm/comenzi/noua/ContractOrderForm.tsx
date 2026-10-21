@@ -8,7 +8,7 @@ import { dutyIn } from "@/lib/labels";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PURPOSES } from "@/lib/order-labels";
-import { assetProfile, capType, emptyAsset, type AssetForm } from "@/lib/asset-labels";
+import { assetMissing, assetProfile, capType, emptyAsset, type AssetForm } from "@/lib/asset-labels";
 import { feeKindLabel, feeKindOf, gridRate, netFromGrid, parseFeeGrid } from "@/lib/fee-grid";
 import { AssetsEditor, newUid } from "@/components/AssetsEditor";
 import { NoteParentPick } from "@/components/NoteParentPick";
@@ -90,7 +90,7 @@ export function ContractOrderForm(p: {
   /** may add a collaborator on the spot (clients.A) */
   canAddReferral?: boolean;
   /** the designated users a report can be made for (banks, IFN, institutions) */
-  parties?: { id: string; name: string; kind: string }[];
+  parties?: { id: string; name: string; kind: string; code?: string | null; logo?: string | null }[];
 }) {
   const [referral, setReferral] = useState<Referral | null>(null);
   const [idScan, setIdScan] = useState<IdScan | null>(null);
@@ -144,6 +144,8 @@ export function ContractOrderForm(p: {
 
   const bankOpts: Opt[] = useMemo(() => p.contracts.map((c) => ({ id: c.id, title: c.bank, logo: c.logo, short: (c.bank_code ?? initials(c.bank)).slice(0, 4).toUpperCase(),
     sub: [c.number && `contract ${c.number}`, c.fee ? `${c.fee.toLocaleString("ro-RO")} lei` : null, c.report_type].filter(Boolean).join(" · ") || "contract cadru" })), [p.contracts]);
+  const partyOpts: Opt[] = useMemo(() => (p.parties ?? []).map((x) => ({ id: x.id, title: x.name, logo: x.logo, short: (x.code ?? initials(x.name)).slice(0, 4).toUpperCase(),
+    sub: x.kind === "bank" ? (x.id === contract?.bank_id ? "banca contractului cadru" : "bancă") : PARTY_KIND[x.kind] ?? x.kind })), [p.parties, contract?.bank_id]);
   const collabOpts: Opt[] = useMemo(() => p.collabs.map((c) => ({ id: c.id, title: c.firm, logo: c.logo, short: initials(c.firm).slice(0, 3),
     sub: [c.number, c.share != null ? `cota VALUEFY ${Math.round(c.share * 100)}%` : null].filter(Boolean).join(" · ") || "colaborare" })), [p.collabs]);
 
@@ -172,9 +174,10 @@ export function ContractOrderForm(p: {
     if (f.client_phone.replace(/\D/g, "").length < 9) e.client_phone = "Completează telefonul clientului.";
     // Appraisal & Valuation process the order in their CRM: the client's email is required there
     if (avOrder && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(f.client_email.trim())) e.client_email = "Emailul clientului e obligatoriu la Appraisal & Valuation.";
+    if (!assets.length) e.asset0 = "Adaugă cel puțin un bun de evaluat.";
     assets.forEach((a, i) => {
-      if (!a.type.trim()) e[`asset${i}`] = `Bunul ${i + 1}: alege tipul.`;
-      else if (assetProfile(a.category, a.type).address && !a.city.trim() && !a.full_address.trim()) e[`asset${i}`] = `Bunul ${i + 1}: completează adresa sau localitatea.`;
+      const miss = assetMissing(a);
+      if (miss.length) e[`asset${i}`] = `${i ? `Bunul ${i + 1}` : "Bunul principal"}: completează ${miss.join(", ")}.`;
       else if (a.contact_kind !== "client" && !a.contact_name.trim()) e[`asset${i}`] = `Bunul ${i + 1}: completează persoana de contact la inspecție.`;
     });
     if (!f.client_only && !recipient) e.recipient = "Alege utilizatorul desemnat (banca) sau bifează „Doar clientul”.";
@@ -269,12 +272,6 @@ export function ContractOrderForm(p: {
           {kind === "bank" && <p className="nwInfo">Nr. raport: <b>automat</b> · următorul din seria VALUEFY, la înregistrare</p>}
           {kind === "bank" && <label className="field"><span className="fLabel">Agenție / sucursală <small>(opțional)</small></span><input className="input" value={f.bank_branch} onChange={set("bank_branch")} placeholder="ex. Timișoara Iosefin" /></label>}
           <div className="formRow">
-            <label className="field">Utilizarea desemnată
-              <select className="select" value={f.purpose} onChange={set("purpose")}>
-                {!USES.includes(f.purpose) && f.purpose && <option value={f.purpose}>{f.purpose}</option>}
-                {USES.map((x) => <option key={x} value={x}>{x}</option>)}
-              </select>
-            </label>
             <div className="field"><span className="fLabel">Onorariu fără TVA {kind === "bank" && contract && <Req />}</span>
               <span className="nwSuffix"><input className="input" inputMode="decimal" value={f.fee} onChange={set("fee")} readOnly={feeLocked} aria-invalid={!!errors.fee || undefined} aria-label="Onorariu fără TVA"
                 placeholder={feeState === "wait" ? "după tipul bunului principal" : feeState === "missing" ? "tarif negociat" : contract?.fee ? String(contract.fee) : "0"} disabled={f.fee_later} /><em>lei</em></span>
@@ -288,16 +285,12 @@ export function ContractOrderForm(p: {
               {err("fee")}
             </div>
           </div>
-          <div className="field">Tip raport
-            <div className="segment nwSeg" role="group" aria-label="Tip raport">
-              {REPORT_KINDS.map((k) => <button key={k} type="button" aria-pressed={f.report_type === k} onClick={() => setF({ ...f, report_type: k })}>{k}</button>)}
-            </div>
-          </div>
           {(kind === "collab" ? collab : contract) && (() => {
             const m = billingLabel((kind === "collab" ? collab : contract)?.billing_mode);
             const href = kind === "collab" ? `${p.base}/contracte?tip=colaborare` : `${p.base}/contracte/${contract!.id}`;
             return <p className="nwInfo">Facturare: {m ? <b>{m.toLowerCase()}</b> : <><b className="errTxt">nesetată</b>{href && <> · <a className="link" href={href} target="_blank" rel="noopener">setează pe {kind === "collab" ? "colaborare" : "contract"}</a></>}</>}</p>;
           })()}
+          {avOrder && <p className="nwInfo">Formularul Excel pentru Appraisal & Valuation se completează automat: după înregistrare, în raport, butonul <b>„Formular Appraisal & Valuation”</b> (sus, lângă status).</p>}
           {kind === "collab" && collab?.share != null && Number.isFinite(feeNum) && <p className="nwInfo">Cota VALUEFY: <b>{Math.round(collab.share * 100)}%</b> · {(feeNum * collab.share).toLocaleString("ro-RO", { maximumFractionDigits: 2 })} lei</p>}
         </section>
 
@@ -327,25 +320,38 @@ export function ContractOrderForm(p: {
             <label className="field"><span className="fLabel">Email {avOrder ? <small>(obligatoriu la Appraisal & Valuation)</small> : <small>(opțional)</small>}</span><input className="input" type="email" value={f.client_email} onChange={set("client_email")} placeholder="nume@exemplu.ro" aria-invalid={!!errors.client_email || undefined} />{errors.client_email && <small className="errTxt">{errors.client_email}</small>}</label>
           </div>
           {f.client_kind === "company" && <label className="field"><span className="fLabel">CUI <small>(opțional)</small></span><input className="input mono" value={f.client_cui} onChange={set("client_cui")} placeholder="ex. 12345678" disabled={!!picked} /></label>}
-          <div className="field">
-            <span className="fLabel">Utilizator desemnat {!f.client_only && <Req />}</span>
-            <label className="check"><input type="checkbox" checked={f.client_only} onChange={(e) => { setF({ ...f, client_only: e.target.checked }); setErrors((x) => ({ ...x, recipient: "" })); }} /><span>Doar clientul folosește raportul</span></label>
-            {!f.client_only && (
-              <select className="select" value={recipient} aria-invalid={!!errors.recipient || undefined} aria-label="Utilizator desemnat"
-                onChange={(e) => { setF({ ...f, recipient_id: e.target.value }); setErrors((x) => ({ ...x, recipient: "" })); }}>
-                <option value="">— alege banca / instituția —</option>
-                {(p.parties ?? []).map((x) => <option key={x.id} value={x.id}>{x.name}{x.kind !== "bank" ? ` · ${PARTY_KIND[x.kind] ?? x.kind}` : ""}</option>)}
-              </select>
-            )}
-            {kind === "bank" && contract?.bank_id && !f.client_only && recipient === contract.bank_id && <small className="muted">banca contractului cadru · o poți schimba</small>}
-            {err("recipient")}
-          </div>
           <ReferralPick value={referral} onChange={setReferral} canAdd={!!p.canAddReferral} />
         </section>
       </div>
 
       <section className="card nwCard">
-        <Step n={3} title="Bunuri evaluate" sub="Fiecare bun separat: are valoarea și inspecția lui. Primul e bunul principal." done={assetsDone} />
+        <Step n={3} title="Raportul" sub="Tipul raportului, scopul evaluării și cine îl folosește" done={!now.recipient} />
+        <div className="nwReport">
+          <div className="field"><span className="fLabel">Tip raport</span>
+            <div className="segment nwSeg" role="group" aria-label="Tip raport">
+              {REPORT_KINDS.map((k) => <button key={k} type="button" aria-pressed={f.report_type === k} onClick={() => setF({ ...f, report_type: k })}>{k}</button>)}
+            </div>
+          </div>
+          <label className="field"><span className="fLabel">Scopul evaluării</span>
+            <select className="select" value={f.purpose} onChange={set("purpose")}>
+              {!USES.includes(f.purpose) && f.purpose && <option value={f.purpose}>{f.purpose}</option>}
+              {USES.map((x) => <option key={x} value={x}>{x}</option>)}
+            </select>
+          </label>
+          <div className="field">
+            <span className="fLabel">Utilizator desemnat {!f.client_only && <Req />}</span>
+            {!f.client_only && (
+              <LogoSelect value={recipient} options={partyOpts} placeholder="Alege banca / instituția…" invalid={!!errors.recipient}
+                onChange={(v) => { setF({ ...f, recipient_id: v }); setErrors((x) => ({ ...x, recipient: "" })); }} />
+            )}
+            <label className="check"><input type="checkbox" checked={f.client_only} onChange={(e) => { setF({ ...f, client_only: e.target.checked }); setErrors((x) => ({ ...x, recipient: "" })); }} /><span>Doar clientul folosește raportul</span></label>
+            {err("recipient")}
+          </div>
+        </div>
+      </section>
+
+      <section className="card nwCard">
+        <Step n={4} title="Bunuri evaluate" sub="Fiecare bun separat: are valoarea și inspecția lui. Primul e bunul principal." done={assetsDone} />
         {note && (
           <div className="npBox">
             <div className="npHead"><b>Raportul inițial</b><small>nota se leagă de el și folosește același bun, fără o proprietate nouă</small></div>
@@ -355,7 +361,7 @@ export function ContractOrderForm(p: {
             }} />
           </div>
         )}
-        <AssetsEditor assets={assets} setAssets={(a) => { setAssets(a); setErrors((x) => Object.fromEntries(Object.entries(x).filter(([k]) => !k.startsWith("asset")))); }}
+        <AssetsEditor required assets={assets} setAssets={(a) => { setAssets(a); setErrors((x) => Object.fromEntries(Object.entries(x).filter(([k]) => !k.startsWith("asset")))); }}
           client={{ name: f.client_name, phone: f.client_phone }} docs={{ files: drafts, set: (uid, files) => setDrafts((d) => ({ ...d, [uid]: files })) }} />
         {assets.map((_, i) => <span key={i} style={{ display: "contents" }}>{err(`asset${i}`)}</span>)}
         <label className="field"><span className="fLabel">Observații pentru inspecție <small>(opțional · le vede inspectorul)</small></span>
@@ -363,7 +369,7 @@ export function ContractOrderForm(p: {
       </section>
 
       <section className="card nwCard">
-        <Step n={4} title="Raport și echipă" sub="Doar evaluatorul principal e obligatoriu; restul se pot alege și după creare." done={!now.evaluator_id} />
+        <Step n={5} title="Raport și echipă" sub="Doar evaluatorul principal e obligatoriu; restul se pot alege și după creare." done={!now.evaluator_id} />
         <div className="nwTeam">
           <div className="field"><span className="fLabel">Evaluator principal <Req /></span>
             <PersonPicker label="Evaluator principal" value={f.evaluator_id} onChange={(v) => { setF({ ...f, evaluator_id: v }); setErrors((x) => ({ ...x, evaluator_id: "" })); }} people={p.evaluators.filter((x) => dutyIn(x.duties, "evaluator"))} me={p.me} />

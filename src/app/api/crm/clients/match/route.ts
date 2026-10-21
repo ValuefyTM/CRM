@@ -27,12 +27,12 @@ export async function GET(req: Request) {
   if (validCnp(cnp)) {
     const hit = await a.db.prepare(`SELECT ${cols} FROM entities e WHERE e.kind = 'person' AND e.cnp = ?1${where(2)} ORDER BY reports DESC LIMIT 1`)
       .bind(cnp, ...(scope?.binds ?? [])).first<Row>();
-    if (hit) return Response.json({ client: { ...hit, by: "cnp" } });
+    if (hit) return Response.json({ client: { ...hit, by: "cnp" }, matches: [{ ...hit, by: "cnp" }] });
   }
   // candidates: the longest family name, by its plainest letters (LIKE does not fold diacritics); the words decide after
   const key = [...sur].sort((x, y) => y.length - x.length)[0] ?? "";
   const probe = (name.normalize("NFC").match(/[A-Za-z]{3,}/g) ?? []).filter((r) => words(r)[0] && key.includes(words(r)[0])).sort((x, y) => y.length - x.length)[0] ?? "";
-  if (probe.length < 3) return Response.json({ client: null });
+  if (probe.length < 3) return Response.json({ client: null, matches: [] });
   const { results } = await a.db.prepare(`SELECT ${cols} FROM entities e WHERE e.kind = 'person' AND e.name LIKE ?1${where(2)} LIMIT 300`)
     .bind(`%${probe}%`, ...(scope?.binds ?? [])).all<Row>();
   const scored = results
@@ -44,6 +44,7 @@ export async function GET(req: Request) {
     })
     .filter((x) => x.ok)
     .sort((x, y) => Number(y.exact) - Number(x.exact) || y.same - x.same || y.r.reports - x.r.reports);
-  const best = scored[0];
-  return Response.json({ client: best ? { ...best.r, by: best.exact ? "name" : "similar" } : null, more: Math.max(0, scored.length - 1) });
+  // several people with that name: all of them (the best first), to choose from
+  const matches = scored.slice(0, 8).map((x) => ({ ...x.r, by: x.exact ? "name" : "similar" }));
+  return Response.json({ client: matches[0] ?? null, matches });
 }

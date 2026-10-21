@@ -9,8 +9,10 @@ import type { DraftDoc } from "@/components/AssetDocs";
 
 export const newUid = () => Math.random().toString(36).slice(2, 10);
 
-export function AssetsEditor({ assets, setAssets, client, docs }: {
+export function AssetsEditor({ assets, setAssets, client, docs, required }: {
   assets: AssetForm[]; setAssets: (a: AssetForm[]) => void; client: { name: string; phone: string };
+  /** an order: the asset's type, address, area, CF and cadastral number are required */
+  required?: boolean;
   /** The documents dropped under each asset (by its uid), uploaded once the report exists. */
   docs?: { files: Record<string, DraftDoc[]>; set: (uid: string, files: DraftDoc[]) => void };
 }) {
@@ -37,7 +39,7 @@ export function AssetsEditor({ assets, setAssets, client, docs }: {
             <span className="assetFold" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="m6 9 6 6 6-6" /></svg></span>
           </div>
           {!folded.has(i) && <>
-          <AssetFields value={a} onChange={(p) => patch(i, p)}
+          <AssetFields value={a} onChange={(p) => patch(i, p)} required={required}
             docs={docs && a.uid ? { mode: "draft", files: docs.files[a.uid] ?? [], onChange: (f) => docs.set(a.uid!, f) } : undefined} />
           <div className="contactBox">
             <div className="contactBoxHead">

@@ -4,7 +4,7 @@ import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
 import { dutyIn } from "@/lib/labels";
 
 import { useEffect, useRef, useState } from "react";
-import { capType, emptyAsset, type AssetForm } from "@/lib/asset-labels";
+import { assetMissing, capType, emptyAsset, type AssetForm } from "@/lib/asset-labels";
 import { feeKindLabel, feeKindOf, gridRate, netFromGrid, parseFeeGrid } from "@/lib/fee-grid";
 import { PURPOSES } from "@/lib/order-labels";
 import { AssetsEditor } from "@/components/AssetsEditor";
@@ -122,8 +122,10 @@ export function ProcessWizard(p: {
 
   const check = (i: number) => {
     if (i >= 1 && !client.name.trim()) return "Completează numele clientului.";
+    if (i >= 2 && !assets.length) return "Adaugă cel puțin un bun de evaluat.";
     if (i >= 2) for (const [n, a] of assets.entries()) {
-      if (!a.type.trim()) return `Bunul ${n + 1}: alege tipul.`;
+      const miss = assetMissing(a);
+      if (miss.length) return `Bunul ${n + 1}: completează ${miss.join(", ")}.`;
       if (a.contact_kind !== "client" && !a.contact_name.trim()) return `Bunul ${n + 1}: completează persoana de contact la inspecție (sau alege „Clientul”).`;
       if (!a.city.trim() && !a.full_address.trim() && a.category !== "BUN MOBIL") return `Bunul ${n + 1}: completează localitatea sau adresa.`;
     }
@@ -235,7 +237,7 @@ export function ProcessWizard(p: {
           <>
             <h2>Bunuri evaluate</h2>
             <p className="hint">Fiecare bun (apartament, loc de parcare, boxă, teren) separat: are valoarea și inspecția lui. Primul e bunul principal.</p>
-            <AssetsEditor assets={assets} setAssets={setAssets} client={{ name: client.name, phone: client.phone }} />
+            <AssetsEditor required assets={assets} setAssets={setAssets} client={{ name: client.name, phone: client.phone }} />
           </>
         )}
 

@@ -6,7 +6,7 @@ import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
 import { dutyIn } from "@/lib/labels";
 
 import { AssetsEditor } from "@/components/AssetsEditor";
-import { emptyAsset, type AssetForm } from "@/lib/asset-labels";
+import { assetMissing, emptyAsset, type AssetForm } from "@/lib/asset-labels";
 import { ReferralPick, type Referral } from "@/components/ReferralPick";
 import { IdCardDrop, uploadIdCard, type IdScan } from "@/components/IdCardDrop";
 
@@ -191,6 +191,9 @@ export function ContractForm(p: {
     if (!client && !fresh.phone.trim() && !fresh.email.trim()) return setMsg("Completează telefonul sau emailul clientului.");
     if (mode === "offer" && !who.email.trim()) return setMsg("Pentru ofertă e nevoie de emailul clientului.");
     for (const [n, a] of usedAssets.entries()) {
+      // a work accepted (not only an offer): everything the report needs about the asset
+      const miss = mode === "offer" ? [] : assetMissing(a);
+      if (miss.length) return setMsg(`Bunul ${n + 1}: completează ${miss.join(", ")}.`);
       if (!a.type.trim()) return setMsg(`Bunul ${n + 1}: alege tipul.`);
       if (!a.city.trim() && !a.full_address.trim() && a.category !== "BUN MOBIL") return setMsg(`Bunul ${n + 1}: completează localitatea sau adresa.`);
       if (a.contact_kind !== "client" && !a.contact_name.trim()) return setMsg(`Bunul ${n + 1}: completează persoana de contact la inspecție (sau alege „Clientul”).`);
@@ -287,7 +290,7 @@ export function ContractForm(p: {
               </>
             )}
             {newAssets && <p className="hint">Fiecare bun separat (apartament, loc de parcare, boxă, teren): are valoarea și inspecția lui. Primul e bunul principal. Un bun inclus în mai multe rapoarte se inspectează o singură dată.</p>}
-            {newAssets && <AssetsEditor assets={assets} setAssets={(next) => {
+            {newAssets && <AssetsEditor required={mode !== "offer"} assets={assets} setAssets={(next) => {
               // A new asset joins every report that holds the previous one; a removed asset leaves them.
               if (next.length > assets.length) addAssetTo(next.length - 1);
               if (next.length < assets.length) {

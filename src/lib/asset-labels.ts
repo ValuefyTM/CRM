@@ -70,6 +70,34 @@ export function assetProfile(category: string | null | undefined, type: string |
   return { key: "building", fields: BUILDING, labels: {}, address: true };
 }
 
+/**
+ * What an order must say about each asset (Lucrare nouă, procesare, contract direct): its type, where it is and, by kind,
+ * its area, CF and cadastral number. Each group is satisfied by any of its fields (a house: the construction's or the
+ * land's cadastral number).
+ */
+export function assetRequired(category: string | null | undefined, type: string | null | undefined): ProfileField[][] {
+  const p = assetProfile(category, type);
+  if (p.key === "vehicle") return [["vehicle_make"], ["vehicle_model"], ["year_built"]];
+  const area: ProfileField[][] = p.key === "land" ? [["land_area"]] : p.key === "house" ? [["usable_area"], ["land_area"]] : [["usable_area", "land_area"]];
+  const cad: ProfileField[] = (["cad_building", "cad_land"] as ProfileField[]).filter((k) => p.fields.includes(k));
+  return [...area, ["cf_number"], ...(cad.length ? [cad] : [])];
+}
+
+/** The required things an asset still lacks, by their labels (empty: complete). */
+export function assetMissing(a: AssetForm): string[] {
+  const p = assetProfile(a.category, a.type);
+  const m: string[] = [];
+  if (!a.type.trim()) return ["tipul (subtipul) bunului"];
+  if (p.address) {
+    if (!a.full_address.trim()) m.push("adresa");
+    if (!a.county.trim()) m.push("județul");
+    if (!a.city.trim()) m.push("localitatea");
+  }
+  for (const g of assetRequired(a.category, a.type))
+    if (!g.some((k) => String(a[k] ?? "").trim())) m.push(g.map((k) => (p.labels[k] ?? FIELD_LABELS[k]).replace(/ \(mp\)$/, "").replace(/^Suprafață/, "suprafața").replace(/^An /, "anul ").replace(/^Marcă/, "marca").replace(/^Model/, "modelul")).join(" sau "));
+  return m;
+}
+
 export const FIELD_LABELS: Record<ProfileField, string> = {
   usable_area: "Suprafață utilă (mp)", land_area: "Suprafață teren (mp)", rooms: "Nr. camere", floor: "Etaj", height_regime: "Regim de înălțime",
   year_built: "An construcție", construction: "Stadiu", cf_number: "Nr. CF", cad_building: "Nr. cad. construcție", cad_land: "Nr. cad. teren",

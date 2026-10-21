@@ -3,7 +3,7 @@
 // list, filled in from the address when it names them) and the details that this type of asset has — an apartment
 // has rooms and floor, a house its land too, land only its area, a car its make, model and plate.
 import { useEffect, useRef, useState } from "react";
-import { ASSET_CATEGORIES, assetProfile, capType, FIELD_HINTS, FIELD_LABELS, type AssetForm, type ProfileField } from "@/lib/asset-labels";
+import { ASSET_CATEGORIES, assetProfile, assetRequired, capType, FIELD_HINTS, FIELD_LABELS, type AssetForm, type ProfileField } from "@/lib/asset-labels";
 import { extractPlace, loadPlaces, type Places } from "@/lib/places";
 import { Combo } from "./Combo";
 import { MiniMap, type MiniPoint } from "./MiniMap";
@@ -15,7 +15,10 @@ const SOURCE_TEXT: Record<MiniPoint["source"], string> = { cadastru: "Localizat 
 const NUMERIC: ProfileField[] = ["usable_area", "land_area", "rooms", "year_built", "mileage"];
 const MONO: ProfileField[] = ["cf_number", "cad_building", "cad_land", "reg_number", "vin"];
 
-export function AssetFields({ value: f, onChange, docs }: { value: AssetForm; onChange: (patch: Partial<AssetForm>) => void; docs?: AssetDocsProps }) {
+const Req = () => <span className="req" aria-label="obligatoriu">*</span>;
+
+/** `required`: an order's asset (type, address, area, CF, cadastral number are required; marked with *). */
+export function AssetFields({ value: f, onChange, docs, required }: { value: AssetForm; onChange: (patch: Partial<AssetForm>) => void; docs?: AssetDocsProps; required?: boolean }) {
   const [places, setPlaces] = useState<Places>({});
   const [auto, setAuto] = useState(false);
   const last = useRef<{ county: string; city: string } | null>(null);
@@ -69,6 +72,9 @@ export function AssetFields({ value: f, onChange, docs }: { value: AssetForm; on
     }
   };
 
+  const must = new Set(required ? assetRequired(f.category, f.type).flat() : []);
+  const need = (k: ProfileField) => (must.has(k) ? <Req /> : null);
+  const R = required ? <Req /> : null;
   const field = (k: ProfileField) => {
     if (k === "construction") return (
       <label key={k} className={`afBuild${f.construction === "under_construction" ? " on" : ""}`} title="Bifează dacă imobilul nu e finalizat (lucrări în curs)">
@@ -77,7 +83,7 @@ export function AssetFields({ value: f, onChange, docs }: { value: AssetForm; on
       </label>
     );
     return (
-      <label key={k} className="field">{p.labels[k] ?? FIELD_LABELS[k]}
+      <label key={k} className="field"><span className="fLabel">{p.labels[k] ?? FIELD_LABELS[k]} {need(k)}</span>
         <input className={`input${MONO.includes(k) ? " mono" : ""}`} inputMode={NUMERIC.includes(k) ? (k === "usable_area" || k === "land_area" ? "decimal" : "numeric") : undefined}
           value={f[k]} placeholder={FIELD_HINTS[k] ?? ""} onChange={(e) => onChange({ [k]: k === "reg_number" || k === "vin" ? e.target.value.toUpperCase() : e.target.value })} />
       </label>
@@ -90,12 +96,12 @@ export function AssetFields({ value: f, onChange, docs }: { value: AssetForm; on
     <div className="afWrap">
     <div className="afGrid">
       <div className="formRow">
-        <label className="field">Categorie
+        <label className="field"><span className="fLabel">Categorie {R}</span>
           <select className="select" value={f.category} onChange={(e) => { setOther(false); onChange({ category: e.target.value, type: "" }); }}>
             {ASSET_CATEGORIES.map(([c, l]) => <option key={c} value={c}>{l}</option>)}
           </select>
         </label>
-        <label className="field">Tip bun
+        <label className="field"><span className="fLabel">Tip bun {R}</span>
           {other || types.length === 0
             ? <span className="afOther">
                 <input className="input" value={f.type} onChange={(e) => onChange({ type: e.target.value.toUpperCase() })} placeholder="ex. SPATIU DE BIROURI" />
@@ -112,16 +118,16 @@ export function AssetFields({ value: f, onChange, docs }: { value: AssetForm; on
       </div>
 
       <div className="afPlace">
-        <label className="field">{p.address ? "Adresa completă" : "Unde se află (opțional)"}
+        <label className="field"><span className="fLabel">{p.address ? "Adresa completă" : "Unde se află (opțional)"} {p.address && R}</span>
           <input className="input" value={f.full_address} placeholder="Strada, număr, bloc, scară, etaj, apartament, localitate"
             onChange={(e) => { onChange({ full_address: e.target.value }); setAuto(false); }} onBlur={(e) => fromAddress(e.target.value)} />
         </label>
         <div className="formRow">
-          <div className="field">Județ
+          <div className="field"><span className="fLabel">Județ {p.address && R}</span>
             <Combo label="Județ" value={f.county} options={counties} free={false} placeholder="Alege județul"
               onChange={(v) => { last.current = null; setAuto(false); onChange(v === f.county ? {} : { county: v, city: "" }); }} />
           </div>
-          <div className="field">Localitate
+          <div className="field"><span className="fLabel">Localitate {p.address && R}</span>
             <Combo label="Localitate" value={f.city} options={localities} placeholder={f.county ? "Alege sau scrie localitatea" : "Alege întâi județul"}
               onChange={(v) => { last.current = null; setAuto(false); onChange({ city: v }); }} />
           </div>

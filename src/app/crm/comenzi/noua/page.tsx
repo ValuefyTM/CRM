@@ -22,8 +22,9 @@ export default async function NewContractOrder({ searchParams }: { searchParams:
   const [{ contracts, collabs }, evaluators, inspectors, next, billing] = await Promise.all([contractChoices(db, limited ? user.id : undefined), evaluatorChoices(db), inspectorChoices(db, user.id),
     db.prepare("SELECT COALESCE(MAX(seq), 0) + 1 AS n FROM orders").first<{ n: number }>(), getBilling(db)]);
   // who the report is made for (the designated user): banks first, then IFN, institutions…
-  const parties = (await db.prepare(`SELECT id, name, kind FROM entities WHERE kind IN ('bank', 'ifn', 'uat', 'anaf', 'broker', 'other')
-      ORDER BY kind <> 'bank', kind, name`).all<{ id: string; name: string; kind: string }>()).results.map((e) => ({ id: e.id, name: niceName(e.name) || e.name, kind: e.kind }));
+  const parties = (await db.prepare(`SELECT id, name, kind, code, logo_url AS logo FROM entities WHERE kind IN ('bank', 'ifn', 'uat', 'anaf', 'broker', 'other')
+      ORDER BY kind <> 'bank', kind, name`).all<{ id: string; name: string; kind: string; code: string | null; logo: string | null }>()).results
+    .map((e) => ({ id: e.id, name: niceName(e.name) || e.name, kind: e.kind, code: e.code, logo: e.logo }));
   const sp = await searchParams;
   const kind = sp.tip === "colaborare" && !limited ? "collab" : "bank";
   return (

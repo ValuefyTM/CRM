@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { cardFound, EMPTY_CARD, readIdCard, validCnp, type IdCard } from "@/lib/id-card";
 
-export type IdMatch = { id: string; kind: string; name: string; cui: string | null; phone: string | null; email: string | null; city: string | null; reports: number; by: "cnp" | "name" | "similar" };
+export type IdMatch = { id: string; kind: string; name: string; cui: string | null; phone: string | null; email: string | null; city: string | null; reports: number; cnp?: string | null; by: "cnp" | "name" | "similar" };
 export type IdScan = { card: IdCard; photos: Blob[] };
 
 const MAX_SIDE = 2400;
@@ -116,7 +116,7 @@ export function IdCardDrop({ base, onRead, onMatch, onChange, matched, hint }: {
   const [scan, setScan] = useState<IdScan | null>(null);
   const [thumbs, setThumbs] = useState<string[]>([]);
   const [msg, setMsg] = useState("");
-  const [hit, setHit] = useState<IdMatch | null>(null);
+  const [hits, setHits] = useState<IdMatch[]>([]);
   const [open, setOpen] = useState(true);
   const pick = useRef<HTMLInputElement>(null);
   const cam = useRef<HTMLInputElement>(null);
@@ -127,7 +127,7 @@ export function IdCardDrop({ base, onRead, onMatch, onChange, matched, hint }: {
   const read = async (list: FileList | File[] | null) => {
     const files = [...(list ?? [])].filter((f) => isImg(f) || isPdf(f)).slice(0, 2);
     if (!files.length) return setMsg("Încarcă o poză (JPG, PNG) sau un PDF scanat cu CI-ul (fața; la cartea electronică și versoul). HEIC: fă o captură sau exportă JPG.");
-    setMsg(""); setHit(null); setBusy({ p: 0, label: "Se pregătește cititorul…" });
+    setMsg(""); setHits([]); setBusy({ p: 0, label: "Se pregătește cititorul…" });
     try {
       // a PDF: its pages are read as images (plus the text a digital PDF has) and the PDF itself is kept
       const images: Blob[] = [], photos: Blob[] = [];
@@ -150,8 +150,8 @@ export function IdCardDrop({ base, onRead, onMatch, onChange, matched, hint }: {
       // the same person in the CRM?
       if (validCnp(card.cnp) || card.name) {
         const r = await fetch(`/api/crm/clients/match?cnp=${card.cnp}&name=${encodeURIComponent(card.name)}&surname=${encodeURIComponent(card.surname)}`).catch(() => null);
-        const d = (await r?.json().catch(() => null)) as { client?: IdMatch | null } | null;
-        setHit(d?.client ?? null);
+        const d = (await r?.json().catch(() => null)) as { matches?: IdMatch[] } | null;
+        setHits(d?.matches ?? []);
       }
     } catch {
       setMsg("Cititorul de CI nu a pornit (verifică conexiunea la internet). Completează datele manual.");
@@ -165,7 +165,9 @@ export function IdCardDrop({ base, onRead, onMatch, onChange, matched, hint }: {
     const card = { ...scan.card, [k]: e.target.value };
     update({ ...scan, card });
   };
-  const clear = () => { update(null); setThumbs([]); setHit(null); setMsg(""); };
+  const clear = () => { update(null); setThumbs([]); setHits([]); setMsg(""); };
+  const shown = hits.filter((h) => h.id !== matched);
+  const use = (h: IdMatch) => { onMatch?.(h); setHits([]); };
   const c = scan?.card ?? EMPTY_CARD;
   const expired = c.expires && c.expires < new Date().toISOString().slice(0, 10);
 
@@ -193,12 +195,25 @@ export function IdCardDrop({ base, onRead, onMatch, onChange, matched, hint }: {
         <input ref={cam} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { read(e.target.files); e.target.value = ""; }} />
       </div>
       {msg && <div className="note">{msg}</div>}
-      {hit && hit.id !== matched && (
+      {shown.length === 1 && (() => { const hit = shown[0]; return (
         <div className="nwClient ok">
           <span className="nwKind person">PF</span>
           <span><b>{hit.by === "cnp" ? "Clientul există în CRM (același CNP)" : hit.by === "name" ? "Există un client cu același nume" : "Posibil același client (nume asemănător) — verifică"}</b><small>{hit.name}{hit.phone ? ` · ${hit.phone}` : ""}{hit.reports ? ` · ${hit.reports} ${hit.reports === 1 ? "raport" : "rapoarte"}` : ""}</small></span>
-          {onMatch ? <button type="button" className="btn btnGhost btnSm" onClick={() => { onMatch(hit); setHit(null); }}>Folosește clientul</button>
+          {onMatch ? <button type="button" className="btn btnGhost btnSm" onClick={() => use(hit)}>Folosește clientul</button>
             : <a className="btn btnGhost btnSm" href={`${base}/clienti/${hit.id}`} target="_blank" rel="noreferrer">Deschide</a>}
+        </div>
+      ); })()}
+      {shown.length > 1 && (
+        <div className="idMatches">
+          <div className="idMatchHead"><b>{shown.length} clienți cu nume asemănător în CRM</b><small>alege-l pe cel corect{onMatch ? "" : " (se deschide fișa)"} sau continuă cu client nou</small>
+            <button type="button" className="linkBtn" onClick={() => setHits([])}>Niciunul</button></div>
+          {shown.map((h) => (
+            <div key={h.id} className="idMatch">
+              <span><b>{h.name}</b><small>{[h.by === "name" ? "același nume" : "nume asemănător", h.cnp ? `CNP ${h.cnp}` : "fără CNP", h.phone, h.email, h.city, h.reports ? `${h.reports} ${h.reports === 1 ? "raport" : "rapoarte"}` : ""].filter(Boolean).join(" · ")}</small></span>
+              {onMatch ? <button type="button" className="btn btnGhost btnSm" onClick={() => use(h)}>Folosește</button>
+                : <a className="btn btnGhost btnSm" href={`${base}/clienti/${h.id}`} target="_blank" rel="noreferrer">Deschide</a>}
+            </div>
+          ))}
         </div>
       )}
       {scan && (
