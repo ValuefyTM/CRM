@@ -131,7 +131,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
   });
   const head = <thead><tr><th>Pentru</th><th>Stare</th><th>Linii</th><th>Număr</th><th style={{ textAlign: "right" }}>Total</th><th /></tr></thead>;
   return (
-    <CrmShell user={user} base={base} active="statements" title={self ? "Profitabilitatea mea" : "Borderouri"} subtitle={self ? "Rezultatul tău lunar: veniturile din rapoartele în care ești în echipă, plățile colaboratorilor pe ele, cota ta și cheltuielile tale" : "Generate automat în fiecare lună: veniturile pe surse și plățile colaboratorilor care au lucrat în lună; în curs până la validare, apoi înghețate și emise"}
+    <CrmShell user={user} base={base} active="statements" title={self ? "Borderoul meu" : "Borderouri"} subtitle={self ? "Rezultatul tău lunar: veniturile din rapoartele în care ești în echipă, plățile colaboratorilor pe ele, cota ta și cheltuielile tale" : "Generate automat în fiecare lună: veniturile pe surse și plățile colaboratorilor care au lucrat în lună; în curs până la validare, apoi înghețate și emise"}
       actions={self ? <ExportXlsx period={period} label="Export Excel lună" /> : <><ExportXlsx period={period} evaluator={who?.id ?? null} label="Export Excel lună" /><a href={`${here}/cheltuieli`} className="btn btnGhost btnSm">Cheltuieli fixe</a></>}>
       <div className="stMonth">
         <a className="btn btnGhost btnSm" href={link(shift(period, -1))} aria-label="Luna anterioară">‹</a>
@@ -144,14 +144,21 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
       {who && (self ? <div className="note">Vezi doar rapoartele în care ai fost în echipă: veniturile lor și plățile colaboratorilor pe ele. Cheltuielile fixe intră cu partea ta.</div>
         : <div className="note"><b>Filtrat după {who.name}.</b> Veniturile și plățile de mai jos cuprind doar rapoartele în care a fost în echipă. Cheltuielile fixe intră cu partea lui (splitul setat la fiecare cheltuială).</div>)}
       <div className="dbKpis stKpis">
-        {self && cut && (
-          <a className="dbKpi" href="#rezultat"><span className="dbKpiLabel"><i style={{ background: "var(--ok, #2e8b57)" }} />De primit · {periodLabel(period)}</span><b className="ctKpiMoney" style={{ color: cut.cut >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(cut.cut)}</b>
-            <small className="ctKpiFoot">{cutBefore != null ? `${periodLabel(shift(period, -1))}: ${lei2(cutBefore)} · ${cut.cut - cutBefore >= 0 ? "+" : ""}${lei2(Math.round((cut.cut - cutBefore) * 100) / 100)}` : `cota ta ${cut.pct}%`}</small></a>
-        )}
+        {self ? <>
+          {/* the associate's own: what came in (green), what goes out (red), what they get (green) */}
+          <a className="dbKpi" href="#venituri"><span className="dbKpiLabel"><i style={{ background: "var(--ok, #2e8b57)" }} />Venituri</span><b className="ctKpiMoney" style={{ color: "var(--ok-text)" }}>{lei2(revenue)}</b><small className="ctKpiFoot">din rapoartele tale</small></a>
+          <a className="dbKpi" href="#cheltuieli"><span className="dbKpiLabel"><i style={{ background: "var(--err)" }} />Cheltuieli colaboratori</span><b className="ctKpiMoney" style={{ color: "var(--err)" }}>− {lei2(paid)}</b><small className="ctKpiFoot">{payouts.length} {payouts.length === 1 ? "colaborator" : "colaboratori"} pe rapoartele tale</small></a>
+          <a className="dbKpi" href="#fixe"><span className="dbKpiLabel"><i style={{ background: "var(--err)" }} />Cota ta din cheltuielile fixe</span><b className="ctKpiMoney" style={{ color: "var(--err)" }}>− {lei2(fixed)}</b><small className="ctKpiFoot">{costs.items.length ? costs.items.map((c) => `${c.label} ${c.pct}%`).join(", ") : "nicio cheltuială"}</small></a>
+          {cut && (
+            <a className="dbKpi" href="#rezultat"><span className="dbKpiLabel"><i style={{ background: "var(--ok, #2e8b57)" }} />De primit</span><b className="ctKpiMoney" style={{ color: cut.cut >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(cut.cut)}</b>
+              <small className="ctKpiFoot">{cutBefore != null ? `${periodLabel(shift(period, -1))}: ${lei2(cutBefore)} · ${cut.cut - cutBefore >= 0 ? "+" : ""}${lei2(Math.round((cut.cut - cutBefore) * 100) / 100)}` : `cota ta ${cut.pct}%`}</small></a>
+          )}
+        </> : <>
         <a className="dbKpi" href="#venituri"><span className="dbKpiLabel"><i style={{ background: "var(--acc)" }} />Venituri</span><b className="ctKpiMoney">{lei2(revenue)}</b><small className="ctKpiFoot">{SOURCES.map(([k, l]) => `${l.toLowerCase()} ${lei2(res.bySource(k))}`).join(" · ")}</small></a>
         <a className="dbKpi" href="#cheltuieli"><span className="dbKpiLabel"><i style={{ background: "var(--err)" }} />Plăți colaboratori</span><b className="ctKpiMoney">{lei2(paid)}</b><small className="ctKpiFoot">{payouts.length} {payouts.length === 1 ? "colaborator" : "colaboratori"}</small></a>
         <a className="dbKpi" href="#fixe"><span className="dbKpiLabel"><i style={{ background: "var(--muted)" }} />Cheltuieli fixe{who ? ` (partea ${his})` : ""}</span><b className="ctKpiMoney">{lei2(fixed)}</b><small className="ctKpiFoot">{costs.items.length ? costs.items.map((c) => c.label).join(", ") : "nicio cheltuială"}</small></a>
         <a className="dbKpi" href="#rezultat"><span className="dbKpiLabel"><i style={{ background: profit >= 0 ? "var(--ok, #2e8b57)" : "var(--err)" }} />{profit >= 0 ? "Profit" : "Pierdere"}</span><b className="ctKpiMoney" style={profit < 0 ? { color: "var(--err)" } : undefined}>{lei2(profit)}</b><small className="ctKpiFoot">venituri − plăți − cheltuieli fixe{revenue ? ` · marjă ${Math.round(profit / revenue * 100)}%` : ""}</small></a>
+        </>}
       </div>
 
       <section className="card flush" id="venituri">
