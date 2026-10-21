@@ -82,7 +82,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
   const admins = self ? [] : await memberChoices(db);
   const who = self ? { id: user.id, name: user.name || user.email } : admins.find((a) => a.id === sp.evaluator) ?? null;
   const owner = user.role === "owner";
-  const [res, issued] = await Promise.all([monthResult(db, period, who), listStatements(db, { limit: 80 })]);
+  const res = await monthResult(db, period, who);
   const { payouts, receivables, costs, revenue, paid, fixed, profit } = res;
   // the shares of the profit: seen only by the owner (set on each administrator's page) — the filtered one's, or all of them
   const shares = owner ? (who ? null : await profitShares(db, period)) : null;
@@ -96,7 +96,6 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
   const his = self ? "ta" : "lui";
   // the month's adjustments of the fixed costs: who sees and changes every statement
   const editCosts = !self && all && can(user, "statements.E");
-  const past = issued.filter((s) => s.period !== period && s.status !== "open");
   const sum = (rows: Row[]) => Math.round(rows.reduce((s, r) => s + r.total, 0) * 100) / 100;
   const q = who ? `&evaluator=${who.id}` : "";
   const link = (p: string) => `${here}?luna=${p}${q}`;
@@ -276,24 +275,6 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
         )}
       </section>
 
-      <section className="card flush">
-        <div className="cardHead"><h2>Borderouri anterioare</h2><span className="muted">validate sau emise, din alte luni</span></div>
-        {past.length === 0 ? <p className="hint pad">Niciunul încă.</p> : (
-          <div className="tableWrap">
-            <table className="table">
-              <thead><tr><th>Luna</th><th>Fel</th><th>Pentru</th><th>Stare</th><th>Număr</th><th>Emis</th><th style={{ textAlign: "right" }}>Total</th></tr></thead>
-              <tbody>
-                {past.map((s) => { const [l, c] = STATUS_LABEL[s.status]; return (
-                  <ClickRow key={s.id} href={`${here}/${s.id}`}>
-                    <td><b>{periodLabel(s.period)}</b></td><td>{KIND_LABEL[s.kind]}</td><td>{s.name}{s.sub && <div className="muted">{s.sub}</div>}</td><td><span className={`pill ${c}`}><i />{l}</span></td>
-                    <td className="mono">{s.number ?? "—"}</td><td>{s.issued_on ? fmtDate(s.issued_on) : "—"}</td><td style={{ textAlign: "right" }} className="mono">{lei2(s.total)}</td>
-                  </ClickRow>
-                ); })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
     </CrmShell>
   );
 }
