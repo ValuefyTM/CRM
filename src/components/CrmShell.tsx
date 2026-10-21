@@ -93,6 +93,8 @@ export async function CrmShell(props: { user: User; base: string; active: string
         ...group("Financiar", "g-fin", [
           may("billing") && { key: "invoicing", label: may("billing.all") || u.role === "owner" ? "Facturare" : "Facturile mele", href: `${b}/facturare`, badge: toBillN, hot: true },
           may("statements") && { key: "statements", label: may("statements.all") || u.role === "owner" ? "Borderouri" : "Borderoul meu", href: `${b}/borderouri` },
+          // the owner's dashboard of the firm's profitability
+          u.role === "owner" && { key: "analytics", label: "Analitice", href: `${b}/analitice` },
         ]),
         ...group("Administrare", "g-admin", [
           may("users") && { key: "users", label: "Utilizatori", href: `${b}/utilizatori` },
