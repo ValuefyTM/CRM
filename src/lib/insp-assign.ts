@@ -1,6 +1,7 @@
 // Server-only: inspection tasks given from the CRM report page. The main evaluator of the report (or an owner /
 // administrator) gives the inspection of an asset to themselves or to a colleague; the inspector schedules it in the app.
 import { now, uuid } from "./db";
+import { pushLater } from "./push";
 import { dutySql, hasDuty } from "./labels";
 import { appUrl } from "./site";
 import { audit } from "./auth";
@@ -184,15 +185,16 @@ export async function markInspectionDone(db: D1Database, user: User, reportId: s
   const t = now();
   const open = await openTask(db, a.id);
   if (open) {
-    await db.prepare("UPDATE inspections SET status = 'done', done_at = ?, updated_at = ? WHERE id = ?").bind(at, t, open.id).run();
+    await db.prepare("UPDATE inspections SET status = 'done', done_at = ?, done_logged_at = ?, updated_at = ? WHERE id = ?").bind(at, t, t, open.id).run();
     await later(cancelInUvalo(db, open.id, "inspecția a fost făcută fără aplicație (marcată realizată în CRM)"));
   } else {
     const order = await db.prepare("SELECT order_id FROM reports WHERE id = ?").bind(reportId).first<{ order_id: string | null }>();
-    await db.prepare(`INSERT INTO inspections (id, asset_id, report_id, order_id, inspector_id, status, done_at, assigned_by, assigned_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'done', ?, ?, ?, ?)`).bind(uuid(), a.id, reportId, order?.order_id ?? null, user.id, at, user.id, t, t).run();
+    await db.prepare(`INSERT INTO inspections (id, asset_id, report_id, order_id, inspector_id, status, done_at, done_logged_at, assigned_by, assigned_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'done', ?, ?, ?, ?, ?)`).bind(uuid(), a.id, reportId, order?.order_id ?? null, user.id, at, t, user.id, t, t).run();
   }
   await db.prepare("UPDATE assets SET no_inspection = NULL, no_inspection_at = NULL, no_inspection_by = NULL WHERE id = ?").bind(a.id).run();
   await audit(db, `user:${user.id}`, "report.inspection_done", "report", reportId, `${a.type ? a.type.toLowerCase() : "bun"} · inspecție realizată ${m[1].split("-").reverse().join(".")} (marcată în CRM)`);
+  pushLater(db);
   return { ok: true as const, advanced: await advanceIfInspected(db, `user:${user.id}`, reportId) };
 }
 

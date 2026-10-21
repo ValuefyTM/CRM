@@ -5,6 +5,7 @@
 // Worker config: secret UVALO_API_KEY (the key from UVALO → Firma mea → Integrare), secret UVALO_WEBHOOK_SECRET (the
 // webhook secret shown there) and optionally var UVALO_API_URL (default https://app.uvalo.ro). The webhook in UVALO:
 // <CRM>/api/integrations/uvalo/webhook. The channel (UVALO or the CRM app) is chosen in Setări → Fișe de inspecție.
+import { pushLater } from "./push";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { now, parseJson } from "./db";
 import { audit } from "./auth";
@@ -405,14 +406,15 @@ export async function importSheet(db: D1Database, id: string, u?: UInsp) {
       db.prepare("DELETE FROM property_features WHERE sheet_id = ?").bind(sid),
       db.prepare(`INSERT INTO property_features (id, sheet_id, inspection_id, property_id, sheet_type, observed_at, ${FEATURE_COLUMNS.join(", ")})
         VALUES (?, ?, ?, ?, ?, ?, ${FEATURE_COLUMNS.map(() => "?").join(", ")})`).bind(`pf-${id}`, sid, id, ins.property_id, type, doneAt, ...FEATURE_COLUMNS.map((n) => cols[n] ?? null)),
-      db.prepare(`UPDATE inspections SET status = 'done', done_at = ?, started_at = COALESCE(started_at, ?), uvalo_status = ?, uvalo_error = NULL, uvalo_synced_at = ?, updated_at = ? WHERE id = ?`)
-        .bind(doneAt, x.started_at, x.status, t, t, id),
+      db.prepare(`UPDATE inspections SET status = 'done', done_at = ?, done_logged_at = COALESCE(done_logged_at, ?), started_at = COALESCE(started_at, ?), uvalo_status = ?, uvalo_error = NULL, uvalo_synced_at = ?, updated_at = ? WHERE id = ?`)
+        .bind(doneAt, t, x.started_at, x.status, t, t, id),
     ]);
     await audit(db, "system:uvalo", "inspection.submit", "inspection", id, `${type} · din UVALO${x.sheet.no ? ` (${x.sheet.no})` : ""}`);
     if (ins.report_id) {
       await audit(db, "system:uvalo", "report.inspection_done", "report", ins.report_id, `inspecție finalizată în UVALO${x.sheet.no ? ` · fișa ${x.sheet.no}` : ""}`);
       await advanceIfInspected(db, "system:uvalo", ins.report_id);
     }
+    pushLater(db);
     return { ok: true as const };
   } catch (e) { return fail(db, id, e); }
 }

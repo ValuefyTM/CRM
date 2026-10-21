@@ -80,8 +80,9 @@ const SQL: Record<AlertKind, string> = {
       (SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE x.id = rm.user_id) AS who, (SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE x.id = rm.added_by) AS place,
       rm.added_at AS anchor, rm.role || '|' || COALESCE(rm.added_by, '') AS extra, ${REPORT_COLS}
     FROM report_members rm JOIN reports r ON r.id = rm.report_id ${REPORT_JOINS} WHERE rm.added_at > ?2 AND r.status <> 'cancelled'`,
-  insp_done: `SELECT ${INSP_COLS}, i.done_at AS anchor, NULL AS extra, ${REPORT_COLS} FROM inspections i ${INSP_JOINS}
-    WHERE i.status = 'done' AND i.done_at IS NOT NULL AND i.glide_id IS NULL AND i.done_at > ?2`,
+  // from the moment the CRM learnt it (a sync from UVALO may come later than the inspection itself)
+  insp_done: `SELECT ${INSP_COLS}, COALESCE(i.done_logged_at, i.done_at) AS anchor, NULL AS extra, ${REPORT_COLS} FROM inspections i ${INSP_JOINS}
+    WHERE i.status = 'done' AND i.done_at IS NOT NULL AND i.glide_id IS NULL AND COALESCE(i.done_logged_at, i.done_at) > ?2`,
   insp_not_scheduled: `SELECT ${INSP_COLS}, COALESCE(i.assigned_at, i.created_at) AS anchor, NULL AS extra, ${REPORT_COLS} FROM inspections i ${INSP_JOINS}
     WHERE i.status = 'to_schedule' AND i.glide_id IS NULL AND (r.id IS NULL OR ${OPEN_REPORT})`,
   insp_overdue: `SELECT ${INSP_COLS}, i.scheduled_at AS anchor, i.scheduled_at AS extra, ${REPORT_COLS} FROM inspections i ${INSP_JOINS}

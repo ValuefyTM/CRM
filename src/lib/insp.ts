@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { getDb, now, uuid } from "./db";
 import { currentUser, audit } from "./auth";
+import { pushLater } from "./push";
 import { bucket } from "./orders";
 import { err } from "./api";
 import type { User } from "./users";
@@ -333,7 +334,7 @@ export async function saveSheet(db: D1Database, user: User, ins: Insp, b: Record
         `INSERT INTO property_features (id, sheet_id, inspection_id, property_id, sheet_type, observed_at, ${names.join(", ")})
          VALUES (?, ?, ?, ?, ?, ?, ${names.map(() => "?").join(", ")})`,
       ).bind(`pf-${ins.id}`, id, ins.id, propertyId, type, t, ...names.map((n) => cols[n] ?? null)),
-      db.prepare("UPDATE inspections SET status = 'done', done_at = ?, updated_at = ? WHERE id = ?").bind(localNow(), t, ins.id),
+      db.prepare("UPDATE inspections SET status = 'done', done_at = ?, done_logged_at = ?, updated_at = ? WHERE id = ?").bind(localNow(), t, t, ins.id),
     );
     // Accessories inspected on this sheet: their answers ("acc.<id>.<field>") become their own submitted sheet.
     for (const h of ins.hosted) {
@@ -350,12 +351,14 @@ export async function saveSheet(db: D1Database, user: User, ins: Insp, b: Record
            ON CONFLICT(id) DO UPDATE SET details = ?4, description = ?5, status = 'submitted', submitted_at = excluded.submitted_at, updated_at = excluded.updated_at`,
         ).bind(sheetId(h.id), h.id, accAsset.asset_id, JSON.stringify({ v: FORM_VERSION, answers: acc, on_sheet: id }),
           typeof acc.acc_notes === "string" ? acc.acc_notes.slice(0, 4000) || null : null, id),
-        db.prepare("UPDATE inspections SET status = 'done', done_at = ?, sheet_type = 'accesoriu', updated_at = ? WHERE id = ?").bind(localNow(), t, h.id),
+        db.prepare("UPDATE inspections SET status = 'done', done_at = ?, done_logged_at = ?, sheet_type = 'accesoriu', updated_at = ? WHERE id = ?").bind(localNow(), t, t, h.id),
       );
     }
   }
   await db.batch(stmts);
   if (submit) await audit(db, `user:${user.id}`, "inspection.submit", "inspection", ins.id, ins.hosted.length ? `${type} + ${ins.hosted.length} accesorii` : type);
+  // "Inspecție realizată": the alerts go out now, not at the next sweep
+  if (submit) pushLater(db);
   return { ok: true as const };
 }
 
