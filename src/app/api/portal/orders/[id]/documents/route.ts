@@ -16,6 +16,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!(file instanceof File)) return err("Alege un fișier.");
   const r = await addDocument(a.db, { id: o.id, seq: o.seq, property_type: o.property_type }, file, String(form?.get("kind") ?? "other"), a.user.id);
   if (!r.ok) return err(r.error);
-  await audit(a.db, `user:${a.user.id}`, "order.document", "order", o.id, file.name);
-  return NextResponse.json({ ok: true, id: r.id, docsMissing: r.docsMissing });
+  await audit(a.db, `user:${a.user.id}`, "order.document", "order", o.id, "unzipped" in r ? `${file.name}: ${r.unzipped} ${r.unzipped === 1 ? "fișier dezarhivat" : "fișiere dezarhivate"}` : file.name);
+  return NextResponse.json({ ok: true, id: r.id, docsMissing: r.docsMissing, ...("unzipped" in r ? { unzipped: r.unzipped, skipped: r.skipped } : {}) });
 }

@@ -6,6 +6,7 @@ import { validEmail } from "./crypto";
 import { AREA_FIELDS, BANKS, DOCS, MAX_FILE_MB, PROPERTY_TYPES, PURPOSES, type PropertyType } from "./order-labels";
 import type { User } from "./users";
 import { fileHeaders, fileType } from "./file-response";
+import { isZip, unzipDocs } from "./unzip-docs";
 
 export * from "./order-labels";
 
@@ -202,8 +203,26 @@ export async function addDocument(db: D1Database, order: { id: string; seq: numb
   if (!file.size) return { ok: false as const, error: "Fișierul este gol." };
   if (file.size > MAX_FILE_MB * 1024 * 1024) return { ok: false as const, error: `Fișierul „${file.name}” depășește ${MAX_FILE_MB} MB.` };
   // The extension decides (the type a browser claims is not trusted): it is also what the file is served as.
-  if (!OK_EXT.test(file.name)) return { ok: false as const, error: `„${file.name}”: acceptăm PDF, imagini (JPG, PNG, HEIC) și Word.` };
+  if (!OK_EXT.test(file.name) && !isZip(file.name)) return { ok: false as const, error: `„${file.name}”: acceptăm PDF, imagini (JPG, PNG, HEIC), Word și arhive ZIP.` };
   const validKind = kind === "other" || DOCS[order.property_type].some((d) => d.key === kind) ? kind : "other";
+  // A ZIP: opened, each file its own document (for the document it was uploaded as)
+  if (isZip(file.name)) {
+    const z = unzipDocs(new Uint8Array(await file.arrayBuffer()));
+    if (!z.ok) return { ok: false as const, error: z.error };
+    const ids: string[] = [];
+    for (const f of z.files) {
+      const did = uuid();
+      const safe = f.name.replace(/[^\w.\-() ăâîșțĂÂÎȘȚ]/g, "_").slice(-120) || "document";
+      const k = `orders/${order.id}/${did}-${safe}`;
+      await r2.put(k, f.data, { httpMetadata: { contentType: fileType(safe) }, customMetadata: { order: `CO-${order.seq}`, kind: validKind, zip: file.name.slice(0, 120) } });
+      await db.prepare("INSERT INTO order_documents (id, order_id, kind, filename, content_type, size_bytes, r2_key, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(did, order.id, validKind, safe, fileType(safe), f.data.byteLength, k, userId).run();
+      ids.push(did);
+    }
+    const left = missingDocs(order.property_type, await orderDocuments(db, order.id)).length > 0;
+    await db.prepare("UPDATE orders SET docs_missing = ?, updated_at = ? WHERE id = ?").bind(left ? 1 : 0, now(), order.id).run();
+    return { ok: true as const, id: ids[0], ids, docsMissing: left, unzipped: z.files.length, skipped: z.skipped };
+  }
   const id = uuid();
   const safeName = file.name.replace(/[^\w.\-() ăâîșțĂÂÎȘȚ]/g, "_").slice(-120) || "document";
   const key = `orders/${order.id}/${id}-${safeName}`;

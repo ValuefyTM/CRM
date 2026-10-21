@@ -76,7 +76,7 @@ export const PAYMENT_PRESETS: [string, string][] = [
   ["integral", "Integral la acceptare (avans 100%), prin card sau transfer bancar, pe baza facturii emise."],
   ["livrare", "Integral la livrarea raportului, prin card sau transfer bancar, pe baza facturii emise."],
 ];
-export const ACCEPT = ".pdf,.jpg,.jpeg,.png,.heic,.webp,.doc,.docx";
+export const ACCEPT = ".pdf,.jpg,.jpeg,.png,.heic,.webp,.doc,.docx,.zip";
 export const MAX_FILE_MB = 40;
 
 /** Status pill for an order. New orders show whether documents are missing; processed ones (Glide) their outcome. */
