@@ -77,6 +77,9 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
   const past = issued.filter((s) => s.period !== period && s.status !== "open");
   const sum = (rows: Row[]) => rows.reduce((s, r) => s + r.total, 0);
   const paid = sum(payouts), due = sum(receivables), fixed = costs.total, profit = Math.round((rev.total - paid - fixed) * 100) / 100;
+  // the administrator's share of the profit on their reports: seen only by the owner (set on the user's page)
+  const pshare = who && user.role === "owner" ? (await db.prepare("SELECT profit_share FROM users WHERE id = ?").bind(who.id).first<{ profit_share: number | null }>())?.profit_share ?? null : null;
+  const cut = pshare != null && pshare > 0 ? { pct: pshare, amount: profit > 0 ? Math.round(profit * pshare) / 100 : 0 } : null;
   const q = who ? `&evaluator=${who.id}` : "";
   const link = (p: string) => `${here}?luna=${p}${q}`;
   const group = (kind: Kind, rows: Row[]) => (
@@ -197,7 +200,12 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
           <div><dt>− Borderouri de plată</dt><dd className="mono">{lei2(paid)}</dd></div>
           <div><dt>− Cheltuieli fixe{who ? " (partea lui)" : ""}</dt><dd className="mono">{lei2(fixed)}</dd></div>
           <div className="stSumTotal"><dt>{profit >= 0 ? "Profit" : "Pierdere"}</dt><dd className="mono" style={profit < 0 ? { color: "var(--err)" } : undefined}>{lei2(profit)}</dd></div>
+          {cut != null && <>
+            <div className="stSumShare"><dt>Cota lui {who!.name} din profit ({cut.pct}%)</dt><dd className="mono">{lei2(cut.amount)}</dd></div>
+            <div><dt>Rămâne firmei</dt><dd className="mono">{lei2(Math.round((profit - cut.amount) * 100) / 100)}</dd></div>
+          </>}
         </dl>
+        {cut != null && <p className="hint" style={{ margin: "8px 0 0" }}>Cota din profit o vezi doar tu; se setează din profilul utilizatorului.</p>}
       </section>
 
       <section className="card flush">

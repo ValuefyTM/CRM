@@ -9,13 +9,18 @@ export type UserValues = {
   duties: string[]; partner_id: string; client_type: string; company: string; cui: string; city: string; notes: string;
   /** Fee shares (owner only): % as main evaluator, % as verifier, inspection fee fixed (lei) or % when only the inspector. */
   share_evaluator: string; share_verifier: string; inspector_fee_kind: string; inspector_fee: string;
+  /** Share of the profit generated on their reports (owner only: set and seen). */
+  profit_share: string;
 };
 
 const EMPTY: UserValues = {
   name: "", email: "", phone: "", role: "", engagement: "employee", anevar_no: "", specializations: [], coverage: "",
   duties: [], partner_id: "", client_type: "person", company: "", cui: "", city: "", notes: "",
-  share_evaluator: "", share_verifier: "", inspector_fee_kind: "fixed", inspector_fee: "",
+  share_evaluator: "", share_verifier: "", inspector_fee_kind: "fixed", inspector_fee: "", profit_share: "",
 };
+
+/** The share of the profit goes only with the owner's form. */
+const withoutProfit = ({ profit_share: _p, ...rest }: UserValues) => rest;
 
 const INVITE_TEXT: Record<Kind, string> = {
   internal: "Trimite acum un email cu acces la CRM",
@@ -31,6 +36,8 @@ const INVITE_TEXT: Record<Kind, string> = {
 export function UserForm(props: {
   kind: Kind; base: string; userId?: string; initial?: Partial<UserValues>; firms: { id: string; name: string }[];
   lockRole?: boolean; readOnly?: boolean; canMakeOwner?: boolean; roles?: [string, string][]; shares?: boolean; editShares?: boolean;
+  /** the share of the profit: shown and sent only for the owner */
+  profitShare?: boolean;
 }) {
   const { kind, base, userId } = props;
   const isNew = !userId;
@@ -52,7 +59,7 @@ export function UserForm(props: {
     const r = await fetch(isNew ? "/api/crm/users" : `/api/crm/users/${userId}`, {
       method: isNew ? "POST" : "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(isNew ? { kind, ...f, invite } : { action: "update", ...f }),
+      body: JSON.stringify({ ...(isNew ? { kind, ...withoutProfit(f), invite } : { action: "update", ...withoutProfit(f) }), ...(props.profitShare ? { profit_share: f.profit_share } : {}) }),
     });
     const d = (await r.json().catch(() => ({}))) as { error?: string; id?: string; invited?: boolean };
     setBusy(false);
@@ -172,6 +179,14 @@ export function UserForm(props: {
                 </label>
               </div>
             </fieldset>
+          </>
+        )}
+
+        {kind === "internal" && props.profitShare && (
+          <>
+            <div className="section">Cota din profit <small className="muted" style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500 }}>· o vezi și o setezi doar tu</small></div>
+            <p className="hint" style={{ margin: 0 }}>Procent din profitul generat pe rapoartele în care e în echipă (Borderouri, filtrat pe el): venituri − plăți − partea lui din cheltuielile fixe.</p>
+            <label className="field" style={{ maxWidth: 220 }}><span>Cota din profit</span><span className="inputUnit"><input className="input" inputMode="decimal" value={f.profit_share} onChange={set("profit_share")} placeholder="ex. 30" /><small>%</small></span></label>
           </>
         )}
 

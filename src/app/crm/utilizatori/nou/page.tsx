@@ -43,7 +43,7 @@ export default async function NewUserPage({ searchParams }: { searchParams: Prom
           <>
             {kind === "partner" && <p className="hint">Firma nu e în listă? <a className="rowLink" href={`${base}/utilizatori/firme/nou`}>Adaug-o întâi →</a></p>}
             <UserForm key={kind} kind={kind} base={base} firms={firms} initial={{ partner_id: sp.firma ?? "" }} canMakeOwner={user.role === "owner"}
-              roles={cfg.roles.map((r) => [r.id, r.name] as [string, string])} shares={user.role === "owner"} editShares={user.role === "owner"} />
+              roles={cfg.roles.map((r) => [r.id, r.name] as [string, string])} shares={user.role === "owner"} editShares={user.role === "owner"} profitShare={user.role === "owner" && kind === "internal"} />
           </>
         )}
       </div>

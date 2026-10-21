@@ -185,3 +185,12 @@ export async function updateUser(db: D1Database, u: User, v: UserInput) {
 
 /** Display name: the person, or the company for company clients without a contact name. */
 export const displayName = (u: Pick<User, "name" | "email" | "company">) => u.name || u.company || u.email;
+
+/** The share of the profit (owner only, set and seen): a percent, or empty. */
+export async function saveProfitShare(db: D1Database, id: string, raw: unknown) {
+  const t = String(raw ?? "").trim().replace(",", ".");
+  const v = t === "" ? null : Number(t);
+  if (v != null && (!Number.isFinite(v) || v < 0 || v > 100)) return { ok: false as const, error: "Cota din profit trebuie să fie între 0 și 100%." };
+  await db.prepare("UPDATE users SET profit_share = ?, updated_at = ? WHERE id = ?").bind(v, now(), id).run();
+  return { ok: true as const, value: v };
+}

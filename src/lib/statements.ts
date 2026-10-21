@@ -656,7 +656,7 @@ export async function directLines(db: D1Database, period: string, member?: Set<s
     const amount = collab ? r.fee_net ?? (r.fee != null && r.share != null ? round2(r.fee * r.share) : r.fee ?? 0) : r.fee ?? 0;
     return {
       id: null, key: `rep:${r.id}:direct`, source: "report", report_id: r.id, inspection_id: null, label: repLabel(r), detail: repDetail(r), on_date: r.on_date,
-      base: r.fee, rate: collab && r.share != null ? `${Math.round(r.share * 100)}%` : null, auto_amount: amount, amount, removed: 0, reason: null, changed_by: null, changed_at: null,
+      base: r.fee, rate: collab && r.fee_net == null && r.share != null ? `${Math.round(r.share * 100)}%` : null, auto_amount: amount, amount, removed: 0, reason: null, changed_by: null, changed_at: null,
       sort: i, number: r.number, group: collab ? `Colaborare · ${niceName(r.collab ?? "") || r.collab}` : "Direct", bank: niceName(r.bank_name ?? "") || r.bank_name || "Fără bancă (doar clientul)",
     };
   });

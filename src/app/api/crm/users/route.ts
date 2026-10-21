@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { audit, sendInvite } from "@/lib/auth";
 import { getPartner } from "@/lib/partners";
-import { createUser, isAdmin, roleLabel, saveShares, validateShares, validateUser } from "@/lib/users";
+import { createUser, isAdmin, roleLabel, saveProfitShare, saveShares, validateShares, validateUser } from "@/lib/users";
 import { getConfig } from "@/lib/perms-db";
 import { err, json, staffApi } from "@/lib/api";
 import { can, roleNames } from "@/lib/perms";
@@ -24,6 +24,7 @@ export async function POST(req: Request) {
   const r = await createUser(a.db, kind, v.value, a.user.id);
   if (!r.ok) return err(r.error, 409);
   if (shares?.ok) await saveShares(a.db, r.id, shares.value);
+  if (kind === "internal" && a.user.role === "owner" && "profit_share" in b) await saveProfitShare(a.db, r.id, b.profit_share);
   const actor = `user:${a.user.id}`;
   await audit(a.db, actor, "user.create", "user", r.id, `${v.value.email} · ${roleLabel(kind, v.value.role, roleNames(cfg))}`);
   const invited = b.invite === false ? false : await sendInvite(a.db, r.id, actor);

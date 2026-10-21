@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { audit, endAllSessions, sendInvite } from "@/lib/auth";
 import { getPartner } from "@/lib/partners";
-import { canManageUser, deleteUser, getUser, isAdmin, roleLabel, saveShares, updateUser, validateShares, validateUser } from "@/lib/users";
+import { canManageUser, deleteUser, getUser, isAdmin, roleLabel, saveProfitShare, saveShares, updateUser, validateShares, validateUser } from "@/lib/users";
 import { getConfig } from "@/lib/perms-db";
 import { bucket } from "@/lib/orders";
 import { err, json, staffApi } from "@/lib/api";
@@ -40,6 +40,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const r = await updateUser(a.db, u, v.value);
     if (!r.ok) return err(r.error, 409);
     if (shares?.ok) await saveShares(a.db, u.id, shares.value);
+    // the share of the profit: set (and seen) only by the owner
+    if (u.kind === "internal" && a.user.role === "owner" && "profit_share" in b) {
+      const ps = await saveProfitShare(a.db, u.id, b.profit_share);
+      if (!ps.ok) return err(ps.error);
+    }
     const changed = [v.value.role !== u.role && `rol: ${roleLabel("internal", v.value.role, roleNames(cfg))}`, shares?.ok && `cote: ${shares.value.map((x) => x ?? "—").join(" / ")}`].filter(Boolean).join(" · ");
     await audit(a.db, actor, "user.update", "user", id, changed || undefined);
     return NextResponse.json({ ok: true });

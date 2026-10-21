@@ -3293,3 +3293,4 @@ span.rdPick { display: inline-block; }
 .stWorkBank ul { list-style: none; margin: 8px 0 4px 14px; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
 .stWorkBank li { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto; gap: 10px; align-items: baseline; }
 .stWork td.mono { white-space: nowrap; }
+.stSummary .stSumShare dt { color: var(--ink); font-weight: 700; }
