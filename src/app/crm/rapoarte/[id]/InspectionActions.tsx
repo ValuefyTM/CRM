@@ -301,7 +301,7 @@ export function UvaloAction({ report, inspection, action }: { report: string; in
       setBusy(false);
       if (error) return alert(error);
       location.reload();
-    }}>{busy ? "Se trimite…" : action === "push" ? "↻ Retrimite în UVALO" : "⤓ Preia fișa din UVALO"}</button>
+    }}>{busy ? "Se trimite…" : action === "push" ? "↻ Retrimite în UVALO" : "⤓ Verifică și preia fișa din UVALO"}</button>
   );
 }
 

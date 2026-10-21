@@ -31,7 +31,8 @@
 		}
 	],
 	// Every morning at 06:47 UTC (09:47 / 08:47 in Romania): new SEAP notices for valuations (worker.ts → scheduled).
-	// Every hour at :13: the alerts (bell, phone, email) — the ones repeated every few hours go out even when nobody is online.
-	"triggers": { "crons": ["47 6 * * *", "13 * * * *"] },
+	// Every 15 minutes (:13, :28, :43, :58): the inspections finished in UVALO that the webhook missed are brought in, then
+	// the alerts (bell, phone, email) — the ones repeated every few hours go out even when nobody is online.
+	"triggers": { "crons": ["47 6 * * *", "13,28,43,58 * * * *"] },
 	"observability": { "enabled": true }
 }

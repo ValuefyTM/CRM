@@ -349,74 +349,116 @@ function toCrmAnswers(form: Section[], u: UInsp): Answers {
 
 /**
  * Brings the finished UVALO sheet into the CRM: the answers (as an inspection sheet of the CRM, with the form it was made on),
- * the photos and the signature (copied to the CRM's storage), the property features; the inspection is done, and the report
- * goes to drafting when nothing is left to inspect. Safe to run again (photos already copied are skipped).
+ * the property features, the inspection done (and the report to drafting when nothing is left to inspect) — first, so it
+ * shows at once; then the photos and the signature, copied to the CRM's storage within a time budget. What is not copied
+ * yet is left marked and copied by the next sync. Safe to run again (photos already copied are skipped).
  */
 export async function importSheet(db: D1Database, id: string, u?: UInsp) {
-  const ins = await db.prepare(`SELECT i.id, i.report_id, i.asset_id, i.inspector_id, i.sheet_type, i.template, a.property_id FROM inspections i JOIN assets a ON a.id = i.asset_id WHERE i.id = ?`)
-    .bind(id).first<{ id: string; report_id: string | null; asset_id: string; inspector_id: string | null; sheet_type: string | null; template: string | null; property_id: string }>();
+  const ins = await db.prepare(`SELECT i.id, i.report_id, i.asset_id, i.inspector_id, i.sheet_type, i.template, i.status, a.property_id FROM inspections i JOIN assets a ON a.id = i.asset_id WHERE i.id = ?`)
+    .bind(id).first<{ id: string; report_id: string | null; asset_id: string; inspector_id: string | null; sheet_type: string | null; template: string | null; status: string; property_id: string }>();
   if (!ins) return { ok: false as const, error: "Inspecția nu există în CRM." };
   try {
     const x = u ?? (await call<{ inspection: UInsp }>(`/inspections/${encodeURIComponent(id)}`)).inspection;
-    if (x.status !== "gata" && x.status !== "pred") return { ok: false as const, error: "Fișa nu e finalizată în UVALO." };
+    if (x.status !== "gata" && x.status !== "pred") {
+      await db.prepare("UPDATE inspections SET uvalo_status = ?, uvalo_synced_at = ? WHERE id = ?").bind(x.status, now(), id).run();
+      return { ok: false as const, error: "Fișa nu e finalizată în UVALO." };
+    }
     const key = tplKey(ins), type = baseOfKey(await templateList(db, true), key ?? ins.sheet_type);
     const forms = await currentForms(db);
     const form = (key ? forms[key] : null) ?? forms[type];
     const answers = toCrmAnswers(form, x);
-    const r2 = await bucket();
-    if (!r2) throw new UvaloError("Stocarea fișierelor nu este disponibilă.");
     const sid = sheetId(id), t = now();
-    // photos and signature, copied once (the photo id = UVALO's file id)
-    let signature: string | null = null;
-    const have = new Set((await db.prepare("SELECT id FROM inspection_photos WHERE inspection_id = ?").bind(id).all<{ id: string }>()).results.map((p) => p.id));
-    let sort = 0;
-    for (const f of x.files) {
-      if (f.kind === "signature") {
-        const b = await fileOf(f.id);
-        const key = `inspectii/${id}/semnatura.${ext(b.type)}`;
-        await r2.put(key, b.bytes, { httpMetadata: { contentType: b.type } });
-        signature = `r2:${key}`;
-        continue;
-      }
-      if (f.kind !== "photo") continue;
-      sort++;
-      const pid = `uv-${f.id}`;
-      if (have.has(pid)) continue;
-      const b = await fileOf(f.id);
-      const key = `inspectii/${id}/${pid}.${ext(b.type)}`;
-      await r2.put(key, b.bytes, { httpMetadata: { contentType: b.type, cacheControl: "private, max-age=604800" } });
-      await db.prepare(`INSERT OR IGNORE INTO inspection_photos (id, inspection_id, sheet_id, category, caption, r2_key, content_type, size_bytes, taken_at, lat, lng, sort, uploaded_by)
-        VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(pid, id, f.id === x.sheet.cover_file_id ? "exterior" : category(f.room), f.room, key, b.type, b.bytes.byteLength,
-        f.taken_at ?? t, f.lat, f.lng, f.id === x.sheet.cover_file_id ? -1 : sort, ins.inspector_id).run();
-    }
-    const cover = await db.prepare("SELECT r2_key FROM inspection_photos WHERE inspection_id = ? AND deleted_at IS NULL ORDER BY category = 'exterior' DESC, sort, created_at LIMIT 1").bind(id).first<{ r2_key: string }>();
     const doneAt = x.finished_at ?? t;
     const details = JSON.stringify({ v: FORM_VERSION, answers, form, source: "uvalo", uvalo: { id: x.id, code: x.code, sheet_no: x.sheet.no, template: x.sheet.template?.name ?? null } });
     const cols = featureColumns(type, answers, form);
+    const first = ins.status !== "done";
+    // 1. the sheet and the inspection done: at once
     await db.batch([
       db.prepare(`INSERT INTO inspection_sheets (id, inspection_id, asset_id, inspector_id, sheet_type, status, form_version, details, description, present_person, present_role, present_phone,
           signature_url, signed_at, photo_url, photos_count, started_at, submitted_at, done_at, updated_at)
-        VALUES (?1, ?2, ?3, ?4, ?5, 'submitted', ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, (SELECT COUNT(*) FROM inspection_photos WHERE inspection_id = ?2 AND deleted_at IS NULL), ?15, ?16, ?16, ?17)
-        ON CONFLICT(id) DO UPDATE SET sheet_type = ?5, status = 'submitted', form_version = ?6, details = ?7, description = ?8, present_person = ?9, present_role = ?10, present_phone = ?11,
-          signature_url = COALESCE(?12, signature_url), signed_at = ?13, photo_url = ?14, photos_count = (SELECT COUNT(*) FROM inspection_photos WHERE inspection_id = ?2 AND deleted_at IS NULL),
-          submitted_at = ?16, done_at = ?16, updated_at = ?17`)
+        VALUES (?1, ?2, ?3, ?4, ?5, 'submitted', ?6, ?7, ?8, ?9, NULL, NULL, NULL, ?10, NULL, 0, ?11, ?12, ?12, ?13)
+        ON CONFLICT(id) DO UPDATE SET sheet_type = ?5, status = 'submitted', form_version = ?6, details = ?7, description = ?8, present_person = ?9, signed_at = ?10,
+          submitted_at = ?12, done_at = ?12, updated_at = ?13`)
         .bind(sid, id, ins.asset_id, ins.inspector_id, type, FORM_VERSION, details, typeof answers.notes === "string" ? answers.notes.slice(0, 4000) : null,
-          x.sheet.signed_name, null, null, signature, x.sheet.signed_at, cover ? `r2:${cover.r2_key}` : null, x.started_at ?? doneAt, doneAt, t),
-      db.prepare("UPDATE inspection_photos SET sheet_id = ? WHERE inspection_id = ? AND sheet_id IS NULL").bind(sid, id),
+          x.sheet.signed_name, x.sheet.signed_at, x.started_at ?? doneAt, doneAt, t),
       db.prepare("DELETE FROM property_features WHERE sheet_id = ?").bind(sid),
       db.prepare(`INSERT INTO property_features (id, sheet_id, inspection_id, property_id, sheet_type, observed_at, ${FEATURE_COLUMNS.join(", ")})
         VALUES (?, ?, ?, ?, ?, ?, ${FEATURE_COLUMNS.map(() => "?").join(", ")})`).bind(`pf-${id}`, sid, id, ins.property_id, type, doneAt, ...FEATURE_COLUMNS.map((n) => cols[n] ?? null)),
-      db.prepare(`UPDATE inspections SET status = 'done', done_at = ?, done_logged_at = COALESCE(done_logged_at, ?), started_at = COALESCE(started_at, ?), uvalo_status = ?, uvalo_error = NULL, uvalo_synced_at = ?, updated_at = ? WHERE id = ?`)
-        .bind(doneAt, t, x.started_at, x.status, t, t, id),
+      db.prepare(`UPDATE inspections SET status = 'done', done_at = ?, done_logged_at = COALESCE(done_logged_at, ?), started_at = COALESCE(started_at, ?), uvalo_status = ?, uvalo_error = ?, uvalo_synced_at = ?, updated_at = ? WHERE id = ?`)
+        .bind(doneAt, t, x.started_at, x.status, PHOTOS_PENDING, t, t, id),
     ]);
-    await audit(db, "system:uvalo", "inspection.submit", "inspection", id, `${type} · din UVALO${x.sheet.no ? ` (${x.sheet.no})` : ""}`);
-    if (ins.report_id) {
-      await audit(db, "system:uvalo", "report.inspection_done", "report", ins.report_id, `inspecție finalizată în UVALO${x.sheet.no ? ` · fișa ${x.sheet.no}` : ""}`);
-      await advanceIfInspected(db, "system:uvalo", ins.report_id);
+    if (first) {
+      await audit(db, "system:uvalo", "inspection.submit", "inspection", id, `${type} · din UVALO${x.sheet.no ? ` (${x.sheet.no})` : ""}`);
+      if (ins.report_id) {
+        await audit(db, "system:uvalo", "report.inspection_done", "report", ins.report_id, `inspecție finalizată în UVALO${x.sheet.no ? ` · fișa ${x.sheet.no}` : ""}`);
+        await advanceIfInspected(db, "system:uvalo", ins.report_id);
+      }
+      pushLater(db);
     }
-    pushLater(db);
-    return { ok: true as const };
+    // 2. the photos and the signature, a few at a time, within the time left
+    const r2 = await bucket();
+    if (!r2) throw new UvaloError("Stocarea fișierelor nu este disponibilă.");
+    const have = new Set((await db.prepare("SELECT id FROM inspection_photos WHERE inspection_id = ?").bind(id).all<{ id: string }>()).results.map((p) => p.id));
+    const until = Date.now() + 22000;
+    let signature: string | null = null, left = 0;
+    const photos = x.files.filter((f) => f.kind === "photo");
+    const todo = photos.map((f, i) => ({ f, sort: i + 1 })).filter(({ f }) => !have.has(`uv-${f.id}`));
+    const sig = x.files.find((f) => f.kind === "signature");
+    if (sig) {
+      const sk = (await db.prepare("SELECT signature_url FROM inspection_sheets WHERE id = ?").bind(sid).first<{ signature_url: string | null }>())?.signature_url;
+      if (sk) signature = sk;
+      else {
+        const b = await fileOf(sig.id);
+        const k = `inspectii/${id}/semnatura.${ext(b.type)}`;
+        await r2.put(k, b.bytes, { httpMetadata: { contentType: b.type } });
+        signature = `r2:${k}`;
+      }
+    }
+    for (let i = 0; i < todo.length; i += 4) {
+      if (Date.now() > until) { left = todo.length - i; break; }
+      await Promise.all(todo.slice(i, i + 4).map(async ({ f, sort }) => {
+        const pid = `uv-${f.id}`;
+        const b = await fileOf(f.id);
+        const k = `inspectii/${id}/${pid}.${ext(b.type)}`;
+        await r2.put(k, b.bytes, { httpMetadata: { contentType: b.type, cacheControl: "private, max-age=604800" } });
+        await db.prepare(`INSERT OR IGNORE INTO inspection_photos (id, inspection_id, sheet_id, category, caption, r2_key, content_type, size_bytes, taken_at, lat, lng, sort, uploaded_by)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(pid, id, sid, f.id === x.sheet.cover_file_id ? "exterior" : category(f.room), f.room, k, b.type, b.bytes.byteLength,
+          f.taken_at ?? t, f.lat, f.lng, f.id === x.sheet.cover_file_id ? -1 : sort, ins.inspector_id).run();
+      }));
+    }
+    const cover = await db.prepare("SELECT r2_key FROM inspection_photos WHERE inspection_id = ? AND deleted_at IS NULL ORDER BY category = 'exterior' DESC, sort, created_at LIMIT 1").bind(id).first<{ r2_key: string }>();
+    await db.batch([
+      db.prepare("UPDATE inspection_photos SET sheet_id = ? WHERE inspection_id = ? AND sheet_id IS NULL").bind(sid, id),
+      db.prepare(`UPDATE inspection_sheets SET signature_url = COALESCE(?, signature_url), photo_url = COALESCE(?, photo_url),
+          photos_count = (SELECT COUNT(*) FROM inspection_photos WHERE inspection_id = ? AND deleted_at IS NULL), updated_at = ? WHERE id = ?`)
+        .bind(signature, cover ? `r2:${cover.r2_key}` : null, id, now(), sid),
+      // photos still to copy: the next sync goes on
+      db.prepare("UPDATE inspections SET uvalo_error = ? WHERE id = ?").bind(left ? PHOTOS_PENDING : null, id),
+    ]);
+    return { ok: true as const, left };
   } catch (e) { return fail(db, id, e); }
+}
+
+/** An inspection done from UVALO whose photos are not all copied yet. */
+const PHOTOS_PENDING = "Fotografiile se copiază din UVALO.";
+
+/**
+ * The safety net of the webhook (hourly, and from the report page): the open inspections sent to UVALO are read back;
+ * a sheet finished there is brought in, a change of schedule follows; the photos left to copy are copied.
+ */
+export async function syncFromUvalo(db: D1Database, only?: string) {
+  if (!(await uvaloConfigured())) return { checked: 0, imported: 0 };
+  const { results } = await db.prepare(`SELECT id, status FROM inspections WHERE uvalo_id IS NOT NULL AND glide_id IS NULL AND (?1 = '' OR id = ?1)
+      AND ((status IN ('to_schedule', 'scheduled') AND COALESCE(uvalo_status, '') <> 'deleted') OR (status = 'done' AND uvalo_error = ?2))
+      ORDER BY updated_at LIMIT 25`).bind(only ?? "", PHOTOS_PENDING).all<{ id: string; status: string }>();
+  let imported = 0;
+  for (const r of results) {
+    const x = await call<{ inspection: UInsp }>(`/inspections/${encodeURIComponent(r.id)}`).then((d) => d.inspection).catch(() => null);
+    if (!x) continue;
+    if (x.status === "gata" || x.status === "pred") { if ((await importSheet(db, r.id, x)).ok && r.status !== "done") imported++; }
+    else await onHook(db, { event: "inspection.updated", id: x.id, ref: r.id, status: x.status, scheduled_at: x.scheduled_at ?? null, started_at: x.started_at ?? null, finished_at: null, sheet_no: null });
+  }
+  return { checked: results.length, imported };
 }
 
 /* ---------- webhook ---------- */

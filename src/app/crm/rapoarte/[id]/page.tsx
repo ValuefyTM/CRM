@@ -594,7 +594,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                       </details>
                     )}
                     {mayAssign && active && a.uvalo_error && <UvaloAction report={r.id} inspection={a.inspection_id!} action="push" />}
-                    {mayAssign && a.uvalo_id && (a.uvalo_status === "gata" || a.uvalo_status === "pred") && a.inspection_status !== "done" && <UvaloAction report={r.id} inspection={a.inspection_id!} action="import" />}
+                    {/* finished in UVALO but not here (the webhook missed it), or photos still to copy: brought in by hand */}
+                    {mayAssign && a.uvalo_id && !cancelled && a.uvalo_status !== "deleted" && (a.inspection_status !== "done" || a.uvalo_error === "Fotografiile se copiază din UVALO.") && <UvaloAction report={r.id} inspection={a.inspection_id!} action="import" />}
                     {mayAssign && (
                       <div className="abPanelActs">
                         {(canGive || active) && (
