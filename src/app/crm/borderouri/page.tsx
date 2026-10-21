@@ -45,34 +45,31 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
       const lines = st ? await linesOf(db, st) : (await autoLines(db, criteriaOf(party), p)).map((l, i) => ({ ...l, id: null, removed: 0, reason: null, changed_by: null, changed_at: null, sort: i }));
       return { st, lines, total: st && st.status !== "open" ? st.total ?? totalOf(lines) : totalOf(lines) };
     };
-    const now = thisMonth(), prevP = shift(now, -1);
+    // the month chosen (‹ ›), and the one before it to compare
+    const now = period, prevP = shift(now, -1);
     const [cur, prev] = await Promise.all([monthOf(now), monthOf(prevP)]);
     const delta = Math.round((cur.total - prev.total) * 100) / 100;
     const badge = (st: typeof cur.st) => (st && st.status !== "open" ? <span className="stBadge">✓ Validat de firmă{st.status === "issued" ? " · emis" : ""}</span> : <span className="stBadge wait">În curs</span>);
     const banks = await recipientsOf(db, [...new Set(cur.lines.map((l) => l.report_id).filter((x): x is string => !!x))]);
-    const pending = cur.lines.filter((l) => l.changed_at && !l.accepted_at).length + prev.lines.filter((l) => l.changed_at && !l.accepted_at).length;
+    const pending = cur.lines.filter((l) => l.changed_at && !l.accepted_at).length;
     return (
       <CrmShell user={user} base={base} active="statements" title="Borderoul meu" subtitle="Ce ți se cuvine lunar: cotele tale din rapoartele predate și inspecțiile făcute">
+        <div className="stMonth">
+          <a className="btn btnGhost btnSm" href={`${here}?luna=${shift(now, -1)}`} aria-label="Luna anterioară">‹</a>
+          <b>{periodLabel(now)}</b>
+          {now < thisMonth() ? <a className="btn btnGhost btnSm" href={`${here}?luna=${shift(now, 1)}`} aria-label="Luna următoare">›</a> : <span className="btn btnGhost btnSm" aria-disabled="true" style={{ opacity: 0.4 }}>›</span>}
+          {now !== thisMonth() && <a className="link" href={here}>luna curentă</a>}
+        </div>
         <div className="dbKpis stKpis">
-          <a className="dbKpi" href={cur.st ? `${here}/${cur.st.id}` : "#luna"}><span className="dbKpiLabel"><i style={{ background: "var(--acc)" }} />{periodLabel(now)} · luna curentă</span><b className="ctKpiMoney">{lei2(cur.total)}</b><small className="ctKpiFoot">{badge(cur.st)} · {cur.lines.filter((l) => !l.removed).length} linii</small></a>
-          <a className="dbKpi" href={prev.st ? `${here}/${prev.st.id}` : "#istoric"}><span className="dbKpiLabel"><i style={{ background: "var(--muted)" }} />{periodLabel(prevP)} · luna anterioară</span><b className="ctKpiMoney">{lei2(prev.total)}</b><small className="ctKpiFoot">{badge(prev.st)}{prev.st?.number ? ` · ${prev.st.number}` : ""}</small></a>
+          <a className="dbKpi" href={cur.st ? `${here}/${cur.st.id}` : "#luna"}><span className="dbKpiLabel"><i style={{ background: "var(--acc)" }} />{periodLabel(now)}{now === thisMonth() ? " · luna curentă" : ""}</span><b className="ctKpiMoney">{lei2(cur.total)}</b><small className="ctKpiFoot">{badge(cur.st)} · {cur.lines.filter((l) => !l.removed).length} linii</small></a>
+          <a className="dbKpi" href={`${here}?luna=${prevP}`}><span className="dbKpiLabel"><i style={{ background: "var(--muted)" }} />{periodLabel(prevP)} · luna anterioară</span><b className="ctKpiMoney">{lei2(prev.total)}</b><small className="ctKpiFoot">{badge(prev.st)}{prev.st?.number ? ` · ${prev.st.number}` : ""}</small></a>
           <div className="dbKpi"><span className="dbKpiLabel"><i style={{ background: delta >= 0 ? "var(--ok, #2e8b57)" : "var(--err)" }} />Diferență față de luna anterioară</span><b className="ctKpiMoney" style={{ color: delta >= 0 ? "var(--ok-text)" : "var(--err)" }}>{delta > 0 ? "+" : ""}{lei2(delta)}</b><small className="ctKpiFoot">{prev.total ? `${delta >= 0 ? "+" : ""}${Math.round(delta / prev.total * 100)}%` : "—"}</small></div>
         </div>
         {pending > 0 && <div className="note"><b>Ai {pending} {pending === 1 ? "ajustare" : "ajustări"} de confirmat.</b> Le găsești în coloana „Ajustare · comentariu”; bifează „Accept ajustarea”.</div>}
         <section className="card flush" id="luna">
-          <div className="cardHead"><h2>{periodLabel(now)} · luna curentă</h2><span className="muted">{badge(cur.st)}{cur.st && <> · <a className="link" href={`${here}/${cur.st.id}`}>deschide →</a></>}</span></div>
+          <div className="cardHead"><h2>{periodLabel(now)}{now === thisMonth() ? " · luna curentă" : ""}</h2><span className="muted">{badge(cur.st)}{cur.st && <> · <a className="link" href={`${here}/${cur.st.id}`}>deschide →</a></>}</span></div>
           <LinesTable lines={cur.lines} base={base} statement={cur.st?.id ?? ""} canEdit={false} adjust accept={!!cur.st} locked={cur.st?.status === "issued"} banks={banks} />
           <p className="hint pad">Se calculează din rapoartele predate și inspecțiile făcute în lună, cu cotele tale. La final de lună firma îl validează și îl emite; ajustările apar cu comentariul lor și le confirmi tu.</p>
-        </section>
-        <section className="card flush" id="istoric">
-          <div className="cardHead"><h2>Borderourile mele</h2></div>
-          {mine.filter((s) => s.period !== now).length === 0 ? <p className="hint pad">Niciun borderou anterior.</p> : (
-            <div className="tableWrap"><table className="table"><thead><tr><th>Luna</th><th>Număr</th><th>Stare</th><th>Emis</th><th style={{ textAlign: "right" }}>Total</th></tr></thead><tbody>
-              {mine.filter((s) => s.period !== now).map((s) => (
-                <ClickRow key={s.id} href={`${here}/${s.id}`}><td><b>{periodLabel(s.period)}</b></td><td className="mono">{s.number ?? "—"}</td><td>{badge(s)}</td><td>{s.issued_on ? fmtDate(s.issued_on) : "—"}</td><td style={{ textAlign: "right" }} className="mono">{lei2(s.total)}</td></ClickRow>
-              ))}
-            </tbody></table></div>
-          )}
         </section>
       </CrmShell>
     );
