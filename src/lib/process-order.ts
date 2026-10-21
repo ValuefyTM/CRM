@@ -89,12 +89,14 @@ export async function processBankOrder(db: D1Database, user: User, orderId: stri
   const due = /^\d{4}-\d{2}-\d{2}$/.test(str(d.due_on, 10)) ? str(d.due_on, 10) : null;
   const r = await openDossier(db, orderId, { id: user.id, name: user.name }, { evaluator_id: evaluator, verifier_id: id_(d.verifier_id), due_on: due });
   if (!r.ok) return r;
-  if (!r.created || !r.assetId) return { ok: true as const, report: r.id };
+  // a person is created with the report file
+  const owner = clientId ?? (await db.prepare("SELECT client_id FROM reports WHERE id = ?").bind(r.id).first<{ client_id: string | null }>())?.client_id ?? null;
+  if (!r.created || !r.assetId) return { ok: true as const, report: r.id, client: owner };
 
   const filled = await fillReportAssets(db, user.id, r.id, r.assetId, assets, { name, phone: str(c.phone, 40) });
   if (!filled.ok) return filled;
   await audit(db, `user:${user.id}`, "order.processed", "order", orderId, `${assets.length} ${assets.length === 1 ? "bun" : "bunuri"}`);
-  return { ok: true as const, report: r.id };
+  return { ok: true as const, report: r.id, client: owner };
 }
 
 /** The assets sent with a new order (the first is the main one). */

@@ -6,6 +6,7 @@ import { PAYMENT_PRESETS, PURPOSES } from "@/lib/order-labels";
 import { assetProfile, capType, emptyAsset, type AssetForm } from "@/lib/asset-labels";
 import { AssetsEditor, newUid } from "@/components/AssetsEditor";
 import { ClientSearch, type ClientHit } from "@/components/ClientSearch";
+import { IdCardDrop, uploadIdCard, type IdScan } from "@/components/IdCardDrop";
 import { ReferralPick, type Referral } from "@/components/ReferralPick";
 
 export type QuoteInitial = {
@@ -37,6 +38,7 @@ export function QuoteForm({ base, initial, collabs, vatPercent, canAddReferral }
   const [assets, setAssets] = useState<AssetForm[]>(initial?.assets.length ? initial.assets : [{ ...emptyAsset(), uid: newUid(), full_address: "", is_main: true }]);
   const [picked, setPicked] = useState<ClientHit | null>(initial?.client_id ? { id: initial.client_id, kind: initial.client_kind, name: initial.client_name, cui: initial.client_cui || null, phone: initial.client_phone || null, email: initial.client_email || null, city: null, reports: 0 } : null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [idScan, setIdScan] = useState<IdScan | null>(null);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => { setF({ ...f, [k]: e.target.value }); setErrors((x) => ({ ...x, [k]: "" })); };
@@ -71,6 +73,8 @@ export function QuoteForm({ base, initial, collabs, vatPercent, canAddReferral }
     const r = await fetch(f.id ? `/api/crm/quotes/${f.id}` : "/api/crm/quotes", { method: f.id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
     const d = (await r?.json().catch(() => ({}))) as { id?: string; error?: string } | undefined;
     if (!r?.ok) { setBusy(false); setMsg(d?.error || "Nu am putut salva. Încearcă din nou."); return; }
+    // the identity card goes to a client already in the CRM (a new one is created when the offer is accepted)
+    if (idScan && f.client_id && !(await uploadIdCard(f.client_id, idScan))) alert("Oferta a fost salvată, dar CI-ul nu s-a putut salva la client.");
     location.href = `${base}/oferte/${f.id || d?.id}`;
   };
   const err = (k: string) => errors[k] ? <span className="fieldErr" role="alert">{errors[k]}</span> : null;
@@ -80,6 +84,10 @@ export function QuoteForm({ base, initial, collabs, vatPercent, canAddReferral }
       <div className="nwTop">
         <section className="card nwCard">
           <Step n={1} title="Client" sub="Cui îi faci oferta" done={!now.client_name && !now.client_phone} />
+          <IdCardDrop base={base} matched={f.client_id} onChange={setIdScan}
+            hint={f.client_id ? undefined : "Poza CI se păstrează la client când e deja în CRM (alege-l mai sus); un client nou se creează la acceptarea ofertei."}
+            onRead={(c) => { if (!picked && c.name) { setF((x) => ({ ...x, client_kind: "person", client_name: c.name })); setErrors((x) => ({ ...x, client_name: "" })); } }}
+            onMatch={(m) => pickClient({ ...m })} />
           <div className="segment nwSeg" role="group" aria-label="Tip client">
             <button type="button" aria-pressed={f.client_kind === "person"} disabled={!!picked} onClick={() => setF({ ...f, client_kind: "person" })}>Persoană fizică</button>
             <button type="button" aria-pressed={f.client_kind === "company"} disabled={!!picked} onClick={() => setF({ ...f, client_kind: "company" })}>Persoană juridică</button>

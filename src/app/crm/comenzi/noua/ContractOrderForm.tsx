@@ -17,6 +17,7 @@ import { docKindLabel } from "@/lib/doc-kinds";
 import { SafeImg } from "@/app/crm/rapoarte/[id]/ReportActions";
 import { ClientSearch, type ClientHit as Hit } from "@/components/ClientSearch";
 import { ReferralPick, type Referral } from "@/components/ReferralPick";
+import { IdCardDrop, uploadIdCard, type IdScan } from "@/components/IdCardDrop";
 
 type Contract = { id: string; number: string | null; bank_id?: string | null; bank: string; bank_code: string | null; fee: number | null; report_type: string | null; purpose: string | null; logo?: string | null; billing_mode?: string | null; fee_grid?: string | null };
 type Collab = { id: string; number: string | null; firm: string; share: number | null; logo?: string | null; billing_mode?: string | null };
@@ -92,6 +93,7 @@ export function ContractOrderForm(p: {
   parties?: { id: string; name: string; kind: string }[];
 }) {
   const [referral, setReferral] = useState<Referral | null>(null);
+  const [idScan, setIdScan] = useState<IdScan | null>(null);
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
   const [kind, setKind] = useState(p.initialKind);
   const preset = p.contracts.find((c) => c.id === p.initialContract) ?? (p.contracts.length === 1 ? p.contracts[0] : null);
@@ -195,11 +197,13 @@ export function ContractOrderForm(p: {
     const r = await fetch("/api/crm/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, recipient_id: recipient, kind, referral_id: referral?.id ?? "", parent_report_id: note ? parent ?? "" : "", assets: assets.map((a, i) => ({
       ...a, is_main: i === 0, ...(a.contact_kind === "client" ? { contact_name: f.client_name, contact_phone: f.client_phone } : {}),
     })) }) }).catch(() => null);
-    const d = (await r?.json().catch(() => ({}))) as { report?: string; error?: string; inspections?: number; assets?: string[] } | undefined;
+    const d = (await r?.json().catch(() => ({}))) as { report?: string; client?: string; error?: string; inspections?: number; assets?: string[] } | undefined;
     if (!r?.ok || !d?.report) { setBusy(false); setMsg(d?.error || "Nu am putut salva. Încearcă din nou."); return; }
+    // the identity card read on the form: kept at the client (photos, CNP, address)
+    const failed: string[] = [];
+    if (idScan && d.client) { setPhase("Se salvează CI-ul la client…"); if (!(await uploadIdCard(d.client, idScan))) failed.push("CI client"); }
     // The documents dropped under each asset go to the new report, on the asset they belong to.
     const queue = assets.flatMap((a, i) => (drafts[a.uid ?? ""] ?? []).map((x, j) => ({ ...x, key: `${a.uid}:${j}`, asset: d.assets?.[i] ?? "" })));
-    const failed: string[] = [];
     const ids: Record<string, string> = {};
     for (const [n, x] of queue.entries()) {
       setPhase(`Se încarcă actele ${n + 1} / ${queue.length}…`);
@@ -299,6 +303,9 @@ export function ContractOrderForm(p: {
 
         <section className="card nwCard">
           <Step n={2} title="Client" sub="Cine comandă evaluarea" done={clientDone} />
+          <IdCardDrop base={p.base} matched={f.client_id} onChange={setIdScan}
+            onRead={(c) => { if (!picked && c.name) { setF((x) => ({ ...x, client_kind: "person", client_name: c.name })); setErrors((x) => ({ ...x, client_name: "" })); } }}
+            onMatch={(m) => pickClient({ ...m })} />
           <div className="segment nwSeg" role="group" aria-label="Tip client">
             <button type="button" aria-pressed={f.client_kind === "person"} disabled={!!picked} onClick={() => setF({ ...f, client_kind: "person" })}>Persoană fizică</button>
             <button type="button" aria-pressed={f.client_kind === "company"} disabled={!!picked} onClick={() => setF({ ...f, client_kind: "company" })}>Persoană juridică</button>

@@ -54,5 +54,5 @@ export async function POST(req: Request) {
     await mailAssigned(a.db, a.user, ids);
   }
   pushLater(a.db);
-  return Response.json({ ok: true, order: o.id, report: r.id, inspections: given, assets: results.map((x) => x.id) });
+  return Response.json({ ok: true, order: o.id, report: r.id, client: o.clientId, inspections: given, assets: results.map((x) => x.id) });
 }

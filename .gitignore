@@ -15,3 +15,6 @@ next-env.d.ts
 
 # Stock photos copied at build time (scripts/fetch-photos.mjs)
 public/photos/u/
+
+# OCR engine for the identity card, copied at build time (scripts/ocr-assets.mjs)
+public/ocr/

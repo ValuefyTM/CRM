@@ -159,5 +159,5 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
     if (nr) await db.prepare("UPDATE orders SET collab_report_number = ? WHERE id = ?").bind(nr, id).run();
   }
   await audit(db, `user:${actor}`, "order.create", "order", id, kind === "bank" ? `${contract!.bank} ${str(b.bank_ref, 60)}` : `colaborare ${collab!.firm}`);
-  return { ok: true as const, id };
+  return { ok: true as const, id, clientId };
 }

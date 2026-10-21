@@ -3382,3 +3382,38 @@ span.rdPick { display: inline-block; }
   .dbKpi > b, .ctKpiMoney { font-size: 18px; }
   .top .actions .btn { padding: 0 10px; }
 }
+
+/* ---------- Identity card (CI) scan: a thin bar on top of the client's data ---------- */
+.idScan { display: flex; flex-direction: column; gap: 8px; container-type: inline-size; }
+.idDrop { display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 12px; border: 1.5px dashed var(--dashed); border-radius: 12px; background: var(--cream); transition: border-color .15s, background .15s; }
+.idDrop.drag { border-color: var(--acc); background: var(--acc-soft); }
+.idDrop.busy { border-style: solid; border-color: var(--acc-line); }
+.idIco { font-size: 18px; line-height: 1; }
+.idTxt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: 12.5px; }
+.idTxt b { font-size: 13px; }
+.idTxt small { color: var(--muted-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.idBar { display: block; height: 4px; border-radius: 4px; background: var(--divider); overflow: hidden; margin-top: 4px; max-width: 260px; }
+.idBar i { display: block; height: 100%; background: var(--acc); transition: width .2s; }
+.idBtns { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.idRead { border: 1px solid var(--divider); border-radius: 12px; background: #fff; overflow: hidden; }
+.idHead { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 12px; cursor: pointer; font-size: 12.5px; }
+.idHead > span:nth-child(2) { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.idHead small { color: var(--muted-2); }
+.idThumbs { display: flex; gap: 4px; }
+.idThumbs img { width: 46px; height: 30px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); }
+.idFields { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px 10px; padding: 4px 12px 12px; border-top: 1px solid var(--divider); }
+.idFields .field { font-size: 12px; min-width: 0; }
+.idFields .input { padding: 7px 9px; font-size: 13px; }
+.idDocs { display: flex; flex-wrap: wrap; gap: 10px; }
+.idDocs figure { margin: 0; display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--muted-2); }
+.idDocs img { width: 168px; height: 108px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); background: var(--cream); }
+@media (max-width: 760px) {
+  .idDrop { flex-wrap: wrap; }
+  .idTxt small { white-space: normal; }
+  .idFields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .idFields .field { grid-column: span 1 !important; }
+  .idFields .field:first-child, .idFields .hint { grid-column: 1 / -1 !important; }
+}
+@container (max-width: 620px) { .idFields { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.idPdf { width: 168px; height: 108px; border-radius: 8px; border: 1px solid var(--line); background: var(--cream); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-weight: 800; color: var(--err); font-size: 18px; text-decoration: none; }
+.idPdf small { font-size: 10.5px; font-weight: 500; color: var(--muted-2); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

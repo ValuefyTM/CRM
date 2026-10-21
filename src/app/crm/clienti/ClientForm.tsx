@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { IdCardDrop, uploadIdCard, type IdScan } from "@/components/IdCardDrop";
 
 export type ClientValues = {
   kind: string; name: string; cui: string; reg_no: string; billing_address: string; city: string; county: string;
-  phone: string; email: string; vat_payer: boolean | null; caen: string; notes: string;
+  phone: string; email: string; vat_payer: boolean | null; caen: string; notes: string; cnp: string;
 };
 type ContactRow = { name: string; role: string; phone: string; email: string };
 
-const EMPTY: ClientValues = { kind: "person", name: "", cui: "", reg_no: "", billing_address: "", city: "", county: "", phone: "", email: "", vat_payer: null, caen: "", notes: "" };
+const EMPTY: ClientValues = { kind: "person", name: "", cui: "", reg_no: "", billing_address: "", city: "", county: "", phone: "", email: "", vat_payer: null, caen: "", notes: "", cnp: "" };
 const OTHER_KINDS: [string, string][] = [["company", "Firmă"], ["bank", "Bancă"], ["ifn", "IFN"], ["uat", "Instituție publică (UAT)"], ["anaf", "ANAF"], ["broker", "Broker"], ["other", "Altul"]];
 const ROLES = ["Administrator", "Director", "Contabil", "Reprezentant legal", "Persoană de contact"];
 
@@ -26,6 +27,7 @@ export function ClientForm({ base, clientId, initial }: { base: string; clientId
   const [bad, setBad] = useState<string[]>([]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string; dup?: { id: string; name: string } } | null>(null);
   const [busy, setBusy] = useState("");
+  const [idScan, setIdScan] = useState<IdScan | null>(null);
   const company = f.kind !== "person";
   const set = (k: keyof ClientValues) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setF((p) => ({ ...p, [k]: e.target.value }));
   const setC = (i: number, k: keyof ContactRow, v: string) => setContacts((l) => l.map((c, j) => (j === i ? { ...c, [k]: v } : c)));
@@ -60,10 +62,14 @@ export function ClientForm({ base, clientId, initial }: { base: string; clientId
     setBusy("");
     if (r.status === 409 && d.duplicate) return setMsg({ ok: false, text: d.error ?? "Client existent.", dup: d.duplicate });
     if (!r.ok) return setMsg({ ok: false, text: d.error || "Nu am putut salva." });
+    // the identity card read on the form: photos + series / address at the client
+    const idOk = await uploadIdCard(d.id ?? clientId ?? "", idScan);
+    if (!idOk) alert("Clientul a fost salvat, dar poza CI nu s-a putut salva. Încearc-o din nou din fișa clientului.");
     if (isNew && d.id) {
       const p = d.portal;
       location.href = `${base}/clienti/${d.id}?nou=${p ? (p.invited ? "portal" : p.error ? "portal-eroare" : "portal-neinvitat") : "1"}`;
-    } else setMsg({ ok: true, text: "Modificările au fost salvate." });
+    } else if (idScan) location.reload();
+    else setMsg({ ok: true, text: "Modificările au fost salvate." });
   };
 
   return (
@@ -93,10 +99,19 @@ export function ClientForm({ base, clientId, initial }: { base: string; clientId
         </div>
       )}
 
+      {!company && (
+        <IdCardDrop base={base} matched={clientId} onChange={setIdScan}
+          onRead={(c) => setF((p) => ({
+            ...p, name: isNew || !p.name ? c.name || p.name : p.name, cnp: c.cnp || p.cnp,
+            billing_address: c.address || p.billing_address, city: c.city || p.city, county: c.county || p.county,
+          }))} />
+      )}
+
       <div className="grid2">
         <label className="field span2">{company ? "Denumire firmă *" : "Nume și prenume *"}<input className="input" value={f.name} onChange={set("name")} autoComplete="off" {...inv("name")} /></label>
         <label className="field">Telefon *<input className="input" type="tel" value={f.phone} onChange={set("phone")} placeholder="07xx xxx xxx" {...inv("phone")} /></label>
         <label className="field">Email *<input className="input" type="email" value={f.email} onChange={set("email")} placeholder={company ? "office@firma.ro" : "nume@exemplu.ro"} {...inv("email")} /></label>
+        {!company && <label className="field"><span>CNP <small>(opțional)</small></span><input className="input mono" inputMode="numeric" maxLength={13} value={f.cnp} onChange={set("cnp")} {...inv("cnp")} /></label>}
         <label className="field span2"><span>{company ? "Adresă sediu" : "Adresă"} <small>(opțional)</small></span><input className="input" value={f.billing_address} onChange={set("billing_address")} /></label>
         <label className="field"><span>Localitate <small>(opțional)</small></span><input className="input" value={f.city} onChange={set("city")} /></label>
         <label className="field"><span>Județ <small>(opțional)</small></span><input className="input" value={f.county} onChange={set("county")} /></label>

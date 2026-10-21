@@ -3,6 +3,7 @@ import type { ScopeFilter } from "./scope";
 import { now, uuid } from "./db";
 import { normEmail, validEmail } from "./crypto";
 import { createUser, getUser, type UserInput } from "./users";
+import { validCnp } from "./id-card";
 
 import { CLIENT_KINDS, kindName } from "./client-kinds";
 export { CLIENT_KINDS, kindName };
@@ -11,6 +12,7 @@ export type Client = {
   id: string; glide_id: string | null; kind: string; name: string; cui: string | null; reg_no: string | null; billing_address: string | null;
   city: string | null; county: string | null; phone: string | null; email: string | null; vat_payer: number | null; caen: string | null;
   code: string | null; notes: string | null; created_at: string; updated_at: string;
+  cnp?: string | null; id_series?: string | null; id_number?: string | null; id_expires?: string | null;
 };
 export type Contact = { id: string; entity_id: string; name: string; role: string | null; phone: string | null; email: string | null; is_primary: number };
 export type ClientRow = Client & { reports: number; orders: number; last_report: string | null; portal: string | null };
@@ -21,7 +23,8 @@ const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().replace
 const opt = (v: unknown, max = 200) => str(v, max) || null;
 const digits = (v: string | null) => (v ?? "").replace(/\D/g, "");
 
-export type ClientInput = Pick<Client, "kind" | "name" | "cui" | "reg_no" | "billing_address" | "city" | "county" | "phone" | "email" | "vat_payer" | "caen" | "notes">;
+export type ClientInput = Pick<Client, "kind" | "name" | "cui" | "reg_no" | "billing_address" | "city" | "county" | "phone" | "email" | "vat_payer" | "caen" | "notes">
+  & { /** persons; undefined = not sent (left as it is) */ cnp?: string | null };
 export type ContactInput = { name: string; role: string | null; phone: string | null; email: string | null };
 
 /** Required for everyone: name, phone and email. Companies may add a CUI and contact people. */
@@ -37,6 +40,8 @@ export function validateClient(body: unknown): { ok: true; value: ClientInput; c
   if (!validEmail(email)) return { ok: false, error: "Completează o adresă de email validă." };
   const cuiRaw = str(b.cui, 20).toUpperCase().replace(/\s/g, "");
   if (company && cuiRaw && !/^(RO)?\d{2,10}$/.test(cuiRaw)) return { ok: false, error: "CUI-ul nu pare valid (doar cifre, opțional cu RO în față)." };
+  const cnp = typeof b.cnp === "string" ? b.cnp.replace(/\D/g, "") : undefined;
+  if (!company && cnp && !validCnp(cnp)) return { ok: false, error: "CNP-ul nu este valid (13 cifre, cu cifra de control corectă)." };
   const contacts: ContactInput[] = [];
   if (company && Array.isArray(b.contacts)) {
     for (const c of b.contacts.slice(0, 20) as Record<string, unknown>[]) {
@@ -54,7 +59,7 @@ export function validateClient(body: unknown): { ok: true; value: ClientInput; c
       kind, name, phone, email: normEmail(email), cui: company ? cuiRaw || null : null, reg_no: company ? opt(b.reg_no, 40) : null,
       billing_address: opt(b.billing_address, 240), city: opt(b.city, 80), county: opt(b.county, 60),
       vat_payer: company ? (b.vat_payer === true ? 1 : b.vat_payer === false ? 0 : null) : null, caen: company ? opt(b.caen, 10) : null,
-      notes: opt(b.notes, 4000),
+      notes: opt(b.notes, 4000), cnp: company ? (cnp === undefined ? undefined : null) : cnp === undefined ? undefined : cnp || null,
     },
   };
 }
@@ -66,11 +71,11 @@ export async function findDuplicate(db: D1Database, v: ClientInput, exceptId?: s
   const row = await db
     .prepare(
       `SELECT id, name FROM entities WHERE id <> ? AND (
-         (? IS NOT NULL AND replace(upper(cui), 'RO', '') = ?) OR lower(email) = ? OR
+         (? IS NOT NULL AND replace(upper(cui), 'RO', '') = ?) OR lower(email) = ? OR (? IS NOT NULL AND cnp = ?) OR
          (length(?) = 9 AND substr(replace(replace(replace(phone, ' ', ''), '+40', '0'), '-', ''), -9) = ? AND kind = ?)
        ) LIMIT 1`,
     )
-    .bind(exceptId ?? "", cui, cui, v.email, phone, phone, v.kind)
+    .bind(exceptId ?? "", cui, cui, v.email, v.cnp ?? null, v.cnp ?? null, phone, phone, v.kind)
     .first<{ id: string; name: string }>();
   return row;
 }
@@ -136,6 +141,7 @@ export async function createClient(db: D1Database, v: ClientInput, contacts: Con
     )
     .bind(id, v.kind, v.name, v.cui, v.reg_no, v.billing_address, v.city, v.county, v.phone, v.email, v.vat_payer, v.caen, v.notes, actor)
     .run();
+  if (v.cnp) await db.prepare("UPDATE entities SET cnp = ? WHERE id = ?").bind(v.cnp, id).run();
   for (const [i, c] of contacts.entries()) await addContact(db, id, c, i === 0);
   return id;
 }
@@ -148,6 +154,7 @@ export async function updateClient(db: D1Database, id: string, v: ClientInput) {
     )
     .bind(v.kind, v.name, v.cui, v.reg_no, v.billing_address, v.city, v.county, v.phone, v.email, v.vat_payer, v.caen, v.notes, now(), id)
     .run();
+  if (v.cnp !== undefined) await db.prepare("UPDATE entities SET cnp = ? WHERE id = ?").bind(v.cnp, id).run();
 }
 
 export async function addContact(db: D1Database, entityId: string, c: ContactInput, primary = false) {

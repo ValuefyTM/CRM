@@ -15,7 +15,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!v.ok) return err(v.error);
   if (b.force !== true) {
     const dup = await findDuplicate(a.db, v.value, id);
-    if (dup) return NextResponse.json({ error: `Există deja clientul „${dup.name}” cu același CUI, email sau telefon.`, duplicate: dup }, { status: 409 });
+    if (dup) return NextResponse.json({ error: `Există deja clientul „${dup.name}” cu același CUI, CNP, email sau telefon.`, duplicate: dup }, { status: 409 });
   }
   await updateClient(a.db, id, v.value);
   await audit(a.db, `user:${a.user.id}`, "client.update", "client", id);

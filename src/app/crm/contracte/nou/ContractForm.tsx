@@ -8,6 +8,7 @@ import { dutyIn } from "@/lib/labels";
 import { AssetsEditor } from "@/components/AssetsEditor";
 import { emptyAsset, type AssetForm } from "@/lib/asset-labels";
 import { ReferralPick, type Referral } from "@/components/ReferralPick";
+import { IdCardDrop, uploadIdCard, type IdScan } from "@/components/IdCardDrop";
 
 export type PickedClient = { id: string; kind: string; name: string; cui: string | null; phone: string | null; email: string | null; city: string | null; reports?: number; last_contract?: string | null };
 type Bank = { id: string; name: string; code: string | null };
@@ -136,6 +137,7 @@ export function ContractForm(p: {
   const [kind, setKind] = useState(q ? "classic" : p.initialKind);
   const [mode, setMode] = useState<"accepted" | "offer">("accepted");
   const [client, setClient] = useState<PickedClient | null>(p.client);
+  const [idScan, setIdScan] = useState<IdScan | null>(null);
   const [fresh, setFresh] = useState({ on: !!q?.fresh, kind: "person" as "person" | "company", name: "", cui: "", phone: "", email: "", city: "", ...(q?.fresh ?? {}) });
   const [f, setF] = useState({
     fee: p.existing?.fee ? String(p.existing.fee) : "", purpose: p.existing?.purpose ?? "", report_type: p.existing?.report_type ?? "Raport de evaluare", ordered_on: today(),
@@ -175,8 +177,10 @@ export function ContractForm(p: {
   const post = async (body: Record<string, unknown>) => {
     setBusy(true); setMsg("");
     const r = await fetch("/api/crm/contracts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
-    const d = (await r?.json().catch(() => ({}))) as { error?: string; report?: string | null; order?: string; contract?: string | { id: string } | null } | undefined;
+    const d = (await r?.json().catch(() => ({}))) as { error?: string; report?: string | null; order?: string; contract?: string | { id: string } | null; client?: { id: string } } | undefined;
     if (!r?.ok || !d) { setBusy(false); setMsg(d?.error || "Nu am putut salva. Încearcă din nou."); return null; }
+    // the identity card read on the form: kept at the client
+    if (idScan && d.client?.id && !(await uploadIdCard(d.client.id, idScan))) alert("Lucrarea a fost salvată, dar CI-ul nu s-a putut salva la client.");
     return d;
   };
 
@@ -254,6 +258,11 @@ export function ContractForm(p: {
 
           <section className="card">
             <h2>Client</h2>
+            {!p.existing && (
+              <IdCardDrop base={p.base} matched={client?.id} onChange={setIdScan}
+                onRead={(c) => { if (!client && c.name) setFresh((x) => ({ ...x, on: true, kind: "person", name: c.name, city: c.city || x.city })); }}
+                onMatch={(m) => setClient(m)} />
+            )}
             {p.existing && client ? (
               <div className="ctPicked"><span className="ctPickedAv" aria-hidden>{KIND[client.kind] ?? "?"}</span>
                 <span className="who"><b>{client.name}</b><span className="muted">Clientul contractului nr. {p.existing.number}</span></span></div>

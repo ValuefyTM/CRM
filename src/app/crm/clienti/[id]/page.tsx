@@ -13,6 +13,9 @@ import { ReportList } from "@/components/ReportList";
 import { ClientForm } from "../ClientForm";
 import { ContactsPanel } from "./ContactsPanel";
 import { PortalButton } from "./PortalButton";
+import { IdCardPanel } from "./IdCardPanel";
+import { idDocs } from "@/lib/id-docs";
+import { can } from "@/lib/perms";
 
 export const metadata: Metadata = { title: "Client | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -31,7 +34,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   if (!c) notFound();
   // „Adăugați de el”: only the clients the user added.
   if (!(await inScope(db, user, "clients", id))) notFound();
-  const [contacts, portalUsers, reports, orders, totals, log] = await Promise.all([
+  const [contacts, portalUsers, reports, orders, totals, log, ids] = await Promise.all([
     clientContacts(db, id),
     clientPortalUsers(db, id),
     db.prepare(`SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.result_value, r.result_eur, r.report_type, NULL AS client_name, NULL AS bank_code, NULL AS issuer_name,
@@ -41,6 +44,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
     db.prepare("SELECT o.*, NULL AS creator_name FROM orders o WHERE o.client_id = ? ORDER BY o.created_at DESC LIMIT 50").bind(id).all<Order>().then((r) => r.results),
     db.prepare("SELECT COUNT(*) AS n, SUM(CASE WHEN status = 'done' THEN fee END) AS fees FROM reports WHERE client_id = ?").bind(id).first<{ n: number; fees: number | null }>(),
     history(db, [id]),
+    idDocs(db, id),
   ]);
   const byEmail = new Map(portalUsers.map((u) => [u.email, u.status]));
   const company = c.kind !== "person";
@@ -58,7 +62,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           <ClientForm
             base={base} clientId={c.id}
             initial={{ kind: c.kind, name: c.name, cui: c.cui ?? "", reg_no: c.reg_no ?? "", billing_address: c.billing_address ?? "", city: c.city ?? "", county: c.county ?? "",
-              phone: c.phone ?? "", email: c.email ?? "", vat_payer: c.vat_payer == null ? null : !!c.vat_payer, caen: c.caen ?? "", notes: c.notes ?? "" }}
+              phone: c.phone ?? "", email: c.email ?? "", vat_payer: c.vat_payer == null ? null : !!c.vat_payer, caen: c.caen ?? "", notes: c.notes ?? "", cnp: c.cnp ?? "" }}
           />
           {company && <ContactsPanel clientId={c.id} contacts={contacts.map((x) => ({ ...x, portal: x.email ? byEmail.get(x.email) ?? null : null }))} />}
           <ReportList reports={reports} base={base} title={`Rapoarte (${totals?.n ?? 0})`} empty="Niciun raport pentru acest client." />
@@ -80,6 +84,9 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           )}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+          {(!company || ids.length > 0) && (
+            <IdCardPanel clientId={c.id} docs={ids} cnp={c.cnp ?? null} series={c.id_series ?? null} number={c.id_number ?? null} expires={c.id_expires ?? null} canEdit={can(user, "clients.E")} />
+          )}
           <section className="card">
             <h2>Portal client</h2>
             {portalUsers.length > 0 ? (

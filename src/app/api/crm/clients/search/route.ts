@@ -2,7 +2,7 @@ import { staffApi } from "@/lib/api";
 import { scopeFilter } from "@/lib/scope";
 import { CLIENT_KINDS } from "@/lib/client-kinds";
 
-/** Clients matching a name, CUI, phone or email (the client picker of a new contract). */
+/** Clients matching a name, CUI, CNP, phone or email (the client picker of a new contract). */
 export async function GET(req: Request) {
   const a = await staffApi();
   if ("res" in a) return a.res;
@@ -19,7 +19,7 @@ export async function GET(req: Request) {
       (SELECT MAX(k.signed_on) FROM contracts k WHERE k.client_id = e.id) AS last_contract
     FROM entities e WHERE e.kind <> 'valuation_firm' ${kind ? "AND e.kind = ?4" : ""} ${scope ? `AND ${scope.sql.replace(/\?/g, (() => { let n = 5; return () => `?${n++}`; })())}` : ""}
       AND (?1 = '%%' OR e.name LIKE ?1 OR e.cui LIKE ?1 OR e.email LIKE ?1
-      OR (length(?2) >= 6 AND replace(replace(replace(e.phone, ' ', ''), '.', ''), '-', '') LIKE '%' || ?2 || '%'))
+      OR (length(?2) = 13 AND e.cnp = ?2) OR (length(?2) >= 6 AND replace(replace(replace(e.phone, ' ', ''), '.', ''), '-', '') LIKE '%' || ?2 || '%'))
     ORDER BY e.name LIKE ?3 DESC, reports DESC LIMIT 12`;
   // D1 wants exactly as many bindings as the highest numbered placeholder (?4 only with a kind)
   const binds = [like, digits, `${q.replace(/[%_]/g, "")}%`, kind ?? "", ...(scope?.binds ?? [])];

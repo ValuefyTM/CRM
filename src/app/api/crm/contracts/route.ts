@@ -54,5 +54,5 @@ export async function POST(req: Request) {
     const s = await sendForSignature(a.db, `user:${a.user.id}`, r.contract.id, sendTo);
     signSent = s.ok;
   }
-  return Response.json({ ok: true, order: r.order, report: r.report, contract: r.contract, client: { name: r.client.name, reused: r.client.reused }, signSent });
+  return Response.json({ ok: true, order: r.order, report: r.report, contract: r.contract, client: { id: r.client.id, name: r.client.name, reused: r.client.reused }, signSent });
 }

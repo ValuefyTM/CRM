@@ -15,7 +15,7 @@ export async function POST(req: Request) {
   if (!v.ok) return err(v.error);
   if (b.force !== true) {
     const dup = await findDuplicate(a.db, v.value);
-    if (dup) return NextResponse.json({ error: `Există deja clientul „${dup.name}” cu același CUI, email sau telefon.`, duplicate: dup }, { status: 409 });
+    if (dup) return NextResponse.json({ error: `Există deja clientul „${dup.name}” cu același CUI, CNP, email sau telefon.`, duplicate: dup }, { status: 409 });
   }
   const actor = `user:${a.user.id}`;
   const id = await createClient(a.db, v.value, v.contacts, a.user.id);

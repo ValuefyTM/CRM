@@ -8,6 +8,7 @@ import { capType, emptyAsset, type AssetForm } from "@/lib/asset-labels";
 import { feeKindLabel, feeKindOf, gridRate, netFromGrid, parseFeeGrid } from "@/lib/fee-grid";
 import { PURPOSES } from "@/lib/order-labels";
 import { AssetsEditor } from "@/components/AssetsEditor";
+import { IdCardDrop, uploadIdCard, type IdScan } from "@/components/IdCardDrop";
 
 type Person = { id: string; name: string; role: string; duties?: string | null };
 type OrderInfo = {
@@ -42,6 +43,7 @@ export function ProcessWizard(p: {
   const [files, setFiles] = useState<File[]>([]);
   const [read, setRead] = useState<"" | "busy" | "done" | "error">("");
   const [readMsg, setReadMsg] = useState("");
+  const [idScan, setIdScan] = useState<IdScan | null>(null);
   const [client, setClient] = useState({ kind: "person", name: o.client ?? "", phone: o.phone ?? "", email: o.email ?? "", cui: "", contact_name: "", contact_phone: "" });
   const [bank, setBank] = useState({ branch: o.branch ?? "", consultant: "", purpose: o.purpose ?? "Credit bancar", report_type: o.report_type ?? "", notes: "" });
   const [assets, setAssets] = useState<AssetForm[]>([{ ...emptyAsset({ city: o.city }), full_address: o.address ?? "", is_main: true }]);
@@ -142,9 +144,11 @@ export function ProcessWizard(p: {
         ...a, is_main: i === 0, ...(a.contact_kind === "client" ? { contact_name: client.name, contact_phone: client.phone } : {}),
       })) }),
     }).catch(() => null);
-    const d = (await r?.json().catch(() => ({}))) as { report?: string; error?: string } | undefined;
+    const d = (await r?.json().catch(() => ({}))) as { report?: string; client?: string | null; error?: string } | undefined;
+    if (!r?.ok || !d?.report) { setBusy(false); return setMsg(d?.error || "Nu am putut procesa comanda. Încearcă din nou."); }
+    // the identity card read on the form: kept at the client
+    if (idScan && d.client && !(await uploadIdCard(d.client, idScan))) alert("Comanda a fost procesată, dar CI-ul nu s-a putut salva la client.");
     setBusy(false);
-    if (!r?.ok || !d?.report) return setMsg(d?.error || "Nu am putut procesa comanda. Încearcă din nou.");
     location.href = `${p.base}/rapoarte/${d.report}?tab=inspectii&alocare=1`;
   };
 
@@ -199,6 +203,7 @@ export function ProcessWizard(p: {
           <>
             <h2>Client</h2>
             {readMsg && read === "done" && <div role="status" className="okMsg">{readMsg}</div>}
+            <IdCardDrop base={p.base} onChange={setIdScan} onRead={(c) => { if (c.name) setClient((x) => ({ ...x, kind: "person", name: c.name })); }} />
             <div className="segment" role="group" aria-label="Tip client" style={{ maxWidth: 380 }}>
               <button type="button" aria-pressed={client.kind === "person"} onClick={() => setClient({ ...client, kind: "person" })}>Persoană fizică</button>
               <button type="button" aria-pressed={client.kind === "company"} onClick={() => setClient({ ...client, kind: "company" })}>Persoană juridică</button>
