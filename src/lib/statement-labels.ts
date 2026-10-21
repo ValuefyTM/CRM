@@ -31,6 +31,8 @@ export type Line = {
   id: string | null; key: string | null; source: Source; report_id: string | null; inspection_id: string | null; label: string; detail: string | null;
   on_date: string | null; base: number | null; rate: string | null; auto_amount: number | null; amount: number; removed: number; reason: string | null;
   changed_by: string | null; changed_at: string | null; changed_name?: string | null; sort: number;
+  /** the collaborator accepted the adjustment (when) */
+  accepted_at?: string | null;
   /** the report's number, for the link */
   number?: string | null;
 };

@@ -3466,3 +3466,14 @@ span.rdPick { display: inline-block; }
 .stCalc .stNet { background: var(--acc-soft); border-radius: 10px; padding: 6px 8px; margin-top: 4px; }
 .stCalc .stCalcHead { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--divider); }
 .stCalc .stCalcHead dt { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--muted-2); }
+/* statement lines: the firm's adjustment and the collaborator's acceptance */
+.stAdj { font-size: 12px; min-width: 200px; max-width: 320px; }
+.stAdj > div { margin-top: 2px; }
+.stAdj .neg { color: var(--err); }
+.stAdj .pos { color: var(--ok-text); }
+.stAccepted { color: var(--ok-text); font-weight: 700; }
+.stPending { color: var(--acc-text); font-weight: 700; }
+.stAccept { margin-top: 4px; font-size: 12px; font-weight: 700; color: var(--acc-text); }
+.stAccept.on { color: var(--ok-text); }
+.stBadge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 800; background: var(--ok-bg); color: var(--ok-text); border: 1px solid var(--ok-line); white-space: nowrap; }
+.stBadge.wait { background: var(--acc-soft); color: var(--acc-text); border-color: var(--acc-line); }

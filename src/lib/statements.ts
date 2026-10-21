@@ -365,6 +365,18 @@ export async function addLine(db: D1Database, actor: string, id: string, b: Reco
   return { ok: true as const };
 }
 
+/** The collaborator accepts (or takes back the acceptance of) an adjustment on their own statement. */
+export async function acceptLine(db: D1Database, userId: string, id: string, lineId: string, accept: boolean) {
+  const s = await getStatement(db, id);
+  if (!s || s.user_id !== userId) return { ok: false as const, error: "Borderoul nu e al tău." };
+  if (s.status === "issued" && !accept) return { ok: false as const, error: "Borderoul e emis." };
+  const l = await db.prepare("SELECT id, changed_at FROM statement_lines WHERE id = ? AND statement_id = ?").bind(lineId, id).first<{ id: string; changed_at: string | null }>();
+  if (!l || !l.changed_at) return { ok: false as const, error: "Linia nu are ajustări." };
+  await db.prepare("UPDATE statement_lines SET accepted_at = ?, accepted_by = ? WHERE id = ?").bind(accept ? now() : null, accept ? userId : null, lineId).run();
+  await audit(db, `user:${userId}`, accept ? "statement.line_accept" : "statement.line_unaccept", "statement", id, lineId);
+  return { ok: true as const };
+}
+
 /** An automatic line removed / put back, or its amount changed — with the reason, kept on the line. */
 export async function adjustLine(db: D1Database, actor: string, id: string, b: Record<string, unknown>) {
   const s = await getStatement(db, id);
@@ -391,7 +403,7 @@ export async function adjustLine(db: D1Database, actor: string, id: string, b: R
   }
   const next = removed ? l.amount : amount ?? l.amount;
   if (l.id) {
-    await db.prepare("UPDATE statement_lines SET removed = ?, amount = ?, reason = ?, changed_by = ?, changed_at = ? WHERE id = ?").bind(removed ? 1 : 0, round2(next), reason, actor, t, l.id).run();
+    await db.prepare("UPDATE statement_lines SET removed = ?, amount = ?, reason = ?, changed_by = ?, changed_at = ?, accepted_at = NULL, accepted_by = NULL WHERE id = ?").bind(removed ? 1 : 0, round2(next), reason, actor, t, l.id).run();
   } else {
     await db.prepare(`INSERT INTO statement_lines (id, statement_id, key, source, report_id, inspection_id, label, detail, on_date, base, rate, auto_amount, amount, removed, reason, changed_by, changed_at, sort, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)

@@ -44,7 +44,8 @@ export default async function StatementPage({ params, searchParams }: { params: 
         <StatementActions id={s.id} status={s.status} canEdit={canEdit} canDelete={all && can(user, "statements.D")} back={back} lines={lines.filter((l) => !l.removed).length} />
       </>}>
       <div className="stHead">
-        <span className={`pill ${cls}`}><i />{st}</span>
+        {s.kind === "payout" ? (s.status === "open" ? <span className="stBadge wait">În curs · nevalidat încă</span> : <span className="stBadge">✓ Validat de firmă{s.status === "issued" ? " · emis" : ""}</span>)
+          : <span className={`pill ${cls}`}><i />{st}</span>}
         <b className="stTotal">{lei2(total)}</b>
         <span className="muted">
           {s.status === "open" ? "se calculează din datele de azi; se îngheață la validare" : s.status === "validated" ? `validat ${fmtDate(s.validated_at, true)}${s.validated_name ? ` de ${s.validated_name}` : ""}; se mai poate ajusta până la emitere` : `emis ${fmtDate(s.issued_on)}${s.issued_name ? ` de ${s.issued_name}` : ""}`}
@@ -53,9 +54,10 @@ export default async function StatementPage({ params, searchParams }: { params: 
       </div>
       {who && <div className="note"><b>Filtrat după {who.name}:</b> doar {lines.length} din {allLines.length} linii, cele pe rapoartele în care a fost în echipă. {!self && <a className="link" href={`${back}/${s.id}`}>Vezi tot borderoul</a>}.</div>}
       {s.status === "open" && !all && !self && <div className="note">Borderoul e în curs: se actualizează pe măsură ce lucrările se predau. La final de lună îl validează și îl emite firma; orice ajustare apare aici, cu motivul.</div>}
+      {mine && lines.some((l) => l.changed_at && !l.accepted_at) && <div className="note"><b>Ai ajustări de confirmat.</b> Uită-te în coloana „Ajustare · comentariu” și bifează „Accept ajustarea” la fiecare.</div>}
       <section className="card flush">
         <div className="cardHead"><h2>Linii</h2>{canEdit && s.status !== "issued" && <AddLine statement={s.id} />}</div>
-        <LinesTable lines={lines} base={base} statement={s.id} canEdit={canEdit && s.status !== "issued"} />
+        <LinesTable lines={lines} base={base} statement={s.id} canEdit={canEdit && s.status !== "issued"} adjust={s.kind === "payout"} accept={mine} locked={s.status === "issued"} />
       </section>
       <div className="dGrid2">
           <section className="card">
