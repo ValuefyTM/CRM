@@ -18,7 +18,7 @@ import { SafeImg } from "@/app/crm/rapoarte/[id]/ReportActions";
 import { ClientSearch, type ClientHit as Hit } from "@/components/ClientSearch";
 import { ReferralPick, type Referral } from "@/components/ReferralPick";
 
-type Contract = { id: string; number: string | null; bank: string; bank_code: string | null; fee: number | null; report_type: string | null; purpose: string | null; logo?: string | null; billing_mode?: string | null; fee_grid?: string | null };
+type Contract = { id: string; number: string | null; bank_id?: string | null; bank: string; bank_code: string | null; fee: number | null; report_type: string | null; purpose: string | null; logo?: string | null; billing_mode?: string | null; fee_grid?: string | null };
 type Collab = { id: string; number: string | null; firm: string; share: number | null; logo?: string | null; billing_mode?: string | null };
 type Opt = { id: string; title: string; sub: string; logo?: string | null; short: string };
 
@@ -76,6 +76,8 @@ const inThreeDays = () => {
   return s.slice(0, 16).replace(" ", "T");
 };
 
+const PARTY_KIND: Record<string, string> = { ifn: "IFN", uat: "instituție publică", anaf: "ANAF", broker: "broker", other: "altă entitate" };
+
 /** Bank (framework contract) or collaboration order: the statement line and the report file, in one form. */
 export function ContractOrderForm(p: {
   base: string; me: string; initialKind: "bank" | "collab"; initialContract?: string | null; contracts: Contract[]; collabs: Collab[]; evaluators: PickPerson[]; inspectors: PickPerson[];
@@ -86,6 +88,8 @@ export function ContractOrderForm(p: {
   vatPercent?: number;
   /** may add a collaborator on the spot (clients.A) */
   canAddReferral?: boolean;
+  /** the designated users a report can be made for (banks, IFN, institutions) */
+  parties?: { id: string; name: string; kind: string }[];
 }) {
   const [referral, setReferral] = useState<Referral | null>(null);
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
@@ -94,7 +98,7 @@ export function ContractOrderForm(p: {
   const [f, setF] = useState({
     contract_id: preset?.id ?? "", collaboration_id: "", bank_ref: "", bank_branch: "", ordered_on: today, report_type: kindOf(preset?.report_type), purpose: preset?.purpose || "Garantare bancară",
     fee: preset?.fee ? String(preset.fee) : "", fee_later: false, report_number: "", client_id: "", client_kind: "person" as "person" | "company", client_name: "", client_phone: "", client_email: "", client_cui: "",
-    inspection_notes: "", notes: "", evaluator_id: p.evaluators.some((e) => e.id === p.me && dutyIn(e.duties, "evaluator")) ? p.me : "", verifier_id: "", inspector_id: "", due_on: inThreeDays(), urgent: false,
+    recipient_id: "", client_only: false, inspection_notes: "", notes: "", evaluator_id: p.evaluators.some((e) => e.id === p.me && dutyIn(e.duties, "evaluator")) ? p.me : "", verifier_id: "", inspector_id: "", due_on: inThreeDays(), urgent: false,
   });
   // The fee field unlocked by hand (an exception to the grid).
   const [feeFree, setFeeFree] = useState(false);
@@ -116,6 +120,8 @@ export function ContractOrderForm(p: {
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => { setF({ ...f, [k]: e.target.value }); setErrors((x) => ({ ...x, [k]: "" })); };
   const contract = p.contracts.find((c) => c.id === f.contract_id);
   const collab = p.collabs.find((c) => c.id === f.collaboration_id);
+  // the designated user: the one chosen, else (bank work) the contract's bank; none when only the client uses the report
+  const recipient = f.client_only ? "" : f.recipient_id || (kind === "bank" ? contract?.bank_id ?? "" : "");
   const avOrder = kind === "collab" && isAvFirm(collab?.firm);
   const feeNum = parseFloat(f.fee.replace(",", "."));
   // The fee grid of the contract: the fee comes from the kind of the main asset. Locked until the type is chosen; a type
@@ -169,6 +175,7 @@ export function ContractOrderForm(p: {
       else if (assetProfile(a.category, a.type).address && !a.city.trim() && !a.full_address.trim()) e[`asset${i}`] = `Bunul ${i + 1}: completează adresa sau localitatea.`;
       else if (a.contact_kind !== "client" && !a.contact_name.trim()) e[`asset${i}`] = `Bunul ${i + 1}: completează persoana de contact la inspecție.`;
     });
+    if (!f.client_only && !recipient) e.recipient = "Alege utilizatorul desemnat (banca) sau bifează „Doar clientul”.";
     if (!f.evaluator_id) e.evaluator_id = "Alege evaluatorul principal.";
     return e;
   };
@@ -185,7 +192,7 @@ export function ContractOrderForm(p: {
       return;
     }
     setBusy(true); setMsg("");
-    const r = await fetch("/api/crm/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, kind, referral_id: referral?.id ?? "", parent_report_id: note ? parent ?? "" : "", assets: assets.map((a, i) => ({
+    const r = await fetch("/api/crm/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, recipient_id: recipient, kind, referral_id: referral?.id ?? "", parent_report_id: note ? parent ?? "" : "", assets: assets.map((a, i) => ({
       ...a, is_main: i === 0, ...(a.contact_kind === "client" ? { contact_name: f.client_name, contact_phone: f.client_phone } : {}),
     })) }) }).catch(() => null);
     const d = (await r?.json().catch(() => ({}))) as { report?: string; error?: string; inspections?: number; assets?: string[] } | undefined;
@@ -313,6 +320,19 @@ export function ContractOrderForm(p: {
             <label className="field"><span className="fLabel">Email {avOrder ? <small>(obligatoriu la Appraisal & Valuation)</small> : <small>(opțional)</small>}</span><input className="input" type="email" value={f.client_email} onChange={set("client_email")} placeholder="nume@exemplu.ro" aria-invalid={!!errors.client_email || undefined} />{errors.client_email && <small className="errTxt">{errors.client_email}</small>}</label>
           </div>
           {f.client_kind === "company" && <label className="field"><span className="fLabel">CUI <small>(opțional)</small></span><input className="input mono" value={f.client_cui} onChange={set("client_cui")} placeholder="ex. 12345678" disabled={!!picked} /></label>}
+          <div className="field">
+            <span className="fLabel">Utilizator desemnat {!f.client_only && <Req />}</span>
+            <label className="check"><input type="checkbox" checked={f.client_only} onChange={(e) => { setF({ ...f, client_only: e.target.checked }); setErrors((x) => ({ ...x, recipient: "" })); }} /><span>Doar clientul folosește raportul</span></label>
+            {!f.client_only && (
+              <select className="select" value={recipient} aria-invalid={!!errors.recipient || undefined} aria-label="Utilizator desemnat"
+                onChange={(e) => { setF({ ...f, recipient_id: e.target.value }); setErrors((x) => ({ ...x, recipient: "" })); }}>
+                <option value="">— alege banca / instituția —</option>
+                {(p.parties ?? []).map((x) => <option key={x.id} value={x.id}>{x.name}{x.kind !== "bank" ? ` · ${PARTY_KIND[x.kind] ?? x.kind}` : ""}</option>)}
+              </select>
+            )}
+            {kind === "bank" && contract?.bank_id && !f.client_only && recipient === contract.bank_id && <small className="muted">banca contractului cadru · o poți schimba</small>}
+            {err("recipient")}
+          </div>
           <ReferralPick value={referral} onChange={setReferral} canAdd={!!p.canAddReferral} />
         </section>
       </div>

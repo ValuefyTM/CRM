@@ -125,6 +125,14 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
     if (nr && await db.prepare("SELECT 1 AS x FROM reports r JOIN collaborations c ON c.firm_id = r.issuer_id WHERE c.id = ? AND r.number = ? AND r.status <> 'cancelled' LIMIT 1").bind(collab.id, nr).first())
       return { ok: false as const, error: `Există deja un raport cu nr. ${nr} emis pe ${collab.firm}.` };
   }
+  // The designated user: the one chosen (a bank, IFN, institution), else the contract's bank; none when only the client
+  let recipient: { id: string; label: string } | null = null;
+  if (b.client_only !== true) {
+    const rid = str(b.recipient_id, 80) || contract?.bank_id || "";
+    const e = rid ? await db.prepare("SELECT id, name, code FROM entities WHERE id = ? AND kind <> 'valuation_firm'").bind(rid).first<{ id: string; name: string; code: string | null }>() : null;
+    if (!e) return { ok: false as const, error: "Alege utilizatorul desemnat (banca) sau bifează „Doar clientul”." };
+    recipient = { id: e.id, label: e.code || e.name };
+  }
   const share = collab?.share ?? null;
   const clientId = await clientOf(db, actor, b, client, phone);
   const referral = await referralOf(db, b.referral_id);
@@ -134,9 +142,9 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
       ordered_on, viewed_at, viewed_by, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'received', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(id, kind, actor, type, city || null, address || null, main.usable_area || null, str(b.purpose, 120) || contract?.purpose || (kind === "bank" ? "Garantare bancară" : null),
-      contract ? contract.bank_code || contract.bank : null, b.urgent === true ? 1 : 0, client, phone, str(b.client_email, 160).toLowerCase() || null,
+      recipient && contract && recipient.id === contract.bank_id ? contract.bank_code || contract.bank : recipient?.label ?? null, b.urgent === true ? 1 : 0, client, phone, str(b.client_email, 160).toLowerCase() || null,
       contactName, contactPhone, str(b.inspection_notes, 1000) || null, str(b.notes, 2000) || null,
-      clientId, contract?.id ?? null, collab?.id ?? null, contract?.bank_id ?? null, str(b.bank_branch, 120) || null, kind === "bank" ? str(b.bank_ref, 60) || null : null,
+      clientId, contract?.id ?? null, collab?.id ?? null, recipient?.id ?? null, str(b.bank_branch, 120) || null, kind === "bank" ? str(b.bank_ref, 60) || null : null,
       str(b.report_type, 120) || contract?.report_type || null, fee, share, fee != null && share != null ? Math.round(fee * share * 100) / 100 : null,
       ordered, t, actor, t, t)
     .run();
