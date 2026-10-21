@@ -6,7 +6,9 @@ import { DEFAULT_EXPORT, EXPORT_FIELDS } from "@/lib/statement-labels";
 
 const GROUPS = ["Linie", "Raport", "Bun", "Echipă"] as const;
 
-export function ExportXlsx({ id, evaluator }: { id: string; evaluator?: string | null }) {
+/** `id`: one statement; else `period`: the whole month (a summary sheet and a sheet per statement). */
+export function ExportXlsx({ id, period, evaluator, label = "Export Excel" }: { id?: string; period?: string; evaluator?: string | null; label?: string }) {
+  const url = id ? `/api/crm/statements/${id}/export` : "/api/crm/statements/export";
   const [open, setOpen] = useState(false);
   const [sel, setSel] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -14,7 +16,7 @@ export function ExportXlsx({ id, evaluator }: { id: string; evaluator?: string |
   const show = async () => {
     setOpen(true); setMsg("");
     if (sel) return;
-    const d = (await fetch(`/api/crm/statements/${id}/export`).then((r) => r.json()).catch(() => ({}))) as { fields?: string[] };
+    const d = (await fetch(url).then((r) => r.json()).catch(() => ({}))) as { fields?: string[] };
     setSel(d.fields?.length ? d.fields : DEFAULT_EXPORT);
   };
   const toggle = (k: string) => setSel((s) => (s ? (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]) : s));
@@ -22,7 +24,7 @@ export function ExportXlsx({ id, evaluator }: { id: string; evaluator?: string |
   const run = async () => {
     if (!sel?.length) return setMsg("Alege cel puțin o coloană.");
     setBusy(true); setMsg("");
-    const r = await fetch(`/api/crm/statements/${id}/export`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields: sel, evaluator }) }).catch(() => null);
+    const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields: sel, evaluator, period }) }).catch(() => null);
     setBusy(false);
     if (!r?.ok) { const d = (await r?.json().catch(() => ({}))) as { error?: string }; return setMsg(d.error ?? "Exportul nu a reușit."); }
     const blob = await r.blob();
@@ -30,21 +32,21 @@ export function ExportXlsx({ id, evaluator }: { id: string; evaluator?: string |
     const m = cd.match(/filename\*=UTF-8''([^;]+)/);
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = m ? decodeURIComponent(m[1]) : "borderou.xlsx";
+    a.download = m ? decodeURIComponent(m[1]) : id ? "borderou.xlsx" : "borderouri.xlsx";
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     setOpen(false);
   };
   return (
     <>
-      <button type="button" className="btn btnGhost btnSm" onClick={show}>Export Excel</button>
+      <button type="button" className="btn btnGhost btnSm" onClick={show}>{label}</button>
       {open && createPortal(
         <div className="vfModal sheet" role="dialog" aria-modal="true" aria-labelledby="exT" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
           <div className="vfModalBox exBox">
-            <div className="cardHead"><h2 id="exT">Export Excel</h2><button type="button" className="btn btnGhost btnSm" onClick={() => setOpen(false)} aria-label="Închide">×</button></div>
+            <div className="cardHead"><h2 id="exT">{id ? "Export Excel" : "Export Excel · toată luna"}</h2><button type="button" className="btn btnGhost btnSm" onClick={() => setOpen(false)} aria-label="Închide">×</button></div>
             {!sel ? <p className="hint">Se încarcă…</p> : (
               <>
-                <p className="hint" style={{ margin: 0 }}>Bifează coloanele. Alegerea rămâne salvată pentru exportul următor.</p>
+                <p className="hint" style={{ margin: 0 }}>Bifează coloanele liniilor. Alegerea rămâne salvată pentru exportul următor.{!id && " Fișierul are un centralizator pe prima foaie, apoi câte o foaie pentru fiecare borderou (P = plată, I = de încasat), lucrările directe și cheltuielile fixe."}</p>
                 <div className="exGroups">
                   {GROUPS.map((g) => {
                     const fs = EXPORT_FIELDS.filter((f) => f.group === g);

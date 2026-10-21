@@ -7,11 +7,11 @@
 import { bucharestDay, now, uuid } from "./db";
 import { audit } from "./auth";
 import { dutySql, niceName } from "./labels";
-import { xlsx, type Cell } from "./xlsx";
+import { xlsxBook, type Cell, type Sheet } from "./xlsx";
 
 export type { Kind, Status, Basis, Recurrence, Source, Rule, Line, FixedCost } from "./statement-labels";
 export { KIND_LABEL, STATUS_LABEL, BASIS_PICK, RECURRENCE_PICK, SOURCE_LABEL, EXPORT_FIELDS, DEFAULT_EXPORT, totalOf } from "./statement-labels";
-import { DEFAULT_EXPORT, EXPORT_FIELDS, SOURCE_LABEL, totalOf, type Kind, type Status, type Basis, type Recurrence, type Rule, type Line, type FixedCost } from "./statement-labels";
+import { DEFAULT_EXPORT, EXPORT_FIELDS, SOURCE_LABEL, STATUS_LABEL, totalOf, type Kind, type Status, type Basis, type Recurrence, type Rule, type Line, type FixedCost } from "./statement-labels";
 
 export type Statement = {
   id: string; kind: Kind; party: string; period: string; number: string | null; issued_on: string | null; total: number | null; status: Status;
@@ -573,8 +573,8 @@ async function reportData(db: D1Database, ids: string[]) {
   return out;
 }
 
-/** The statement as a spreadsheet, with the chosen columns, in the order of EXPORT_FIELDS. */
-export async function exportStatement(db: D1Database, s: Statement, lines: Line[], keys: string[]) {
+/** The lines as a sheet, with the chosen columns, in the order of EXPORT_FIELDS (a TOTAL row under the amounts). */
+async function linesSheet(db: D1Database, name: string, lines: Line[], keys: string[]): Promise<Sheet> {
   const fields = EXPORT_FIELDS.filter((f) => keys.includes(f.key));
   const reps = await reportData(db, [...new Set(lines.map((l) => l.report_id).filter((x): x is string => !!x))]);
   const ymd = (d: string | null | undefined) => (d ? String(d).slice(0, 10).split("-").reverse().join(".") : null);
@@ -596,9 +596,85 @@ export async function exportStatement(db: D1Database, s: Statement, lines: Line[
     return k === "report_date" || k === "delivered_at" ? ymd(v as string | null) : v;
   };
   const rows = lines.map((l, i) => fields.map((f) => lineVal(l, i, f.key)));
-  // the total row, under the amounts
   const at = fields.findIndex((f) => f.key === "amount");
-  if (at >= 0) rows.push(fields.map((f, i) => (i === at ? totalOf(lines) : i === 0 ? "TOTAL" : null)));
+  const bold: number[] = [];
+  if (at >= 0) { bold.push(rows.length); rows.push(fields.map((f, i) => (i === at ? totalOf(lines) : i === 0 ? "TOTAL" : null))); }
   const widths = fields.map((f) => (["line", "address", "reason", "client", "recipient"].includes(f.key) ? 40 : f.key === "nr" ? 7 : 18));
-  return xlsx(`${s.number ?? "Borderou"} ${s.period}`, fields.map((f) => f.label), rows, widths);
+  return { name, headers: fields.map((f) => f.label), rows, widths, bold };
+}
+
+/** The statement as a spreadsheet, with the chosen columns. */
+export async function exportStatement(db: D1Database, s: Statement, lines: Line[], keys: string[]) {
+  return xlsxBook([await linesSheet(db, `${s.number ?? "Borderou"} ${s.period}`, lines, keys)]);
+}
+
+// ---------- direct work ----------
+
+/**
+ * The month's direct work: reports delivered in the month that are neither under a framework contract (on the bank's
+ * statement) nor a collaboration (on the firm's) — direct clients, with their fee. Shown as an implicit statement.
+ */
+export async function directLines(db: D1Database, period: string, member?: Set<string> | null): Promise<Line[]> {
+  const { results } = await db.prepare(`SELECT ${REPORT_COLS}, ${DATE_OF.delivered} AS on_date ${REPORT_BASE}
+      LEFT JOIN orders o ON o.id = r.order_id LEFT JOIN contracts k ON k.id = r.contract_id
+      WHERE r.status = 'done' AND substr(${DATE_OF.delivered}, 1, 7) = ?1 AND o.collaboration_id IS NULL AND COALESCE(k.kind, '') <> 'framework'
+      ORDER BY on_date, r.number`).bind(period).all<RepRow>();
+  return results.filter((r) => !member || member.has(r.id)).map((r, i) => ({
+    id: null, key: `rep:${r.id}:direct`, source: "report", report_id: r.id, inspection_id: null, label: repLabel(r), detail: repDetail(r), on_date: r.on_date,
+    base: r.fee, rate: null, auto_amount: r.fee ?? 0, amount: r.fee ?? 0, removed: 0, reason: null, changed_by: null, changed_at: null, sort: i, number: r.number,
+  }));
+}
+
+// ---------- the month's export ----------
+
+/**
+ * The whole month as a workbook: a summary sheet (revenue, statements, fixed costs, result), then one sheet per
+ * statement (payouts, then receivables), the direct work and the fixed costs. With `member`: the same filter as the page.
+ */
+export async function exportMonth(db: D1Database, period: string, keys: string[], member: { id: string; name: string } | null) {
+  const reports = member ? await memberReports(db, member.id) : null;
+  const [payouts, receivables, rev, costs, direct] = await Promise.all([
+    monthBoard(db, period, "payout", reports), monthBoard(db, period, "receivable", reports), monthRevenue(db, period, member?.id), monthFixedCosts(db, period, member?.id), directLines(db, period, reports),
+  ]);
+  const linesFor = async (r: (typeof payouts)[number]) => {
+    if (r.statement) return linesWith(await linesOf(db, r.statement), reports);
+    const auto = await autoLines(db, criteriaOf(r.rule, partyCols(r.party)!), period);
+    return linesWith(auto.map((l, i) => ({ ...l, id: null, removed: 0, reason: null, changed_by: null, changed_at: null, sort: i })), reports);
+  };
+  const sheets: Sheet[] = [];
+  const sum: Cell[][] = [], bold: number[] = [];
+  const head = (t: string) => { bold.push(sum.length); sum.push([t]); };
+  const blank = () => sum.push([]);
+  sum.push([`Borderouri ${periodLabel(period)}${member ? ` · filtrat după ${member.name}` : ""}`]); bold.push(0); blank();
+  const block = async (title: string, rows: typeof payouts, kind: Kind) => {
+    head(title);
+    bold.push(sum.length); sum.push(["Pentru", "Detalii", "Stare", "Număr", "Linii", "Total (lei)"]);
+    let t = 0;
+    for (const r of rows) {
+      const lines = await linesFor(r);
+      const total = totalOf(lines);
+      t += total;
+      sum.push([r.name, r.sub, r.statement ? STATUS_LABEL[r.statement.status][0] : "În curs (din regulă)", r.statement?.number ?? null, lines.filter((l) => !l.removed).length, total]);
+      sheets.push(await linesSheet(db, `${kind === "payout" ? "P" : "I"} ${r.name}`, lines, keys));
+    }
+    bold.push(sum.length); sum.push(["Total " + title.toLowerCase(), null, null, null, null, round2(t)]); blank();
+    return round2(t);
+  };
+  const paid = await block("Plăți colaboratori", payouts, "payout");
+  const due = await block("De încasat", receivables, "receivable");
+  head("Lucrări directe");
+  sum.push(["Clienți direcți (fără contract cadru sau colaborare)", null, null, null, direct.length, totalOf(direct)]); blank();
+  if (direct.length) sheets.push(await linesSheet(db, "Lucrări directe", direct, keys));
+  head(`Cheltuieli fixe${member ? " (partea lui)" : ""}`);
+  bold.push(sum.length); sum.push(["Cheltuială", null, member ? "Split" : null, null, null, "Lei"]);
+  for (const c of costs.items) sum.push([c.label, c.notes, member ? `${c.pct}%` : null, null, null, c.share]);
+  bold.push(sum.length); sum.push(["Total cheltuieli fixe", null, null, null, null, costs.total]); blank();
+  head("Rezultatul lunii");
+  sum.push([`Venituri${member ? " (rapoartele unde a fost în echipă)" : ""}`, `proprii ${rev.own} lei (${rev.ownN}) · colaborări ${rev.collab} lei (${rev.collabN})`, null, null, null, rev.total]);
+  sum.push(["− Plăți colaboratori", null, null, null, null, paid]);
+  sum.push(["− Cheltuieli fixe", null, null, null, null, costs.total]);
+  const profit = round2(rev.total - paid - costs.total);
+  bold.push(sum.length); sum.push([profit >= 0 ? "Profit" : "Pierdere", rev.total ? `marjă ${Math.round(profit / rev.total * 100)}%` : null, null, null, null, profit]);
+  sum.push(["De încasat pe borderouri", null, null, null, null, due]);
+  return xlsxBook([{ name: "Centralizator", headers: [], rows: sum, widths: [42, 40, 18, 16, 8, 16], bold }, ...sheets]);
 }

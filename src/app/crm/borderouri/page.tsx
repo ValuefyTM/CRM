@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { can } from "@/lib/perms";
 import {
-  autoLines, KIND_LABEL, listStatements, memberChoices, memberReports, monthBoard, monthFixedCosts, monthRevenue, partyChoices, periodLabel, ruleFor, STATUS_LABEL, thisMonth, validPeriod, type Kind,
+  autoLines, directLines, KIND_LABEL, listStatements, memberChoices, memberReports, monthBoard, monthFixedCosts, monthRevenue, partyChoices, periodLabel, ruleFor, STATUS_LABEL, thisMonth, validPeriod, type Kind,
 } from "@/lib/statements";
 import { MemberFilter } from "./MemberFilter";
+import { ExportXlsx } from "./ExportXlsx";
 import { CrmShell } from "@/components/CrmShell";
 import { ClickRow } from "@/components/ClickRow";
 import { NewStatement, OpenStatement } from "./StatementActions";
@@ -65,9 +66,11 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
   const admins = self ? [] : await memberChoices(db);
   const who = self ? { id: user.id, name: user.name || user.email } : admins.find((a) => a.id === sp.evaluator) ?? null;
   const member = who ? await memberReports(db, who.id) : null;
-  const [payouts, receivables, issued, choices, rev, costs] = await Promise.all([
+  const [payouts, receivables, issued, choices, rev, costs, direct] = await Promise.all([
     monthBoard(db, period, "payout", member), monthBoard(db, period, "receivable", member), listStatements(db, { limit: 80 }), partyChoices(db), monthRevenue(db, period, who?.id), monthFixedCosts(db, period, who?.id),
+    directLines(db, period, member),
   ]);
+  const directTotal = Math.round(direct.reduce((t, l) => t + l.amount, 0) * 100) / 100;
   const past = issued.filter((s) => s.period !== period && s.status !== "open");
   const sum = (rows: Row[]) => rows.reduce((s, r) => s + r.total, 0);
   const paid = sum(payouts), due = sum(receivables), fixed = costs.total, profit = Math.round((rev.total - paid - fixed) * 100) / 100;
@@ -101,7 +104,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
   );
   return (
     <CrmShell user={user} base={base} active="statements" title="Borderouri" subtitle="Lunar: ce plătește firma colaboratorilor și ce încasează de la bănci și firmele colaboratoare; în curs până la validare, apoi înghețate și emise"
-      actions={self ? undefined : <><a href={`${here}/cheltuieli`} className="btn btnGhost btnSm">Cheltuieli fixe</a><a href={`${here}/reguli`} className="btn btnGhost btnSm">Reguli</a><NewStatement period={period} base={here} {...choices} /></>}>
+      actions={self ? <ExportXlsx period={period} label="Export Excel lună" /> : <><ExportXlsx period={period} evaluator={who?.id ?? null} label="Export Excel lună" /><a href={`${here}/cheltuieli`} className="btn btnGhost btnSm">Cheltuieli fixe</a><a href={`${here}/reguli`} className="btn btnGhost btnSm">Reguli</a><NewStatement period={period} base={here} {...choices} /></>}>
       <div className="stMonth">
         <a className="btn btnGhost btnSm" href={link(shift(period, -1))} aria-label="Luna anterioară">‹</a>
         <b>{periodLabel(period)}</b>
@@ -121,6 +124,29 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
 
       {group("payout", payouts)}
       {group("receivable", receivables)}
+
+      <section className="card flush" id="directe">
+        <div className="cardHead"><h2>Lucrări directe · {periodLabel(period)}</h2><span className="muted">clienți direcți, fără contract cadru sau colaborare · {direct.length} {direct.length === 1 ? "raport" : "rapoarte"} · <b>{lei2(directTotal)}</b></span></div>
+        {direct.length === 0 ? <p className="hint pad">Niciun raport direct predat în luna aceasta{who ? " cu el în echipă" : ""}.</p> : (
+          <details className="stDirect">
+            <summary>Vezi rapoartele</summary>
+            <div className="tableWrap">
+              <table className="table">
+                <thead><tr><th>Raport</th><th>Data</th><th style={{ textAlign: "right" }}>Onorariu</th></tr></thead>
+                <tbody>
+                  {direct.map((l) => (
+                    <ClickRow key={l.key} href={`${base}/rapoarte/${l.report_id}`}>
+                      <td><b>{l.label}</b>{l.detail && <div className="muted">{l.detail}</div>}</td>
+                      <td>{l.on_date ? l.on_date.split("-").reverse().join(".") : "—"}</td>
+                      <td style={{ textAlign: "right" }} className="mono"><b>{lei2(l.amount)}</b></td>
+                    </ClickRow>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        )}
+      </section>
 
       <section className="card flush" id="fixe">
         <div className="cardHead"><h2>Cheltuieli fixe · {periodLabel(period)}</h2><span className="muted">{who ? `partea lui ${who.name}` : "toată firma"} · <b>{lei2(costs.total)}</b>{!self && <> · <a className="link" href={`${here}/cheltuieli`}>setează</a></>}</span></div>

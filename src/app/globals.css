@@ -3270,3 +3270,4 @@ span.rdPick { display: inline-block; }
 .exGroup legend { padding: 0 4px; }
 .exGroup .check { font-size: 13px; }
 @media (max-width: 640px) { .exGroups { grid-template-columns: 1fr; } }
+.stDirect summary { cursor: pointer; padding: 12px 18px; font-size: 13px; font-weight: 700; color: var(--acc-text, #8a5a00); }
