@@ -19,6 +19,8 @@ import { getFirm } from "@/lib/settings";
 import { ReportDocs, type DocItem } from "./ReportDocs";
 import { ReferralEdit } from "@/components/ReferralPick";
 import { FramingEdit, type Party } from "./FramingEdit";
+import { AvFormButton } from "./AvFormButton";
+import { avReport } from "@/lib/av-form";
 import { PURPOSES } from "@/lib/order-labels";
 import { VALUE_TYPES } from "@/lib/contract-terms";
 import { CONTRACT_PURPOSES, REPORT_KINDS } from "@/lib/contracts";
@@ -105,6 +107,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const c = acc.can, fees = acc.fee === "all";
   const link = (perm: Perm, path: string, cls: string, body: React.ReactNode) => (can(user, perm) ? <a className={cls} href={`${base}${path}`}>{body}</a> : <span>{body}</span>);
   const messages = await messagesOf(db, "report", r.id, user.id);
+  // worked for Appraisal & Valuation: their order form (Excel) is filled in from here
+  const av = await avReport(db, r.id);
   // The institutions a report is made for (banks first), to correct its designated user.
   const frame = canFrame(user, acc);
   const parties: Party[] = tab === "general" && frame ? (await db.prepare(`SELECT id, name, kind, logo_url FROM entities
@@ -332,6 +336,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             </a>
             {c.docs && <a className="btn btnGold btnSm" href={final && c.deliver && !r.delivered_at ? `${href("documente")}&predare=1` : href("documente")}>{final ? "Livrare raport" : "Încarcă raportul final"}</a>}
             {/* "Finalizat" goes through the delivery (date, values per asset, euro, approach), never straight to the status. */}
+            {av && <AvFormButton id={r.id} />}
             {c.status && <StatusButton id={r.id} status={r.status} reason={r.suspend_reason} locked={acc.locked}
               finish={r.delivered_at ? null : !c.deliver ? "Raportul îl finalizează evaluatorul principal, din „Predă raportul”." : final ? `${href("documente")}&predare=1` : "Încarcă întâi raportul final (PDF semnat) în Documente; apoi îl predai cu valorile."} />}
             {c.status && !acc.locked && !r.glide_id && r.status !== "cancelled" && <StageActions id={r.id} stage={stage} hasVerifier={!!verifier} />}

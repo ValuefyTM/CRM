@@ -2,6 +2,7 @@
 // New work from a framework contract (bank) or a collaboration: 1 where it comes from, 2 the client (searched in the
 // CRM, or added), 3 the assets, 4 the report and its team. A bar at the bottom sums it up and says what is missing.
 import { billingLabel } from "@/lib/billing-modes";
+import { isAvFirm } from "@/lib/av-labels";
 import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
 import { dutyIn } from "@/lib/labels";
 
@@ -115,6 +116,7 @@ export function ContractOrderForm(p: {
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => { setF({ ...f, [k]: e.target.value }); setErrors((x) => ({ ...x, [k]: "" })); };
   const contract = p.contracts.find((c) => c.id === f.contract_id);
   const collab = p.collabs.find((c) => c.id === f.collaboration_id);
+  const avOrder = kind === "collab" && isAvFirm(collab?.firm);
   const feeNum = parseFloat(f.fee.replace(",", "."));
   // The fee grid of the contract: the fee comes from the kind of the main asset. Locked until the type is chosen; a type
   // the grid has no fee for opens the field and asks for the fee (or "Completez mai târziu").
@@ -160,6 +162,8 @@ export function ContractOrderForm(p: {
     if (kind === "bank" && contract && !f.fee_later && !(Number.isFinite(feeNum) && feeNum > 0)) e.fee = feeState === "wait" ? "Alege tipul bunului principal: tariful se preia din grila contractului." : feeState === "missing" ? `Tipul „${capType(assets[0]?.type)}” nu e în grila contractului: completează tariful sau bifează „Completez mai târziu”.` : "Completează tariful sau bifează „Completez mai târziu”.";
     if (!f.client_name.trim()) e.client_name = "Completează numele clientului.";
     if (f.client_phone.replace(/\D/g, "").length < 9) e.client_phone = "Completează telefonul clientului.";
+    // Appraisal & Valuation process the order in their CRM: the client's email is required there
+    if (avOrder && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(f.client_email.trim())) e.client_email = "Emailul clientului e obligatoriu la Appraisal & Valuation.";
     assets.forEach((a, i) => {
       if (!a.type.trim()) e[`asset${i}`] = `Bunul ${i + 1}: alege tipul.`;
       else if (assetProfile(a.category, a.type).address && !a.city.trim() && !a.full_address.trim()) e[`asset${i}`] = `Bunul ${i + 1}: completează adresa sau localitatea.`;
@@ -306,7 +310,7 @@ export function ContractOrderForm(p: {
               <input className="input" type="tel" value={f.client_phone} onChange={set("client_phone")} aria-invalid={!!errors.client_phone || undefined} placeholder="07xx xxx xxx" />
               {err("client_phone")}
             </label>
-            <label className="field"><span className="fLabel">Email <small>(opțional)</small></span><input className="input" type="email" value={f.client_email} onChange={set("client_email")} placeholder="nume@exemplu.ro" /></label>
+            <label className="field"><span className="fLabel">Email {avOrder ? <small>(obligatoriu la Appraisal & Valuation)</small> : <small>(opțional)</small>}</span><input className="input" type="email" value={f.client_email} onChange={set("client_email")} placeholder="nume@exemplu.ro" aria-invalid={!!errors.client_email || undefined} />{errors.client_email && <small className="errTxt">{errors.client_email}</small>}</label>
           </div>
           {f.client_kind === "company" && <label className="field"><span className="fLabel">CUI <small>(opțional)</small></span><input className="input mono" value={f.client_cui} onChange={set("client_cui")} placeholder="ex. 12345678" disabled={!!picked} /></label>}
           <ReferralPick value={referral} onChange={setReferral} canAdd={!!p.canAddReferral} />

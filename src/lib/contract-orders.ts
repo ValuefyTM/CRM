@@ -1,6 +1,7 @@
 // Server-only: work under a framework contract (banks) or a collaboration agreement (other valuation firms).
 // There is no offer: the fee comes from the contract. One form registers the order — the line that goes on the
 // statement (borderou) — and opens its report file in the same step.
+import { isAvFirm } from "./av-labels";
 import { now, uuid } from "./db";
 import { audit } from "./auth";
 import { propertyType } from "./process-order";
@@ -118,6 +119,8 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
     collab = await db.prepare("SELECT c.id, c.number, e.name AS firm, c.share FROM collaborations c JOIN entities e ON e.id = c.firm_id WHERE c.id = ?")
       .bind(str(b.collaboration_id, 80)).first<CollabChoice>();
     if (!collab) return { ok: false as const, error: "Alege colaborarea (firma de evaluare)." };
+    // Appraisal & Valuation process the order in their CRM: the client's email is required there
+    if (isAvFirm(collab.firm) && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(str(b.client_email, 160))) return { ok: false as const, error: "Emailul clientului e obligatoriu la Appraisal & Valuation." };
     const nr = str(b.report_number, 30);
     if (nr && await db.prepare("SELECT 1 AS x FROM reports r JOIN collaborations c ON c.firm_id = r.issuer_id WHERE c.id = ? AND r.number = ? AND r.status <> 'cancelled' LIMIT 1").bind(collab.id, nr).first())
       return { ok: false as const, error: `Există deja un raport cu nr. ${nr} emis pe ${collab.firm}.` };

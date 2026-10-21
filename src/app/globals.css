@@ -3271,3 +3271,17 @@ span.rdPick { display: inline-block; }
 .exGroup .check { font-size: 13px; }
 @media (max-width: 640px) { .exGroups { grid-template-columns: 1fr; } }
 .stDirect summary { cursor: pointer; padding: 12px 18px; font-size: 13px; font-weight: 700; color: var(--acc-text, #8a5a00); }
+
+/* Appraisal & Valuation order form */
+.avBox { width: min(980px, 100%); }
+.avGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 12px; }
+.avAddr { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; }
+.avAddr > div:nth-child(2), .avAddr > div:nth-child(3) { grid-column: span 2; }
+.avSub { font-size: 13px; font-weight: 700; display: flex; gap: 10px; align-items: center; }
+.avReq { color: var(--err); margin-left: 3px; }
+.avMiss .input, .avMiss .select { border-color: var(--err); background: #fff5f4; }
+.avNote { background: #fff5f4; border-color: #f1c7c2; }
+.avOk { background: #eef8f1; border-color: #bfe3cb; }
+.avAsset { display: flex; flex-direction: column; gap: 10px; }
+.avActs { position: sticky; bottom: -22px; background: #fff; padding: 10px 0; border-top: 1px solid var(--divider); }
+@media (max-width: 800px) { .avGrid { grid-template-columns: 1fr 1fr; } .avAddr { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
