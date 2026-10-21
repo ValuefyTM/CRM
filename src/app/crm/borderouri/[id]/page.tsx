@@ -8,6 +8,7 @@ import { History } from "@/components/History";
 import { LinesTable, lei2 } from "../LinesTable";
 import { NotesEdit, StatementActions } from "../StatementActions";
 import { AddLine } from "../LineActions";
+import { ExportXlsx } from "../ExportXlsx";
 
 export const metadata: Metadata = { title: "Borderou | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -40,6 +41,7 @@ export default async function StatementPage({ params, searchParams }: { params: 
       subtitle={`${KIND_LABEL[s.kind]} · ${periodLabel(s.period)}${s.sub ? ` · ${s.sub}` : ""}`}
       actions={<>
         <a href={back} className="btn btnGhost btnSm">← Borderouri</a>
+        <ExportXlsx id={s.id} evaluator={who && !self ? who.id : null} />
         <StatementActions id={s.id} status={s.status} canEdit={canEdit} canDelete={all && can(user, "statements.D")} back={back} lines={lines.filter((l) => !l.removed).length} />
       </>}>
       <div className="stHead">

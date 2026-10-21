@@ -7,10 +7,11 @@
 import { bucharestDay, now, uuid } from "./db";
 import { audit } from "./auth";
 import { dutySql, niceName } from "./labels";
+import { xlsx, type Cell } from "./xlsx";
 
 export type { Kind, Status, Basis, Recurrence, Source, Rule, Line, FixedCost } from "./statement-labels";
-export { KIND_LABEL, STATUS_LABEL, BASIS_PICK, RECURRENCE_PICK, SOURCE_LABEL, totalOf } from "./statement-labels";
-import { totalOf, type Kind, type Status, type Basis, type Recurrence, type Rule, type Line, type FixedCost } from "./statement-labels";
+export { KIND_LABEL, STATUS_LABEL, BASIS_PICK, RECURRENCE_PICK, SOURCE_LABEL, EXPORT_FIELDS, DEFAULT_EXPORT, totalOf } from "./statement-labels";
+import { DEFAULT_EXPORT, EXPORT_FIELDS, SOURCE_LABEL, totalOf, type Kind, type Status, type Basis, type Recurrence, type Rule, type Line, type FixedCost } from "./statement-labels";
 
 export type Statement = {
   id: string; kind: Kind; party: string; period: string; number: string | null; issued_on: string | null; total: number | null; status: Status;
@@ -526,3 +527,78 @@ export const linesWith = (lines: Line[], reports: Set<string> | null) => (report
 export const memberChoices = async (db: D1Database) =>
   (await db.prepare(`SELECT u.id, COALESCE(NULLIF(u.name, ''), u.email) AS name FROM users u WHERE u.kind = 'internal' AND u.status <> 'deleted' AND u.role IN ('owner', 'admin') ORDER BY name`)
     .all<{ id: string; name: string }>()).results;
+
+// ---------- export (XLSX) ----------
+
+const exportKey = (userId: string) => `export_fields:statements:${userId}`;
+
+/** The columns the user chose last time (else the default ones). */
+export async function exportFields(db: D1Database, userId: string): Promise<string[]> {
+  const row = await db.prepare("SELECT value FROM settings WHERE key = ?").bind(exportKey(userId)).first<{ value: string }>().catch(() => null);
+  try {
+    const v = row ? (JSON.parse(row.value) as unknown) : null;
+    if (Array.isArray(v)) { const keys = v.filter((k): k is string => typeof k === "string" && EXPORT_FIELDS.some((f) => f.key === k)); if (keys.length) return keys; }
+  } catch { /* the default */ }
+  return DEFAULT_EXPORT;
+}
+
+export async function saveExportFields(db: D1Database, userId: string, keys: string[]) {
+  const clean = EXPORT_FIELDS.map((f) => f.key).filter((k) => keys.includes(k));
+  await db.prepare("INSERT INTO settings (key, value, updated_at, updated_by) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at")
+    .bind(exportKey(userId), JSON.stringify(clean), now(), userId).run();
+  return clean;
+}
+
+type RepExport = Record<string, string | number | null>;
+/** The report data behind the lines, by report id. */
+async function reportData(db: D1Database, ids: string[]) {
+  const out = new Map<string, RepExport>();
+  for (let i = 0; i < ids.length; i += 80) {
+    const part = ids.slice(i, i + 80);
+    const { results } = await db.prepare(`SELECT r.id, r.number, substr(r.report_date, 1, 10) AS report_date, substr(r.delivered_at, 1, 10) AS delivered_at, cl.name AS client, cl.cui AS client_cui,
+        b.name AS recipient, r.bank_branch, o.bank_ref, k.number AS contract, r.purpose, r.report_type, r.value_type, r.fee, r.fee_gross,
+        CASE WHEN r.collected = 1 OR iv.status = 'paid' THEN 'da' ELSE 'nu' END AS collected, CASE WHEN iv.id IS NOT NULL THEN iv.series || ' ' || iv.number END AS invoice,
+        r.result_value, r.result_eur, p.type AS prop_type, COALESCE(p.full_address, p.city) AS address, p.city, p.county, p.cf_number, COALESCE(p.cad_building, p.cad_land) AS cad,
+        p.usable_area, p.land_area,
+        (SELECT group_concat(COALESCE(NULLIF(u.name, ''), u.email), ', ') FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = r.id AND m.role = 'evaluator') AS evaluator,
+        (SELECT group_concat(COALESCE(NULLIF(u.name, ''), u.email), ', ') FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = r.id AND m.role = 'verifier') AS verifier,
+        (SELECT group_concat(COALESCE(NULLIF(u.name, ''), u.email), ', ') FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = r.id AND m.role = 'inspector') AS inspector,
+        (SELECT COALESCE(NULLIF(u.name, ''), u.email) FROM users u WHERE u.id = r.referral_user_id) AS referral
+      FROM reports r LEFT JOIN entities cl ON cl.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id LEFT JOIN orders o ON o.id = r.order_id
+        LEFT JOIN contracts k ON k.id = r.contract_id LEFT JOIN invoices iv ON iv.id = r.invoice_id
+        LEFT JOIN crm_properties p ON p.id = (SELECT a.property_id FROM assets a WHERE a.report_id = r.id ORDER BY a.is_main DESC LIMIT 1)
+      WHERE r.id IN (${part.map(() => "?").join(", ")})`).bind(...part).all<RepExport & { id: string }>();
+    for (const r of results) out.set(r.id, { ...r, client: niceName(String(r.client ?? "")) || r.client, recipient: niceName(String(r.recipient ?? "")) || r.recipient, prop_type: r.prop_type ? String(r.prop_type).charAt(0) + String(r.prop_type).slice(1).toLowerCase() : null });
+  }
+  return out;
+}
+
+/** The statement as a spreadsheet, with the chosen columns, in the order of EXPORT_FIELDS. */
+export async function exportStatement(db: D1Database, s: Statement, lines: Line[], keys: string[]) {
+  const fields = EXPORT_FIELDS.filter((f) => keys.includes(f.key));
+  const reps = await reportData(db, [...new Set(lines.map((l) => l.report_id).filter((x): x is string => !!x))]);
+  const ymd = (d: string | null | undefined) => (d ? String(d).slice(0, 10).split("-").reverse().join(".") : null);
+  const lineVal = (l: Line, i: number, k: string): Cell => {
+    switch (k) {
+      case "nr": return i + 1;
+      case "line": return l.label;
+      case "source": return SOURCE_LABEL[l.source];
+      case "on_date": return ymd(l.on_date);
+      case "base": return l.base;
+      case "rate": return l.rate;
+      case "auto_amount": return l.auto_amount;
+      case "amount": return l.removed ? 0 : l.amount;
+      case "adjust": return l.removed ? "scoasă" : !l.key ? "adăugată manual" : l.changed_at ? "modificată" : null;
+      case "reason": return l.reason;
+    }
+    const r = l.report_id ? reps.get(l.report_id) : undefined;
+    const v = r?.[k] ?? null;
+    return k === "report_date" || k === "delivered_at" ? ymd(v as string | null) : v;
+  };
+  const rows = lines.map((l, i) => fields.map((f) => lineVal(l, i, f.key)));
+  // the total row, under the amounts
+  const at = fields.findIndex((f) => f.key === "amount");
+  if (at >= 0) rows.push(fields.map((f, i) => (i === at ? totalOf(lines) : i === 0 ? "TOTAL" : null)));
+  const widths = fields.map((f) => (["line", "address", "reason", "client", "recipient"].includes(f.key) ? 40 : f.key === "nr" ? 7 : 18));
+  return xlsx(`${s.number ?? "Borderou"} ${s.period}`, fields.map((f) => f.label), rows, widths);
+}

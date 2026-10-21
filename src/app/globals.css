@@ -3264,3 +3264,9 @@ span.rdPick { display: inline-block; }
 .stSummary dd { margin: 0; font-weight: 700; }
 .stSummary .stSumTotal { border-top: 2px solid var(--line); padding-top: 8px; font-size: 16px; }
 .stSummary .stSumTotal dt { color: var(--ink); font-weight: 800; }
+.exBox { width: min(760px, 100%); }
+.exGroups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.exGroup { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px 12px; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.exGroup legend { padding: 0 4px; }
+.exGroup .check { font-size: 13px; }
+@media (max-width: 640px) { .exGroups { grid-template-columns: 1fr; } }
