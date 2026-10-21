@@ -92,6 +92,35 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
     </>;
     return href ? <ClickRow key={r.party} href={href}>{cells}</ClickRow> : <tr key={r.party}>{cells}</tr>;
   });
+  // a source of revenue: its statement, unfolding into the designated users (banks / institutions) and their reports
+  const incomeRows = (rows: Row[]) => rows.map((r) => {
+    const [l, c] = r.statement ? STATUS_LABEL[r.statement.status] : ["În curs", "pillInfo"];
+    const href = r.statement ? `${here}/${r.statement.id}${who ? `?evaluator=${who.id}` : ""}` : null;
+    return (
+      <tr key={r.party}>
+        <td>
+          <details className="stSrc">
+            <summary><b>{r.name}</b>{r.sub && <span className="muted"> · {r.sub}</span>}<small className="stSrcHint">{r.banks.length} {r.banks.length === 1 ? "utilizator" : "utilizatori"} desemnați ▾</small></summary>
+            <ul className="stBanks">
+              {r.banks.map((b) => (
+                <li key={b.bank}>
+                  <details>
+                    <summary><span>{b.bank}</span><span className="muted">{b.lines.length} {b.lines.length === 1 ? "raport" : "rapoarte"}</span><span className="mono">{lei2(b.total)}</span></summary>
+                    <ul>{b.lines.map((x) => <li key={x.report_id}><a className="link" href={`${base}/rapoarte/${x.report_id}`}>{x.label}</a><span className="muted">{x.on_date ? x.on_date.split("-").reverse().join(".") : ""}</span><span className="mono">{lei2(x.amount)}</span></li>)}</ul>
+                  </details>
+                </li>
+              ))}
+            </ul>
+          </details>
+        </td>
+        <td><span className={`pill ${c}`}><i />{l}</span></td>
+        <td>{r.lines}</td>
+        <td className="mono">{r.statement?.number ?? "—"}</td>
+        <td style={{ textAlign: "right", whiteSpace: "nowrap" }} className="mono"><b>{lei2(r.total)}</b></td>
+        <td>{href ? <a className="btn btnGhost btnSm" href={href}>Deschide</a> : !self && can(user, "statements.A") ? <OpenStatement party={r.party} period={period} base={here} /> : null}</td>
+      </tr>
+    );
+  });
   const head = <thead><tr><th>Pentru</th><th>Stare</th><th>Linii</th><th>Număr</th><th style={{ textAlign: "right" }}>Total</th><th /></tr></thead>;
   return (
     <CrmShell user={user} base={base} active="statements" title="Borderouri" subtitle="Generate automat în fiecare lună: veniturile pe surse și plățile colaboratorilor care au lucrat în lună; în curs până la validare, apoi înghețate și emise"
@@ -122,8 +151,8 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
                 const rows = receivables.filter((r) => r.source === k);
                 return rows.length ? (
                   <tbody key={k}>
-                    <tr className="stWorkGroup"><td colSpan={4}><b>{l}</b> <span className="muted">· {sub}</span></td><td style={{ textAlign: "right" }} className="mono"><b>{lei2(sum(rows))}</b></td><td /></tr>
-                    {rowsOf(rows)}
+                    <tr className="stSrcHead"><td colSpan={4}><b>{l}</b><span>{sub} · {rows.length} {rows.length === 1 ? "borderou" : "borderouri"}</span></td><td style={{ textAlign: "right" }} className="mono"><b>{lei2(sum(rows))}</b></td><td /></tr>
+                    {incomeRows(rows)}
                   </tbody>
                 ) : null;
               })}
@@ -175,21 +204,29 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
 
       <section className="card stSummary" id="rezultat">
         <h2>Rezultatul lunii{who ? ` · ${who.name}` : ""}</h2>
-        <dl>
-          {SOURCES.map(([k, l]) => <div key={k}><dt>{l}</dt><dd className="mono">{lei2(res.bySource(k))}</dd></div>)}
-          <div><dt>Venituri {who ? "(rapoartele unde a fost în echipă)" : ""}</dt><dd className="mono"><b>{lei2(revenue)}</b></dd></div>
-          <div><dt>− Plăți colaboratori</dt><dd className="mono">{lei2(paid)}</dd></div>
-          <div><dt>− Cheltuieli fixe{who ? " (partea lui)" : ""}</dt><dd className="mono">{lei2(fixed)}</dd></div>
-          <div className="stSumTotal"><dt>{profit >= 0 ? "Profit" : "Pierdere"}</dt><dd className="mono" style={profit < 0 ? { color: "var(--err)" } : undefined}>{lei2(profit)}</dd></div>
+        <dl className="stCalc">
+          {SOURCES.map(([k, l]) => <div key={k} className="stIn"><dt>+ {l}</dt><dd className="mono">{lei2(res.bySource(k))}</dd></div>)}
+          <div className="stIn stSub"><dt>Venituri {who ? "(rapoartele unde a fost în echipă)" : ""}</dt><dd className="mono">{lei2(revenue)}</dd></div>
+          <div className="stOut"><dt>− Plăți colaboratori ({payouts.length})</dt><dd className="mono">{lei2(paid)}</dd></div>
+          <div className="stOut"><dt>− Cheltuieli fixe{who ? " (partea lui)" : ""}</dt><dd className="mono">{lei2(fixed)}</dd></div>
+          <div className="stSumTotal"><dt>{profit >= 0 ? "Profit net" : "Pierdere"}</dt><dd className="mono" style={{ color: profit >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(profit)}</dd></div>
           {cut != null && <>
-            <div className="stSumShare"><dt>Cota lui {who!.name} din profit ({cut.pct}%)</dt><dd className="mono">{lei2(cut.amount)}</dd></div>
-            <div><dt>Rămâne firmei</dt><dd className="mono">{lei2(Math.round((profit - cut.amount) * 100) / 100)}</dd></div>
+            <div className="stOut"><dt>− Cota lui {who!.name} din profit ({cut.pct}%)</dt><dd className="mono">{lei2(cut.amount)}</dd></div>
+            <div className="stSumTotal stNet"><dt>Rămâne firmei</dt><dd className="mono">{lei2(Math.round((profit - cut.amount) * 100) / 100)}</dd></div>
           </>}
+          {shares && shares.length > 0 && (() => {
+            const totalCut = Math.round(shares.reduce((t, x) => t + x.cut, 0) * 100) / 100;
+            const net = Math.round((profit - totalCut) * 100) / 100;
+            return <>
+              {shares.map((x) => <div key={x.id} className="stOut"><dt>− Cota {x.name} ({x.pct}% din {lei2(Math.max(0, x.profit))} profit pe rapoartele unde e în echipă)</dt><dd className="mono">{lei2(x.cut)}</dd></div>)}
+              <div className="stSumTotal stNet"><dt>Net-ul tău (proprietar)</dt><dd className="mono" style={{ color: net >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(net)}</dd></div>
+            </>;
+          })()}
         </dl>
-        {cut != null && <p className="hint" style={{ margin: "8px 0 0" }}>Cota din profit o vezi doar tu; se setează din profilul utilizatorului.</p>}
+        {cut != null && <p className="hint" style={{ margin: "8px 0 0" }}>Cota din profit o vezi doar tu; se setează din fișa utilizatorului (Cum e plătit → Procent din profitul net).</p>}
         {shares && shares.length > 0 && (
           <div className="stShares">
-            <h3>Cote din profit</h3>
+            <h3>Cote din profit · calculul</h3>
             <div className="tableWrap">
               <table className="table">
                 <thead><tr><th>Administrator</th><th style={{ textAlign: "right" }}>Venituri (rapoartele lui)</th><th style={{ textAlign: "right" }}>− Plăți</th><th style={{ textAlign: "right" }}>− Fixe (partea lui)</th><th style={{ textAlign: "right" }}>Profit filtrat</th><th style={{ textAlign: "right" }}>Cotă</th><th style={{ textAlign: "right" }}>De primit</th></tr></thead>

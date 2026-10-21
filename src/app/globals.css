@@ -3258,7 +3258,7 @@ span.rdPick { display: inline-block; }
 .fcSplits { display: flex; flex-direction: column; gap: 6px; }
 .fcSplit { display: grid; grid-template-columns: minmax(0, 1fr) 90px minmax(90px, auto); gap: 10px; align-items: center; font-size: 13.5px; }
 .fcSplit .input { height: 36px; text-align: right; }
-.stSummary dl { margin: 0; display: flex; flex-direction: column; gap: 8px; max-width: 520px; }
+.stSummary dl { margin: 0; display: flex; flex-direction: column; gap: 8px; max-width: 720px; }
 .stSummary dl div { display: flex; justify-content: space-between; gap: 16px; font-size: 14px; }
 .stSummary dt { color: var(--muted); }
 .stSummary dd { margin: 0; font-weight: 700; }
@@ -3445,3 +3445,22 @@ span.rdPick { display: inline-block; }
 }
 .stShares { margin-top: 14px; border-top: 1px solid var(--divider); padding-top: 12px; }
 .stShares h3 { margin: 0 0 8px; font-size: 14px; }
+/* Borderouri: a source's total row stands out; a statement unfolds into designated users and reports */
+.stSrcHead td { background: var(--navy); color: #fff; border-top: 2px solid var(--navy); }
+.stSrcHead td b { font-size: 13.5px; letter-spacing: .02em; text-transform: uppercase; }
+.stSrcHead td span { display: block; font-size: 11.5px; color: var(--on-navy-2); font-weight: 500; margin-top: 2px; }
+.stSrcHead td.mono b { font-size: 15px; text-transform: none; color: var(--acc-light); }
+.stSrc > summary { cursor: pointer; list-style: none; }
+.stSrc > summary::-webkit-details-marker { display: none; }
+.stSrcHint { display: block; color: var(--acc-text); font-weight: 700; font-size: 11.5px; margin-top: 2px; }
+.stSrc[open] .stSrcHint { color: var(--muted-2); }
+.stBanks { list-style: none; margin: 8px 0 2px; padding: 0 0 0 10px; border-left: 2px solid var(--acc-line); display: flex; flex-direction: column; gap: 4px; }
+.stBanks summary { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; cursor: pointer; font-size: 12.5px; padding: 3px 0; }
+.stBanks summary span:first-child { font-weight: 700; }
+.stBanks ul { list-style: none; margin: 4px 0 6px; padding: 0 0 0 12px; display: flex; flex-direction: column; gap: 3px; }
+.stBanks ul li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; font-size: 12px; }
+/* the month's result: revenue green, costs red */
+.stCalc .stIn dt, .stCalc .stIn dd { color: var(--ok-text); }
+.stCalc .stSub { border-top: 1px dashed var(--ok-line); padding-top: 4px; font-weight: 800; }
+.stCalc .stOut dt, .stCalc .stOut dd { color: var(--err); }
+.stCalc .stNet { background: var(--acc-soft); border-radius: 10px; padding: 6px 8px; margin-top: 4px; }

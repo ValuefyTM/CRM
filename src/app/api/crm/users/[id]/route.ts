@@ -42,7 +42,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (shares?.ok) await saveShares(a.db, u.id, shares.value);
     // the share of the profit: set (and seen) only by the owner
     if (u.kind === "internal" && a.user.role === "owner" && "profit_share" in b) {
-      const ps = await saveProfitShare(a.db, u.id, b.profit_share);
+      const ps = await saveProfitShare(a.db, u.id, b.profit_share, b.pay_mode);
       if (!ps.ok) return err(ps.error);
     }
     const changed = [v.value.role !== u.role && `rol: ${roleLabel("internal", v.value.role, roleNames(cfg))}`, shares?.ok && `cote: ${shares.value.map((x) => x ?? "—").join(" / ")}`].filter(Boolean).join(" · ");

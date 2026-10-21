@@ -428,8 +428,12 @@ async function monthParties(db: D1Database, period: string, kind: Kind) {
     ]);
     return [...(direct ? [DIRECT] : []), ...frameworks.results.map((x) => x.party), ...collabs.results.map((x) => x.party)];
   }
-  const { results } = await db.prepare(`SELECT DISTINCT 'u:' || m.user_id AS party FROM report_members m JOIN reports r ON r.id = m.report_id WHERE ${month} AND m.role IN ('evaluator', 'verifier')
-      UNION SELECT DISTINCT 'u:' || i.inspector_id FROM inspections i JOIN reports r ON r.id = i.report_id WHERE i.status = 'done' AND substr(i.done_at, 1, 7) = ?1 AND r.status <> 'cancelled' AND i.inspector_id IS NOT NULL`)
+  // not the owner, nor who is paid with a share of the profit (they are in the result, not in the costs)
+  const paid = "u.role <> 'owner' AND COALESCE(u.pay_mode, 'commission') <> 'profit'";
+  const { results } = await db.prepare(`SELECT DISTINCT 'u:' || m.user_id AS party FROM report_members m JOIN reports r ON r.id = m.report_id JOIN users u ON u.id = m.user_id
+        WHERE ${month} AND m.role IN ('evaluator', 'verifier') AND ${paid}
+      UNION SELECT DISTINCT 'u:' || i.inspector_id FROM inspections i JOIN reports r ON r.id = i.report_id JOIN users u ON u.id = i.inspector_id
+        WHERE i.status = 'done' AND substr(i.done_at, 1, 7) = ?1 AND r.status <> 'cancelled' AND ${paid}`)
     .bind(period).all<{ party: string }>();
   return results.map((x) => x.party);
 }
@@ -449,13 +453,30 @@ async function partyName(db: D1Database, party: string) {
  */
 export async function monthBoard(db: D1Database, period: string, kind: Kind, member?: Set<string> | null) {
   const [parties, existing] = await Promise.all([monthParties(db, period, kind), listStatements(db, { period, kind })]);
-  const rows: { party: string; name: string; sub: string | null; source: RevSource; statement: Statement | null; total: number; lines: number }[] = [];
+  type Bank = { bank: string; total: number; lines: { report_id: string; label: string; amount: number; on_date: string | null }[] };
+  const rows: { party: string; name: string; sub: string | null; source: RevSource; statement: Statement | null; total: number; lines: number; banks: Bank[] }[] = [];
+  // the revenue by designated user (the bank / institution the report is for), to unfold under each source
+  const recipients = kind === "receivable" ? new Map((await db.prepare(`SELECT r.id, COALESCE(b.name, '') AS bank FROM reports r LEFT JOIN entities b ON b.id = r.recipient_id
+      WHERE r.status = 'done' AND substr(${DATE_OF.delivered}, 1, 7) = ?1`).bind(period).all<{ id: string; bank: string }>()).results.map((x) => [x.id, niceName(x.bank) || x.bank])) : null;
+  const banksOf = (lines: { report_id: string | null; label: string; amount: number; on_date: string | null; removed?: number }[]): Bank[] => {
+    if (!recipients) return [];
+    const out: Bank[] = [];
+    for (const l of lines) {
+      if (l.removed) continue;
+      const bank = (l.report_id && recipients.get(l.report_id)) || "Doar clientul (fără bancă)";
+      let b = out.find((x) => x.bank === bank);
+      if (!b) out.push(b = { bank, total: 0, lines: [] });
+      b.total = round2(b.total + l.amount);
+      if (l.report_id) b.lines.push({ report_id: l.report_id, label: l.label, amount: l.amount, on_date: l.on_date });
+    }
+    return out.sort((a, b) => b.total - a.total);
+  };
   const seen = new Set<string>();
   for (const s of existing) {
     seen.add(s.party);
     const lines = linesWith(await linesOf(db, s), member ?? null);
     if (member && !lines.length) continue;
-    rows.push({ party: s.party, name: s.name, sub: s.sub, source: SOURCE_OF(s.party), statement: s, total: member || s.status === "open" ? totalOf(lines) : s.total ?? totalOf(lines), lines: lines.filter((l) => !l.removed).length });
+    rows.push({ party: s.party, name: s.name, sub: s.sub, source: SOURCE_OF(s.party), statement: s, total: member || s.status === "open" ? totalOf(lines) : s.total ?? totalOf(lines), lines: lines.filter((l) => !l.removed).length, banks: banksOf(lines) });
   }
   for (const party of parties) {
     const cols = partyCols(party);
@@ -464,7 +485,7 @@ export async function monthBoard(db: D1Database, period: string, kind: Kind, mem
     const lines = member ? auto.filter((l) => l.report_id && member.has(l.report_id)) : auto;
     // a person with no share set (nothing to pay) does not get one
     if (!lines.length || (kind === "payout" && !lines.some((l) => l.amount))) continue;
-    rows.push({ party, ...(await partyName(db, party)), source: SOURCE_OF(party), statement: null, total: round2(lines.reduce((t, l) => t + l.amount, 0)), lines: lines.length });
+    rows.push({ party, ...(await partyName(db, party)), source: SOURCE_OF(party), statement: null, total: round2(lines.reduce((t, l) => t + l.amount, 0)), lines: lines.length, banks: banksOf(lines) });
   }
   const order: Record<RevSource, number> = { direct: 0, framework: 1, collab: 2, person: 3 };
   return rows.sort((a, b) => order[a.source] - order[b.source] || a.name.localeCompare(b.name, "ro"));
@@ -484,7 +505,8 @@ export async function monthResult(db: D1Database, period: string, who: { id: str
 
 /** The administrators with a share of the profit, each with the month's profit on their reports and their cut. */
 export async function profitShares(db: D1Database, period: string) {
-  const { results } = await db.prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, profit_share FROM users WHERE kind = 'internal' AND status <> 'deleted' AND profit_share > 0 ORDER BY name`)
+  const { results } = await db.prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, profit_share FROM users
+      WHERE kind = 'internal' AND status <> 'deleted' AND role <> 'owner' AND pay_mode = 'profit' AND profit_share > 0 ORDER BY name`)
     .all<{ id: string; name: string; profit_share: number }>();
   const out: { id: string; name: string; pct: number; revenue: number; paid: number; fixed: number; profit: number; cut: number }[] = [];
   for (const u of results) {

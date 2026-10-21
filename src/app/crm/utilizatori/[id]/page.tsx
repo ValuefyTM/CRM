@@ -47,8 +47,8 @@ export default async function UserPage({ params, searchParams }: { params: Promi
   const firms = u.kind === "partner" ? (await listPartners(db)).map((p) => ({ id: p.id, name: p.name })) : [];
   const [log, cfg, shares, fw, accred] = await Promise.all([
     history(db, [u.id]), getConfig(db),
-    db.prepare("SELECT share_evaluator, share_verifier, inspector_fee_kind, inspector_fee, profit_share FROM users WHERE id = ?").bind(u.id)
-      .first<{ share_evaluator: number | null; share_verifier: number | null; inspector_fee_kind: string | null; inspector_fee: number | null; profit_share: number | null }>(),
+    db.prepare("SELECT share_evaluator, share_verifier, inspector_fee_kind, inspector_fee, profit_share, pay_mode FROM users WHERE id = ?").bind(u.id)
+      .first<{ share_evaluator: number | null; share_verifier: number | null; inspector_fee_kind: string | null; inspector_fee: number | null; profit_share: number | null; pay_mode: string | null }>(),
     // Agreeri: the framework contracts (team accounts, seen by those who manage users)
     u.kind === "internal" && can(me, "users")
       ? db.prepare(`SELECT k.id, COALESCE(e.name, 'Fără bancă') AS bank, k.number, k.closed_on IS NOT NULL AS closed FROM contracts k LEFT JOIN entities e ON e.id = k.client_id
@@ -93,7 +93,7 @@ export default async function UserPage({ params, searchParams }: { params: Promi
               share_evaluator: numStr(shares?.share_evaluator), share_verifier: numStr(shares?.share_verifier),
               inspector_fee_kind: shares?.inspector_fee_kind ?? "fixed", inspector_fee: numStr(shares?.inspector_fee),
               // the share of the profit: only in the owner's page
-              profit_share: me.role === "owner" ? numStr(shares?.profit_share) : "",
+              profit_share: me.role === "owner" ? numStr(shares?.profit_share) : "", pay_mode: me.role === "owner" && shares?.pay_mode === "profit" ? "profit" : "commission",
             }}
           />
           {u.kind === "internal" && !gone && can(me, "users") && u.role !== "owner" && (

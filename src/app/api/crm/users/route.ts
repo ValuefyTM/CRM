@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   const r = await createUser(a.db, kind, v.value, a.user.id);
   if (!r.ok) return err(r.error, 409);
   if (shares?.ok) await saveShares(a.db, r.id, shares.value);
-  if (kind === "internal" && a.user.role === "owner" && "profit_share" in b) await saveProfitShare(a.db, r.id, b.profit_share);
+  if (kind === "internal" && a.user.role === "owner" && "profit_share" in b) await saveProfitShare(a.db, r.id, b.profit_share, b.pay_mode);
   const actor = `user:${a.user.id}`;
   await audit(a.db, actor, "user.create", "user", r.id, `${v.value.email} · ${roleLabel(kind, v.value.role, roleNames(cfg))}`);
   const invited = b.invite === false ? false : await sendInvite(a.db, r.id, actor);
