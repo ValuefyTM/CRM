@@ -214,25 +214,23 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
             <div className="stIn"><dt>× {cut.pct}% cota asociatului</dt><dd className="mono">{lei2(cut.gross)}</dd></div>
             <div className="stOut"><dt>− Cheltuieli fixe aferente (partea lui)</dt><dd className="mono">{lei2(fixed)}</dd></div>
             <div className="stSumTotal stNet"><dt>De primit · {who!.name}</dt><dd className="mono" style={{ color: cut.cut >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(cut.cut)}</dd></div>
-          </> : <>
+          </> : shares && shares.length > 0 ? (() => {
+            // the owner: the fixed costs left to them, the associates' fixed costs (paid by the firm, taken back from
+            // each associate's cut), then each associate's net cut
+            const r2 = (n: number) => Math.round(n * 100) / 100;
+            const allocated = r2(shares.reduce((t, x) => t + x.fixed, 0));
+            const mine = r2(fixed - allocated);
+            const net = r2(revenue - paid - mine - allocated - shares.reduce((t, x) => t + x.cut, 0));
+            return <>
+              <div className="stOut"><dt>− Cheltuieli fixe rămase la tine</dt><dd className="mono">{lei2(mine)}</dd></div>
+              {allocated > 0 && <div className="stOut"><dt>− Cheltuieli fixe ale asociaților <small className="muted">(plătite de firmă; scăzute din cota fiecăruia mai jos)</small></dt><dd className="mono">{lei2(allocated)}</dd></div>}
+              {shares.map((x) => <div key={x.id} className="stOut"><dt>− Cota netă asociat {x.name} <small className="muted">({lei2(x.base)} × {x.pct}% − {lei2(x.fixed)} cheltuieli)</small></dt><dd className="mono">{lei2(x.cut)}</dd></div>)}
+              <div className="stSumTotal stNet"><dt>Net-ul tău (proprietar)</dt><dd className="mono" style={{ color: net >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(net)}</dd></div>
+            </>;
+          })() : <>
             <div className="stOut"><dt>− Cheltuieli fixe{who ? " (partea lui)" : ""}</dt><dd className="mono">{lei2(fixed)}</dd></div>
             <div className="stSumTotal"><dt>{profit >= 0 ? "Profit net" : "Pierdere"}</dt><dd className="mono" style={{ color: profit >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(profit)}</dd></div>
           </>}
-          {shares && shares.length > 0 && (() => {
-            const r2 = (n: number) => Math.round(n * 100) / 100;
-            // the fixed costs: the associates carry their split, the owner what is left
-            const allocated = r2(shares.reduce((t, x) => t + x.fixed, 0));
-            const mine = r2(fixed - allocated);
-            const base = r2(revenue - paid);
-            const net = r2(base - shares.reduce((t, x) => t + x.gross, 0) - mine);
-            return <>
-              <div className="stCalcHead"><dt>Net-ul tău · calculul</dt><dd /></div>
-              <div className="stSumTotal"><dt>Bază (venituri − plăți)</dt><dd className="mono">{lei2(base)}</dd></div>
-              {shares.map((x) => <div key={x.id} className="stOut"><dt>− Cota brută asociat {x.name} ({lei2(x.base)} × {x.pct}%)</dt><dd className="mono">{lei2(x.gross)}</dd></div>)}
-              <div className="stOut"><dt>− Cheltuieli fixe rămase la tine ({lei2(fixed)} total − {lei2(allocated)} alocate asociaților)</dt><dd className="mono">{lei2(mine)}</dd></div>
-              <div className="stSumTotal stNet"><dt>Net-ul tău (proprietar)</dt><dd className="mono" style={{ color: net >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(net)}</dd></div>
-            </>;
-          })()}
         </dl>
         {cut != null && <p className="hint" style={{ margin: "8px 0 0" }}>Cota din profit o vezi doar tu; se setează din fișa utilizatorului (Cum e plătit → Procent din profitul net).</p>}
         {shares && shares.length > 0 && (
