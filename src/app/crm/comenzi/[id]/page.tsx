@@ -27,6 +27,8 @@ import { photoUrl, presenceOf } from "@/lib/presence";
 import { orderProgress } from "@/lib/delivery";
 import { IssueInvoice, InvoiceList } from "@/components/Invoices";
 import { draftForReport, invoicesFor } from "@/lib/billing";
+import { avReport } from "@/lib/av-form";
+import { AvFormButton } from "@/components/AvFormButton";
 
 export const metadata: Metadata = { title: "Comandă | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -47,6 +49,8 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
     await audit(db, `user:${user.id}`, "order.view", "order", id);
   }
   const [docs, log, reports] = await Promise.all([orderDocuments(db, id), history(db, [id]), reportsForOrder(db, id)]);
+  // a work for Appraisal & Valuation: their order form (Excel), filled from the order's report
+  const avId = reports[0] && (await avReport(db, reports[0].id)) ? reports[0].id : null;
   const portal = o.source === "partner" || o.source === "client";
   const progress = o.glide_id ? null : await orderProgress(db, o);
   const lead = o.lead_id ? await getLead(db, o.lead_id) : null;
@@ -102,6 +106,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
       subtitle={`${SOURCE_LABEL[o.source]} · ${orderWhat(o)}${o.address ? ` · ${orderPlace(o)}` : ""} · ${o.glide_id ? `din ${fmtDate(o.ordered_on ?? o.created_at)}` : `primită ${fmtDate(o.created_at, true)}`}`}
       actions={<>
         <a href={backTo} className="btn btnGhost btnSm">← Comenzi</a>
+        {avId && <AvFormButton id={avId} />}
         {liveInvoices.map((i) => <a key={i.id} href={`/api/crm/invoices/${i.id}/pdf`} target="_blank" rel="noopener" className="btn btnGold btnSm" title={`Factura ${i.series} ${i.number}`}>PDF factură {i.series} {i.number}</a>)}
         {can(user, "orders.E") && !o.glide_id && (o.status === "cancelled" ? <CancelReason url={`/api/crm/orders/${o.id}`} what="comanda" reopen />
           : o.status === "received" || o.status === "draft" ? <CancelReason url={`/api/crm/orders/${o.id}`} what="comanda" /> : null)}

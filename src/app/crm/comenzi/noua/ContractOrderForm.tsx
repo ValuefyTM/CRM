@@ -290,7 +290,7 @@ export function ContractOrderForm(p: {
             const href = kind === "collab" ? `${p.base}/contracte?tip=colaborare` : `${p.base}/contracte/${contract!.id}`;
             return <p className="nwInfo">Facturare: {m ? <b>{m.toLowerCase()}</b> : <><b className="errTxt">nesetată</b>{href && <> · <a className="link" href={href} target="_blank" rel="noopener">setează pe {kind === "collab" ? "colaborare" : "contract"}</a></>}</>}</p>;
           })()}
-          {avOrder && <p className="nwInfo">Formularul Excel pentru Appraisal & Valuation se completează automat: după înregistrare, în raport, butonul <b>„Formular Appraisal & Valuation”</b> (sus, lângă status).</p>}
+          {avOrder && <p className="nwInfo">Formularul Excel pentru Appraisal & Valuation se completează automat: după înregistrare, în pagina comenzii, butonul <b>„Formular Appraisal & Valuation”</b> (sus).</p>}
           {kind === "collab" && collab?.share != null && Number.isFinite(feeNum) && <p className="nwInfo">Cota VALUEFY: <b>{Math.round(collab.share * 100)}%</b> · {(feeNum * collab.share).toLocaleString("ro-RO", { maximumFractionDigits: 2 })} lei</p>}
         </section>
 
