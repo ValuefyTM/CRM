@@ -3294,3 +3294,91 @@ span.rdPick { display: inline-block; }
 .stWorkBank li { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto; gap: 10px; align-items: baseline; }
 .stWork td.mono { white-space: nowrap; }
 .stSummary .stSumShare dt { color: var(--ink); font-weight: 700; }
+
+/* ========== Phones: the whole CRM ========== */
+@media (max-width: 760px) {
+  /* The header: title and bell on one line, the page's buttons in a strip that scrolls sideways, then the search.
+     Not sticky: on a phone it would cover half the screen. */
+  .top, .top.topDark { position: relative; flex-wrap: wrap; gap: 8px 10px; padding: 10px 14px; align-items: center; }
+  .top > div:first-child { order: 1; flex: 1 1 0; min-width: 0; }
+  .top h1, .topDark h1 { font-size: 14px; letter-spacing: 0.05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .top p, .topDark p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .top .bell, .bell { order: 2; }
+  .top .actions { order: 3; flex: 1 1 100%; display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; margin: 0 -14px; padding: 0 14px 2px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .top .actions::-webkit-scrollbar { display: none; }
+  .top .actions > * { flex-shrink: 0; }
+  .top .actions .btn, .top .actions .btnSm { height: 36px; padding: 0 12px; font-size: 12.5px; border-radius: 10px; }
+  .top:has(.gs) .actions { margin-left: -14px; }
+  .top .gs, .top.topDark .gs { order: 4; flex: 1 1 100%; min-width: 0; margin: 0; }
+  .gsInput { height: 40px; }
+  /* the dashboards: no title, the search next to the bell */
+  .top.topDark:not(:has(h1)) .gs { order: 1; flex: 1 1 0; }
+
+  /* Page and cards: a bit less padding, the content gets the width */
+  .content { padding: 12px 12px 96px; gap: 12px; }
+  .card { --pad: 14px; padding: var(--pad); border-radius: 16px; gap: 12px; }
+  .card > h2:first-child, .card > .cardHead:first-child { padding: 11px 14px !important; border-radius: 16px 16px 0 0; }
+  .cardHead { gap: 8px; }
+  .cardHead > .muted, .cardHead > span.muted { font-size: 12px; }
+
+  /* Figures: two by two, smaller; the last one alone takes the whole row */
+  .dbKpis, .ibKpis, .stKpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .dbKpis > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .dbKpi { padding: 12px 12px 10px; border-radius: 16px; gap: 4px; }
+  .dbKpi::after { top: 10px; right: 12px; font-size: 12px; }
+  .dbKpiLabel { font-size: 9.5px; letter-spacing: 0.05em; padding-right: 14px; }
+  .dbKpi > b, .ctKpiMoney { font-size: 20px; }
+  .ctKpiFoot, .dbKpi small { font-size: 11px; }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px; }
+  .kpis > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .kpi { padding: 12px; } .kpi b { font-size: 22px; }
+
+  /* Fields: 16px text, so the phone does not zoom in on them */
+  .input, .select, .textarea, .gsInput, input[type="text"], input[type="email"], input[type="tel"], input[type="number"], input[type="search"], select, textarea { font-size: 16px; }
+  .formRow, .grid2, .grid3 { grid-template-columns: 1fr; }
+
+  /* Every dialog opens from the bottom, the width of the screen */
+  .vfModal { align-items: flex-end; padding: 0; }
+  .vfModal .vfModalBox { width: 100%; max-width: none; border-radius: 20px 20px 0 0; max-height: 92dvh; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); }
+  .vfModalBox .actions { flex-wrap: wrap; }
+  .vfModalBox .actions .btn { flex: 1 1 auto; }
+  .frGrid, .avGrid, .exGroups { grid-template-columns: 1fr; }
+  .avAddr { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .avAddr > div:nth-child(2), .avAddr > div:nth-child(3) { grid-column: 1 / -1; }
+  .avActs { bottom: -16px; }
+
+  /* Tabs and filters: one line that scrolls */
+  .pillTabs { margin: 0 -12px; padding: 0 12px 2px; }
+  .pillTabs a { height: 36px; padding: 0 13px; font-size: 13px; }
+
+  /* Borderouri */
+  .stMonth { flex-wrap: wrap; gap: 8px; font-size: 15px; }
+  .stMonth b { min-width: 0; flex: 1; }
+  .stMonthFill { display: none; }
+  .stFilter { flex: 1 1 100%; flex-direction: column; align-items: stretch; gap: 4px; }
+  .stFilter .select { min-width: 0; width: 100%; }
+  .stHead { gap: 8px; }
+  .stTotal { font-size: 19px; }
+  .stSummary dl div { font-size: 13px; }
+  .stWorkBank li { grid-template-columns: 1fr; gap: 2px; }
+  .fcAdj { width: 100%; }
+  .fcAdjNote { flex-wrap: wrap; }
+  .fcAdjNote .input { min-width: 0; flex: 1 1 100%; }
+
+  /* Bottom bars of long forms (Lucrare nouă…): one compact line — what is missing, then the two buttons side by side */
+  .nwBar { padding: 10px 12px; gap: 8px; bottom: calc(66px + env(safe-area-inset-bottom)); margin: 0; }
+  .nwSum { gap: 2px 10px; font-size: 11.5px; }
+  .nwSum > span:not(.nwMissing):not(.nwReady) { display: none; }
+  .nwBar .actions { flex: 1 1 100%; flex-wrap: nowrap; gap: 8px; }
+  .nwBar .actions .btn { height: 40px; padding: 0 12px; font-size: 13px; }
+  .nwBar .actions .btnGold { flex: 1 1 auto; }
+  /* Choices side by side that are too long for a phone: they wrap */
+  .segment a, .segment button { white-space: normal; text-align: center; line-height: 1.2; height: auto; min-height: 40px; padding: 4px 6px; font-size: 13px; }
+
+  /* Links that act as buttons: a finger-sized target */
+  .linkBtn { min-height: 32px; display: inline-flex; align-items: center; }
+}
+@media (max-width: 380px) {
+  .dbKpi > b, .ctKpiMoney { font-size: 18px; }
+  .top .actions .btn { padding: 0 10px; }
+}
