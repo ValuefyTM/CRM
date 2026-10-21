@@ -469,13 +469,39 @@ export const listFixedCosts = async (db: D1Database) =>
  * with their percent of it.
  */
 export async function monthFixedCosts(db: D1Database, period: string, memberId?: string | null) {
-  const { results } = await db.prepare("SELECT id, label, amount, from_period, to_period, notes, splits FROM fixed_costs WHERE from_period <= ?1 AND (to_period IS NULL OR to_period >= ?1) ORDER BY label")
-    .bind(period).all<CostRow>();
-  const items = results.map(costOf).map((c) => {
+  const { results } = await db.prepare(`SELECT f.id, f.label, f.amount, f.from_period, f.to_period, f.notes, f.splits, a.amount AS adjust, a.note AS adjust_note, a.changed_at AS adjust_at,
+      COALESCE(NULLIF(u.name, ''), u.email) AS adjust_by
+    FROM fixed_costs f LEFT JOIN fixed_cost_adjustments a ON a.cost_id = f.id AND a.period = ?1 LEFT JOIN users u ON u.id = a.changed_by
+    WHERE f.from_period <= ?1 AND (f.to_period IS NULL OR f.to_period >= ?1) ORDER BY f.label`)
+    .bind(period).all<CostRow & { adjust: number | null; adjust_note: string | null; adjust_at: string | null; adjust_by: string | null }>();
+  const items = results.map((r) => {
+    const c = costOf(r);
+    // this month's amount: the monthly one plus the month's adjustment (+ / −)
+    const month = round2(c.amount + (r.adjust ?? 0));
     const pct = memberId ? c.splits[memberId] ?? 0 : 100;
-    return { ...c, pct, share: round2(c.amount * pct / 100) };
-  }).filter((c) => c.share > 0);
+    return { ...c, adjust: r.adjust ?? 0, adjust_note: r.adjust_note, adjust_at: r.adjust_at, adjust_by: r.adjust_by, month, pct, share: round2(month * pct / 100) };
+  }).filter((c) => !memberId || c.pct > 0);
   return { items, total: round2(items.reduce((s, c) => s + c.share, 0)) };
+}
+
+/** The month's adjustment of a fixed cost (+ / −) with its explanation; 0 removes it. */
+export async function adjustFixedCost(db: D1Database, actor: string, b: Record<string, unknown>) {
+  const id = typeof b.id === "string" ? b.id : "", period = b.period;
+  if (!validPeriod(period)) return { ok: false as const, error: "Luna nu e validă." };
+  const c = await db.prepare("SELECT label FROM fixed_costs WHERE id = ?").bind(id).first<{ label: string }>();
+  if (!c) return { ok: false as const, error: "Cheltuiala nu există." };
+  const raw = typeof b.amount === "string" ? b.amount.replace(/\s/g, "").replace(",", ".") : String(b.amount ?? "");
+  const amount = raw === "" ? 0 : Number(raw);
+  if (!Number.isFinite(amount)) return { ok: false as const, error: "Ajustarea nu e un număr (de ex. +250 sau -120)." };
+  const note = typeof b.note === "string" ? b.note.trim().slice(0, 300) || null : null;
+  if (amount === 0 && !note) await db.prepare("DELETE FROM fixed_cost_adjustments WHERE cost_id = ? AND period = ?").bind(id, period).run();
+  else {
+    if (amount !== 0 && !note) return { ok: false as const, error: "Scrie explicația ajustării." };
+    await db.prepare(`INSERT INTO fixed_cost_adjustments (cost_id, period, amount, note, changed_by, changed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        ON CONFLICT(cost_id, period) DO UPDATE SET amount = ?3, note = ?4, changed_by = ?5, changed_at = ?6`).bind(id, period, round2(amount), note, actor, now()).run();
+  }
+  await audit(db, `user:${actor}`, "fixed_cost.adjust", "fixed_cost", id, `${c.label} · ${period}: ${amount > 0 ? "+" : ""}${round2(amount)} lei${note ? ` (${note})` : ""}`);
+  return { ok: true as const };
 }
 
 export async function saveFixedCost(db: D1Database, actor: string, b: Record<string, unknown>) {
@@ -610,20 +636,47 @@ export async function exportStatement(db: D1Database, s: Statement, lines: Line[
 
 // ---------- direct work ----------
 
+/** A report of the month's work, with what it is grouped by: the kind of work and the bank (designated user). */
+export type WorkLine = Line & { group: string; bank: string };
+
 /**
- * The month's direct work: reports delivered in the month that are neither under a framework contract (on the bank's
- * statement) nor a collaboration (on the firm's) — direct clients, with their fee. Shown as an implicit statement.
+ * The month's own work: reports delivered in the month that are not under a framework contract (those are on the
+ * bank's statement) — direct clients with their fee, and the collaborations with the firm's share of it. Grouped by
+ * the kind of work, then by bank.
  */
-export async function directLines(db: D1Database, period: string, member?: Set<string> | null): Promise<Line[]> {
-  const { results } = await db.prepare(`SELECT ${REPORT_COLS}, ${DATE_OF.delivered} AS on_date ${REPORT_BASE}
-      LEFT JOIN orders o ON o.id = r.order_id LEFT JOIN contracts k ON k.id = r.contract_id
-      WHERE r.status = 'done' AND substr(${DATE_OF.delivered}, 1, 7) = ?1 AND o.collaboration_id IS NULL AND COALESCE(k.kind, '') <> 'framework'
-      ORDER BY on_date, r.number`).bind(period).all<RepRow>();
-  return results.filter((r) => !member || member.has(r.id)).map((r, i) => ({
-    id: null, key: `rep:${r.id}:direct`, source: "report", report_id: r.id, inspection_id: null, label: repLabel(r), detail: repDetail(r), on_date: r.on_date,
-    base: r.fee, rate: null, auto_amount: r.fee ?? 0, amount: r.fee ?? 0, removed: 0, reason: null, changed_by: null, changed_at: null, sort: i, number: r.number,
-  }));
+export async function directLines(db: D1Database, period: string, member?: Set<string> | null): Promise<WorkLine[]> {
+  const { results } = await db.prepare(`SELECT ${REPORT_COLS}, ${DATE_OF.delivered} AS on_date, b.name AS bank_name, cf.name AS collab, o.fee_net, COALESCE(o.share, cb.share) AS share
+      ${REPORT_BASE} LEFT JOIN orders o ON o.id = r.order_id LEFT JOIN contracts k ON k.id = r.contract_id
+      LEFT JOIN collaborations cb ON cb.id = o.collaboration_id LEFT JOIN entities cf ON cf.id = cb.firm_id
+      WHERE r.status = 'done' AND substr(${DATE_OF.delivered}, 1, 7) = ?1 AND COALESCE(k.kind, '') <> 'framework'
+      ORDER BY cf.name IS NOT NULL, cf.name, b.name IS NULL, b.name, on_date, r.number`).bind(period)
+    .all<RepRow & { bank_name: string | null; collab: string | null; fee_net: number | null; share: number | null }>();
+  return results.filter((r) => !member || member.has(r.id)).map((r, i) => {
+    const collab = !!r.collab;
+    const amount = collab ? r.fee_net ?? (r.fee != null && r.share != null ? round2(r.fee * r.share) : r.fee ?? 0) : r.fee ?? 0;
+    return {
+      id: null, key: `rep:${r.id}:direct`, source: "report", report_id: r.id, inspection_id: null, label: repLabel(r), detail: repDetail(r), on_date: r.on_date,
+      base: r.fee, rate: collab && r.share != null ? `${Math.round(r.share * 100)}%` : null, auto_amount: amount, amount, removed: 0, reason: null, changed_by: null, changed_at: null,
+      sort: i, number: r.number, group: collab ? `Colaborare · ${niceName(r.collab ?? "") || r.collab}` : "Direct", bank: niceName(r.bank_name ?? "") || r.bank_name || "Fără bancă (doar clientul)",
+    };
+  });
 }
+
+/** The work lines in their groups: kind of work → bank → reports, with the totals. */
+export const groupWork = (lines: WorkLine[]) => {
+  const out: { group: string; total: number; banks: { bank: string; total: number; lines: WorkLine[] }[] }[] = [];
+  for (const l of lines) {
+    let g = out.find((x) => x.group === l.group);
+    if (!g) out.push(g = { group: l.group, total: 0, banks: [] });
+    let b = g.banks.find((x) => x.bank === l.bank);
+    if (!b) g.banks.push(b = { bank: l.bank, total: 0, lines: [] });
+    b.lines.push(l); b.total = round2(b.total + l.amount); g.total = round2(g.total + l.amount);
+  }
+  // direct first, then the collaborations; inside, the biggest banks first
+  out.sort((a, b) => (a.group === "Direct" ? -1 : b.group === "Direct" ? 1 : a.group.localeCompare(b.group, "ro")));
+  for (const g of out) g.banks.sort((a, b) => b.total - a.total);
+  return out;
+};
 
 // ---------- the month's export ----------
 
@@ -662,12 +715,17 @@ export async function exportMonth(db: D1Database, period: string, keys: string[]
   };
   const paid = await block("Plăți colaboratori", payouts, "payout");
   const due = await block("De încasat", receivables, "receivable");
-  head("Lucrări directe");
-  sum.push(["Clienți direcți (fără contract cadru sau colaborare)", null, null, null, direct.length, totalOf(direct)]); blank();
+  head("Lucrări directe și colaborări (fără contracte cadru)");
+  bold.push(sum.length); sum.push(["Tip", "Bancă", null, null, "Rapoarte", "Total (lei)"]);
+  for (const g of groupWork(direct)) {
+    for (const b of g.banks) sum.push([g.group, b.bank, null, null, b.lines.length, b.total]);
+    bold.push(sum.length); sum.push([`Total ${g.group.toLowerCase()}`, null, null, null, g.banks.reduce((n, b) => n + b.lines.length, 0), g.total]);
+  }
+  bold.push(sum.length); sum.push(["Total lucrări", null, null, null, direct.length, totalOf(direct)]); blank();
   if (direct.length) sheets.push(await linesSheet(db, "Lucrări directe", direct, keys));
   head(`Cheltuieli fixe${member ? " (partea lui)" : ""}`);
-  bold.push(sum.length); sum.push(["Cheltuială", null, member ? "Split" : null, null, null, "Lei"]);
-  for (const c of costs.items) sum.push([c.label, c.notes, member ? `${c.pct}%` : null, null, null, c.share]);
+  bold.push(sum.length); sum.push(["Cheltuială", "Ajustare lună · explicație", member ? "Split" : "Lunar", "Ajustare", "Total lună", "Lei"]);
+  for (const c of costs.items) sum.push([c.label, c.adjust ? c.adjust_note : c.notes, member ? `${c.pct}%` : c.amount, c.adjust || null, c.month, c.share]);
   bold.push(sum.length); sum.push(["Total cheltuieli fixe", null, null, null, null, costs.total]); blank();
   head("Rezultatul lunii");
   sum.push([`Venituri${member ? " (rapoartele unde a fost în echipă)" : ""}`, `proprii ${rev.own} lei (${rev.ownN}) · colaborări ${rev.collab} lei (${rev.collabN})`, null, null, null, rev.total]);

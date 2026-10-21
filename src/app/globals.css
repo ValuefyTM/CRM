@@ -3285,3 +3285,11 @@ span.rdPick { display: inline-block; }
 .avAsset { display: flex; flex-direction: column; gap: 10px; }
 .avActs { position: sticky; bottom: -22px; background: #fff; padding: 10px 0; border-top: 1px solid var(--divider); }
 @media (max-width: 800px) { .avGrid { grid-template-columns: 1fr 1fr; } .avAddr { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.fcAdj { width: 110px; height: 34px; text-align: right; font-family: var(--mono); }
+.fcAdjNote { display: flex; gap: 6px; align-items: center; }
+.fcAdjNote .input { height: 34px; min-width: 180px; }
+.stWork .stWorkGroup td { background: var(--acc-soft); }
+.stWorkBank summary { cursor: pointer; display: flex; gap: 12px; align-items: baseline; padding-left: 14px; }
+.stWorkBank ul { list-style: none; margin: 8px 0 4px 14px; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+.stWorkBank li { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto; gap: 10px; align-items: baseline; }
+.stWork td.mono { white-space: nowrap; }

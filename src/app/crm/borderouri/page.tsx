@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { can } from "@/lib/perms";
 import {
-  autoLines, directLines, KIND_LABEL, listStatements, memberChoices, memberReports, monthBoard, monthFixedCosts, monthRevenue, partyChoices, periodLabel, ruleFor, STATUS_LABEL, thisMonth, validPeriod, type Kind,
+  autoLines, directLines, groupWork, KIND_LABEL, listStatements, memberChoices, memberReports, monthBoard, monthFixedCosts, monthRevenue, partyChoices, periodLabel, ruleFor, STATUS_LABEL, thisMonth, validPeriod, type Kind,
 } from "@/lib/statements";
 import { MemberFilter } from "./MemberFilter";
 import { ExportXlsx } from "./ExportXlsx";
+import { CostAdjust } from "./CostAdjust";
 import { CrmShell } from "@/components/CrmShell";
 import { ClickRow } from "@/components/ClickRow";
 import { NewStatement, OpenStatement } from "./StatementActions";
@@ -70,6 +71,8 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
     monthBoard(db, period, "payout", member), monthBoard(db, period, "receivable", member), listStatements(db, { limit: 80 }), partyChoices(db), monthRevenue(db, period, who?.id), monthFixedCosts(db, period, who?.id),
     directLines(db, period, member),
   ]);
+  // the month's adjustments of the fixed costs: who sees and changes every statement
+  const editCosts = !self && all && can(user, "statements.E");
   const directTotal = Math.round(direct.reduce((t, l) => t + l.amount, 0) * 100) / 100;
   const past = issued.filter((s) => s.period !== period && s.status !== "open");
   const sum = (rows: Row[]) => rows.reduce((s, r) => s + r.total, 0);
@@ -126,25 +129,37 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
       {group("receivable", receivables)}
 
       <section className="card flush" id="directe">
-        <div className="cardHead"><h2>Lucrări directe · {periodLabel(period)}</h2><span className="muted">clienți direcți, fără contract cadru sau colaborare · {direct.length} {direct.length === 1 ? "raport" : "rapoarte"} · <b>{lei2(directTotal)}</b></span></div>
-        {direct.length === 0 ? <p className="hint pad">Niciun raport direct predat în luna aceasta{who ? " cu el în echipă" : ""}.</p> : (
-          <details className="stDirect">
-            <summary>Vezi rapoartele</summary>
-            <div className="tableWrap">
-              <table className="table">
-                <thead><tr><th>Raport</th><th>Data</th><th style={{ textAlign: "right" }}>Onorariu</th></tr></thead>
-                <tbody>
-                  {direct.map((l) => (
-                    <ClickRow key={l.key} href={`${base}/rapoarte/${l.report_id}`}>
-                      <td><b>{l.label}</b>{l.detail && <div className="muted">{l.detail}</div>}</td>
-                      <td>{l.on_date ? l.on_date.split("-").reverse().join(".") : "—"}</td>
-                      <td style={{ textAlign: "right" }} className="mono"><b>{lei2(l.amount)}</b></td>
-                    </ClickRow>
+        <div className="cardHead"><h2>Lucrări directe · {periodLabel(period)}</h2><span className="muted">clienți direcți și colaborări (contractele cadru sunt pe borderourile băncilor) · {direct.length} {direct.length === 1 ? "raport" : "rapoarte"} · <b>{lei2(directTotal)}</b></span></div>
+        {direct.length === 0 ? <p className="hint pad">Niciun raport predat în luna aceasta{who ? " cu el în echipă" : ""}.</p> : (
+          <div className="tableWrap">
+            <table className="table stWork">
+              <thead><tr><th>Tip · bancă</th><th>Rapoarte</th><th style={{ textAlign: "right" }}>Total</th></tr></thead>
+              {groupWork(direct).map((g) => (
+                <tbody key={g.group}>
+                  <tr className="stWorkGroup"><td><b>{g.group}</b></td><td>{g.banks.reduce((n, b) => n + b.lines.length, 0)}</td><td style={{ textAlign: "right" }} className="mono"><b>{lei2(g.total)}</b></td></tr>
+                  {g.banks.map((b) => (
+                    <tr key={b.bank}>
+                      <td colSpan={2}>
+                        <details className="stWorkBank">
+                          <summary><span>{b.bank}</span><span className="muted">{b.lines.length} {b.lines.length === 1 ? "raport" : "rapoarte"}</span></summary>
+                          <ul>
+                            {b.lines.map((l) => (
+                              <li key={l.key}>
+                                <a className="link" href={`${base}/rapoarte/${l.report_id}`}>{l.label}</a>
+                                <span className="muted">{[l.on_date ? l.on_date.split("-").reverse().join(".") : null, l.detail].filter(Boolean).join(" · ")}</span>
+                                <span className="mono">{l.rate ? `${lei2(l.base)} × ${l.rate} = ` : ""}{lei2(l.amount)}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      </td>
+                      <td style={{ textAlign: "right", verticalAlign: "top" }} className="mono">{lei2(b.total)}</td>
+                    </tr>
                   ))}
                 </tbody>
-              </table>
-            </div>
-          </details>
+              ))}
+            </table>
+          </div>
         )}
       </section>
 
@@ -153,17 +168,23 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
         {costs.items.length === 0 ? <p className="hint pad">{who ? "Nicio cheltuială fixă împărțită cu acest administrator în luna aceasta." : "Nicio cheltuială fixă în luna aceasta."}</p> : (
           <div className="tableWrap">
             <table className="table">
-              <thead><tr><th>Cheltuială</th><th style={{ textAlign: "right" }}>Lunar</th>{who && <th style={{ textAlign: "right" }}>Split</th>}<th style={{ textAlign: "right" }}>{who ? "Partea lui" : "Se scade"}</th></tr></thead>
+              <thead><tr><th>Cheltuială</th><th style={{ textAlign: "right" }}>Lunar</th><th style={{ textAlign: "right" }}>Ajustare (+ / −)</th><th>Explicație</th><th style={{ textAlign: "right" }}>Total lună</th>{who && <th style={{ textAlign: "right" }}>Split</th>}<th style={{ textAlign: "right" }}>{who ? "Partea lui" : "Se scade"}</th></tr></thead>
               <tbody>
                 {costs.items.map((c) => (
-                  <tr key={c.id}>
+                  <tr key={c.id} className={c.adjust ? "stChanged" : undefined}>
                     <td><b>{c.label}</b>{c.notes && <div className="muted">{c.notes}</div>}</td>
                     <td style={{ textAlign: "right" }} className="mono">{lei2(c.amount)}</td>
+                    {editCosts ? <CostAdjust id={c.id} period={period} adjust={c.adjust} note={c.adjust_note} /> : <>
+                      <td style={{ textAlign: "right" }} className="mono">{c.adjust ? `${c.adjust > 0 ? "+" : ""}${lei2(c.adjust)}` : "—"}</td>
+                      <td className="muted">{c.adjust_note ?? ""}</td>
+                    </>}
+                    <td style={{ textAlign: "right" }} className="mono">{lei2(c.month)}{c.adjust_by && <div className="muted" style={{ fontSize: 11 }}>ajustat de {c.adjust_by}</div>}</td>
                     {who && <td style={{ textAlign: "right" }}>{c.pct}%</td>}
                     <td style={{ textAlign: "right" }} className="mono"><b>{lei2(c.share)}</b></td>
                   </tr>
                 ))}
               </tbody>
+              <tfoot><tr><td colSpan={who ? 6 : 5} style={{ textAlign: "right" }}><b>Total cheltuieli fixe</b></td><td style={{ textAlign: "right" }} className="mono"><b>{lei2(costs.total)}</b></td></tr></tfoot>
             </table>
           </div>
         )}
