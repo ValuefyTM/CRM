@@ -12,12 +12,20 @@ const day = (d: string | null) => (d ? d.slice(0, 10).split("-").reverse().join(
  * `adjust`: the column of the firm's adjustments (amount and comment) — on a payout statement; `accept`: the
  * collaborator ticks each adjustment as accepted (their own statement); `locked`: issued.
  */
-export function LinesTable({ lines, base, statement, canEdit, print = false, adjust = false, accept = false, locked = false }: {
+export function LinesTable({ lines, base, statement, canEdit, print = false, adjust = false, accept = false, locked = false, banks }: {
   lines: Line[]; base: string; statement: string; canEdit: boolean; print?: boolean; adjust?: boolean; accept?: boolean; locked?: boolean;
+  /** the designated user (bank / institution) of each report: the lines grouped by it, with subtotals */
+  banks?: Record<string, string>;
 }) {
   if (!lines.length) return <p className="hint pad">Nicio linie în această lună.</p>;
   const adjusted = lines.filter((l) => l.removed || l.changed_at);
   const col = adjust || adjusted.length > 0;
+  const groupOf = (l: Line) => (l.report_id ? banks?.[l.report_id] || "Doar clientul (fără bancă)" : "Alte linii");
+  // grouped: the banks by their total (biggest first), the other lines last
+  const groups = banks ? [...new Set(lines.map(groupOf))].map((g) => ({ g, lines: lines.filter((l) => groupOf(l) === g) }))
+    .sort((a, b) => (a.g === "Alte linii" ? 1 : b.g === "Alte linii" ? -1 : totalOf(b.lines) - totalOf(a.lines))) : [{ g: "", lines }];
+  const cols = 5 + (col ? 1 : 0) + (canEdit && !print ? 1 : 0);
+  let n = 0;
   const diff = (l: Line) => {
     if (l.removed) return `− ${lei2(l.amount)} (scoasă)`;
     if (l.source === "manual") return `${l.amount >= 0 ? "+" : "−"} ${lei2(Math.abs(l.amount))} (adăugată)`;
@@ -28,8 +36,11 @@ export function LinesTable({ lines, base, statement, canEdit, print = false, adj
     <div className={print ? "" : "tableWrap"}>
       <table className={`table stLines${print ? " stPrint" : ""}`}>
         <thead><tr><th>#</th><th>Ce</th><th>Data</th><th>Bază · cotă</th><th style={{ textAlign: "right" }}>Suma</th>{col && <th>Ajustare · comentariu</th>}{canEdit && !print && <th />}</tr></thead>
-        <tbody>
-          {lines.map((l, i) => {
+        {groups.map(({ g, lines: part }) => (
+        <tbody key={g || "all"}>
+          {g && <tr className="stBankHead"><td colSpan={cols}><b>{g}</b><span>{part.filter((l) => !l.removed).length} {part.filter((l) => !l.removed).length === 1 ? "linie" : "linii"} · <b className="mono">{lei2(totalOf(part))}</b></span></td></tr>}
+          {part.map((l) => {
+            const i = n++;
             const changed = !l.removed && l.changed_at && l.key;
             return (
               <tr key={l.id ?? l.key ?? i} className={l.removed ? "stRemoved" : changed || l.source === "manual" ? "stChanged" : ""}>
@@ -57,6 +68,7 @@ export function LinesTable({ lines, base, statement, canEdit, print = false, adj
             );
           })}
         </tbody>
+        ))}
         <tfoot>
           <tr><td colSpan={4} style={{ textAlign: "right" }}><b>Total</b>{adjusted.length > 0 && <span className="muted"> · {adjusted.length} {adjusted.length === 1 ? "ajustare" : "ajustări"}</span>}</td><td style={{ textAlign: "right" }} className="mono"><b>{lei2(totalOf(lines))}</b></td>{col && <td />}{canEdit && !print && <td />}</tr>
         </tfoot>

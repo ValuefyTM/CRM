@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { can } from "@/lib/perms";
 import {
-  autoLines, criteriaOf, KIND_LABEL, listStatements, memberChoices, monthBoard, associateCut, linesOf, monthResult, partyCols, totalOf, periodLabel, profitShares, STATUS_LABEL, thisMonth, validPeriod, type RevSource,
+  autoLines, criteriaOf, KIND_LABEL, listStatements, memberChoices, monthBoard, associateCut, linesOf, monthResult, recipientsOf, partyCols, totalOf, periodLabel, profitShares, STATUS_LABEL, thisMonth, validPeriod, type RevSource,
 } from "@/lib/statements";
 import { MemberFilter } from "./MemberFilter";
 import { ExportXlsx } from "./ExportXlsx";
@@ -49,6 +49,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
     const [cur, prev] = await Promise.all([monthOf(now), monthOf(prevP)]);
     const delta = Math.round((cur.total - prev.total) * 100) / 100;
     const badge = (st: typeof cur.st) => (st && st.status !== "open" ? <span className="stBadge">✓ Validat de firmă{st.status === "issued" ? " · emis" : ""}</span> : <span className="stBadge wait">În curs</span>);
+    const banks = await recipientsOf(db, [...new Set(cur.lines.map((l) => l.report_id).filter((x): x is string => !!x))]);
     const pending = cur.lines.filter((l) => l.changed_at && !l.accepted_at).length + prev.lines.filter((l) => l.changed_at && !l.accepted_at).length;
     return (
       <CrmShell user={user} base={base} active="statements" title="Borderoul meu" subtitle="Ce ți se cuvine lunar: cotele tale din rapoartele predate și inspecțiile făcute">
@@ -60,7 +61,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
         {pending > 0 && <div className="note"><b>Ai {pending} {pending === 1 ? "ajustare" : "ajustări"} de confirmat.</b> Le găsești în coloana „Ajustare · comentariu”; bifează „Accept ajustarea”.</div>}
         <section className="card flush" id="luna">
           <div className="cardHead"><h2>{periodLabel(now)} · luna curentă</h2><span className="muted">{badge(cur.st)}{cur.st && <> · <a className="link" href={`${here}/${cur.st.id}`}>deschide →</a></>}</span></div>
-          <LinesTable lines={cur.lines} base={base} statement={cur.st?.id ?? ""} canEdit={false} adjust accept={!!cur.st} locked={cur.st?.status === "issued"} />
+          <LinesTable lines={cur.lines} base={base} statement={cur.st?.id ?? ""} canEdit={false} adjust accept={!!cur.st} locked={cur.st?.status === "issued"} banks={banks} />
           <p className="hint pad">Se calculează din rapoartele predate și inspecțiile făcute în lună, cu cotele tale. La final de lună firma îl validează și îl emite; ajustările apar cu comentariul lor și le confirmi tu.</p>
         </section>
         <section className="card flush" id="istoric">
@@ -99,20 +100,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
   const sum = (rows: Row[]) => Math.round(rows.reduce((s, r) => s + r.total, 0) * 100) / 100;
   const q = who ? `&evaluator=${who.id}` : "";
   const link = (p: string) => `${here}?luna=${p}${q}`;
-  const rowsOf = (rows: Row[]) => rows.map((r) => {
-    const [l, c] = r.statement ? STATUS_LABEL[r.statement.status] : ["În curs", "pillInfo"];
-    const href = r.statement ? `${here}/${r.statement.id}${who ? `?evaluator=${who.id}` : ""}` : null;
-    const cells = <>
-      <td><b>{r.name}</b>{r.sub && <div className="muted">{r.sub}</div>}</td>
-      <td><span className={`pill ${c}`}><i />{l}</span>{!r.statement && <div className="muted" style={{ fontSize: 11.5 }}>calculat automat</div>}</td>
-      <td>{r.lines}</td>
-      <td className="mono">{r.statement?.number ?? "—"}</td>
-      <td style={{ textAlign: "right", whiteSpace: "nowrap" }} className="mono"><b>{lei2(r.total)}</b></td>
-      <td>{href ? <a className="btn btnGhost btnSm" href={href}>Deschide</a> : !self && can(user, "statements.A") ? <OpenStatement party={r.party} period={period} base={here} /> : null}</td>
-    </>;
-    return href ? <ClickRow key={r.party} href={href}>{cells}</ClickRow> : <tr key={r.party}>{cells}</tr>;
-  });
-  // a source of revenue: its statement, unfolding into the designated users (banks / institutions) and their reports
+  // a statement (revenue source or collaborator), unfolding into the designated users (banks / institutions) and their reports
   const incomeRows = (rows: Row[]) => rows.map((r) => {
     const [l, c] = r.statement ? STATUS_LABEL[r.statement.status] : ["În curs", "pillInfo"];
     const href = r.statement ? `${here}/${r.statement.id}${who ? `?evaluator=${who.id}` : ""}` : null;
@@ -193,7 +181,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
           <div className="tableWrap">
             <table className="table">
               {head}
-              <tbody>{rowsOf(payouts)}</tbody>
+              <tbody>{incomeRows(payouts)}</tbody>
               <tfoot><tr><td colSpan={4} style={{ textAlign: "right" }}><b>Total plăți colaboratori</b></td><td style={{ textAlign: "right" }} className="mono"><b>{lei2(paid)}</b></td><td /></tr></tfoot>
             </table>
           </div>

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { can } from "@/lib/perms";
-import { getStatement, KIND_LABEL, linesOf, linesWith, memberChoices, memberReports, periodLabel, statementLog, STATUS_LABEL, BASIS_PICK, totalOf } from "@/lib/statements";
+import { getStatement, KIND_LABEL, linesOf, linesWith, memberChoices, memberReports, periodLabel, recipientsOf, statementLog, STATUS_LABEL, BASIS_PICK, totalOf } from "@/lib/statements";
 import { CrmShell } from "@/components/CrmShell";
 import { History } from "@/components/History";
 import { LinesTable, lei2 } from "../LinesTable";
@@ -30,6 +30,8 @@ export default async function StatementPage({ params, searchParams }: { params: 
   const canEdit = all && can(user, "statements.E") && !who;
   const [allLines, log] = await Promise.all([linesOf(db, s), statementLog(db, id)]);
   const lines = who ? linesWith(allLines, await memberReports(db, who.id)) : allLines;
+  // the lines by designated user (bank / institution)
+  const banks = await recipientsOf(db, [...new Set(lines.map((l) => l.report_id).filter((x): x is string => !!x))]);
   if (self && !lines.length) redirect(`${base}/borderouri`);
   const [st, cls] = STATUS_LABEL[s.status];
   const back = `${base}/borderouri`;
@@ -57,7 +59,7 @@ export default async function StatementPage({ params, searchParams }: { params: 
       {mine && lines.some((l) => l.changed_at && !l.accepted_at) && <div className="note"><b>Ai ajustări de confirmat.</b> Uită-te în coloana „Ajustare · comentariu” și bifează „Accept ajustarea” la fiecare.</div>}
       <section className="card flush">
         <div className="cardHead"><h2>Linii</h2>{canEdit && s.status !== "issued" && <AddLine statement={s.id} />}</div>
-        <LinesTable lines={lines} base={base} statement={s.id} canEdit={canEdit && s.status !== "issued"} adjust={s.kind === "payout"} accept={mine} locked={s.status === "issued"} />
+        <LinesTable lines={lines} base={base} statement={s.id} canEdit={canEdit && s.status !== "issued"} adjust={s.kind === "payout"} accept={mine} locked={s.status === "issued"} banks={banks} />
       </section>
       <div className="dGrid2">
           <section className="card">

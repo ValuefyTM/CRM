@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { can } from "@/lib/perms";
 import { getFirm } from "@/lib/settings";
-import { getStatement, KIND_LABEL, linesOf, linesWith, memberReports, periodLabel, STATUS_LABEL, totalOf } from "@/lib/statements";
+import { getStatement, KIND_LABEL, linesOf, linesWith, memberReports, periodLabel, recipientsOf, STATUS_LABEL, totalOf } from "@/lib/statements";
 import { LinesTable, lei2 } from "../../LinesTable";
 
 export const metadata: Metadata = { title: "Borderou | CRM VALUEFY" };
@@ -20,6 +20,7 @@ export default async function StatementPrint({ params }: { params: Promise<{ id:
   const [allLines, firm] = await Promise.all([linesOf(db, s), getFirm(db)]);
   // "Profitabilitatea lui": only the lines on the user's reports
   const lines = self ? linesWith(allLines, await memberReports(db, user.id)) : allLines;
+  const banks = await recipientsOf(db, [...new Set(lines.map((l) => l.report_id).filter((x): x is string => !!x))]);
   if (self && !lines.length) redirect(`${base}/borderouri`);
   const total = self || s.status === "open" ? totalOf(lines) : s.total ?? totalOf(lines);
   return (
@@ -33,7 +34,7 @@ export default async function StatementPrint({ params }: { params: Promise<{ id:
         </div>
       </header>
       <p><b>{s.kind === "payout" ? "Beneficiar" : "Client"}:</b> {s.name}{s.sub ? ` · ${s.sub}` : ""}</p>
-      <LinesTable lines={lines} base={base} statement={s.id} canEdit={false} print />
+      <LinesTable lines={lines} base={base} statement={s.id} canEdit={false} print banks={banks} />
       <p className="stGrand">Total: <b>{lei2(total)}</b></p>
       {s.notes && <p><b>Observații:</b> {s.notes}</p>}
       <p className="muted" style={{ fontSize: 11 }}>Generat din CRM {fmtDate(new Date().toISOString(), true)}.</p>

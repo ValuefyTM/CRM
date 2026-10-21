@@ -426,6 +426,34 @@ export async function deleteLine(db: D1Database, actor: string, id: string, line
   return { ok: true as const };
 }
 
+/** The designated user (bank / institution) of each report: the name, by report id. */
+export async function recipientsOf(db: D1Database, ids: string[]) {
+  const out: Record<string, string> = {};
+  for (let i = 0; i < ids.length; i += 90) {
+    const part = ids.slice(i, i + 90);
+    const { results } = await db.prepare(`SELECT r.id, COALESCE(b.name, '') AS bank FROM reports r LEFT JOIN entities b ON b.id = r.recipient_id WHERE r.id IN (${part.map((_, j) => `?${j + 1}`).join(", ")})`)
+      .bind(...part).all<{ id: string; bank: string }>();
+    for (const x of results) out[x.id] = niceName(x.bank) || x.bank;
+  }
+  return out;
+}
+
+export const NO_BANK = "Doar clientul (fără bancă)";
+export type Bank = { bank: string; total: number; lines: { report_id: string; label: string; amount: number; on_date: string | null }[] };
+/** Lines by designated user, the biggest first (lines without a report: „Alte linii”). */
+export function groupByBank(lines: { report_id: string | null; label: string; amount: number; on_date: string | null; removed?: number }[], recipients: Map<string, string>): Bank[] {
+  const out: Bank[] = [];
+  for (const l of lines) {
+    if (l.removed) continue;
+    const bank = l.report_id ? recipients.get(l.report_id) || NO_BANK : "Alte linii";
+    let b = out.find((x) => x.bank === bank);
+    if (!b) out.push(b = { bank, total: 0, lines: [] });
+    b.total = round2(b.total + l.amount);
+    if (l.report_id) b.lines.push({ report_id: l.report_id, label: l.label, amount: l.amount, on_date: l.on_date });
+  }
+  return out.sort((a, b) => b.total - a.total);
+}
+
 export type RevSource = "direct" | "framework" | "collab" | "person";
 export const SOURCE_OF = (party: string): RevSource => (party === DIRECT ? "direct" : party.startsWith("k:") ? "framework" : party.startsWith("c:") ? "collab" : "person");
 
@@ -465,30 +493,20 @@ async function partyName(db: D1Database, party: string) {
  */
 export async function monthBoard(db: D1Database, period: string, kind: Kind, member?: Set<string> | null) {
   const [parties, existing] = await Promise.all([monthParties(db, period, kind), listStatements(db, { period, kind })]);
-  type Bank = { bank: string; total: number; lines: { report_id: string; label: string; amount: number; on_date: string | null }[] };
   const rows: { party: string; name: string; sub: string | null; source: RevSource; statement: Statement | null; total: number; lines: number; banks: Bank[] }[] = [];
   // the revenue by designated user (the bank / institution the report is for), to unfold under each source
-  const recipients = kind === "receivable" ? new Map((await db.prepare(`SELECT r.id, COALESCE(b.name, '') AS bank FROM reports r LEFT JOIN entities b ON b.id = r.recipient_id
-      WHERE r.status = 'done' AND substr(${DATE_OF.delivered}, 1, 7) = ?1`).bind(period).all<{ id: string; bank: string }>()).results.map((x) => [x.id, niceName(x.bank) || x.bank])) : null;
-  const banksOf = (lines: { report_id: string | null; label: string; amount: number; on_date: string | null; removed?: number }[]): Bank[] => {
-    if (!recipients) return [];
-    const out: Bank[] = [];
-    for (const l of lines) {
-      if (l.removed) continue;
-      const bank = (l.report_id && recipients.get(l.report_id)) || "Doar clientul (fără bancă)";
-      let b = out.find((x) => x.bank === bank);
-      if (!b) out.push(b = { bank, total: 0, lines: [] });
-      b.total = round2(b.total + l.amount);
-      if (l.report_id) b.lines.push({ report_id: l.report_id, label: l.label, amount: l.amount, on_date: l.on_date });
-    }
-    return out.sort((a, b) => b.total - a.total);
+  const recipients = new Map<string, string>();
+  const banksOf = async (lines: { report_id: string | null; label: string; amount: number; on_date: string | null; removed?: number }[]): Promise<Bank[]> => {
+    const missing = [...new Set(lines.map((l) => l.report_id).filter((x): x is string => !!x && !recipients.has(x)))];
+    for (const [k, v] of Object.entries(await recipientsOf(db, missing))) recipients.set(k, v);
+    return groupByBank(lines, recipients);
   };
   const seen = new Set<string>();
   for (const s of existing) {
     seen.add(s.party);
     const lines = linesWith(await linesOf(db, s), member ?? null);
     if (member && !lines.length) continue;
-    rows.push({ party: s.party, name: s.name, sub: s.sub, source: SOURCE_OF(s.party), statement: s, total: member || s.status === "open" ? totalOf(lines) : s.total ?? totalOf(lines), lines: lines.filter((l) => !l.removed).length, banks: banksOf(lines) });
+    rows.push({ party: s.party, name: s.name, sub: s.sub, source: SOURCE_OF(s.party), statement: s, total: member || s.status === "open" ? totalOf(lines) : s.total ?? totalOf(lines), lines: lines.filter((l) => !l.removed).length, banks: await banksOf(lines) });
   }
   for (const party of parties) {
     const cols = partyCols(party);
@@ -497,7 +515,7 @@ export async function monthBoard(db: D1Database, period: string, kind: Kind, mem
     const lines = member ? auto.filter((l) => l.report_id && member.has(l.report_id)) : auto;
     // a person with no share set (nothing to pay) does not get one
     if (!lines.length || (kind === "payout" && !lines.some((l) => l.amount))) continue;
-    rows.push({ party, ...(await partyName(db, party)), source: SOURCE_OF(party), statement: null, total: round2(lines.reduce((t, l) => t + l.amount, 0)), lines: lines.length, banks: banksOf(lines) });
+    rows.push({ party, ...(await partyName(db, party)), source: SOURCE_OF(party), statement: null, total: round2(lines.reduce((t, l) => t + l.amount, 0)), lines: lines.length, banks: await banksOf(lines) });
   }
   const order: Record<RevSource, number> = { direct: 0, framework: 1, collab: 2, person: 3 };
   return rows.sort((a, b) => order[a.source] - order[b.source] || a.name.localeCompare(b.name, "ro"));
