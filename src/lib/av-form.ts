@@ -1,5 +1,6 @@
 // Server-only: the Appraisal & Valuation order form, filled in from the report (client, designated user, purpose,
 // assets) and the order's own settings, then written into their template (same sheets, lists and comments).
+import { splitAddress } from "./address-split";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { now, parseJson } from "./db";
 import { audit } from "./auth";
@@ -19,7 +20,7 @@ type Row = {
   id: string; order_id: string | null; fee: number | null; purpose: string | null; bank_branch: string | null; firm: string | null; av_form: string | null;
   client_id: string | null; kind: string | null; name: string | null; cui: string | null; cnp: string | null; reg_no: string | null; legal_rep: string | null;
   email: string | null; phone: string | null; county: string | null; city: string | null; addr_street: string | null; addr_number: string | null; addr_block: string | null;
-  addr_stair: string | null; addr_floor: string | null; addr_apartment: string | null; recipient_id: string | null; recipient: string | null; order_email: string | null; order_phone: string | null;
+  addr_stair: string | null; addr_floor: string | null; addr_apartment: string | null; billing_address: string | null; recipient_id: string | null; recipient: string | null; order_email: string | null; order_phone: string | null;
 };
 type Prop = {
   asset_id: string; property_id: string; is_main: number; category: string | null; type: string | null; construction: string | null; county: string | null; city: string | null;
@@ -41,7 +42,7 @@ export async function avReport(db: D1Database, reportId: string) {
 export async function avData(db: D1Database, reportId: string) {
   const r = await db.prepare(`SELECT r.id, r.order_id, r.fee, r.purpose, r.bank_branch, fe.name AS firm, o.av_form, o.client_email AS order_email, o.client_phone AS order_phone,
       r.client_id, c.kind, c.name, c.cui, c.cnp, c.reg_no, c.legal_rep, c.email, c.phone, c.county, c.city, c.addr_street, c.addr_number, c.addr_block, c.addr_stair,
-      c.addr_floor, c.addr_apartment, r.recipient_id, b.name AS recipient
+      c.addr_floor, c.addr_apartment, c.billing_address, r.recipient_id, b.name AS recipient
     FROM reports r LEFT JOIN orders o ON o.id = r.order_id LEFT JOIN collaborations cb ON cb.id = o.collaboration_id LEFT JOIN entities fe ON fe.id = cb.firm_id
       LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id WHERE r.id = ?`).bind(reportId).first<Row>();
   if (!r) return null;
@@ -52,10 +53,11 @@ export async function avData(db: D1Database, reportId: string) {
     FROM assets a JOIN crm_properties p ON p.id = a.property_id WHERE a.report_id = ? ORDER BY a.is_main DESC, a.created_at`).bind(reportId).all<Prop>();
   const hasRecipient = !!r.recipient_id && r.recipient_id !== r.client_id;
   const recipient = s(sv.recipient) || (hasRecipient ? avBank(niceName(r.recipient ?? "") || r.recipient) : "");
-  const addrOf = (p: Prop): AvAddress => ({
+  // the parts kept on the property; what is missing, taken from its full address ("Str. Florilor 5, Dumbrăvița")
+  const addrOf = (p: Prop): AvAddress => fill({
     county: countyCode(p.county), city: s(p.city), street: [s(p.street_type) && !/^str/i.test(s(p.street_type)) ? s(p.street_type) : "", s(p.street)].filter(Boolean).join(" "),
     number: s(p.number), block: s(p.block), stair: s(p.stair), floor: s(p.floor), apartment: s(p.apartment),
-  });
+  }, p.full_address);
   const assets: AvAsset[] = props.map((p, i) => {
     const o = sv.assets?.[p.asset_id] ?? {};
     const mobile = p.category === "BUN MOBIL";
@@ -75,7 +77,9 @@ export async function avData(db: D1Database, reportId: string) {
     };
   });
   const main = assets.find((a) => !a.mobile);
-  const own: AvAddress = { county: countyCode(r.county), city: s(r.city), street: s(r.addr_street), number: s(r.addr_number), block: s(r.addr_block), stair: s(r.addr_stair), floor: s(r.addr_floor), apartment: s(r.addr_apartment) };
+  // the client's: its parts, else split from its address (the domicile read from the CI is one line)
+  const own: AvAddress = fill({ county: countyCode(r.county), city: s(r.city), street: s(r.addr_street), number: s(r.addr_number), block: s(r.addr_block), stair: s(r.addr_stair),
+    floor: s(r.addr_floor), apartment: s(r.addr_apartment) }, r.billing_address);
   const form: AvForm = {
     firm: s(sv.firm) || avFirmFor(recipient), client_id: s(sv.client_id), name: niceName(r.name ?? "") || s(r.name), pj: r.kind === "company",
     legal_rep: s(r.legal_rep), cnp: s(r.cnp), cui: s(r.cui), reg_no: s(r.reg_no), addr: own,
@@ -83,6 +87,18 @@ export async function avData(db: D1Database, reportId: string) {
     purpose: s(sv.purpose) || avPurpose(r.purpose), same: sv.same ?? (!!main && sameAddr(own, main.addr)), fee_vat: false, due_days: s(sv.due_days) || "5",
   };
   return { form, assets, hasRecipient, missing: avMissing(form, assets, hasRecipient), firmName: r.firm, orderId: r.order_id, clientId: r.client_id };
+}
+
+/** The address parts the form asks, completed from the address written in one line (only those still empty). */
+function fill(a: AvAddress, full: string | null | undefined): AvAddress {
+  if (a.street && a.number) return a;
+  const x = splitAddress(full);
+  // the line's street and number belong together: both from it, when the street was not kept apart
+  const fromLine = !a.street && !!x.street;
+  return {
+    county: a.county || countyCode(x.county), city: a.city || x.city, street: a.street || x.street, number: a.number || (fromLine || !a.street ? x.number : ""),
+    block: a.block || x.block, stair: a.stair || x.stair, floor: a.floor || x.floor, apartment: a.apartment || x.apartment,
+  };
 }
 
 const sameAddr = (a: AvAddress, b: AvAddress) => !!a.street && a.county === b.county && a.city.toLowerCase() === b.city.toLowerCase() && a.street.toLowerCase() === b.street.toLowerCase() && a.number === b.number;

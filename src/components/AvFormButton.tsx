@@ -15,12 +15,16 @@ export function AvFormButton({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [saved, setSaved] = useState(false);
+  // Complete: downloaded straight away. Something missing: the form opens, with only that to fill in.
   const load = async () => {
-    setOpen(true); setMsg(""); setD(null);
+    setMsg(""); setD(null); setBusy(true);
     const r = await fetch(`/api/crm/reports/${id}/av-form`).catch(() => null);
     const x = (await r?.json().catch(() => ({}))) as Data & { error?: string };
-    if (!r?.ok) { setMsg(x.error ?? "Nu am putut încărca formularul."); return; }
+    setBusy(false);
+    if (!r?.ok) { setOpen(true); setMsg(x.error ?? "Nu am putut încărca formularul."); return; }
     setD(x);
+    if (!x.missing.length) { await fetchFile(); return; }
+    setOpen(true);
   };
   const missing = d ? avMissing(d.form, d.assets, d.hasRecipient) : [];
   const miss = (label: string) => missing.some((m) => m.startsWith(label));
@@ -41,16 +45,20 @@ export function AvFormButton({ id }: { id: string }) {
   };
   const download = async () => {
     if (d?.canEdit && !(await save())) return;
+    if (await fetchFile()) setOpen(false);
+  };
+  const fetchFile = async () => {
     setBusy(true);
     const r = await fetch(`/api/crm/reports/${id}/av-form`, { method: "POST" }).catch(() => null);
     setBusy(false);
-    if (!r?.ok) { const x = (await r?.json().catch(() => ({}))) as { error?: string }; return setMsg(x.error ?? "Nu am putut genera fișierul."); }
+    if (!r?.ok) { const x = (await r?.json().catch(() => ({}))) as { error?: string }; setOpen(true); setMsg(x.error ?? "Nu am putut genera fișierul."); return false; }
     const blob = await r.blob();
     const m = (r.headers.get("Content-Disposition") ?? "").match(/filename\*=UTF-8''([^;]+)/);
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = m ? decodeURIComponent(m[1]) : "formular.xlsx";
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    return true;
   };
   const ro = !d?.canEdit;
   const inp = (label: string, value: string, on: (v: string) => void, req = false, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
@@ -70,14 +78,14 @@ export function AvFormButton({ id }: { id: string }) {
   );
   return (
     <>
-      <button type="button" className="btn btnOnNavy btnSm" onClick={load}>Formular Appraisal & Valuation</button>
+      <button type="button" className="btn btnOnNavy btnSm" onClick={load} disabled={busy && !open}>{busy && !open ? "Se generează…" : "Descarcă formular Appraisal & Valuation"}</button>
       {open && createPortal(
         <div className="vfModal sheet" role="dialog" aria-modal="true" aria-labelledby="avT" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
           <div className="vfModalBox avBox">
             <div className="cardHead"><h2 id="avT">Formular facturare · Appraisal & Valuation</h2><button type="button" className="btn btnGhost btnSm" onClick={() => setOpen(false)} aria-label="Închide">×</button></div>
             {!d ? <p className="hint">{msg || "Se încarcă…"}</p> : (
               <>
-                {missing.length ? <div className="note avNote"><b>Lipsesc {missing.length} {missing.length === 1 ? "câmp" : "câmpuri"} obligatorii</b> (marcate cu roșu): {missing.join(", ")}.</div>
+                {missing.length ? <div className="note avNote"><b>Formularul nu se poate descărca încă: lipsesc {missing.length} {missing.length === 1 ? "câmp" : "câmpuri"}</b> (marcate cu roșu): {missing.join(", ")}. Restul e completat automat din CRM.</div>
                   : <div className="note avOk"><b>Formularul e complet.</b> Îl poți descărca și trimite.</div>}
                 <div className="section">1. Client și proiect</div>
                 <div className="avGrid">
@@ -134,7 +142,7 @@ export function AvFormButton({ id }: { id: string }) {
                 {msg && <div role="alert" className="error">{msg}</div>}
                 <div className="actions avActs">
                   {!ro && <button type="button" className="btn btnGhost" disabled={busy} onClick={save}>{busy ? "…" : saved ? "Salvat ✓" : "Salvează datele"}</button>}
-                  <button type="button" className="btn btnNavy" disabled={busy || missing.length > 0} title={missing.length ? "Completează câmpurile marcate cu roșu" : undefined} onClick={download}>Descarcă formularul (.xlsx)</button>
+                  <button type="button" className="btn btnNavy" disabled={busy || missing.length > 0} title={missing.length ? "Completează câmpurile marcate cu roșu" : undefined} onClick={download}>Salvează și descarcă (.xlsx)</button>
                   {ro && <span className="muted">Doar citire: datele le completează cine poate edita raportul.</span>}
                 </div>
                 {miss("Email client") && <p className="hint" style={{ margin: 0 }}>Emailul clientului e obligatoriu la Appraisal & Valuation; se salvează și pe fișa clientului.</p>}
