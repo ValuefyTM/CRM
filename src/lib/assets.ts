@@ -55,15 +55,18 @@ export type PropertyHit = { id: string; type: string | null; category: string | 
   cad_building: string | null; usable_area: number | null; reports: number; last_report: string | null };
 
 /** Properties already in the CRM, by CF / cadastral number or address (to link the same property again). */
-export async function searchProperties(db: D1Database, q: string) {
+/** `scope`: only the properties the user may see (Proprietăți, „Pe ce date”: propertyScope); a new asset with the
+ * same CF / cadastral number is still matched to the existing property when saved (sameProperty). */
+export async function searchProperties(db: D1Database, q: string, scope?: { sql: string; binds: string[] } | null) {
   const s = q.trim();
   if (s.length < 3) return [];
   const like = `%${s.replace(/[%_]/g, "")}%`;
+  const sc = scope ? ` AND ${scope.sql.replace(/\?/g, () => "?3")}` : "";
   return (await db.prepare(`SELECT p.id, p.type, p.category, p.full_address, p.city, p.cf_number, p.cad_building, p.usable_area,
       (SELECT COUNT(*) FROM assets a WHERE a.property_id = p.id) AS reports,
       (SELECT MAX(r.report_date) FROM assets a JOIN reports r ON r.id = a.report_id WHERE a.property_id = p.id) AS last_report
-    FROM crm_properties p WHERE p.cf_number = ?1 OR p.cad_building = ?1 OR p.cad_land = ?1 OR p.full_address LIKE ?2 OR p.street LIKE ?2
-    ORDER BY (p.cf_number = ?1 OR p.cad_building = ?1 OR p.cad_land = ?1) DESC, p.updated_at DESC LIMIT 12`).bind(s, like).all<PropertyHit>()).results;
+    FROM crm_properties p WHERE (p.cf_number = ?1 OR p.cad_building = ?1 OR p.cad_land = ?1 OR p.full_address LIKE ?2 OR p.street LIKE ?2)${sc}
+    ORDER BY (p.cf_number = ?1 OR p.cad_building = ?1 OR p.cad_land = ?1) DESC, p.updated_at DESC LIMIT 12`).bind(s, like, ...(scope ? [scope.binds[0]] : [])).all<PropertyHit>()).results;
 }
 
 const PROP_COLS = ["category", "type", "construction", "county", "city", "full_address", "cf_number", "cad_building", "cad_land", "usable_area", "year_built", "description",
