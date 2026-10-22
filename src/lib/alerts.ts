@@ -146,6 +146,15 @@ function forMe(rule: AlertRule, row: Row, u: Viewer) {
     || (t === "team" && (roles.length > 0 || mine)) || (t === "inspector" && (mine || roles.includes("inspector")))
     || ((t === "evaluator" || t === "verifier" || t === "assistant") && roles.includes(t)) || t === `u:${u.id}`);
 }
+/**
+ * An alert about a report reaches only its team (or the inspector of the inspection), whatever the rule's recipients —
+ * except the owner, who sees every one, and the money alerts for who invoices every report (Facturare: toate).
+ */
+function onMyReport(rule: AlertRule, row: Row, u: Viewer) {
+  if (!row.rid || u.role === "owner") return true;
+  if (ALERT_KINDS[rule.kind].group === "Bani" && can(u, "billing.all")) return true;
+  return !!row.my_roles || row.inspector_id === u.id || row.assigned_id === u.id;
+}
 const inScope = (rule: AlertRule, row: Row) =>
   !rule.scope.length || rule.scope.some((s) => (s === "direct" ? !row.kid && !row.cid : s === `k:${row.kid}` || s === `c:${row.cid}`));
 
@@ -172,6 +181,7 @@ export async function alertHits(db: D1Database, u: Viewer, since: string, rules?
   for (const rule of all) {
     for (const row of byKind.get(rule.kind) ?? []) {
       if (!row.anchor || !inScope(rule, row) || !forMe(rule, row, u)) continue;
+      if (!onMyReport(rule, row, u)) continue;
       // what one did oneself (put oneself in a team) is no news
       if (rule.kind === "report_assigned" && (row.extra ?? "").split("|")[1] === u.id) continue;
       let at = momentOf(row.anchor) + rule.days * 86400000;
