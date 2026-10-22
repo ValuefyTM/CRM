@@ -19,6 +19,8 @@ export type SheetDoc = {
   notes: string | null;
   /** group = the category (or the room in UVALO), the caption the room; profile photo first */
   photos: { src: string; label: string; group: string; taken_at: string | null }[];
+  /** the property's profile photo: the one chosen on the asset page, else the first of the exterior, else the first */
+  cover: { src: string; chosen: boolean } | null;
 };
 
 /** A photo's group: the one chosen by hand, else the room taken in UVALO, else the category of the CRM app. */
@@ -122,6 +124,11 @@ export async function inspectionSheetDoc(db: D1Database, reportId: string, asset
     notes: (typeof answers.notes === "string" && answers.notes.trim()) || (row.description as string | null),
     // from UVALO the caption is the room / category chosen on the phone: it groups the photos, as there
     photos: results.map((p) => ({ src: fileSrc(`r2:${p.r2_key}`)!, label: p.caption || catLabel(p.category), group: photoGroup(p, !!uvalo), taken_at: p.taken_at })),
+    cover: (() => {
+      const chosen = results.find((p) => `r2:${p.r2_key}` === row.photo_url);
+      const pick = chosen ?? results.find((p) => p.category === "exterior") ?? results[0];
+      return pick ? { src: fileSrc(`r2:${pick.r2_key}`)!, chosen: !!chosen } : null;
+    })(),
   };
 }
 

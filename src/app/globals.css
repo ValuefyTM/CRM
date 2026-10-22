@@ -3511,3 +3511,81 @@ span.rdPick { display: inline-block; }
 @media (max-width: 1200px) { .anKpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .anGrid2 { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .anKpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .anBars li { grid-template-columns: minmax(0, 1fr) auto; } .anBars .anBarTrack { grid-column: 1 / -1; grid-row: 2; } .anBars small { grid-column: 2; grid-row: 1; display: none; } }
+
+/* ---------- The inspection sheet as a document (like UVALO's): screen and PDF ---------- */
+.fxPage { display: flex; flex-direction: column; gap: 26px; font-family: var(--font); color: #141414; }
+.fxBrand { display: flex; align-items: center; gap: 14px; padding-bottom: 14px; border-bottom: 2px solid #141414; }
+.fxBrand img { max-height: 46px; max-width: 150px; object-fit: contain; }
+.fxBrand > span { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fxBrand b { font-size: 14px; }
+.fxBrand small { font-size: 11px; color: #6b6b6b; }
+.fxBrand em { font-style: normal; text-align: right; font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #6b6b6b; line-height: 1.5; }
+.fxSec { display: flex; flex-direction: column; gap: 10px; }
+.fxCover { margin: 0; border-radius: 14px; overflow: hidden; background: #f3eee3; aspect-ratio: 16 / 7; }
+.fxCover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fxEyebrow { font-size: 10.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: #9a5f00; }
+.fxH1 { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.12; }
+.fxLead { margin: 0; font-size: 14px; color: #4a4a4a; }
+.fxKpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
+.fxKpis span { border: 1px solid #e6dfcf; border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fxKpis small { font-size: 9.5px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; color: #8a7a5a; }
+.fxKpis b { font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fxKpis em { font-style: normal; font-size: 11px; color: #6b6b6b; }
+.fxKpis .dark { background: #141414; color: #fff; border-color: #141414; }
+.fxKpis .dark small { color: #f2a93b; }
+.fxKpis .dark em { color: #a8a8a8; }
+.fxMeta { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px 18px; font-size: 13px; }
+.fxMeta dt { color: #6b6b6b; font-size: 11.5px; }
+.fxMeta dd { margin: 0; font-weight: 700; }
+.fxH2 { margin: 0; display: flex; align-items: baseline; gap: 12px; font-size: 19px; font-weight: 800; letter-spacing: -0.01em; padding-bottom: 8px; border-bottom: 2px solid #141414; }
+.fxH2 span { font-size: 11.5px; color: #9a5f00; }
+.fxH2.light { color: #f2a93b; border-color: transparent; padding-bottom: 0; }
+.fxRows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 26px; }
+.fxRows div { display: flex; justify-content: space-between; gap: 14px; padding: 8px 0; border-bottom: 1px solid #efe9dc; font-size: 13px; break-inside: avoid; }
+.fxRows span { color: #6b6b6b; }
+.fxRows b { text-align: right; }
+.fxRooms { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.fxRooms th { text-align: left; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #8a6a2a; padding: 7px 6px; }
+.fxRooms td { padding: 8px 6px; border-top: 1px solid #efe9dc; vertical-align: top; }
+.fxRooms .right { text-align: right; }
+.fxRooms .acc { color: #9a5f00; font-weight: 800; }
+.fxRooms .tot td { border-top: 2px solid #141414; color: #6b6b6b; }
+.fxNote { font-size: 11.5px; color: #6b6b6b; }
+.fxFind { background: #141414; color: #fff; border-radius: 14px; padding: 18px 20px; }
+.fxFind p { margin: 0; font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; }
+.fxLoc { display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 16px; align-items: start; }
+.fxMap { position: relative; height: 220px; border-radius: 12px; overflow: hidden; border: 1px solid #e6dfcf; background: #e8e2d6; }
+.fxMapTiles { position: absolute; width: 768px; height: 768px; }
+.fxMapTiles img { position: absolute; width: 256px; height: 256px; }
+.fxPin { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -22px 0 0 -11px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: #e0ad4f; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
+.fxMapCredit { position: absolute; right: 6px; bottom: 4px; font-size: 9px; color: #555; background: rgba(255, 255, 255, .8); padding: 0 4px; border-radius: 3px; }
+.fxLocFacts { margin: 0; display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
+.fxLocFacts dt { font-size: 9.5px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; color: #8a7a5a; }
+.fxLocFacts dd { margin: 0 0 2px; }
+.fxSigns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px; padding-top: 10px; border-top: 1px solid #e6dfcf; }
+.fxSigns > div { display: flex; flex-direction: column; gap: 4px; }
+.fxSigns small { font-size: 9.5px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; color: #8a7a5a; }
+.fxSigns em { font-style: normal; font-size: 11.5px; color: #6b6b6b; }
+.fxSignLine { height: 54px; border-bottom: 1px solid #d3c9b6; display: block; }
+.fxSignImg { height: 54px; width: auto; max-width: 100%; object-fit: contain; object-position: left bottom; border-bottom: 1px solid #d3c9b6; }
+.fxLegit { font-weight: 500; font-size: 11.5px; color: #6b6b6b; }
+.fxPhotos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.fxPhotos figure { margin: 0; display: flex; flex-direction: column; gap: 5px; break-inside: avoid; }
+.fxPhBox { position: relative; display: block; height: 200px; border-radius: 12px; overflow: hidden; background: #f3eee3; }
+.fxPhBox img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fxPhN { position: absolute; left: 9px; top: 9px; min-width: 21px; height: 21px; padding: 0 6px; border-radius: 999px; background: #141414; color: #f2a93b; font-size: 10.5px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.fxPhotos figcaption { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.fxPhotos figcaption span { margin-left: auto; color: #6b6b6b; }
+@media (max-width: 760px) {
+  .fxKpis, .fxMeta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fxRows, .fxPhotos, .fxSigns, .fxLoc { grid-template-columns: 1fr; }
+}
+@media print {
+  .fxPage { gap: 18px; }
+  .fxSec { break-inside: auto; }
+  .fxH2, .fxKpis, .fxSigns, .fxLoc, .fxCover { break-inside: avoid; }
+  .fxH2 { break-after: avoid; }
+  .fxFind, .fxKpis .dark, .fxPhN, .fxPin, .fxCover, .fxMap { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .fxPhBox { height: 62mm; }
+}
+.fxPage h1.fxH1 { text-align: left; }

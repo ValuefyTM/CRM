@@ -115,7 +115,8 @@ function SheetModal({ doc, firm, pdf, open, setOpen, btn }: { doc: SheetDoc; fir
   const findIdx = doc.sections.findIndex((x) => /constat/i.test(x.title));
   const sections = findIdx >= 0 && doc.notes ? doc.sections.map((x, i) => (i === findIdx ? { ...x, rows: [...x.rows, { label: "Observații", value: doc.notes! }] } : x)) : doc.sections;
   const notes = findIdx >= 0 ? null : doc.notes;
-  const cover = doc.photos[0] ?? null;
+  // the profile photo chosen on the asset page, else the first of the exterior (as the PDF)
+  const cover = doc.cover ? { src: doc.cover.src, label: "Imaginea de profil" } : doc.photos[0] ?? null;
   const rooms = doc.rooms;
   const util = rooms.reduce((t, r) => t + (num(r.area) ?? 0), 0);
   const fin = rooms.some((r) => r.floor?.length || r.walls?.length || r.ceiling || r.condition);
