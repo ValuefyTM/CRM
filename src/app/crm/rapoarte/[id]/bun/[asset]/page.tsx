@@ -12,7 +12,7 @@ import { getFirm } from "@/lib/settings";
 import { parseGeo } from "@/lib/registry";
 import { niceName } from "@/lib/labels";
 import { CrmShell } from "@/components/CrmShell";
-import { MiniMap } from "@/components/MiniMap";
+import { MapZoom } from "@/components/MapZoom";
 import { InspSheet } from "../../InspSheet";
 import { ReportDocs, type DocItem } from "../../ReportDocs";
 import { SafeImg } from "../../ReportActions";
@@ -337,7 +337,7 @@ export default async function AssetPage({ params, searchParams }: {
               {valueCard(false)}
               <section className="card flush">
                 <div className="cardHead"><h2>Localizare</h2>{ll && <a className="link" href={`https://www.google.com/maps?q=${ll[0]},${ll[1]}`} target="_blank" rel="noopener">Deschide în Google Maps ↗</a>}</div>
-                {ll ? <MiniMap point={{ lat: ll[0], lng: ll[1], source: "adresa" }} height={260} /> : <p className="hint pad">Bunul nu are coordonate. Se completează din adresă sau din cadastru, la proprietate.</p>}
+                {ll ? <div className="pad" style={{ paddingTop: 0 }}><MapZoom point={{ lat: ll[0], lng: ll[1], source: "adresa" }} height={150} link={`https://www.google.com/maps?q=${ll[0]},${ll[1]}`} /></div> : <p className="hint pad">Bunul nu are coordonate. Se completează din adresă sau din cadastru, la proprietate.</p>}
               </section>
             </>
           )}

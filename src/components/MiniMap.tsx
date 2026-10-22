@@ -8,7 +8,8 @@ import type * as Leaflet from "leaflet";
 export type MiniPoint = { lat: number; lng: number; source: "cadastru" | "adresa" | "localitate" };
 const COLOR: Record<MiniPoint["source"], string> = { cadastru: "#1fa971", adresa: "#3b6fd8", localitate: "#e0931a" };
 
-export function MiniMap({ point, height = 220 }: { point: MiniPoint | null; height?: number }) {
+/** `zoom`: the mouse wheel zooms (the big map); `height` may be a CSS length ("70vh"). */
+export function MiniMap({ point, height = 220, zoom = false }: { point: MiniPoint | null; height?: number | string; zoom?: boolean }) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<Leaflet.Map | null>(null);
   const L = useRef<typeof Leaflet | null>(null);
@@ -21,7 +22,7 @@ export function MiniMap({ point, height = 220 }: { point: MiniPoint | null; heig
       if (off || !el.current || map.current) return;
       const l = (mod as unknown as { default?: typeof Leaflet }).default ?? (mod as unknown as typeof Leaflet);
       L.current = l;
-      const m = l.map(el.current, { zoomControl: false, attributionControl: true, scrollWheelZoom: false });
+      const m = l.map(el.current, { zoomControl: false, attributionControl: true, scrollWheelZoom: zoom });
       // OpenStreetMap asks for the attribution and a referrer (the page must not send "no-referrer")
       l.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', referrerPolicy: "strict-origin-when-cross-origin" }).addTo(m);
       l.control.zoom({ position: "bottomright" }).addTo(m);
