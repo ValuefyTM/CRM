@@ -5,13 +5,14 @@ import { FORMS, PHOTO_CATEGORIES, PRESENT_ROLES, otherKey, roomsOf, sheetTypeLab
 import { cleanForm } from "./insp-templates";
 import { currentForms } from "./insp-templates-db";
 import { fileSrc } from "./files";
+import { parseGeo } from "./registry";
 
 export type SheetRow = { label: string; value: string };
 export type SheetDoc = {
   report: { id: string; number: string | null; label: string | null; bank: string | null; client: string | null; purpose: string | null };
   property: { type: string | null; address: string | null; cf: string | null; vin: string | null; cad: string | null; usable_area: number | null; land_area: number | null; city: string | null; county: string | null; lat: number | null; lng: number | null };
   inspection: { id: string; done_at: string | null; inspector: string | null; inspector_anevar: string | null };
-  sheet: { type: SheetType; status: string; present: string | null; role: string | null; phone: string | null; location: string | null; submitted_at: string | null; signature: string | null;
+  sheet: { type: SheetType; status: string; present: string | null; role: string | null; phone: string | null; location: string | null; accuracy: number | null; submitted_at: string | null; signature: string | null;
     /** the sheet number when it was made in UVALO (FI-2026-0001), and where it was made */
     no: string | null; source: "uvalo" | "app" };
   sections: { title: string; rows: SheetRow[] }[];
@@ -73,7 +74,7 @@ export async function inspectionSheetDoc(db: D1Database, reportId: string, asset
     `SELECT r.id AS report_id, r.number, r.label, r.purpose, b.name AS bank, c.name AS client,
         p.type, p.full_address, p.city, p.county, p.geo, p.cf_number, p.vin, p.cad_building, p.cad_land, p.usable_area, p.land_area,
         i.id AS inspection_id, i.done_at, i.template, COALESCE(NULLIF(u.name, ''), u.email) AS inspector, u.anevar_no,
-        s.sheet_type, s.status, s.details, s.description, s.present_person, s.present_role, s.present_phone, s.location, s.submitted_at, s.signature_url, s.photo_url
+        s.sheet_type, s.status, s.details, s.description, s.present_person, s.present_role, s.present_phone, s.location, s.accuracy_m, s.submitted_at, s.signature_url, s.photo_url
       FROM assets a JOIN reports r ON r.id = a.report_id JOIN crm_properties p ON p.id = a.property_id
       LEFT JOIN entities b ON b.id = r.recipient_id LEFT JOIN entities c ON c.id = r.client_id
       -- the sheet as the report shows it: the asset's newest one (of the given inspection, when one is given)
@@ -88,8 +89,9 @@ export async function inspectionSheetDoc(db: D1Database, reportId: string, asset
   const type = (FORMS as Record<string, unknown>)[(row.sheet_type as string) ?? ""] ? (row.sheet_type as SheetType) : "apartament";
   let answers: Answers = {}, form: Section[] | null = null, uvalo: { sheet_no?: string | null } | null = null;
   try { const d = JSON.parse((row.details as string) ?? "{}") as { answers?: Answers; form?: unknown; uvalo?: { sheet_no?: string | null } }; answers = d.answers && typeof d.answers === "object" && !Array.isArray(d.answers) ? d.answers : {}; form = cleanForm(d.form); uvalo = d.uvalo ?? null; } catch { /* old Glide sheet */ }
-  let geo: { lat?: number; lng?: number } = {};
-  try { geo = row.geo ? JSON.parse(row.geo as string) : {}; } catch { /* no pin */ }
+  // the property's pin, kept as "lat, lng"
+  const ll = parseGeo(row.geo as string | null);
+  const geo: { lat?: number; lng?: number } = ll ? { lat: ll[0], lng: ll[1] } : {};
   // The form the sheet was filled in with; older sheets: the current template (same keys).
   const forms = await currentForms(db);
   const fields = form ?? (row.template && row.template !== "std" ? forms[row.template as string] : null) ?? (row.template === "std" ? FORMS[type] : forms[type]) ?? FORMS[type];
@@ -116,7 +118,7 @@ export async function inspectionSheetDoc(db: D1Database, reportId: string, asset
     inspection: { id: row.inspection_id as string, done_at: row.done_at as string | null, inspector: row.inspector as string | null, inspector_anevar: row.anevar_no as string | null },
     sheet: {
       type, status: row.status as string, present: row.present_person as string | null, role: PRESENT_ROLES.find(([k]) => k === row.present_role)?.[1] ?? null,
-      phone: row.present_phone as string | null, location: row.location as string | null, submitted_at: row.submitted_at as string | null, signature: fileSrc(row.signature_url as string | null),
+      phone: row.present_phone as string | null, location: row.location as string | null, accuracy: typeof row.accuracy_m === "number" ? row.accuracy_m : null, submitted_at: row.submitted_at as string | null, signature: fileSrc(row.signature_url as string | null),
       no: uvalo?.sheet_no ?? null, source: uvalo ? "uvalo" : "app",
     },
     sections,

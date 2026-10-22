@@ -70,10 +70,10 @@ export default async function InspectionSheetDocument({ params, searchParams }: 
   const fin = d.rooms.some((r) => (r.floor ?? []).length || (r.walls ?? []).length || r.ceiling || r.condition);
   // the place: the GPS of the sheet ("lat, lng"), else the property's pin
   const m = (d.sheet.location ?? "").match(/(-?\d{1,2}\.\d+)\s*[,; ]\s*(-?\d{1,3}\.\d+)/);
-  const place = m ? { lat: Number(m[1]), lng: Number(m[2]), src: "GPS de pe telefon" } : d.property.lat != null && d.property.lng != null ? { lat: d.property.lat, lng: d.property.lng, src: "pinul proprietății" } : null;
+  const place = m ? { lat: Number(m[1]), lng: Number(m[2]), gps: true } : d.property.lat != null && d.property.lng != null ? { lat: d.property.lat, lng: d.property.lng, gps: false } : null;
   const no = (i: number) => String(i).padStart(2, "0");
   // the sections' numbers, in the order they are printed
-  const nRooms = d.sections.length + 1, nNotes = nRooms + (d.rooms.length ? 1 : 0), nPlace = nNotes + (d.notes ? 1 : 0), nSigns = nPlace + (place ? 1 : 0), nPhotos = nSigns + 1;
+  const nRooms = d.sections.length + 1, nNotes = nRooms + (d.rooms.length ? 1 : 0), nSigns = nNotes + (d.notes ? 1 : 0), nPhotos = nSigns + 1;
   const H2 = ({ n, title }: { n: number; title: string }) => <h2 className="fxH2"><span>{no(n)}</span>{title}</h2>;
   return (
     <div className="cdWrap">
@@ -112,6 +112,16 @@ export default async function InspectionSheetDocument({ params, searchParams }: 
             {d.sheet.phone && <div><dt>Telefon</dt><dd>{d.sheet.phone}</dd></div>}
             {(d.property.city || d.property.county) && <div><dt>Localitate</dt><dd>{[d.property.city, d.property.county].filter(Boolean).join(", ")}</dd></div>}
           </dl>
+          {place && (
+            <div className="fxLoc fxLocSm">
+              <StaticMap lat={place.lat} lng={place.lng} />
+              <dl className="fxLocFacts">
+                <dt>Coordonate GPS</dt><dd className="mono">{place.lat.toFixed(6)}, {place.lng.toFixed(6)}</dd>
+                <dt>Sursa</dt>
+                <dd>{place.gps ? <>Captate cu telefonul inspectorului, la fața locului{when ? `, pe ${fmtDate(when, true)}` : ""}{d.sheet.accuracy ? ` (precizie ±${Math.round(d.sheet.accuracy)} m)` : ""}</> : "Pinul proprietății, din adresă / cadastru (fișa nu are GPS)"}</dd>
+              </dl>
+            </div>
+          )}
         </section>
 
         {d.sections.map((s, i) => (
@@ -143,20 +153,6 @@ export default async function InspectionSheetDocument({ params, searchParams }: 
           <section className="fxSec fxFind">
             <h2 className="fxH2 light"><span>{no(nNotes)}</span>Observații</h2>
             <p>{d.notes}</p>
-          </section>
-        )}
-
-        {place && (
-          <section className="fxSec">
-            <H2 n={nPlace} title="Locația inspecției" />
-            <div className="fxLoc">
-              <StaticMap lat={place.lat} lng={place.lng} />
-              <dl className="fxLocFacts">
-                <dt>Coordonate</dt><dd>{place.lat.toFixed(6)}, {place.lng.toFixed(6)}</dd>
-                <dt>Sursa</dt><dd>{place.src}</dd>
-                {when && <><dt>Data</dt><dd>{fmtDate(when, true)}</dd></>}
-              </dl>
-            </div>
           </section>
         )}
 
