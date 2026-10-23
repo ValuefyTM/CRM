@@ -2,88 +2,31 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { staffPage } from "@/lib/guard";
 import { periodLabel } from "@/lib/statements";
-import { SRC_LABEL, yearAnalytics, type MonthRow, type Src } from "@/lib/analytics";
+import { SRC_LABEL, yearAnalytics, type Src } from "@/lib/analytics";
 import { CrmShell } from "@/components/CrmShell";
+import { Donut, MonthsChart, StackChart, type Slice } from "./Charts";
 
 export const metadata: Metadata = { title: "Analitice | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
 
 const lei = (n: number) => `${n.toLocaleString("ro-RO", { maximumFractionDigits: 0 })} lei`;
 const lei2 = (n: number) => `${n.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} lei`;
-const short = (n: number) => (Math.abs(n) >= 1000 ? `${(n / 1000).toLocaleString("ro-RO", { maximumFractionDigits: 1 })}k` : `${Math.round(n)}`);
 const MON = ["ian", "feb", "mar", "apr", "mai", "iun", "iul", "aug", "sep", "oct", "nov", "dec"];
 const SRC_COLOR: Record<Src, string> = { direct: "#2a78d6", framework: "#eb6834", collab: "#1baf7a" };
 const SRCS: Src[] = ["direct", "framework", "collab"];
 const IN = "#1fa971", OUT = "#d0453f", NET = "#141414";
+// categorical slots, in fixed order; "Altele" is neutral
+const CAT = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"], REST = "#b5b3ab";
 
-/** A clean upper bound for an axis: 1, 2, 2.5, 5 × 10^n. */
-const niceMax = (v: number) => {
-  if (v <= 0) return 1;
-  const p = 10 ** Math.floor(Math.log10(v));
-  return ([1, 2, 2.5, 5, 10].find((k) => k * p >= v) ?? 10) * p;
+/** The first five by amount, then the rest together. */
+const top5 = (items: { name: string; amount: number; n: number }[], unit = true): Slice[] => {
+  const s = [...items].sort((a, b) => b.amount - a.amount);
+  const rest = s.slice(5);
+  return [
+    ...s.slice(0, 5).map((x, i) => ({ name: x.name, value: x.amount, color: CAT[i], sub: unit ? `${x.n} rap.` : undefined })),
+    ...(rest.length ? [{ name: `Altele (${rest.length})`, value: rest.reduce((t, x) => t + x.amount, 0), color: REST }] : []),
+  ];
 };
-
-/** Revenue (green) and costs (red: collaborators + fixed) per month, with the owner's net as a line. */
-function MonthsChart({ rows }: { rows: MonthRow[] }) {
-  const W = 760, H = 260, L = 48, B = 26, T = 10;
-  const max = niceMax(Math.max(...rows.map((r) => Math.max(r.revenue, r.paid + r.fixed, r.net)), 1));
-  const min = Math.min(0, ...rows.map((r) => r.net));
-  const lo = min < 0 ? -niceMax(-min) : 0;
-  const y = (v: number) => T + (H - T - B) * (1 - (v - lo) / (max - lo));
-  const step = (W - L) / 12, bw = Math.min(16, step / 3);
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((k) => lo + (max - lo) * k);
-  const pts = rows.map((r, i) => `${L + step * i + step / 2},${y(r.net)}`).join(" ");
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="anChart" role="img" aria-label="Venituri, cheltuieli și net-ul pe luni">
-      {ticks.map((t) => <g key={t}><line x1={L} x2={W} y1={y(t)} y2={y(t)} className="anGrid" /><text x={L - 6} y={y(t) + 3} className="anAxis" textAnchor="end">{short(t)}</text></g>)}
-      {rows.map((r, i) => {
-        const x = L + step * i + step / 2;
-        return (
-          <g key={r.m} className="anHit">
-            <title>{`${periodLabel(r.m)}\nVenituri: ${lei(r.revenue)}\nColaboratori: ${lei(r.paid)}\nCheltuieli fixe: ${lei(r.fixed)}\nNet-ul tău: ${lei(r.net)}`}</title>
-            <rect x={x - step / 2} y={T} width={step} height={H - T - B} fill="transparent" />
-            <rect x={x - bw - 1} y={y(Math.max(r.revenue, 0))} width={bw} height={Math.max(0, y(0) - y(r.revenue))} rx={3} fill={IN} />
-            <rect x={x + 1} y={y(r.paid + r.fixed)} width={bw} height={Math.max(0, y(0) - y(r.paid + r.fixed))} rx={3} fill={OUT} />
-            <text x={x} y={H - 8} className="anAxis" textAnchor="middle">{MON[i]}</text>
-          </g>
-        );
-      })}
-      <polyline points={pts} fill="none" stroke={NET} strokeWidth={2} />
-      {rows.map((r, i) => <circle key={r.m} cx={L + step * i + step / 2} cy={y(r.net)} r={4} fill={NET} stroke="#fff" strokeWidth={2}><title>{`${periodLabel(r.m)} · net-ul tău ${lei(r.net)}`}</title></circle>)}
-    </svg>
-  );
-}
-
-/** The revenue of each month by source, stacked. */
-function SourcesChart({ rows }: { rows: MonthRow[] }) {
-  const W = 480, H = 230, L = 40, B = 24, T = 10;
-  const max = niceMax(Math.max(...rows.map((r) => r.revenue), 1));
-  const y = (v: number) => T + (H - T - B) * (1 - v / max);
-  const step = (W - L) / 12, bw = Math.min(22, step * 0.6);
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="anChart" role="img" aria-label="Veniturile pe surse, pe luni">
-      {[0, 0.5, 1].map((k) => <g key={k}><line x1={L} x2={W} y1={y(max * k)} y2={y(max * k)} className="anGrid" /><text x={L - 6} y={y(max * k) + 3} className="anAxis" textAnchor="end">{short(max * k)}</text></g>)}
-      {rows.map((r, i) => {
-        const x = L + step * i + step / 2;
-        let acc = 0;
-        return (
-          <g key={r.m} className="anHit">
-            <title>{`${periodLabel(r.m)}\n${SRCS.map((s) => `${SRC_LABEL[s]}: ${lei(r.bySrc[s])}`).join("\n")}\nTotal: ${lei(r.revenue)}`}</title>
-            <rect x={x - step / 2} y={T} width={step} height={H - T - B} fill="transparent" />
-            {SRCS.map((s) => {
-              const v = r.bySrc[s];
-              if (v <= 0) return null;
-              const top = y(acc + v), h = y(acc) - top;
-              acc += v;
-              return <rect key={s} x={x - bw / 2} y={top} width={bw} height={Math.max(0, h - 2)} rx={2} fill={SRC_COLOR[s]} />;
-            })}
-            <text x={x} y={H - 8} className="anAxis" textAnchor="middle">{MON[i]}</text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
 
 /** A ranked list as horizontal bars: name, bar, amount, count. */
 function Bars({ items, color, unit = "rapoarte", limit = 10 }: { items: { name: string; amount: number; n: number }[]; color: string; unit?: string; limit?: number }) {
@@ -123,6 +66,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
   const active = a.rows.filter((r) => r.revenue || r.paid || r.fixed);
   const best = [...active].sort((x, y) => y.net - x.net)[0];
   const here = `${base}/analitice`;
+  const months = a.rows.map((r) => ({ m: r.m, label: periodLabel(r.m), short: MON[Number(r.m.slice(5)) - 1], revenue: r.revenue, costs: r.paid + r.fixed, paid: r.paid, fixed: r.fixed, cuts: r.cuts, net: r.net }));
   return (
     <CrmShell user={user} base={base} active="analytics" title="Analitice" subtitle="Profitabilitatea firmei: pe luni, pe surse, pe bănci, colaborări, colaboratori și asociați · doar pentru proprietar">
       <div className="stMonth">
@@ -143,21 +87,45 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <div className="dbKpi anNet"><span className="dbKpiLabel"><i style={{ background: NET }} />Net-ul tău {year}</span><b className="ctKpiMoney" style={{ color: t.net >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei(t.net)}</b><small className="ctKpiFoot">{best ? `cea mai bună lună: ${periodLabel(best.m)} (${lei(best.net)})` : "—"}</small></div>
       </div>
 
-      <section className="card">
-        <div className="cardHead"><h2>Pe luni · venituri, cheltuieli, net</h2>
-          <span className="anLegend"><span><i style={{ background: IN }} />Venituri</span><span><i style={{ background: OUT }} />Colaboratori + fixe</span><span><i className="dot" style={{ background: NET }} />Net-ul tău</span></span></div>
-        <MonthsChart rows={a.rows} />
-      </section>
+      <div className="anGrid31">
+        <section className="card">
+          <div className="cardHead"><h2>Pe luni · venituri, cheltuieli, net</h2><span className="muted">trece cu mouse-ul peste o lună · apasă pe legendă ca să ascunzi o serie</span></div>
+          <MonthsChart rows={months} />
+        </section>
+        <section className="card">
+          <div className="cardHead"><h2>Unde merg veniturile</h2><span className="muted">{year}</span></div>
+          <Donut center="Venituri" total={t.revenue} items={[
+            { name: "Colaboratori", value: t.paid, color: OUT },
+            { name: "Cheltuieli fixe (la tine)", value: t.fixedOwner, color: "#eda100" },
+            { name: "Cote asociați", value: t.cuts, color: "#6250d6" },
+            { name: "Net-ul tău", value: t.net, color: IN },
+          ]} />
+        </section>
+      </div>
+
+      <div className="anGrid3">
+        <section className="card">
+          <div className="cardHead"><h2>Venituri pe surse</h2></div>
+          <Donut center="Venituri" items={SRCS.map((s) => ({ name: SRC_LABEL[s], value: t.bySrc[s], color: SRC_COLOR[s] }))} />
+        </section>
+        <section className="card">
+          <div className="cardHead"><h2>Utilizatori desemnați</h2><span className="muted">top 5</span></div>
+          <Donut center="Venituri" items={top5(a.banks)} />
+        </section>
+        <section className="card">
+          <div className="cardHead"><h2>Tip de lucrare</h2><span className="muted">top 5</span></div>
+          <Donut center="Venituri" items={top5(a.types)} />
+        </section>
+      </div>
 
       <div className="anGrid2">
         <section className="card">
-          <div className="cardHead"><h2>Veniturile pe surse</h2><span className="anLegend">{SRCS.map((s) => <span key={s}><i style={{ background: SRC_COLOR[s] }} />{SRC_LABEL[s]}</span>)}</span></div>
-          <SourcesChart rows={a.rows} />
-          <ul className="anSplit">{SRCS.map((s) => <li key={s}><i style={{ background: SRC_COLOR[s] }} /><span>{SRC_LABEL[s]}</span><b className="mono">{lei(t.bySrc[s])}</b><small>{t.revenue ? Math.round(t.bySrc[s] / t.revenue * 100) : 0}%</small></li>)}</ul>
+          <div className="cardHead"><h2>Veniturile pe surse, pe luni</h2><span className="anLegend">{SRCS.map((s) => <span key={s}><i style={{ background: SRC_COLOR[s] }} />{SRC_LABEL[s]}</span>)}</span></div>
+          <StackChart rows={a.rows.map((r) => ({ label: periodLabel(r.m), short: MON[Number(r.m.slice(5)) - 1], parts: SRCS.map((s) => ({ name: SRC_LABEL[s], value: r.bySrc[s], color: SRC_COLOR[s] })) }))} />
         </section>
         <section className="card">
           <div className="cardHead"><h2>Pe utilizatori desemnați</h2><span className="muted">bănci și instituții, din toate sursele</span></div>
-          <Bars items={a.banks} color="#2a78d6" />
+          <Bars items={a.banks} color="#2a78d6" limit={6} />
         </section>
       </div>
 
@@ -220,19 +188,6 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           </div>
         </section>
       )}
-
-      <div className="anGrid2">
-        <section className="card">
-          <div className="cardHead"><h2>Pe tip de lucrare</h2></div>
-          <Bars items={a.types} color="#6250d6" />
-        </section>
-        <section className="card">
-          <div className="cardHead"><h2>Cheltuieli · structură {year}</h2></div>
-          <Bars unit="" items={[
-            { name: "Colaboratori", amount: t.paid, n: 0 }, { name: "Cheltuieli fixe", amount: t.fixed, n: 0 }, { name: "Cote asociați", amount: t.cuts, n: 0 },
-          ].filter((x) => x.amount > 0).sort((x, y) => y.amount - x.amount)} color={OUT} />
-        </section>
-      </div>
 
       <section className="card flush">
         <div className="cardHead"><h2>Tabel pe luni · {year}</h2></div>

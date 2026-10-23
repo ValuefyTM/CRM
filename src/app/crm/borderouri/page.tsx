@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { can } from "@/lib/perms";
 import {
-  autoLines, criteriaOf, KIND_LABEL, listStatements, memberChoices, monthBoard, associateCut, linesOf, monthResult, recipientsOf, partyCols, totalOf, periodLabel, profitShares, STATUS_LABEL, thisMonth, validPeriod, type RevSource,
+  autoLines, criteriaOf, KIND_LABEL, listStatements, memberChoices, monthBoard, associateCut, linesOf, monthResult, ownerNetYear, recipientsOf, partyCols, totalOf, periodLabel, profitShares, STATUS_LABEL, thisMonth, validPeriod, type RevSource,
 } from "@/lib/statements";
 import { MemberFilter } from "./MemberFilter";
 import { ExportXlsx } from "./ExportXlsx";
@@ -97,6 +97,9 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
   const allocated = shares ? r2(shares.reduce((t, x) => t + x.fixed, 0)) : 0;
   const mine = r2(fixed - allocated);
   const ownerNet = shares && shares.length ? r2(revenue - paid - mine - shares.reduce((t, x) => t + x.cut, 0)) : null;
+  // the owner's net of the year so far (January to this month), on the whole firm
+  const ytd = owner && !who ? await ownerNetYear(db, period) : null;
+  const ytdText = ytd ? ` · ${period.slice(0, 4)} până acum: ${lei2(ytd.total)}` : "";
   // the month's adjustments of the fixed costs: who sees and changes every statement
   const editCosts = !self && all && can(user, "statements.E");
   const sum = (rows: Row[]) => Math.round(rows.reduce((s, r) => s + r.total, 0) * 100) / 100;
@@ -163,9 +166,9 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
         {cut ? (
           <a className="dbKpi" href="#rezultat"><span className="dbKpiLabel"><i style={{ background: cut.cut >= 0 ? "var(--ok, #2e8b57)" : "var(--err)" }} />De primit · {who!.name}</span><b className="ctKpiMoney" style={{ color: cut.cut >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(cut.cut)}</b><small className="ctKpiFoot">{lei2(cut.base)} × {cut.pct}% − {lei2(fixed)} cheltuieli fixe</small></a>
         ) : ownerNet != null ? (
-          <a className="dbKpi" href="#rezultat"><span className="dbKpiLabel"><i style={{ background: ownerNet >= 0 ? "var(--ok, #2e8b57)" : "var(--err)" }} />Net-ul tău</span><b className="ctKpiMoney" style={{ color: ownerNet >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(ownerNet)}</b><small className="ctKpiFoot">după plăți, cheltuielile fixe rămase la tine și cotele asociaților</small></a>
+          <a className="dbKpi" href="#rezultat"><span className="dbKpiLabel"><i style={{ background: ownerNet >= 0 ? "var(--ok, #2e8b57)" : "var(--err)" }} />Net-ul tău</span><b className="ctKpiMoney" style={{ color: ownerNet >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(ownerNet)}</b><small className="ctKpiFoot">după plăți, fixe și cotele asociaților{ytdText}</small></a>
         ) : (
-          <a className="dbKpi" href="#rezultat"><span className="dbKpiLabel"><i style={{ background: profit >= 0 ? "var(--ok, #2e8b57)" : "var(--err)" }} />{profit >= 0 ? "Profit" : "Pierdere"}</span><b className="ctKpiMoney" style={profit < 0 ? { color: "var(--err)" } : undefined}>{lei2(profit)}</b><small className="ctKpiFoot">venituri − plăți − cheltuieli fixe{revenue ? ` · marjă ${Math.round(profit / revenue * 100)}%` : ""}</small></a>
+          <a className="dbKpi" href="#rezultat"><span className="dbKpiLabel"><i style={{ background: profit >= 0 ? "var(--ok, #2e8b57)" : "var(--err)" }} />{profit >= 0 ? "Profit" : "Pierdere"}</span><b className="ctKpiMoney" style={profit < 0 ? { color: "var(--err)" } : undefined}>{lei2(profit)}</b><small className="ctKpiFoot">venituri − plăți − cheltuieli fixe{revenue ? ` · marjă ${Math.round(profit / revenue * 100)}%` : ""}{ytdText}</small></a>
         )}
         </>}
       </div>
@@ -254,6 +257,12 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
             <div className="stSumTotal"><dt>{profit >= 0 ? "Profit net" : "Pierdere"}</dt><dd className="mono" style={{ color: profit >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(profit)}</dd></div>
           </>}
         </dl>
+        {ytd && (
+          <dl className="stCalc stYtd">
+            <div className="stSumTotal stNet"><dt>{ownerNet != null ? "Net-ul tău" : "Profitul"} în {period.slice(0, 4)}, ianuarie – {periodLabel(period).split(" ")[0]} <small className="muted">({ytd.months} {ytd.months === 1 ? "lună" : "luni"}, aceleași calcule lună de lună)</small></dt>
+              <dd className="mono" style={{ color: ytd.total >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(ytd.total)}</dd></div>
+          </dl>
+        )}
         {cut != null && !self && <p className="hint" style={{ margin: "8px 0 0" }}>Se setează din fișa utilizatorului (Cum e plătit → Procent din profitul net).</p>}
         {cut != null && self && <p className="hint" style={{ margin: "8px 0 0" }}>Cota ta se aplică pe veniturile rapoartelor tale minus plățile colaboratorilor implicați, apoi se scade partea ta din cheltuielile fixe.</p>}
         {shares && shares.length > 0 && (
