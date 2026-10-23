@@ -28,6 +28,7 @@ import type { AccessDoc } from "@/components/DocAccess";
 import { AssetEditor, RemoveAsset } from "./AssetEditor";
 import { assetProfile, emptyAsset, FIELD_LABELS, type AssetForm, type ProfileField } from "@/lib/asset-labels";
 import { canAssign, inspectorChoices } from "@/lib/insp-assign";
+import { RevisionAsk } from "../RevisionAsk";
 import { sheetFits, STD, templateList } from "@/lib/insp-templates-db";
 import { docsByAsset } from "@/lib/insp-docs";
 import { guessDocKind } from "@/lib/doc-kinds";
@@ -577,6 +578,15 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                         <InspSheet doc={sheetDocs[a.id] ?? null} src={`/api/crm/reports/${r.id}/sheet/${a.id}`} firm={sheetFirm} pdf={`${base}/rapoarte/${r.id}/fisa/${a.id}`} />
                       </div>
                     )}
+                    {a.sheet_status === "revision" && a.revision_note && (
+                      <div className="bvRev"><b>Completări cerute{a.revision_at ? ` · ${fmtDate(a.revision_at, true)}` : ""}</b><span>{a.revision_note}</span><small>Fișa e la inspector, în aplicație. Când o trimite din nou, primești notificare.</small></div>
+                    )}
+                    {a.sheet_status === "submitted" && a.revision_done && a.revision_note && (
+                      <div className="bvRev done"><b>Completări trimise {fmtDate(a.revision_done, true)}</b><span>{a.revision_note}</span></div>
+                    )}
+                    {mayAssign && fromApp && a.inspection_status === "done" && a.inspection_id && a.sheet_status === "submitted" && !a.uvalo_id && (
+                      <RevisionAsk report={r.id} inspection={a.inspection_id} inspector={a.inspector} />
+                    )}
                     {((fromApp && !cancelled && (a.assigned_by_name || a.instructions)) || active || ((a.uvalo_id) && !cancelled)) && (
                       <details className="abMore">
                         <summary>Detalii</summary>
@@ -584,7 +594,6 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                           {fromApp && !cancelled && a.assigned_by_name && <div><dt>Alocată de</dt><dd>{a.assigned_by_name}{a.assigned_at ? `, ${fmtDate(a.assigned_at)}` : ""}</dd></div>}
                           {active && <div><dt>Acte la inspector</dt><dd>{seen ? `${seen} ${seen === 1 ? "act" : "acte"}` : <span className="muted">niciun act</span>}</dd></div>}
                           {fromApp && a.sheet_status === "draft" && active && <div><dt>Fișă</dt><dd>în lucru</dd></div>}
-                          {a.sheet_status === "revision" && <div><dt>Fișă</dt><dd>completări cerute inspectorului</dd></div>}
                           {a.uvalo_id && !cancelled && <div><dt>UVALO</dt><dd>{a.uvalo_code ? <span className="mono">{a.uvalo_code} · </span> : null}{UVALO_STATUS[a.uvalo_status ?? ""] ?? "trimisă"}</dd></div>}
                           {fromApp && a.instructions && !cancelled && <div className="wide"><dt>Instrucțiuni</dt><dd>{a.instructions}</dd></div>}
                         </dl>

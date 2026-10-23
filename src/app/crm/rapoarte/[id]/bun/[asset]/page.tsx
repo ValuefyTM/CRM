@@ -14,7 +14,7 @@ import { niceName } from "@/lib/labels";
 import { CrmShell } from "@/components/CrmShell";
 import { MapZoom } from "@/components/MapZoom";
 import { InspSheet } from "../../InspSheet";
-import { RevisionAsk } from "./RevisionAsk";
+import { RevisionAsk } from "../../../RevisionAsk";
 import { canAssign } from "@/lib/insp-assign";
 import { ReportDocs, type DocItem } from "../../ReportDocs";
 import { SafeImg } from "../../ReportActions";
