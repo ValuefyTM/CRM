@@ -91,6 +91,12 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
   const before = self && cut ? await monthResult(db, shift(period, -1), who) : null;
   const cutBefore = before && cut ? associateCut(before.revenue, before.paid, before.fixed, cut.pct).cut : null;
   const his = self ? "ta" : "lui";
+  // the owner's net (all reports, with associates): only the fixed costs left to them (the associates' are counted on
+  // their side, in their net cut), then each associate's net cut — the same figure as the bottom of the calculation
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const allocated = shares ? r2(shares.reduce((t, x) => t + x.fixed, 0)) : 0;
+  const mine = r2(fixed - allocated);
+  const ownerNet = shares && shares.length ? r2(revenue - paid - mine - shares.reduce((t, x) => t + x.cut, 0)) : null;
   // the month's adjustments of the fixed costs: who sees and changes every statement
   const editCosts = !self && all && can(user, "statements.E");
   const sum = (rows: Row[]) => Math.round(rows.reduce((s, r) => s + r.total, 0) * 100) / 100;
@@ -153,7 +159,14 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
         <a className="dbKpi" href="#venituri"><span className="dbKpiLabel"><i style={{ background: "var(--acc)" }} />Venituri</span><b className="ctKpiMoney">{lei2(revenue)}</b><small className="ctKpiFoot">{SOURCES.map(([k, l]) => `${l.toLowerCase()} ${lei2(res.bySource(k))}`).join(" · ")}</small></a>
         <a className="dbKpi" href="#cheltuieli"><span className="dbKpiLabel"><i style={{ background: "var(--err)" }} />Plăți colaboratori</span><b className="ctKpiMoney">{lei2(paid)}</b><small className="ctKpiFoot">{payouts.length} {payouts.length === 1 ? "colaborator" : "colaboratori"}</small></a>
         <a className="dbKpi" href="#fixe"><span className="dbKpiLabel"><i style={{ background: "var(--muted)" }} />Cheltuieli fixe{who ? ` (partea ${his})` : ""}</span><b className="ctKpiMoney">{lei2(fixed)}</b><small className="ctKpiFoot">{costs.items.length ? costs.items.map((c) => c.label).join(", ") : "nicio cheltuială"}</small></a>
-        <a className="dbKpi" href="#rezultat"><span className="dbKpiLabel"><i style={{ background: profit >= 0 ? "var(--ok, #2e8b57)" : "var(--err)" }} />{profit >= 0 ? "Profit" : "Pierdere"}</span><b className="ctKpiMoney" style={profit < 0 ? { color: "var(--err)" } : undefined}>{lei2(profit)}</b><small className="ctKpiFoot">venituri − plăți − cheltuieli fixe{revenue ? ` · marjă ${Math.round(profit / revenue * 100)}%` : ""}</small></a>
+        {/* the last card: the bottom line of the calculation below (an associate's net cut, the owner's net, else the profit) */}
+        {cut ? (
+          <a className="dbKpi" href="#rezultat"><span className="dbKpiLabel"><i style={{ background: cut.cut >= 0 ? "var(--ok, #2e8b57)" : "var(--err)" }} />De primit · {who!.name}</span><b className="ctKpiMoney" style={{ color: cut.cut >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(cut.cut)}</b><small className="ctKpiFoot">{lei2(cut.base)} × {cut.pct}% − {lei2(fixed)} cheltuieli fixe</small></a>
+        ) : ownerNet != null ? (
+          <a className="dbKpi" href="#rezultat"><span className="dbKpiLabel"><i style={{ background: ownerNet >= 0 ? "var(--ok, #2e8b57)" : "var(--err)" }} />Net-ul tău</span><b className="ctKpiMoney" style={{ color: ownerNet >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(ownerNet)}</b><small className="ctKpiFoot">după plăți, cheltuielile fixe rămase la tine și cotele asociaților</small></a>
+        ) : (
+          <a className="dbKpi" href="#rezultat"><span className="dbKpiLabel"><i style={{ background: profit >= 0 ? "var(--ok, #2e8b57)" : "var(--err)" }} />{profit >= 0 ? "Profit" : "Pierdere"}</span><b className="ctKpiMoney" style={profit < 0 ? { color: "var(--err)" } : undefined}>{lei2(profit)}</b><small className="ctKpiFoot">venituri − plăți − cheltuieli fixe{revenue ? ` · marjă ${Math.round(profit / revenue * 100)}%` : ""}</small></a>
+        )}
         </>}
       </div>
 
@@ -229,13 +242,8 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
             <div className="stIn"><dt>× {cut.pct}% {self ? "cota ta" : "cota asociatului"}</dt><dd className="mono">{lei2(cut.gross)}</dd></div>
             <div className="stOut"><dt>− Cheltuieli fixe aferente (partea {his})</dt><dd className="mono">{lei2(fixed)}</dd></div>
             <div className="stSumTotal stNet"><dt>{self ? "De primit" : `De primit · ${who!.name}`}</dt><dd className="mono" style={{ color: cut.cut >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(cut.cut)}</dd></div>
-          </> : shares && shares.length > 0 ? (() => {
-            // the owner: only the fixed costs left to them (the associates' are counted on their side, in their net cut),
-            // then each associate's net cut
-            const r2 = (n: number) => Math.round(n * 100) / 100;
-            const allocated = r2(shares.reduce((t, x) => t + x.fixed, 0));
-            const mine = r2(fixed - allocated);
-            const net = r2(revenue - paid - mine - shares.reduce((t, x) => t + x.cut, 0));
+          </> : shares && ownerNet != null ? (() => {
+            const net = ownerNet;
             return <>
               <div className="stOut"><dt>− Cheltuieli fixe rămase la tine{allocated > 0 && <small className="muted"> ({lei2(fixed)} total − {lei2(allocated)} ale asociaților, calculate la ei)</small>}</dt><dd className="mono">{lei2(mine)}</dd></div>
               {shares.map((x) => <div key={x.id} className="stOut"><dt>− Cota netă asociat {x.name} <small className="muted">({lei2(x.base)} × {x.pct}% − {lei2(x.fixed)} cheltuieli)</small></dt><dd className="mono">{lei2(x.cut)}</dd></div>)}
