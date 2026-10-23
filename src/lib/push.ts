@@ -12,6 +12,9 @@ import { generateVapidKeys, sendWebPush, type PushKeys, type Subscription } from
 
 const KEY = "vapid";
 
+/** Where a device subscribed: the CRM (gets the bell) or the inspections app (gets only what is sent to it, pushToUser). */
+export type PushApp = "crm" | "insp";
+
 /** The firm's VAPID keys (made at the first use). */
 export async function vapidKeys(db: D1Database): Promise<PushKeys> {
   const row = await db.prepare("SELECT value FROM settings WHERE key = ?").bind(KEY).first<{ value: string }>().catch(() => null);
@@ -24,10 +27,10 @@ export async function vapidKeys(db: D1Database): Promise<PushKeys> {
 export const vapidPublicKey = async (db: D1Database) => (await vapidKeys(db)).publicKey;
 
 /** Saves a device's subscription for a user (the same endpoint moves to this user if it was someone else's). */
-export async function savePushSubscription(db: D1Database, userId: string, sub: Subscription, ua: string | null) {
-  await db.prepare(`INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, ua, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth, ua = excluded.ua, failures = 0`)
-    .bind(uuid(), userId, sub.endpoint, sub.p256dh, sub.auth, ua?.slice(0, 200) ?? null, now()).run();
+export async function savePushSubscription(db: D1Database, userId: string, sub: Subscription, ua: string | null, app: PushApp = "crm") {
+  await db.prepare(`INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, ua, created_at, app) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth, ua = excluded.ua, app = excluded.app, failures = 0`)
+    .bind(uuid(), userId, sub.endpoint, sub.p256dh, sub.auth, ua?.slice(0, 200) ?? null, now(), app).run();
   // nothing from before the subscription is pushed
   await db.prepare("UPDATE users SET push_sent_at = COALESCE(push_sent_at, ?) WHERE id = ?").bind(now(), userId).run();
 }
@@ -47,7 +50,7 @@ type Target = { id: string; name: string | null; email: string; role: string; pu
  */
 export async function dispatchPush(db: D1Database, baseUrl?: string) {
   const { results: users } = await db.prepare(`SELECT u.id, u.name, u.email, u.role, u.push_sent_at, u.mail_sent_at,
-        EXISTS (SELECT 1 FROM push_subscriptions s WHERE s.user_id = u.id AND s.failures < 5) AS subscribed
+        EXISTS (SELECT 1 FROM push_subscriptions s WHERE s.user_id = u.id AND s.app = 'crm' AND s.failures < 5) AS subscribed
       FROM users u WHERE u.status = 'active' AND u.kind = 'internal'`).all<Target>().catch(() => ({ results: [] as Target[] }));
   if (!users.length) return 0;
   // the CRM's address: of the request, or (email handler, no request) the configured one
@@ -60,7 +63,7 @@ export async function dispatchPush(db: D1Database, baseUrl?: string) {
     const { items } = await notificationsFor(db, viewer, base);
     const fresh = u.subscribed ? items.filter((n) => u.push_sent_at && n.at > u.push_sent_at && n.at <= t) : [];
     if (fresh.length) {
-      const { results: subs } = await db.prepare("SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ? AND failures < 5").bind(u.id)
+      const { results: subs } = await db.prepare("SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ? AND app = 'crm' AND failures < 5").bind(u.id)
         .all<{ id: string; endpoint: string; p256dh: string; auth: string }>();
       for (const s of subs) {
         let okAny = false;
@@ -92,6 +95,26 @@ async function sendAlertMail(u: Target, list: Notice[]) {
       button: { label: "Deschide CRM-ul", url: list[0].href }, foot: "Primești acest email pentru că alerta are bifat „și pe email” în Setări → Alerte." }),
     text: `${list.map((n) => `${n.title}${n.sub ? ` — ${n.sub}` : ""}\n${n.href}`).join("\n\n")}`,
   });
+}
+
+/**
+ * One message to a person's devices of one app (e.g. "completions asked" to the inspector's phone), now. Returns how
+ * many devices got it. `href` is where a tap opens, in that app.
+ */
+export async function pushToUser(db: D1Database, userId: string, app: PushApp, msg: { id: string; title: string; body: string; href: string }) {
+  const { results: subs } = await db.prepare("SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ? AND app = ? AND failures < 5").bind(userId, app)
+    .all<{ id: string; endpoint: string; p256dh: string; auth: string }>().catch(() => ({ results: [] as { id: string; endpoint: string; p256dh: string; auth: string }[] }));
+  if (!subs.length) return 0;
+  const base = await origin().catch(() => process.env.CRM_URL || "https://crm.valuefy.ro");
+  const keys = await vapidKeys(db);
+  let sent = 0;
+  for (const s of subs) {
+    const r = await sendWebPush(keys, base, s, { ...msg, at: now() }).catch(() => ({ ok: false as const, status: 0, gone: false }));
+    if (r.ok) { sent++; await db.prepare("UPDATE push_subscriptions SET last_ok_at = ?, failures = 0 WHERE id = ?").bind(now(), s.id).run(); }
+    else if (r.gone) await db.prepare("DELETE FROM push_subscriptions WHERE id = ?").bind(s.id).run();
+    else await db.prepare("UPDATE push_subscriptions SET failures = failures + 1 WHERE id = ?").bind(s.id).run();
+  }
+  return sent;
 }
 
 const payloadOf = (n: Notice) => ({ id: n.id, title: n.title, body: n.sub, href: n.href, kind: n.kind, at: n.at });

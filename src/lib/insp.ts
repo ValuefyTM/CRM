@@ -35,8 +35,10 @@ export type Insp = {
   contact_kind: string | null; contact_name: string | null; contact_phone: string | null; notes: string | null;
   report_number: string | null; report_label: string | null; purpose: string | null; client: string | null; bank: string | null;
   reschedule_count: number; contact_notified_at: string | null; started_at: string | null;
-  sheet_status: "draft" | "submitted" | null; updated_at: string | null;
+  sheet_status: "draft" | "submitted" | "revision" | null; updated_at: string | null;
   due_on: string | null; instructions: string | null; assigned_by_name: string | null;
+  /** completions asked by the evaluator on the submitted sheet (the sheet is back on the phone), while not sent again */
+  revision: { id: string; note: string; at: string; by: string | null } | null;
   // Several assets of one report at the same general address are inspected together.
   report_id: string | null; asset_id: string | null; is_main: boolean; accessory: boolean;
   group: string | null;                 // report + general address; shared by the assets inspected together
@@ -45,12 +47,13 @@ export type Insp = {
   together: { id: string; label: string; status: InspStatus }[]; // the other properties of the group (own sheets)
 };
 
-type Row = Omit<Insp, "sheet_type" | "template" | "sheet_label" | "property_label" | "address" | "lat" | "lng" | "cad" | "is_main" | "accessory" | "group" | "host_id" | "hosted" | "together"> & {
+type Row = Omit<Insp, "revision" | "sheet_type" | "template" | "sheet_label" | "property_label" | "address" | "lat" | "lng" | "cad" | "is_main" | "accessory" | "group" | "host_id" | "hosted" | "together"> & {
   a_main: number | null;
   sheet_type: string | null; template: string | null; i_address: string | null; i_lat: number | null; i_lng: number | null;
   category: string | null; type: string | null; order_type: string | null; full_address: string | null; street_type: string | null; street: string | null;
   number: string | null; block: string | null; stair: string | null; floor: string | null; apartment: string | null; geo: string | null;
   cad_building: string | null; cad_land: string | null;
+  rev_id: string | null; rev_note: string | null; rev_at: string | null; rev_by: string | null;
 };
 
 const SELECT = `SELECT i.id, i.report_id, i.asset_id, a.is_main AS a_main, i.status, i.scheduled_at, i.done_at, i.duration_min, i.sheet_type, i.template, i.address AS i_address, i.lat AS i_lat, i.lng AS i_lng,
@@ -61,8 +64,10 @@ const SELECT = `SELECT i.id, i.report_id, i.asset_id, a.is_main AS a_main, i.sta
     o.property_type AS order_type,
     r.number AS report_number, r.label AS report_label, r.purpose,
     c.name AS client, b.name AS bank,
-    (SELECT s.status FROM inspection_sheets s WHERE s.inspection_id = i.id AND s.glide_id IS NULL) AS sheet_status
+    (SELECT s.status FROM inspection_sheets s WHERE s.inspection_id = i.id AND s.glide_id IS NULL) AS sheet_status,
+    v.id AS rev_id, v.note AS rev_note, v.requested_at AS rev_at, (SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE x.id = v.requested_by) AS rev_by
   FROM inspections i
+  LEFT JOIN inspection_revisions v ON v.id = (SELECT y.id FROM inspection_revisions y WHERE y.inspection_id = i.id AND y.done_at IS NULL ORDER BY y.requested_at DESC LIMIT 1)
   LEFT JOIN assets a ON a.id = i.asset_id
   LEFT JOIN crm_properties p ON p.id = a.property_id
   LEFT JOIN reports r ON r.id = i.report_id
@@ -76,8 +81,9 @@ const SELECT = `SELECT i.id, i.report_id, i.asset_id, a.is_main AS a_main, i.sta
  */
 const MINE = `i.glide_id IS NULL AND (i.inspector_id = ?1 OR (i.inspector_id IS NULL AND EXISTS (SELECT 1 FROM report_members m WHERE m.report_id = i.report_id AND m.user_id = ?1)))`;
 
-/** Still to do (and the report is still open), or done in the last 45 days. */
+/** Still to do (and the report is still open), sent back for completions, or done in the last 45 days. */
 const CURRENT = `((i.status IN ('to_schedule', 'scheduled') AND (r.id IS NULL OR r.status IN ('draft', 'in_progress', 'suspended')))
+  OR EXISTS (SELECT 1 FROM inspection_sheets x WHERE x.inspection_id = i.id AND x.status = 'revision')
   OR (i.status = 'done' AND COALESCE(i.done_at, i.scheduled_at) >= strftime('%Y-%m-%d', 'now', '-45 days')))`;
 
 const title = (s: string | null) => (s ? s.toLowerCase().replace(/(^|[\s(/-])(\p{L})/gu, (_, a, b) => a + b.toUpperCase()) : "");
@@ -111,6 +117,7 @@ function toInsp(r: Row): Insp {
     report_number: r.report_number, report_label: r.report_label, purpose: r.purpose, client: r.client, bank: r.bank,
     reschedule_count: r.reschedule_count ?? 0, contact_notified_at: r.contact_notified_at, started_at: r.started_at,
     sheet_status: r.sheet_status as Insp["sheet_status"], updated_at: r.updated_at,
+    revision: r.sheet_status === "revision" && r.rev_id ? { id: r.rev_id, note: r.rev_note ?? "", at: r.rev_at ?? "", by: r.rev_by } : null,
     due_on: r.due_on, instructions: r.instructions, assigned_by_name: r.assigned_by_name,
     report_id: r.report_id, asset_id: r.asset_id, is_main: !!r.a_main, accessory: isAccessoryType(r.type),
     group: null, host_id: null, hosted: [], together: [],
@@ -186,7 +193,7 @@ export async function myInspection(db: D1Database, user: User, id: string): Prom
 // ---------- the sheet ----------
 
 export type Sheet = {
-  id: string; status: "draft" | "submitted"; sheet_type: SheetType; answers: Answers; present_person: string | null; present_role: string | null;
+  id: string; status: "draft" | "submitted" | "revision"; sheet_type: SheetType; answers: Answers; present_person: string | null; present_role: string | null;
   present_phone: string | null; has_signature: boolean; submitted_at: string | null; updated_at: string | null;
   /** The form the sheet was started with (the firm's template at that time); null for sheets older than templates. */
   form: Section[] | null;
@@ -266,10 +273,12 @@ export async function saveSheet(db: D1Database, user: User, ins: Insp, b: Record
   const type = ins.sheet_type;
   const answers = (b.answers && typeof b.answers === "object" ? b.answers : {}) as Answers;
   const submit = b.submit === true;
+  // Sent back for completions: the sheet is changed again, the visit stays as it was (its date, the GPS of the place).
+  const revision = current?.status === "revision";
   const person = str(b.present_person, 120) || null;
   const role = PRESENT_ROLES.some(([k]) => k === b.present_role) ? (b.present_role as string) : null;
   const phone = str(b.present_phone, 40) || null;
-  const lat = numOrNull(b.lat), lng = numOrNull(b.lng), acc = numOrNull(b.accuracy_m);
+  const [lat, lng, acc] = revision ? [null, null, null] : [numOrNull(b.lat), numOrNull(b.lng), numOrNull(b.accuracy_m)];
   const id = sheetId(ins.id);
   // The form: the one the sheet was started with on the phone, else the firm's current template.
   const forms = await currentForms(db);
@@ -318,8 +327,8 @@ export async function saveSheet(db: D1Database, user: User, ins: Insp, b: Record
          present_phone = ?12, signature_url = COALESCE(?13, signature_url), signed_at = CASE WHEN ?13 IS NULL THEN signed_at ELSE ?14 END,
          location = COALESCE(?15, location), lat = COALESCE(?16, lat), lng = COALESCE(?17, lng), accuracy_m = COALESCE(?18, accuracy_m),
          photo_url = ?19, photos_count = (SELECT COUNT(*) FROM inspection_photos WHERE inspection_id = ?2 AND deleted_at IS NULL),
-         submitted_at = ?20, done_at = COALESCE(?20, done_at), updated_at = ?14`,
-    ).bind(id, ins.id, assetId, user.id, type, submit ? "submitted" : "draft", FORM_VERSION, details, notes, person, role, phone,
+         submitted_at = COALESCE(?20, submitted_at), done_at = COALESCE(done_at, ?20), updated_at = ?14`,
+    ).bind(id, ins.id, assetId, user.id, type, submit ? "submitted" : revision ? "revision" : "draft", FORM_VERSION, details, notes, person, role, phone,
       signature, t, location, lat, lng, acc, firstExterior ? `r2:${firstExterior.r2_key}` : null, submit ? t : null),
     db.prepare("UPDATE inspections SET sheet_type = ?, started_at = COALESCE(started_at, ?), updated_at = ? WHERE id = ?").bind(type, t, t, ins.id),
   ];
@@ -334,13 +343,15 @@ export async function saveSheet(db: D1Database, user: User, ins: Insp, b: Record
         `INSERT INTO property_features (id, sheet_id, inspection_id, property_id, sheet_type, observed_at, ${names.join(", ")})
          VALUES (?, ?, ?, ?, ?, ?, ${names.map(() => "?").join(", ")})`,
       ).bind(`pf-${ins.id}`, id, ins.id, propertyId, type, t, ...names.map((n) => cols[n] ?? null)),
-      db.prepare("UPDATE inspections SET status = 'done', done_at = ?, done_logged_at = ?, updated_at = ? WHERE id = ?").bind(localNow(), t, t, ins.id),
+      revision
+        ? db.prepare("UPDATE inspection_revisions SET done_at = ? WHERE inspection_id = ? AND done_at IS NULL").bind(t, ins.id)
+        : db.prepare("UPDATE inspections SET status = 'done', done_at = ?, done_logged_at = ?, updated_at = ? WHERE id = ?").bind(localNow(), t, t, ins.id),
     );
     // Accessories inspected on this sheet: their answers ("acc.<id>.<field>") become their own submitted sheet.
     for (const h of ins.hosted) {
       const acc: Answers = {};
       for (const f of ACC_FIELDS) { const v = answers[accKey(h.id, f.k)]; if (v !== undefined) acc[f.k] = v; }
-      const accAsset = (await db.prepare("SELECT asset_id FROM inspections WHERE id = ? AND status IN ('to_schedule', 'scheduled')").bind(h.id).first<{ asset_id: string | null }>());
+      const accAsset = (await db.prepare(`SELECT asset_id FROM inspections WHERE id = ? AND status IN ('to_schedule', 'scheduled'${revision ? ", 'done'" : ""})`).bind(h.id).first<{ asset_id: string | null }>());
       if (!accAsset) continue;
       stmts.push(
         db.prepare(
@@ -351,12 +362,12 @@ export async function saveSheet(db: D1Database, user: User, ins: Insp, b: Record
            ON CONFLICT(id) DO UPDATE SET details = ?4, description = ?5, status = 'submitted', submitted_at = excluded.submitted_at, updated_at = excluded.updated_at`,
         ).bind(sheetId(h.id), h.id, accAsset.asset_id, JSON.stringify({ v: FORM_VERSION, answers: acc, on_sheet: id }),
           typeof acc.acc_notes === "string" ? acc.acc_notes.slice(0, 4000) || null : null, id),
-        db.prepare("UPDATE inspections SET status = 'done', done_at = ?, done_logged_at = ?, sheet_type = 'accesoriu', updated_at = ? WHERE id = ?").bind(localNow(), t, t, h.id),
+        db.prepare("UPDATE inspections SET status = 'done', done_at = COALESCE(done_at, ?), done_logged_at = COALESCE(done_logged_at, ?), sheet_type = 'accesoriu', updated_at = ? WHERE id = ?").bind(localNow(), t, t, h.id),
       );
     }
   }
   await db.batch(stmts);
-  if (submit) await audit(db, `user:${user.id}`, "inspection.submit", "inspection", ins.id, ins.hosted.length ? `${type} + ${ins.hosted.length} accesorii` : type);
+  if (submit) await audit(db, `user:${user.id}`, revision ? "inspection.resubmit" : "inspection.submit", "inspection", ins.id, ins.hosted.length ? `${type} + ${ins.hosted.length} accesorii` : type);
   // "Inspecție realizată": the alerts go out now, not at the next sweep
   if (submit) pushLater(db);
   return { ok: true as const };

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Ctx } from "./InspApp";
 import { Icon, TopBar } from "./ui";
+import { PushCard } from "./PushCard";
 
 const ROLE: Record<string, string> = { inspector: "Inspector", evaluator: "Evaluator", admin: "Administrator", owner: "Proprietar" };
 
@@ -73,6 +74,7 @@ export function AccountView({ ctx }: { ctx: Ctx }) {
           <div className="iKv"><span>De trimis</span><b>{ctx.pending.count}</b></div>
           <button type="button" className="iBtn ghost" onClick={() => ctx.sync()} disabled={ctx.syncing}><Icon.refresh />Sincronizează acum</button>
         </section>
+        <PushCard />
         <Statement />
         {ctx.me.role !== "inspector" && <a className="iBtn ghost" href={ctx.base ? ctx.base.replace(/\/inspectii$/, "") || "/" : "/"} style={{ textDecoration: "none" }}>Deschide CRM-ul</a>}
         <button type="button" className="iBtn ghost danger-text" onClick={() => ctx.logout()}>Ieși din cont</button>

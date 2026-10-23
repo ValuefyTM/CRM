@@ -3597,3 +3597,21 @@ span.rdPick { display: inline-block; }
 .mapZoomHit span { background: rgba(20, 20, 20, .78); color: #fff; font-size: 11.5px; font-weight: 700; padding: 4px 9px; border-radius: 999px; opacity: .85; }
 .mapZoomHit:hover span { opacity: 1; }
 .mapZoomBox { width: min(1100px, calc(100vw - 32px)); max-width: none; }
+
+/* Completions asked on an inspection sheet (asset page) */
+.bvRev { margin-top: 4px; padding: 8px 10px; border-radius: 8px; background: #fdf3f1; border: 1px solid #efc9c3; display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
+.bvRev b { color: #a8261f; font-size: 12px; }
+.bvRev span { white-space: pre-wrap; color: var(--ink); }
+.bvRev small { color: var(--muted-2); font-size: 11px; }
+.bvRev.done { background: #f1f7ef; border-color: #cfe3c8; }
+.bvRev.done b { color: #2f6b2a; }
+.bvInspBody .btn.ghost.bvRevBtn { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+.bvInspBody .btn.ghost.bvRevBtn:hover { background: var(--bg, #faf7f0); }
+.bvRevAsk { margin-top: 4px; display: flex; flex-direction: column; gap: 6px; }
+.bvRevAsk label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; }
+.bvRevAsk textarea { width: 100%; font: inherit; font-weight: 400; font-size: 13px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; resize: vertical; }
+.bvRevAsk .err { color: #a8261f; }
+.bvRevAsk .muted { font-size: 11px; }
+.bvRevRow { display: flex; gap: 6px; }
+.bvRevRow .btn { flex: 1; margin-top: 0 !important; }
+.bvInspBody .bvRevRow .btn.ghost { background: transparent; border: 1px solid var(--line); }

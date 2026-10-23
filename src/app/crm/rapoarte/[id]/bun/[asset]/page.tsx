@@ -14,6 +14,8 @@ import { niceName } from "@/lib/labels";
 import { CrmShell } from "@/components/CrmShell";
 import { MapZoom } from "@/components/MapZoom";
 import { InspSheet } from "../../InspSheet";
+import { RevisionAsk } from "./RevisionAsk";
+import { canAssign } from "@/lib/insp-assign";
 import { ReportDocs, type DocItem } from "../../ReportDocs";
 import { SafeImg } from "../../ReportActions";
 import { AssetPhotos, type Photo } from "./AssetPhotos";
@@ -96,13 +98,18 @@ export default async function AssetPage({ params, searchParams }: {
   // The inspections of the asset (the cancelled ones only when they left a sheet), newest first.
   const { results: insp } = await db.prepare(
     `SELECT i.id, i.status, i.scheduled_at, i.done_at, i.created_at, i.glide_id, i.uvalo_id, i.uvalo_code, i.sheet_type,
-        COALESCE(NULLIF(u.name, ''), u.email) AS inspector, s.id AS sheet_id, s.photo_url, s.present_person, s.signature_url,
-        (SELECT COUNT(*) FROM inspection_photos f WHERE f.inspection_id = i.id AND f.deleted_at IS NULL) AS photos
+        COALESCE(NULLIF(u.name, ''), u.email) AS inspector, s.id AS sheet_id, s.photo_url, s.present_person, s.signature_url, s.status AS sheet_status, s.glide_id AS sheet_glide,
+        (SELECT COUNT(*) FROM inspection_photos f WHERE f.inspection_id = i.id AND f.deleted_at IS NULL) AS photos,
+        v.note AS rev_note, v.requested_at AS rev_at, v.done_at AS rev_done, (SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE x.id = v.requested_by) AS rev_by
       FROM inspections i LEFT JOIN users u ON u.id = i.inspector_id LEFT JOIN inspection_sheets s ON s.inspection_id = i.id
+      LEFT JOIN inspection_revisions v ON v.id = (SELECT y.id FROM inspection_revisions y WHERE y.inspection_id = i.id ORDER BY y.requested_at DESC LIMIT 1)
       WHERE i.asset_id = ? AND (i.status <> 'cancelled' OR s.id IS NOT NULL) ORDER BY COALESCE(i.done_at, i.scheduled_at, i.created_at) DESC`,
   ).bind(a.id).all<{ id: string; status: string; scheduled_at: string | null; done_at: string | null; created_at: string; glide_id: string | null; uvalo_id: string | null;
     uvalo_code: string | null; sheet_type: string | null; inspector: string | null; sheet_id: string | null; photo_url: string | null; present_person: string | null;
-    signature_url: string | null; photos: number }>();
+    signature_url: string | null; photos: number; sheet_status: string | null; sheet_glide: string | null;
+    rev_note: string | null; rev_at: string | null; rev_done: string | null; rev_by: string | null }>();
+  // Completions are asked by whoever gives the inspections of the report, on sheets filled in the CRM app.
+  const askRevision = await canAssign(db, user, id);
   const done = insp.filter((i) => i.status === "done");
   const ids = insp.map((i) => i.id);
   const { results: rawPhotos } = ids.length ? await db.prepare(
@@ -208,7 +215,16 @@ export default async function AssetPage({ params, searchParams }: {
               <div className="bvInspTop"><b>{i.status === "done" ? fmtDate(i.done_at ?? i.created_at) : i.status === "scheduled" && i.scheduled_at ? `Programată ${fmtDate(i.scheduled_at, true)}` : `Alocată ${fmtDate(i.created_at)}`}</b><span className={`pill ${k}`}><i />{t}</span></div>
               <small>{[i.inspector, i.uvalo_code ? `UVALO ${i.uvalo_code}` : i.uvalo_id ? "UVALO" : i.glide_id ? "din vechiul CRM" : "aplicația CRM", i.photos ? `${i.photos} fotografii` : null,
                 i.signature_url ? "semnată" : null, i.present_person && `prezent: ${i.present_person}`].filter(Boolean).join(" · ")}</small>
+              {i.sheet_status === "revision" && i.rev_note && (
+                <div className="bvRev"><b>Completări cerute{i.rev_at ? ` · ${fmtDate(i.rev_at, true)}` : ""}{i.rev_by ? ` · ${i.rev_by}` : ""}</b><span>{i.rev_note}</span><small>Fișa e la inspector, în aplicație. Când o trimite din nou, primești notificare.</small></div>
+              )}
+              {i.sheet_status === "submitted" && i.rev_done && i.rev_note && (
+                <div className="bvRev done"><b>Completări trimise {fmtDate(i.rev_done, true)}</b><span>{i.rev_note}</span></div>
+              )}
               {(doc || (i.status === "done" && i.sheet_id)) && <InspSheet doc={doc ?? null} src={`/api/crm/reports/${id}/sheet/${a.id}?insp=${encodeURIComponent(i.id)}`} firm={firm} pdf={`${base}/rapoarte/${id}/fisa/${a.id}`} label="Deschide fișa de inspecție →" />}
+              {askRevision && i.sheet_status === "submitted" && !i.uvalo_id && !i.glide_id && !i.sheet_glide && (
+                <RevisionAsk report={id} inspection={i.id} inspector={i.inspector} />
+              )}
             </div>
           </article>
         );

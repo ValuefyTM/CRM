@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Ctx } from "./InspApp";
 import { dayKey, fmtDay, fmtTime, pad, parseLocal } from "./store";
-import { Icon, Pill, type Local } from "./ui";
+import { Icon, inRevision, Pill, type Local } from "./ui";
 import { sheetTypeLabel } from "@/lib/insp-forms";
 
 type Tab = "azi" | "urmeaza" | "deprogramat" | "finalizate";
@@ -11,6 +11,7 @@ type Tab = "azi" | "urmeaza" | "deprogramat" | "finalizate";
 const ROLE: Record<string, string> = { inspector: "inspector", evaluator: "evaluator" };
 
 export function groupFor(i: Local, today: string): Tab {
+  if (inRevision(i)) return "azi";
   if (i.status === "done" || i.local === "sent" || i.local === "sending" || i.status === "cancelled") return "finalizate";
   if (i.status !== "scheduled" || !i.scheduled_at) return "deprogramat";
   return i.scheduled_at.slice(0, 10) <= today ? "azi" : "urmeaza";

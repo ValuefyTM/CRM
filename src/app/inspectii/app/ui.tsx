@@ -29,7 +29,11 @@ export const Icon = {
 /** Local state of an inspection on top of the server status: a sheet waiting for signal counts as "to send". */
 export type Local = Insp & { local?: "sending" | "sent" | "scheduled_offline"; draft?: boolean };
 
+/** Sent back by the evaluator for completions, and not sent again yet. */
+export const inRevision = (i: Local) => !!i.revision && i.local !== "sent" && i.local !== "sending";
+
 export function statusOf(i: Local): [string, string] {
+  if (inRevision(i)) return ["Completări cerute", "err"];
   if (i.local === "sending") return ["De trimis", "warn"];
   if (i.status === "done" || i.local === "sent") return ["Finalizată", "ok"];
   if (i.status === "cancelled") return ["Anulată", "err"];

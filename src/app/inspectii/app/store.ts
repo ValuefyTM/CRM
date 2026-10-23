@@ -10,7 +10,9 @@ export type Insp = {
   contact_kind: string | null; contact_name: string | null; contact_phone: string | null; notes: string | null;
   report_number: string | null; report_label: string | null; purpose: string | null; client: string | null; bank: string | null;
   reschedule_count: number; contact_notified_at: string | null; started_at: string | null;
-  sheet_status: "draft" | "submitted" | null; updated_at: string | null;
+  sheet_status: "draft" | "submitted" | "revision" | null; updated_at: string | null;
+  /** completions asked by the evaluator: the sent sheet is back on the phone (optional: older saved lists lack it) */
+  revision?: { id: string; note: string; at: string; by: string | null } | null;
   due_on: string | null; instructions: string | null; assigned_by_name: string | null;
   // Assets of one report at the same address (optional: lists saved on the phone by an older version lack them).
   report_id?: string | null; accessory?: boolean; group?: string | null; host_id?: string | null;
@@ -18,7 +20,7 @@ export type Insp = {
   together?: { id: string; label: string; status: InspStatus }[];
 };
 export type ServerSheet = {
-  id: string; status: "draft" | "submitted"; sheet_type: SheetType; answers: Answers; present_person: string | null; present_role: string | null;
+  id: string; status: "draft" | "submitted" | "revision"; sheet_type: SheetType; answers: Answers; present_person: string | null; present_role: string | null;
   present_phone: string | null; has_signature: boolean; submitted_at: string | null; updated_at: string | null;
   form?: Section[] | null;
 };
@@ -39,6 +41,8 @@ export type Draft = {
   submit: boolean; // the inspector pressed "Trimite fișa"
   submitted: boolean; // the server accepted the sheet
   error: string | null;
+  /** the completions request this sent sheet was reopened for (once per request) */
+  revision?: string;
 };
 
 /** A photo taken on the phone (kept until the server has it). */

@@ -584,6 +584,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                           {fromApp && !cancelled && a.assigned_by_name && <div><dt>Alocată de</dt><dd>{a.assigned_by_name}{a.assigned_at ? `, ${fmtDate(a.assigned_at)}` : ""}</dd></div>}
                           {active && <div><dt>Acte la inspector</dt><dd>{seen ? `${seen} ${seen === 1 ? "act" : "acte"}` : <span className="muted">niciun act</span>}</dd></div>}
                           {fromApp && a.sheet_status === "draft" && active && <div><dt>Fișă</dt><dd>în lucru</dd></div>}
+                          {a.sheet_status === "revision" && <div><dt>Fișă</dt><dd>completări cerute inspectorului</dd></div>}
                           {a.uvalo_id && !cancelled && <div><dt>UVALO</dt><dd>{a.uvalo_code ? <span className="mono">{a.uvalo_code} · </span> : null}{UVALO_STATUS[a.uvalo_status ?? ""] ?? "trimisă"}</dd></div>}
                           {fromApp && a.instructions && !cancelled && <div className="wide"><dt>Instrucțiuni</dt><dd>{a.instructions}</dd></div>}
                         </dl>

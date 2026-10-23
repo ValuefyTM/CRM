@@ -5,6 +5,7 @@ import type { Ctx } from "./InspApp";
 import { newId } from "./store";
 import { position, shrink, useDetail, useDraft, usePhotos } from "./hooks";
 import { Chips, Icon, type Local } from "./ui";
+import { RevisionNote } from "./RevisionNote";
 import { DocsButton } from "./DocsViewer";
 import {
   accFields, answered, formOf, hasRooms, isFilled, isOptional, otherKey, roomsOf, sheetTypeLabel,
@@ -160,7 +161,7 @@ export function SheetView({ ctx, id, item }: { ctx: Ctx; id: string; item: Local
       <header className="sHead">
         <div className="sHeadRow">
           <button type="button" className="iIconBtn" onClick={() => ctx.go(base)} aria-label="Înapoi"><Icon.back /></button>
-          <span className="sHeadText"><b>Fișa · {sheetTypeLabel(draft.sheet_type).split(" (")[0]}</b><small>{ro ? (draft.submitted ? "Trimisă" : "Semnată · se trimite") : "Salvat pe telefon"} · {done} din {all.length} completate</small></span>
+          <span className="sHeadText"><b>Fișa · {sheetTypeLabel(draft.sheet_type).split(" (")[0]}</b><small>{ro ? (draft.submitted ? "Trimisă" : "Semnată · se trimite") : i.revision ? "Completări cerute" : "Salvat pe telefon"} · {done} din {all.length} completate</small></span>
           <DocsButton docs={detail?.docs} label="Acte" />
         </div>
         <div className="sBar" aria-hidden="true"><i style={{ width: `${(done / Math.max(1, all.length)) * 100}%` }} /></div>
@@ -182,6 +183,7 @@ export function SheetView({ ctx, id, item }: { ctx: Ctx; id: string; item: Local
       <div className="sBody">
         {ro && <p className="iNote ok">{draft.submitted ? "Fișa a fost trimisă și nu mai poate fi modificată." : "Fișa este semnată și așteaptă să fie trimisă."}</p>}
         {draft.error && <p className="iNote err">{draft.error}</p>}
+        {idx === 0 && !ro && i.revision && <RevisionNote i={i} />}
         {idx === 0 && (i.hosted ?? []).length > 0 && <p className="iNote">Pe această fișă inspectezi și {(i.hosted ?? []).map((h) => h.label.toLowerCase()).join(", ")}: grupurile „Accesoriu” de la final.</p>}
         <h2 className="sTitle">{current.title}</h2>
         {current.fields.map((f) => (

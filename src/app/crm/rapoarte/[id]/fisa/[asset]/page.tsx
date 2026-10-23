@@ -79,7 +79,8 @@ export default async function InspectionSheetDocument({ params, searchParams }: 
     <div className="cdWrap">
       <SheetToolbar back={`${base}/rapoarte/${id}?tab=bunuri`} name={sheetPdfName(d)}
         photos={d.photos.length} withPhotos={sp.foto !== "0"} autoPrint={sp.print === "1"} />
-      {d.sheet.status !== "submitted" && <div className="cdWarn">Fișa nu a fost încă trimisă din aplicație: documentul arată ciorna salvată până acum.</div>}
+      {d.sheet.status === "revision" ? <div className="cdWarn">Completări cerute inspectorului: documentul arată fișa cu modificările salvate până acum, până o trimite din nou.</div>
+        : d.sheet.status !== "submitted" && <div className="cdWarn">Fișa nu a fost încă trimisă din aplicație: documentul arată ciorna salvată până acum.</div>}
       <article className="cdPage fxPage">
         <header className="fxBrand">
           {/* eslint-disable-next-line @next/next/no-img-element */}

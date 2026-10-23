@@ -6,7 +6,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Ctx } from "./InspApp";
 import { dayKey, fmtDay, fmtTime, MONTHS, parseLocal, pad } from "./store";
 import { groupFor } from "./ListView";
-import { Icon, mapsUrl, telUrl, type Local } from "./ui";
+import { Icon, inRevision, mapsUrl, telUrl, type Local } from "./ui";
+import { usePush } from "./PushCard";
 import { LeafletMap, type MapPoint } from "./LeafletMap";
 import type { SheetType } from "@/lib/insp-forms";
 
@@ -17,10 +18,11 @@ const TYPE: Record<SheetType, [string, string]> = {
 };
 const WD = ["DUM", "LUN", "MAR", "MIE", "JOI", "VIN", "SÂM"];
 const open = (i: Local) => `#/i/${encodeURIComponent(i.id)}`;
-const isOpen = (i: Local) => i.status !== "done" && i.status !== "cancelled" && i.local !== "sending" && i.local !== "sent";
+const isOpen = (i: Local) => inRevision(i) || i.status !== "done" && i.status !== "cancelled" && i.local !== "sending" && i.local !== "sent";
 
 /** Status of a list row as short coloured text. */
 function rowStatus(i: Local, today: string): [string, string] {
+  if (inRevision(i)) return ["✎ Completări cerute", "err"];
   if (i.local === "sending") return ["↑ De trimis", "warn"];
   if (i.status === "done" || i.local === "sent") return ["✓ Finalizată", "ok"];
   if (i.status === "cancelled") return ["Anulată", "err"];
@@ -58,6 +60,7 @@ export function HomeView({ ctx }: { ctx: Ctx }) {
   const [tab, setTab] = useState<Tab | null>(() => { try { return (sessionStorage.getItem("insp-tab") as Tab) || null; } catch { return null; } });
   const [q, setQ] = useState("");
   const [sel, setSel] = useState<string | null>(null);
+  const push = usePush();
 
   // Accessories inspected on another property's sheet are shown with that property.
   const list = useMemo(() => ctx.list.filter((i) => !i.host_id || !ctx.list.some((x) => x.id === i.host_id)), [ctx.list]);
@@ -93,6 +96,8 @@ export function HomeView({ ctx }: { ctx: Ctx }) {
 
   const alerts = useMemo(() => {
     const a: { t: string; d: string; cta: string; href: string; tone: string }[] = [];
+    for (const i of list.filter(inRevision))
+      a.push({ t: `Completări cerute · ${i.property_label}`, d: `${i.revision!.by ? `${i.revision!.by}: ` : ""}${i.revision!.note}`, cta: "Completează", href: open(i), tone: "err" });
     for (const i of list.filter((x) => x.draft && isOpen(x)).slice(0, 2))
       a.push({ t: `Fișă începută · ${i.property_label}`, d: i.address, cta: "Continuă", href: `${open(i)}/fisa`, tone: "acc" });
     if (ctx.pending.count) a.push({ t: `${ctx.pending.count} ${ctx.pending.count === 1 ? "element netrimis" : "elemente netrimise"}`, d: ctx.online ? "Se trimit acum" : "Se trimit automat când ai semnal", cta: "Vezi", href: "#/detrimis", tone: "err" });
@@ -151,6 +156,17 @@ export function HomeView({ ctx }: { ctx: Ctx }) {
       <div className="hStats">
         {stats.map((s) => <span key={s.l} className={s.c ?? ""}><b>{s.n}</b><small>{s.l}</small></span>)}
       </div>
+
+      {push.state === "off" && (
+        <div className="hBlock">
+          <button type="button" className="hAlert hPush" onClick={push.enable}>
+            <span className="hAlertDot acc" />
+            <span className="hAlertText"><b>Activează notificările pe telefon</b><small>Afli imediat când evaluatorul îți cere completări la o fișă.</small></span>
+            <span className="hAlertCta">Activează</span>
+          </button>
+        </div>
+      )}
+      {push.msg && push.state !== "on" && <p className="hint" style={{ margin: "0 16px" }}>{push.msg}</p>}
 
       {alerts.length > 0 && (
         <div className="hBlock">

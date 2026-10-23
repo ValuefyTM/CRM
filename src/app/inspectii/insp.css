@@ -365,6 +365,10 @@ body:has(.insp) { background: #f4efe6; }
 .hBlock { padding: 14px 16px 0; display: flex; flex-direction: column; gap: 8px; }
 .hEyebrow { font-size: 10.5px; font-weight: 800; letter-spacing: 1.2px; color: #6b6b6b; }
 .hAlert { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; display: flex; gap: 10px; align-items: center; color: #141414; }
+.hPush { width: 100%; text-align: left; font: inherit; cursor: pointer; }
+.iRevision { border-color: #e9b3ad; background: #fdf3f1; }
+.iRevision h3 { color: #a8261f; }
+.iRevision .iText { white-space: pre-wrap; color: #141414; }
 .hAlertDot { width: 10px; height: 10px; flex: none; border-radius: 999px; background: #8a8a8a; }
 .hAlertDot.acc { background: var(--acc); }
 .hAlertDot.err { background: #c4322b; }

@@ -122,7 +122,13 @@ export function syncAll(): Promise<SyncResult> {
           errors++;
         }
       }
-      await fetchList();
+      const list = await fetchList();
+      // Sent back for completions: the sheet sent from this phone opens again (once per request).
+      for (const i of list?.inspections ?? []) {
+        if (!i.revision) continue;
+        const d = await getDraft(i.id);
+        if (d && d.submitted && d.revision !== i.revision.id) await putDraft({ ...d, submitted: false, submit: false, dirty: false, error: null, signature: null, revision: i.revision.id });
+      }
       return { offline: false, sent, errors };
     } catch (e) {
       if (e instanceof Offline) return { offline: true, sent, errors };

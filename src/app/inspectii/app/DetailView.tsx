@@ -3,7 +3,8 @@
 import { useMemo } from "react";
 import type { Ctx } from "./InspApp";
 import { fmtWhen, parseLocal } from "./store";
-import { Icon, mapsUrl, Pill, telUrl, TopBar, wazeUrl, type Local } from "./ui";
+import { Icon, inRevision, mapsUrl, Pill, telUrl, TopBar, wazeUrl, type Local } from "./ui";
+import { RevisionNote } from "./RevisionNote";
 import { LeafletMap } from "./LeafletMap";
 import { DocsSection } from "./DocsViewer";
 import { useDetail, useDraft, usePhotos } from "./hooks";
@@ -43,7 +44,8 @@ export function DetailView({ ctx, id, item }: { ctx: Ctx; id: string; item: Loca
     );
   }
 
-  const sent = i.status === "done" || i.local === "sent" || draft?.submitted;
+  const rev = inRevision(i) && !draft?.submitted && !draft?.submit;
+  const sent = !rev && (i.status === "done" || i.local === "sent" || draft?.submitted);
   const sending = i.local === "sending" && !sent;
   const started = !!draft && (draft.dirty || Object.keys(draft.answers).length > 0 || photos.length > 0);
   const smsText = i.scheduled_at
@@ -56,7 +58,8 @@ export function DetailView({ ctx, id, item }: { ctx: Ctx; id: string; item: Loca
     <>
       <TopBar title={i.property_label} sub={[(i.sheet_label || sheetTypeLabel(i.sheet_type)).split(" (")[0], i.cad && `nr. cad. ${i.cad}`, i.report_number && `raport ${i.report_number}`].filter(Boolean).join(" · ")} onBack={ctx.back} />
       <div className={`iPad${sent || sending ? " withCta" : ""}`}>
-        {!sent && !sending && (
+        {rev && <RevisionNote i={i} href={sheetHref} />}
+        {!sent && !sending && !rev && (
           <div className="dTiles">
             {i.host_id ? (
               <a className="dTile dark wide" href={`#/i/${encodeURIComponent(i.host_id)}/fisa`}><Icon.sheet /><b>Completează pe fișa principală</b><small>accesoriul are câmpurile lui acolo</small></a>

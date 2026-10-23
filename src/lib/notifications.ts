@@ -18,7 +18,7 @@ export async function notificationsFor(db: D1Database, u: WithPerms & { id: stri
   const seen = me?.notif_seen_at ?? null;
   const rep = (id: string) => `${base}/rapoarte/${id}`;
 
-  const [msgs, log, insp, orders, rules] = await Promise.all([
+  const [msgs, log, insp, orders, rules, resent] = await Promise.all([
     // Messages from the others on the reports the user is in the team of.
     db.prepare(`SELECT m.id, m.created_at AS at, r.id AS rid, r.number, COALESCE(NULLIF(au.name, ''), m.author_name, m.author_email, 'Cineva') AS who, substr(m.body, 1, 110) AS body
       FROM messages m JOIN reports r ON r.id = m.entity_id AND m.entity = 'report' LEFT JOIN users au ON au.id = m.author_id
@@ -49,6 +49,16 @@ export async function notificationsFor(db: D1Database, u: WithPerms & { id: stri
       : Promise.resolve([]),
     // The configurable alerts (Setări → Alerte): inspections done, reports not collected or to invoice, late work…
     alertHits(db, u, since).then((h) => h.map((x) => describe(x, base))).catch((e) => { console.error("alerts", e); return []; }),
+    // Sheets sent again by the inspector after completions were asked (to the report's evaluators and to who asked).
+    db.prepare(`SELECT a.id, a.at, r.id AS rid, r.number, COALESCE(p.full_address, p.city) AS place,
+        (SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE a.actor IN ('user:' || x.id, 'staff:' || x.id)) AS who
+      FROM audit_log a JOIN inspections i ON i.id = a.entity_id JOIN reports r ON r.id = i.report_id
+      LEFT JOIN assets s ON s.id = i.asset_id LEFT JOIN crm_properties p ON p.id = s.property_id
+      WHERE a.entity = 'inspection' AND a.action = 'inspection.resubmit' AND a.at > ?2 AND a.actor NOT IN ('user:' || ?1, 'staff:' || ?1)
+        AND (EXISTS (SELECT 1 FROM report_members rm WHERE rm.report_id = r.id AND rm.user_id = ?1 AND rm.role = 'evaluator')
+          OR EXISTS (SELECT 1 FROM inspection_revisions v WHERE v.inspection_id = i.id AND v.requested_by = ?1))
+      ORDER BY a.at DESC LIMIT 10`).bind(u.id, since)
+      .all<{ id: number; at: string; rid: string; number: string | null; place: string | null; who: string | null }>().then((x) => x.results).catch(() => []),
   ]);
 
   const items: Notice[] = [
@@ -66,6 +76,10 @@ export async function notificationsFor(db: D1Database, u: WithPerms & { id: stri
     ...orders.map((o): Notice => ({
       id: `o${o.id}`, at: o.at, kind: "order", title: `Comandă nouă ${orderCode({ id: o.id, seq: o.seq, bank_ref: o.bank_ref, bank: o.bank, source: o.source ?? undefined })}`,
       sub: [o.client, o.bank].filter(Boolean).join(" · ") || "neprocesată", href: `${base}/comenzi/${o.id}`,
+    })),
+    ...resent.map((x): Notice => ({
+      id: `a${x.id}`, at: x.at, kind: "inspection", title: `Fișa de inspecție completată${x.number ? ` · raport ${num(x.number)}` : ""}`,
+      sub: [x.who && `${x.who} a trimis completările`, x.place].filter(Boolean).join(" · "), href: rep(x.rid),
     })),
     ...rules.map((n): Notice => ({ id: n.id, at: n.at, kind: n.kind as Notice["kind"], title: n.title, sub: n.sub, href: n.href, email: n.email })),
   ].sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 30);

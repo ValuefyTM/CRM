@@ -79,6 +79,27 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(caches.match(req).then((hit) => hit || fetch(req)));
   }
 });
+
+// Phone notifications (e.g. a sheet sent back for completions): title, text, the inspection to open.
+self.addEventListener("push", (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { title: "Inspecții VALUEFY", body: e.data ? e.data.text() : "" }; }
+  e.waitUntil(self.registration.showNotification(d.title || "Inspecții VALUEFY", {
+    body: d.body || "", icon: "/icon-insp-192.png", badge: "/icon-insp-192.png", tag: d.id || undefined, data: { href: d.href || SHELL },
+    timestamp: d.at ? Date.parse(d.at) : Date.now(), requireInteraction: true,
+  }));
+});
+// A tap opens the inspection in the app window already open, else in a new one.
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const url = new URL((e.notification.data && e.notification.data.href) || SHELL, self.location.origin).href;
+  e.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const win = all.find((c) => "focus" in c);
+    if (win) { await win.focus(); if ("navigate" in win) await win.navigate(url); return; }
+    await self.clients.openWindow(url);
+  })());
+});
 `;
   return new Response(js, {
     headers: { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache", "Service-Worker-Allowed": base || "/" },

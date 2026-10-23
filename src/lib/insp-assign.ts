@@ -1,7 +1,7 @@
 // Server-only: inspection tasks given from the CRM report page. The main evaluator of the report (or an owner /
 // administrator) gives the inspection of an asset to themselves or to a colleague; the inspector schedules it in the app.
 import { now, uuid } from "./db";
-import { pushLater } from "./push";
+import { pushLater, pushToUser } from "./push";
 import { dutySql, hasDuty } from "./labels";
 import { appUrl } from "./site";
 import { audit } from "./auth";
@@ -303,4 +303,55 @@ ${instructions ? `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;colo
       }),
     });
   }
+}
+
+/**
+ * The evaluator asks the inspector for completions on a submitted sheet: the sheet goes back to the inspector's phone
+ * (status "revision") with the message, the inspector gets a phone notification (and an email), changes the sheet, adds
+ * photos and sends it again. Only sheets filled in the CRM app (not UVALO's, not the old CRM's).
+ */
+export async function requestRevision(db: D1Database, user: User, reportId: string, inspectionId: string, note: string) {
+  const text = note.trim().slice(0, 1000);
+  if (text.length < 3) return { ok: false as const, error: "Scrie ce trebuie completat." };
+  const i = await db.prepare(`SELECT i.id, i.inspector_id, i.uvalo_id, i.glide_id, s.id AS sheet_id, s.status AS sheet_status, s.glide_id AS sheet_glide,
+      u.email, COALESCE(NULLIF(u.name, ''), u.email) AS inspector, COALESCE(p.full_address, p.city) AS address, p.type, r.number
+    FROM inspections i JOIN inspection_sheets s ON s.inspection_id = i.id LEFT JOIN users u ON u.id = i.inspector_id
+    LEFT JOIN assets a ON a.id = i.asset_id LEFT JOIN crm_properties p ON p.id = a.property_id LEFT JOIN reports r ON r.id = i.report_id
+    WHERE i.id = ? AND i.report_id = ?`).bind(inspectionId, reportId)
+    .first<{ id: string; inspector_id: string | null; uvalo_id: string | null; glide_id: string | null; sheet_id: string; sheet_status: string; sheet_glide: string | null;
+      email: string | null; inspector: string | null; address: string | null; type: string | null; number: string | null }>();
+  if (!i) return { ok: false as const, error: "Inspecția nu are fișă în acest raport." };
+  if (i.uvalo_id || i.glide_id || i.sheet_glide) return { ok: false as const, error: "Fișa nu a fost completată în aplicația de inspecții: completările se cer direct inspectorului." };
+  if (!i.inspector_id) return { ok: false as const, error: "Inspecția nu are inspector." };
+  if (i.sheet_status === "revision") return { ok: false as const, error: "Completările au fost deja cerute; fișa e la inspector." };
+  if (i.sheet_status !== "submitted") return { ok: false as const, error: "Fișa nu a fost încă trimisă de inspector." };
+  const t = now();
+  await db.batch([
+    db.prepare("UPDATE inspection_sheets SET status = 'revision', updated_at = ? WHERE id = ?").bind(t, i.sheet_id),
+    db.prepare("INSERT INTO inspection_revisions (id, inspection_id, note, requested_by, requested_at) VALUES (?, ?, ?, ?, ?)").bind(uuid(), i.id, text, user.id, t),
+    db.prepare("UPDATE inspections SET updated_at = ? WHERE id = ?").bind(t, i.id),
+  ]);
+  await audit(db, `user:${user.id}`, "inspection.revision", "inspection", i.id, text.slice(0, 300));
+  if (i.inspector_id === user.id) return { ok: true as const, pushed: 0 };
+  const what = `${i.type ? i.type.charAt(0) + i.type.slice(1).toLowerCase() : "Bun"} · ${i.address ?? "adresă necompletată"}`;
+  const link = await appUrl("insp", `/#/i/${encodeURIComponent(i.id)}`);
+  const pushed = await pushToUser(db, i.inspector_id, "insp", {
+    id: `rev-${i.id}`, title: "Ai primit inspecția înapoi pentru completări",
+    body: `${user.name || "Evaluatorul"}: ${text.slice(0, 160)}`, href: link,
+  }).catch((e) => { console.error("push revision", e); return 0; });
+  if (i.email) {
+    await sendEmail({
+      to: i.email, subject: `Completări cerute la inspecție: ${i.address ?? "bun"}`,
+      text: `${user.name || "Evaluatorul"} ți-a trimis înapoi fișa de inspecție${i.number ? ` (raport ${i.number})` : ""} pentru completări:\n${what}\n\n${text}\n\nDeschide inspecția în aplicație, fă completările și trimite fișa din nou: ${link}`,
+      html: layout({
+        eyebrow: "Inspecții VALUEFY", title: "Ai primit inspecția înapoi pentru completări",
+        body: `<p style="margin:0 0 10px;font-size:15px;line-height:1.65;color:#4A4A4A"><strong style="color:#111111">${esc(user.name || "Evaluatorul")}</strong> ți-a trimis înapoi fișa${esc(i.number ? ` (raport ${i.number})` : "")}: ${esc(what)}.</p>
+<p style="margin:0 0 10px;padding:12px 14px;border-left:3px solid #E0AD4F;background:#FBF6EC;font-size:15px;line-height:1.65;color:#111111;white-space:pre-wrap">${esc(text)}</p>
+<p style="margin:0;font-size:15px;line-height:1.65;color:#4A4A4A">Poți modifica fișa, adăuga fotografii și o trimiți din nou din aplicație.</p>`,
+        button: { label: "Deschide inspecția →", url: link },
+        foot: "Inspecția apare în aplicație cu „Completări cerute”.",
+      }),
+    }).catch((e) => console.error("mail revision", e));
+  }
+  return { ok: true as const, pushed };
 }

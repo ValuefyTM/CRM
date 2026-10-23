@@ -1,7 +1,7 @@
 import { err, json, reportApi } from "@/lib/api";
 import { resyncUvalo } from "@/lib/uvalo";
 import { setInspectorDocs } from "@/lib/insp-docs";
-import { assignInspection, canAssign, cancelInspection, deleteInspection, mailAssigned, markInspectionDone, markNoInspection } from "@/lib/insp-assign";
+import { assignInspection, canAssign, cancelInspection, requestRevision, deleteInspection, mailAssigned, markInspectionDone, markNoInspection } from "@/lib/insp-assign";
 import { pushLater } from "@/lib/push";
 
 /**
@@ -14,7 +14,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const a = await reportApi(id, "view", true);
   if (!("res" in a)) pushLater(a.db);
   if ("res" in a) return a.res;
-  if (!(await canAssign(a.db, a.user, id))) return err("Doar evaluatorul principal al raportului poate aloca inspecția.", 403);
+  if (!(await canAssign(a.db, a.user, id))) return err("Doar evaluatorul principal al raportului poate aloca inspecția sau cere completări.", 403);
   const b = await json(req);
   // inspections given together with `notify: false`: one email for all of them
   if (Array.isArray(b.notify)) {
@@ -22,6 +22,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const mine = ids.length ? (await a.db.prepare(`SELECT id FROM inspections WHERE report_id = ? AND id IN (${ids.map(() => "?").join(", ")})`).bind(id, ...ids).all<{ id: string }>()).results.map((x) => x.id) : [];
     await mailAssigned(a.db, a.user, mine);
     return Response.json({ ok: true });
+  }
+  // completions asked on a submitted sheet: `{ revision: "<what to complete>", inspection }`
+  if (typeof b.revision === "string") {
+    const m = await requestRevision(a.db, a.user, id, typeof b.inspection === "string" ? b.inspection : "", b.revision);
+    return m.ok ? Response.json({ ok: true, pushed: m.pushed }) : err(m.error);
   }
   if (typeof b.done_at === "string") {
     const m = await markInspectionDone(a.db, a.user, id, typeof b.asset === "string" ? b.asset : "", b.done_at);

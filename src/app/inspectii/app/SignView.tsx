@@ -60,7 +60,8 @@ export function SignView({ ctx, id, item }: { ctx: Ctx; id: string; item: Local 
   const i = item ?? detail?.inspection;
 
   useEffect(() => {
-    if (!draft || draft.submitted || draft.submit || asked.current || draft.lat != null) return;
+    // completions on a sheet sent back: the place of the visit stays the one captured then
+    if (!draft || draft.submitted || draft.submit || asked.current || draft.lat != null || i?.revision) return;
     asked.current = true;
     setGps("wait");
     position(15000).then((p) => {
@@ -68,7 +69,7 @@ export function SignView({ ctx, id, item }: { ctx: Ctx; id: string; item: Local 
       setGps("ok");
       update({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy_m: Math.round(p.coords.accuracy) });
     });
-  }, [draft, update]);
+  }, [draft, update, i?.revision]);
 
   if (!draft) return (<div className="sLoading"><p className="iEmpty">Se încarcă…</p></div>);
 
@@ -90,7 +91,7 @@ export function SignView({ ctx, id, item }: { ctx: Ctx; id: string; item: Local 
     ...(req.length ? [[false, "Obligatorii necompletate", req.slice(0, 2).map((f) => f.label).join(", ") + (req.length > 2 ? "…" : ""), `${base}/fisa`] as [boolean, string, string, string]] : []),
     ...(hasRooms(draft.sheet_type) ? [[rooms.length > 0 && roomsDone === rooms.length, "Încăperi", rooms.length ? `${roomsDone}/${rooms.length}` : "nicio încăpere", `${base}/incaperi`] as [boolean, string, string, string]] : []),
     [photosOk, "Fotografii", photosOk ? String(photos.length) : "lipsește exteriorul", `${base}/foto`],
-    [draft.lat != null ? true : null, "Locația", draft.lat != null ? `±${draft.accuracy_m ?? "?"} m` : gps === "wait" ? "se caută…" : "indisponibilă (opțional)"],
+    i?.revision ? [true, "Locația", "cea de la vizită"] : [draft.lat != null ? true : null, "Locația", draft.lat != null ? `±${draft.accuracy_m ?? "?"} m` : gps === "wait" ? "se caută…" : "indisponibilă (opțional)"],
   ];
 
   const send = async () => {
@@ -180,7 +181,7 @@ export function SignView({ ctx, id, item }: { ctx: Ctx; id: string; item: Local 
           <button type="button" className="sNext" onClick={() => ctx.sync()} disabled={ctx.syncing}>{ctx.syncing ? "Se trimite…" : "Încearcă acum"}</button>
         ) : (
           <>
-            <button type="button" className="sNext" onClick={send}>Finalizează și trimite</button>
+            <button type="button" className="sNext" onClick={send}>{i?.revision ? "Trimite completările" : "Finalizează și trimite"}</button>
             <small className="sFootNote">Fără semnal? Se trimite singură când revine rețeaua.</small>
           </>
         )}
