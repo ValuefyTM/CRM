@@ -29,6 +29,8 @@ import { AssetEditor, RemoveAsset } from "./AssetEditor";
 import { assetProfile, emptyAsset, FIELD_LABELS, type AssetForm, type ProfileField } from "@/lib/asset-labels";
 import { canAssign, inspectorChoices } from "@/lib/insp-assign";
 import { RevisionAsk } from "../RevisionAsk";
+import { SimilarReports } from "./SimilarReports";
+import { similarReports } from "@/lib/similar-reports";
 import { sheetFits, STD, templateList } from "@/lib/insp-templates-db";
 import { docsByAsset } from "@/lib/insp-docs";
 import { guessDocKind } from "@/lib/doc-kinds";
@@ -125,6 +127,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const [repInvoices, perOrder, outside] = await Promise.all([invoicesFor(db, { report: id }), can(user, "billing") || can(user, "billing:issue") ? draftForReport(db, id) : Promise.resolve({ error: "" }),
     db.prepare("SELECT billed_outside_at, billed_outside_ref FROM reports WHERE id = ?").bind(id).first<{ billed_outside_at: string | null; billed_outside_ref: string | null }>().catch(() => null)]);
   const main = assets.find((a) => a.is_main) ?? assets[0];
+  // reports of the same type of property within 1 km (the general tab shows how many; the list opens on click)
+  const similar = tab === "general" && main ? await similarReports(db, user, id, { radius: "1" }).catch(() => null) : null;
   const [mayAssign, inspectors, inspDocs, sheetList] = await Promise.all([canAssign(db, user, id), inspectorChoices(db, user.id), docsByAsset(db, id, assets.map((a) => a.id)), templateList(db)]);
   // The sheets an inspection of an asset can be given with: the firm's sheets meant for its type of asset, and the standard one
   // (UVALO's of the type; the VALUEFY model in the CRM app).
@@ -429,6 +433,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                     <Row k="Abordare">{main.approach ? APPROACH[main.approach] : null}</Row>
                     {assets.length > 1 && <Row k="Alte bunuri"><a className="link" href={href("bunuri")}>{assets.length - 1} {assets.length === 2 ? "bun" : "bunuri"} →</a></Row>}
                   </dl>
+                  {similar?.located && <SimilarReports report={r.id} base={base} count={similar.rows.length} bank={similar.subject?.bank ?? null} />}
                 </>
               )}
             </section>
