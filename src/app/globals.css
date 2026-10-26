@@ -3696,3 +3696,67 @@ span.rdPick { display: inline-block; }
 @media (max-width: 760px) { .simDetail dl { grid-template-columns: repeat(2, minmax(0, 1fr)); } .simSum { margin-left: 0; } }
 .simTable th:first-child, .simTable td:first-child { padding-left: 18px; } .simTable th:last-child, .simTable td:last-child { padding-right: 18px; }
 .simDetail td:first-child { padding-left: 18px; }
+
+/* Analiză juridică (Acte & livrare) */
+.lcCard { margin-bottom: 18px; }
+.lcHeadActs { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.lcHeadActs select { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; max-width: 260px; }
+.lcBusy { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--acc-soft, #fdf1dc); font-size: 13px; }
+.lcBody { display: flex; flex-direction: column; gap: 16px; }
+.lcTop { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.lcEyebrow { display: block; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-2); margin-bottom: 4px; }
+.lcVerdict { font-size: 20px; letter-spacing: -0.02em; }
+.lcVerdict.lcCrit { color: #a4281e; } .lcVerdict.lcWarn { color: #9a5f00; } .lcVerdict.lcOk { color: #1f7a45; }
+.lcPills { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.lcPill { font-size: 12px; font-weight: 800; padding: 4px 10px; border-radius: 999px; }
+.lcPill.lcCrit { background: #fdecea; color: #a4281e; } .lcPill.lcWarn { background: #fdf1dc; color: #9a5f00; } .lcPill.lcInfo { background: #f1f2f5; color: #4a4a66; } .lcPill.lcOk { background: #eaf7ef; color: #1f7a45; }
+.lcNone { margin: 0; padding: 12px; border-radius: 10px; background: #eaf7ef; color: #1f7a45; font-weight: 700; font-size: 14px; }
+.lcIssues { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.lcIssues li { display: grid; grid-template-columns: 92px minmax(0, 1fr) 170px; gap: 12px; align-items: start; padding: 10px 12px; border-radius: 10px; font-size: 13.5px; line-height: 1.5; }
+.lcIssues li.lcCrit { background: #fdecea; } .lcIssues li.lcWarn { background: #fdf6e8; } .lcIssues li.lcInfo { background: #f5f6f8; }
+.lcIssues li.lcDone { background: #f5f6f8; opacity: .75; }
+.lcIssues li.lcDone b { text-decoration: line-through; text-decoration-thickness: 1px; }
+.lcLvl { font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; padding-top: 2px; }
+.lcCrit .lcLvl { color: #a4281e; } .lcWarn .lcLvl { color: #9a5f00; } .lcInfo .lcLvl { color: var(--muted-2); } .lcDone .lcLvl { color: #1f7a45; }
+.lcTxt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lcTxt > span { color: #4a4a66; }
+.lcTxt small { color: var(--muted-2); font-size: 12px; }
+.lcNote { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.lcNote input { flex: 1; min-width: 180px; font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; }
+.lcSrc { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; text-align: right; }
+.lcSrc small { font-size: 11.5px; color: var(--muted-2); }
+.lcMarks { display: inline-flex; gap: 10px; }
+.lcGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.lcBox { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; background: #fff; }
+.lcBoxHead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
+.lcBoxHead .muted { font-size: 12px; }
+.lcOpis { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.5; }
+.lcRight { width: 100%; box-sizing: border-box; font: inherit; font-size: 13px; line-height: 1.55; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; resize: vertical; }
+.lcChain { display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding: 4px 2px 8px; }
+.lcNode { flex: none; width: 170px; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; gap: 3px; font-size: 13px; background: #fff; }
+.lcNode small { font-size: 11.5px; color: var(--muted-2); }
+.lcNode.lcPast { background: #f5f6f8; }
+.lcNode.lcNow { background: #fdf1dc; border: 2px solid #f2a93b; }
+.lcNode.lcBroken { background: #fdecea; border-color: #c2362b; }
+.lcNowTag { color: #9a5f00 !important; font-weight: 800; }
+.lcArrow { flex: none; width: 130px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 4px; padding: 0 6px; text-align: center; }
+.lcArrow small { font-size: 11px; line-height: 1.3; color: #4a4a66; }
+.lcArrow i { display: block; width: 100%; height: 0; border-top: 2px solid #626771; position: relative; }
+.lcArrow i::after { content: ""; position: absolute; right: -1px; top: -6px; border: 5px solid transparent; border-left: 8px solid #626771; }
+.lcArrow.bad i { border-top: 2px dashed #c2362b; }
+.lcArrow.bad i::after { border-left-color: #c2362b; }
+.lcBad { color: #a4281e !important; font-weight: 800; }
+.lcEnc { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.lcEnc li { padding: 8px 10px; border-radius: 10px; background: #fdecea; border: 1px solid #efc9c3; font-size: 13px; display: flex; flex-direction: column; gap: 2px; max-width: 360px; }
+.lcEnc small { color: #4a4a66; font-size: 12px; }
+.lcTable td, .lcTable th { font-size: 12.5px; white-space: nowrap; }
+.lcTable td.lcOff { color: #a4281e; font-weight: 800; }
+.lcPre { margin: 0; white-space: pre-wrap; font: inherit; font-size: 13px; line-height: 1.5; color: #4a4a66; }
+.lcDocs summary { cursor: pointer; font-size: 14px; }
+.lcDocs ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.lcDocs li { display: flex; flex-direction: column; gap: 1px; }
+.lcDocs li small { font-size: 11.5px; color: var(--muted-2); }
+.lcDocs li.lcDocBad b { color: #a4281e; }
+.lcFoot { margin: 0; font-size: 11.5px; }
+.rdRead { display: block; font-size: 11.5px; color: #1f7a45; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 900px) { .lcGrid { grid-template-columns: 1fr; } .lcIssues li { grid-template-columns: 1fr; } .lcSrc { align-items: flex-start; text-align: left; } }

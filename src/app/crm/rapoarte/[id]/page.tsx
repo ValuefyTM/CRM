@@ -30,6 +30,8 @@ import { assetProfile, emptyAsset, FIELD_LABELS, type AssetForm, type ProfileFie
 import { canAssign, inspectorChoices } from "@/lib/insp-assign";
 import { RevisionAsk } from "../RevisionAsk";
 import { SimilarReports } from "./SimilarReports";
+import { LegalCheck } from "./LegalCheck";
+import { docReadings, latestChecks, legalEnabled } from "@/lib/legal-check";
 import { similarReports } from "@/lib/similar-reports";
 import { sheetFits, STD, templateList } from "@/lib/insp-templates-db";
 import { docsByAsset } from "@/lib/insp-docs";
@@ -271,6 +273,11 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
       a.plan_file ? { name: `Releveu ${cap(a.type)}`.trim(), path: a.plan_file, kind: "rlv" } : null,
     ].filter((x): x is { name: string; path: string; kind: string } => !!x).map((f): DocItem => ({ id: f.path, name: f.name, kind: f.kind, asset_id: a.id, status: "uploaded", origin: "glide", href: null, size: null, at: null, by: null, insp: true }))),
   ];
+  // what the legal check read from the documents (name of the act, number, date, issuer), and its newest results
+  const [readings, legal] = tab === "documente"
+    ? await Promise.all([docReadings(db, docItems.filter((d) => d.origin !== "glide").map((d) => `${d.origin === "order" ? "o" : "r"}:${d.id}`)), latestChecks(db, r.id)])
+    : [{}, []] as [Awaited<ReturnType<typeof docReadings>>, Awaited<ReturnType<typeof latestChecks>>];
+  for (const d of docItems) { const x = readings[`${d.origin === "order" ? "o" : "r"}:${d.id}`]; if (x) d.read = x; }
   const sheets = assets.filter((a) => a.sheet_type && (a.sheet_photo || a.sheet_person || a.inspection_status === "done"));
   // The list of assets: its title with the inspection button (allocate while some asset has none, else reallocate the open
   // ones), and "Adaugă bun" at its end.
@@ -638,6 +645,10 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
         </>
       )}
 
+      {tab === "documente" && assets.some((a) => a.category !== "BUN MOBIL") && (
+        <LegalCheck report={r.id} canRun={c.docs} enabled={legalEnabled()} checks={legal}
+          assets={assets.filter((a) => a.category !== "BUN MOBIL").map((a) => ({ id: a.id, label: assetShort(a), hasDocs: docItems.some((d) => !d.final && d.status === "uploaded" && d.origin !== "glide" && (!d.asset_id || d.asset_id === a.id)) }))} />
+      )}
       {tab === "documente" && (
         <ReportDocs inspOpen={assets.some(isActive)} inspSent={inspSent} report={r.id} assets={assets.map((a) => ({ id: a.id, label: assetShort(a), sub: a.full_address ?? a.city }))} items={docItems} edit={c.docs} remove={c.docsDelete}
           missing={c.docs ? <><span className="muted">Lipsește un act de la client?</span><MissingDoc id={r.id} /></> : null}

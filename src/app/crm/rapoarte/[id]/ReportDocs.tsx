@@ -14,7 +14,12 @@ export type DocItem = {
   insp?: boolean;
   /** The final report (PDF signed), shown in red at the top of the report's own documents. */
   final?: boolean;
+  /** What the legal check read from it: the name of the act, its number, date and issuer. */
+  read?: { title: string; number: string | null; date: string | null; issuer: string | null };
 };
+
+/** „Contract de vânzare-cumpărare nr. 1234 din 08.03.2021 · BNP Popescu”, as read by the legal check. */
+const readLine = (d: DocItem) => d.read ? <small className="rdRead" title="Citit de analiza juridică">{d.read.title}{d.read.number ? ` nr. ${d.read.number}` : ""}{d.read.date ? ` din ${d.read.date.split("-").reverse().join(".")}` : ""}{d.read.issuer ? ` · ${d.read.issuer}` : ""}</small> : null;
 
 /** "La inspector": the tick of a document (saved with "Actualizează la inspector", not on each click). */
 function InspTick({ d, on, edit, changed, onChange }: { d: DocItem; on: boolean; edit: boolean; changed: boolean; onChange: (v: boolean) => void }) {
@@ -239,6 +244,7 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
                     <tr key={d.origin + d.id} className={rowClass(d)}>
                       <td>{pick(d)}</td>
                       <td><span className="rdTName"><span className={`rdExt sm k-${d.status === "missing" ? "miss" : k}`}>{d.status === "missing" ? "!" : ext(d.name)}</span><b title={d.name}>{d.name}</b></span>
+                        {readLine(d)}
                         {d.origin !== "report" && <small className="muted">{d.origin === "order" ? "din comandă" : "în vechiul CRM"}</small>}</td>
                       <td>{d.status === "missing" ? <span className="errTxt">lipsă</span> : d.final ? <b className="errTxt">Raport final</b> : d.origin === "report" && edit ? <DocTypeSelect id={report} doc={d.id} assets={many ? assets : null} value={`${k}:${d.asset_id ?? ""}`} /> : docKindLabel(k)}</td>
                       {many && <td className="rdTAsset" title={d.asset_id ? labelOf(d.asset_id) : "raport"}>{d.asset_id ? labelOf(d.asset_id) : "raport"}</td>}
@@ -274,6 +280,7 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
                   </div>
                   <div className="rdCardBody">
                     <b title={d.name}>{d.name}</b>
+                    {readLine(d)}
                     <small>{d.status === "missing" ? "lipsă · blochează predarea" : <>{d.final ? <b className="errTxt">Raport final</b> : docKindLabel(k)}{many && <> · {d.asset_id ? labelOf(d.asset_id) : "raport"}</>}{d.at && ` · ${day(d.at)}`}</>}</small>
                     <span className="rdCardActs">{tick(d)}{acts(d)}</span>
                   </div>
@@ -291,6 +298,7 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
                 <span className={`rdExt k-${d.status === "missing" ? "miss" : k}`}>{d.status === "missing" ? "LIPSĂ" : ext(d.name)}</span>
                 <span className="rdName">
                   <b title={d.name}>{d.name}</b>
+                  {readLine(d)}
                   <small>
                     {d.status === "missing" ? <>solicitat {day(d.at)} · <span className="errTxt">blochează predarea</span></> : <>
                       <span className={`rdKind${d.final ? " errTxt" : ""}`}>{kindLabel(d)}</span>
