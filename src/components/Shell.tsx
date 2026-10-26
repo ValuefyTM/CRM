@@ -1,5 +1,6 @@
 import { Avatar } from "./Avatar";
 import { cookies } from "next/headers";
+import { BackLink, NavMemory } from "./NavMemory";
 import { MeMenu, MobileMenu, SideBrand, SideNav, type NavEntry, type NavGroup, type NavItem } from "./SideNav";
 
 export type { NavItem, NavGroup, NavEntry } from "./SideNav";
@@ -51,12 +52,13 @@ export async function Shell(props: {
         </div>
       </aside>
       <div className="main">
+        <NavMemory />
         {props.banner}
         {!props.bare && <header className={props.app === "crm" ? "top topDark" : "top"}>
           {/* No title on the dashboards: their own greeting says it. The way back sits on its left. */}
           {(props.title || props.back) && (
             <div className={props.back ? "topHead" : undefined}>
-              {props.back && <a className="topBack" href={props.back.href} title={`Înapoi la ${props.back.label}`}><span aria-hidden="true">←</span><span>{props.back.label}</span></a>}
+              {props.back && <BackLink href={props.back.href} label={props.back.label} />}
               {props.back ? (
                 <div className="topTitle">
                   {props.title && <h1 className={props.dateTitle ? "topDate" : undefined}>{props.title}</h1>}
