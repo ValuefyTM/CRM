@@ -1,4 +1,5 @@
 import { fileSrc } from "./files";
+import { plain } from "./places";
 import { reportVisibleSql, type PropertyScope } from "./perms-db";
 import { DEFAULT_CONFIG, type TeamMatrix } from "./perms";
 
@@ -94,7 +95,9 @@ function where(f: RegistryFilters, viewer?: RegistryViewer) {
         LEFT JOIN entities ec ON ec.id = rx.client_id LEFT JOIN entities eb ON eb.id = rx.recipient_id LEFT JOIN entities ei ON ei.id = rx.issuer_id
         WHERE ax.property_id = p.id AND (rx.number = ? OR rx.label LIKE ? OR ec.name LIKE ? OR ec.cui = ? OR eb.name LIKE ? OR eb.code LIKE ? OR ei.name LIKE ? OR rx.purpose LIKE ?
           OR EXISTS (SELECT 1 FROM report_members mx JOIN users ux ON ux.id = mx.user_id WHERE mx.report_id = rx.id AND COALESCE(NULLIF(ux.name, ''), ux.email) LIKE ?))))`);
-    a.push(like, like, like, like, like, like, t, t, t, like, like, t, like, like, like, like, like);
+    // localities are kept without diacritics: "Timișoara" typed finds "Timisoara"
+    const loc = plain(like);
+    a.push(like, like, loc, loc, like, like, t, t, t, like, like, t, like, like, like, like, like);
   }
   return { sql: `WHERE ${w.join(" AND ")}`, args: a };
 }

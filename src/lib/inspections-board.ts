@@ -2,6 +2,7 @@
 import { dutySql } from "./labels";
 import { photoUrl, presenceOf, type Presence } from "./presence";
 import { parseGeo } from "./registry";
+import { plain } from "./places";
 import { can, leadSql, type WithPerms } from "./perms";
 import { mySql } from "./perms-db";
 import type { TeamMatrix } from "./perms";
@@ -77,7 +78,7 @@ function where(f: BoardFilters, t: string) {
   if (q) {
     const like = `%${q.replace(/[%_]/g, "")}%`;
     w.push("(p.full_address LIKE ? OR p.city LIKE ? OR r.number = ? OR r.label LIKE ? OR i.contact_name LIKE ?)");
-    a.push(like, like, q, like, like);
+    a.push(like, plain(like), q, like, like);
   }
   return { sql: w.length ? `WHERE ${w.join(" AND ")}` : "", args: a };
 }

@@ -4,6 +4,7 @@ import { now, uuid } from "./db";
 import { normEmail, validEmail } from "./crypto";
 import { createUser, getUser, type UserInput } from "./users";
 import { validCnp } from "./id-card";
+import { plain } from "./places";
 
 import { CLIENT_KINDS, kindName } from "./client-kinds";
 export { CLIENT_KINDS, kindName };
@@ -97,7 +98,7 @@ export async function listClients(db: D1Database, f: ClientFilters) {
   if (q) {
     const like = `%${q.replace(/[%_]/g, "")}%`;
     w.push("(e.name LIKE ? OR e.cui LIKE ? OR e.email LIKE ? OR e.phone LIKE ? OR e.city LIKE ? OR EXISTS (SELECT 1 FROM entity_contacts c WHERE c.entity_id = e.id AND (c.name LIKE ? OR c.email LIKE ?)))");
-    p.push(like, like, like, like, like, like, like);
+    p.push(like, like, like, like, plain(like), like, like);
   }
   const where = `WHERE ${w.join(" AND ")}`;
   const [rows, total] = await Promise.all([
