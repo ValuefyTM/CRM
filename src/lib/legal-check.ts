@@ -29,48 +29,72 @@ type DocType = (typeof DOC_TYPES)[number][0];
 const TYPE_LABEL = Object.fromEntries(DOC_TYPES) as Record<DocType, string>;
 const TITLES: DocType[] = ["contract_vanzare", "certificat_mostenitor", "donatie", "partaj", "hotarare", "titlu_alt"];
 
+// The schema asks for plain values ("" / 0 / false when missing), never null: structured outputs allow only a few
+// optional (union-typed) fields, and a document has dozens. `clean` turns the blanks into nulls afterwards.
+const S = (d: string) => z.string().describe(`${d}; "" dacă lipsește`);
+const N = (d: string) => z.number().describe(`${d}; 0 dacă lipsește`);
 const Person = z.object({
   name: z.string().describe("Numele complet, exact cum e scris"),
-  id_code: z.string().nullable().describe("CNP sau CUI, exact cum apare; null dacă lipsește"),
-  share: z.string().nullable().describe("Cota-parte, ex. 1/1, 1/2; null dacă nu e scrisă"),
+  id_code: S("CNP sau CUI, exact cum apare"),
+  share: S("Cota-parte, ex. 1/1, 1/2"),
 });
-const Doc = z.object({
+const Raw = z.object({
   doc_type: z.enum(DOC_TYPES.map(([k]) => k) as [DocType, ...DocType[]]),
   readable: z.boolean().describe("false dacă actul e în mare parte ilizibil sau incomplet scanat"),
-  unreadable_note: z.string().nullable().describe("Ce nu se poate citi (ex. pagina 2 neclară)"),
+  unreadable_note: S("Ce nu se poate citi (ex. pagina 2 neclară)"),
   title: z.string().describe("Denumirea actului, scurtă, ca într-un opis: ex. „Contract de vânzare-cumpărare autentificat”, „Extras de carte funciară pentru informare”"),
-  act_number: z.string().nullable().describe("Numărul actului (nr. autentificare, nr. certificat, nr. cerere / încheiere la CF)"),
-  issue_date: z.string().nullable().describe("Data emiterii / autentificării, YYYY-MM-DD"),
-  issuer: z.string().nullable().describe("Emitentul: notarul public (BNP …), OCPI / BCPI, primăria, instanța, auditorul energetic, firma de cadastru"),
-  valid_until: z.string().nullable().describe("Valabil până la, YYYY-MM-DD, dacă e scris"),
-  cf_number: z.string().nullable().describe("Numărul cărții funciare"),
-  cf_locality: z.string().nullable().describe("UAT-ul / localitatea cărții funciare"),
+  act_number: S("Numărul actului (nr. autentificare, nr. certificat, nr. cerere / încheiere la CF)"),
+  issue_date: S("Data emiterii / autentificării, YYYY-MM-DD"),
+  issuer: S("Emitentul: notarul public (BNP …), OCPI / BCPI, primăria, instanța, auditorul energetic, firma de cadastru"),
+  valid_until: S("Valabil până la, YYYY-MM-DD, dacă e scris"),
+  cf_number: S("Numărul cărții funciare"),
+  cf_locality: S("UAT-ul / localitatea cărții funciare"),
   cad_numbers: z.array(z.string()).describe("Numere cadastrale / topografice ale imobilului"),
-  address: z.string().nullable(),
-  usable_area: z.number().nullable().describe("Suprafața utilă, mp"),
-  built_area: z.number().nullable().describe("Suprafața construită, mp"),
-  land_area: z.number().nullable().describe("Suprafața terenului, mp"),
+  address: S("Adresa imobilului"),
+  usable_area: N("Suprafața utilă, mp"),
+  built_area: N("Suprafața construită, mp"),
+  land_area: N("Suprafața terenului, mp"),
   current_owners: z.array(Person.extend({
-    acquired_by: z.string().nullable().describe("Actul prin care a dobândit, ex. „contract de vânzare-cumpărare aut. nr. 1234/08.03.2021 de BNP X”"),
-    cf_entry: z.string().nullable().describe("Încheierea de intabulare, nr. și data"),
+    acquired_by: S("Actul prin care a dobândit, ex. „contract de vânzare-cumpărare aut. nr. 1234/08.03.2021 de BNP X”"),
+    cf_entry: S("Încheierea de intabulare, nr. și data"),
   })).describe("Proprietarii actuali conform actului (la extrasul CF: înscrierile în vigoare din partea a II-a; la un contract: cumpărătorii)"),
   transfers: z.array(z.object({
     from: z.array(z.string()).describe("Cei care transmit dreptul (vânzător, defunct, donator); gol la prima înscriere sau construire"),
     to: z.array(Person),
     act: z.string().describe("Tipul actului: contract de vânzare-cumpărare, certificat de moștenitor, donație, partaj, hotărâre, Legea 112/1995, construire…"),
-    act_number: z.string().nullable(), act_date: z.string().nullable().describe("YYYY-MM-DD"),
-    issuer: z.string().nullable(),
-    registered_in_cf: z.boolean().nullable().describe("true doar dacă documentul arată înscrierea în CF (încheiere / intabulare)"),
-    page: z.number().nullable(),
+    act_number: S("Numărul actului"), act_date: S("Data actului, YYYY-MM-DD"),
+    issuer: S("Emitentul actului"),
+    registered_in_cf: z.boolean().describe("true doar dacă documentul arată înscrierea în CF (încheiere / intabulare)"),
+    page: N("Pagina"),
   })).describe("Toate transmisiunile de proprietate (la extrasul CF: istoricul din partea a II-a, inclusiv cele radiate; la un act: transmisiunea lui și titlul anterior invocat)"),
   encumbrances: z.array(z.object({
     kind: z.enum(["ipoteca", "sechestru", "litigiu", "interdictie", "servitute", "uzufruct", "alta"]),
-    detail: z.string(), beneficiary: z.string().nullable(), date: z.string().nullable(),
-    active: z.boolean().describe("false dacă e radiată"), page: z.number().nullable(),
+    detail: z.string(), beneficiary: S("Beneficiarul"), date: S("Data, YYYY-MM-DD"),
+    active: z.boolean().describe("false dacă e radiată"), page: N("Pagina"),
   })).describe("Sarcini: CF partea a III-a, sau menționate în act"),
-  notes: z.string().nullable().describe("Erori vizibile, ștersături, mențiuni neobișnuite, pe scurt; null dacă nu sunt"),
+  notes: S("Erori vizibile, ștersături, mențiuni neobișnuite, pe scurt"),
 });
-export type DocRead = z.infer<typeof Doc>;
+
+type P = { name: string; id_code: string | null; share: string | null };
+/** What is kept from a document: the schema's blanks as nulls. */
+export type DocRead = {
+  doc_type: DocType; readable: boolean; unreadable_note: string | null; title: string; act_number: string | null; issue_date: string | null; issuer: string | null;
+  valid_until: string | null; cf_number: string | null; cf_locality: string | null; cad_numbers: string[]; address: string | null;
+  usable_area: number | null; built_area: number | null; land_area: number | null;
+  current_owners: (P & { acquired_by: string | null; cf_entry: string | null })[];
+  transfers: { from: string[]; to: P[]; act: string; act_number: string | null; act_date: string | null; issuer: string | null; registered_in_cf: boolean | null; page: number | null }[];
+  encumbrances: { kind: "ipoteca" | "sechestru" | "litigiu" | "interdictie" | "servitute" | "uzufruct" | "alta"; detail: string; beneficiary: string | null; date: string | null; active: boolean; page: number | null }[];
+  notes: string | null;
+};
+
+/** "" → null, 0 → null (deep), keeping the names and the lists. */
+function clean(v: unknown, key = ""): unknown {
+  if (typeof v === "string") return v.trim() === "" && !["name", "title", "act", "detail"].includes(key) ? null : v.trim();
+  if (typeof v === "number") return v === 0 ? null : v;
+  if (Array.isArray(v)) return v.map((x) => clean(x)).filter((x) => x !== null); // a blank name in a list: dropped
+  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, clean(x, k)]));
+  return v;
+}
 
 const PROMPT = `Este un act al unui imobil din România, pentru evaluarea lui (extras de carte funciară, act de proprietate, releveu, certificat energetic etc.).
 Citește-l cu atenție și extrage datele cerute. Completează doar ce apare scris în act; lasă null sau listă goală ce lipsește sau e ilizibil — nu ghici și nu completa din presupuneri.
@@ -99,13 +123,14 @@ export async function assetDocs(db: D1Database, reportId: string, assetId: strin
 }
 
 const IMAGE = /^image\/(png|jpe?g|webp|gif)$/;
-const MAX_BYTES = 25_000_000;
+// base64 grows a file by a third: 20 MB stays under the 32 MB of a request
+const MAX_BYTES = 20_000_000;
 
 /** Reads one document (or takes what was read before: an uploaded file does not change). */
 async function readDoc(db: D1Database, client: Anthropic, d: LegalDoc): Promise<LegalDoc> {
   const kept = await db.prepare("SELECT data FROM doc_extracts WHERE ref = ?").bind(d.ref).first<{ data: string }>().catch(() => null);
   if (kept) { try { return { ...d, read: JSON.parse(kept.data) as DocRead }; } catch { /* read again */ } }
-  if (d.size && d.size > MAX_BYTES) return { ...d, error: "Fișier prea mare pentru citire (peste 25 MB)." };
+  if (d.size && d.size > MAX_BYTES) return { ...d, error: "Fișier prea mare pentru citire (peste 20 MB): încarcă o variantă comprimată." };
   const obj = await (await bucket())?.get(d.key);
   if (!obj) return { ...d, error: "Fișierul nu a fost găsit în stocare." };
   const type = (obj.httpMetadata?.contentType ?? d.type ?? (/\.pdf$/i.test(d.name) ? "application/pdf" : "")).toLowerCase().replace("image/jpg", "image/jpeg");
@@ -119,18 +144,24 @@ async function readDoc(db: D1Database, client: Anthropic, d: LegalDoc): Promise<
     const res = await client.beta.messages.parse({
       model: m,
       max_tokens: 16000,
-      output_config: { effort: "medium", format: betaZodOutputFormat(Doc) },
+      output_config: { effort: "medium", format: betaZodOutputFormat(Raw) },
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
       messages: [{ role: "user", content: [block, { type: "text", text: `${PROMPT}\nNumele fișierului: ${d.name}` }] }],
     });
-    if (res.stop_reason === "refusal" || !res.parsed_output) return { ...d, error: "Actul nu a putut fi citit." };
+    if (res.stop_reason === "refusal" || !res.parsed_output) return { ...d, error: res.stop_reason === "max_tokens" ? "Actul e prea lung pentru o singură citire." : "Actul nu a putut fi citit." };
+    const read = clean(res.parsed_output) as DocRead;
     await db.prepare("INSERT INTO doc_extracts (ref, model, data, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(ref) DO UPDATE SET model = excluded.model, data = excluded.data, created_at = excluded.created_at")
-      .bind(d.ref, m, JSON.stringify(res.parsed_output), now()).run();
-    return { ...d, read: res.parsed_output };
+      .bind(d.ref, m, JSON.stringify(read), now()).run();
+    return { ...d, read };
   } catch (e) {
     if (e instanceof Anthropic.RateLimitError) return { ...d, error: "Serviciul de citire e ocupat; rulează din nou peste un minut." };
-    if (e instanceof Anthropic.APIError) { console.error("legal read", d.ref, e.status, e.message); return { ...d, error: "Actul nu a putut fi trimis la citire (format sau mărime)." }; }
+    if (e instanceof Anthropic.APIError) {
+      console.error("legal read", d.ref, e.status, e.message);
+      // the service's own reason (e.g. a PDF it cannot open, too many pages), so it can be acted on
+      const why = (e.error as { error?: { message?: string } } | undefined)?.error?.message ?? e.message;
+      return { ...d, error: `Actul nu a putut fi citit de serviciul AI (${e.status ?? "eroare"}): ${String(why).slice(0, 200)}` };
+    }
     throw e;
   }
 }

@@ -645,12 +645,10 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
         </>
       )}
 
-      {tab === "documente" && assets.some((a) => a.category !== "BUN MOBIL") && (
-        <LegalCheck report={r.id} canRun={c.docs} enabled={legalEnabled()} checks={legal}
-          assets={assets.filter((a) => a.category !== "BUN MOBIL").map((a) => ({ id: a.id, label: assetShort(a), hasDocs: docItems.some((d) => !d.final && d.status === "uploaded" && d.origin !== "glide" && (!d.asset_id || d.asset_id === a.id)) }))} />
-      )}
       {tab === "documente" && (
-        <ReportDocs inspOpen={assets.some(isActive)} inspSent={inspSent} report={r.id} assets={assets.map((a) => ({ id: a.id, label: assetShort(a), sub: a.full_address ?? a.city }))} items={docItems} edit={c.docs} remove={c.docsDelete}
+        <ReportDocs tools={assets.some((a) => a.category !== "BUN MOBIL") ? <LegalCheck report={r.id} canRun={c.docs} enabled={legalEnabled()} checks={legal}
+            assets={assets.filter((a) => a.category !== "BUN MOBIL").map((a) => ({ id: a.id, label: assetShort(a), hasDocs: docItems.some((d) => !d.final && d.status === "uploaded" && d.origin !== "glide" && (!d.asset_id || d.asset_id === a.id)) }))} /> : null}
+          inspOpen={assets.some(isActive)} inspSent={inspSent} report={r.id} assets={assets.map((a) => ({ id: a.id, label: assetShort(a), sub: a.full_address ?? a.city }))} items={docItems} edit={c.docs} remove={c.docsDelete}
           missing={c.docs ? <><span className="muted">Lipsește un act de la client?</span><MissingDoc id={r.id} /></> : null}
           deliver={
             <section className="card dDeliver">

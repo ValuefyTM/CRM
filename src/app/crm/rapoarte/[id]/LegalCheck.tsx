@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import type { Issue, LegalCheck as Check, LegalResult } from "@/lib/legal-check";
 
@@ -32,6 +33,7 @@ export function LegalCheck({ report, assets, checks, canRun, enabled }: {
   report: string; assets: { id: string; label: string; hasDocs: boolean }[]; checks: Check[]; canRun: boolean; enabled: boolean;
 }) {
   const router = useRouter();
+  const [show, setShow] = useState(false);
   const [asset, setAsset] = useState(assets.find((a) => a.hasDocs)?.id ?? assets[0]?.id ?? "");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -47,7 +49,14 @@ export function LegalCheck({ report, assets, checks, canRun, enabled }: {
     setBusy(false);
     if (!res?.ok) return setMsg(d?.error ?? "Analiza nu a putut rula. Încearcă din nou.");
     router.refresh();
+    setShow(true);
   };
+  useEffect(() => {
+    if (!show) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape" && !note) setShow(false); };
+    document.addEventListener("keydown", esc);
+    return () => document.removeEventListener("keydown", esc);
+  }, [show, note]);
   const mark = async (key: string, state: "rezolvat" | "acceptat" | null, text: string | null) => {
     if (!check) return;
     await fetch(`/api/crm/reports/${encodeURIComponent(report)}/legal`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ check: check.id, key, state, note: text }) }).catch(() => null);
@@ -60,24 +69,40 @@ export function LegalCheck({ report, assets, checks, canRun, enabled }: {
   const verdict: LegalResult["verdict"] | null = r ? (count("critic") ? "problems" : count("atentie") ? "incomplete" : "ok") : null;
   const rightText = r ? right[check!.id] ?? r.rightText : "";
 
+  const runOrOpen = () => (check ? setShow(true) : run());
   return (
-    <section className="card lcCard" id="analiza">
-      <div className="cardHead">
-        <h2>Analiză juridică</h2>
-        <span className="lcHeadActs">
-          {assets.length > 1 && (
-            <select value={asset} onChange={(e) => setAsset(e.target.value)} aria-label="Bunul analizat">
-              {assets.map((a) => <option key={a.id} value={a.id}>{a.label}{a.hasDocs ? "" : " (fără acte)"}</option>)}
-            </select>
-          )}
-          {canRun && enabled && <button type="button" className="btn btnPrimary btnSm" onClick={run} disabled={busy || !asset}>{busy ? "Se citesc actele…" : r ? "Rulează din nou" : "Analiză juridică →"}</button>}
-        </span>
+    <>
+      <div className="lcLaunch">
+        {assets.length > 1 && (
+          <select value={asset} onChange={(e) => setAsset(e.target.value)} aria-label="Bunul analizat">
+            {assets.map((a) => <option key={a.id} value={a.id}>{a.label}{a.hasDocs ? "" : " (fără acte)"}</option>)}
+          </select>
+        )}
+        <button type="button" className={`lcBtn${check ? " done" : ""}`} onClick={runOrOpen} disabled={busy || (!check && (!canRun || !enabled || !asset))}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v18M5 7h14M7 7l-3 7a3 3 0 0 0 6 0L7 7zm10 0-3 7a3 3 0 0 0 6 0l-3-7zM8 21h8" /></svg>
+          <span><b>{busy ? "Se citesc actele…" : check ? "Analiză juridică ✓" : "Rulează analiza juridică"}</b>
+            <small>{busy ? "de obicei sub un minut" : check && verdict ? `${VERDICT[verdict][0]} · ${when(check.created_at)}` : !enabled ? "citirea automată nu e configurată" : "dosar, termene, concordanță, lanț de proprietate"}</small></span>
+        </button>
+        {msg && !show && <p className="errTxt lcMsg">{msg}</p>}
       </div>
-      {!enabled && <p className="hint">Citirea automată a actelor nu este configurată (ANTHROPIC_API_KEY).</p>}
-      {busy && <p className="lcBusy">Citesc fiecare act și verific dosarul. Durează de obicei sub un minut; actele citite deja nu se mai citesc o dată.</p>}
-      {msg && <p className="errTxt">{msg}</p>}
-      {!r && !busy && <p className="hint">Verifică dacă dosarul e complet, dacă sunt acte expirate sau cu erori, dacă actele se potrivesc între ele și reface lanțul proprietății. Generează opisul actelor și descrierea dreptului de proprietate pentru raport.</p>}
-
+      {show && r && check && createPortal(
+        <div className="vfModal" role="dialog" aria-modal="true" aria-labelledby="lcT" onClick={(e) => { if (e.target === e.currentTarget) setShow(false); }}>
+          <div className="vfModalBox lcBox0">
+            <div className="lcModalHead">
+              <h2 id="lcT">Analiză juridică</h2>
+              <span className="lcHeadActs">
+                {assets.length > 1 && (
+                  <select value={asset} onChange={(e) => setAsset(e.target.value)} aria-label="Bunul analizat">
+                    {assets.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+                  </select>
+                )}
+                {canRun && enabled && <button type="button" className="btn btnGhost btnSm" onClick={run} disabled={busy}>{busy ? "Se citesc actele…" : "Rulează din nou"}</button>}
+                <button type="button" className="btn btnGhost btnSm" onClick={() => setShow(false)} aria-label="Închide">✕</button>
+              </span>
+            </div>
+            {busy && <p className="lcBusy">Citesc actele noi și verific dosarul din nou…</p>}
+            {msg && <p className="errTxt">{msg}</p>}
+            <div className="lcScroll">
       {r && check && (
         <div className="lcBody">
           <div className="lcTop">
@@ -194,6 +219,11 @@ export function LegalCheck({ report, assets, checks, canRun, enabled }: {
           <p className="hint lcFoot">Verificare asistată de AI pe actele încărcate, nu aviz juridic. Fiecare constatare arată actul din care provine; decizia îți aparține.</p>
         </div>
       )}
-    </section>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }

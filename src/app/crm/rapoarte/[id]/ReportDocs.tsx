@@ -46,7 +46,7 @@ const short = (iso: string | null) => (iso ? new Date(iso.length <= 10 ? `${iso}
 const stamp = (iso: string) => new Date(iso).toLocaleString("ro-RO", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Bucharest" }).replace(".", "");
 const day = (iso: string | null) => (iso ? new Date(iso.length <= 10 ? `${iso}T12:00:00` : iso).toLocaleDateString("ro-RO", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Bucharest" }).replace(".", "") : "");
 
-export function ReportDocs({ report, assets, items, edit, remove, deliver, missing, inspOpen = false, inspSent = null }: {
+export function ReportDocs({ report, assets, items, edit, remove, deliver, missing, tools, inspOpen = false, inspSent = null }: {
   report: string; assets: { id: string; label: string; sub?: string | null }[]; items: DocItem[]; edit: boolean; remove: boolean;
   /** An inspection is given and not done yet: the ticks can be sent to the inspector. */
   inspOpen?: boolean;
@@ -56,6 +56,8 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
   deliver?: React.ReactNode;
   /** "Marchează un document lipsă", under the list. */
   missing?: React.ReactNode;
+  /** Tools over the drop zone (the legal check of the documents). */
+  tools?: React.ReactNode;
 }) {
   const router = useRouter();
   // "" = all, "report" = the ones of the whole report, else an asset id.
@@ -333,6 +335,7 @@ export function ReportDocs({ report, assets, items, edit, remove, deliver, missi
       )}
       {missing && <div className="rdMissing">{missing}</div>}
     </section>
+    {deliver && tools && <div className="rdTools">{tools}</div>}
     {deliver && edit && <section className="card rdDropCard">{dropZone}</section>}
     {deliver && <aside className="rdDeliver">{deliver}</aside>}
     </div>
