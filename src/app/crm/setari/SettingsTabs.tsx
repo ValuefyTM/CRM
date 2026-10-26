@@ -5,6 +5,7 @@ const tabsOf = (user: WithPerms): [string, string, string, boolean][] => [
   ["contract", "Model contract", "/contract", can(user, "settings")],
   ["permisiuni", "Permisiuni", "/permisiuni", can(user, "users")],
   ["fise", "Fișe de inspecție", "/fise", can(user, "templates")],
+  ["machete", "Machete de raport", "/machete", can(user, "templates")],
   // the billing settings (Oblio, series, rules) are for those who may change them; the evaluators who only invoice their reports do not see them
   ["facturare", "Facturare · Oblio", "/facturare", can(user, "billing.E")],
   ["alerte", "Alerte", "/alerte", can(user, "settings")],
@@ -19,7 +20,7 @@ export function settingsHome(base: string, user: WithPerms) {
 }
 
 /** Tabs of Setări (one item in the menu): each one only for those who may open it. */
-export function SettingsTabs({ base, active, user }: { base: string; active: "firma" | "contract" | "facturare" | "alerte" | "claude" | "fise" | "permisiuni" | "import"; user: WithPerms }) {
+export function SettingsTabs({ base, active, user }: { base: string; active: "firma" | "contract" | "facturare" | "alerte" | "claude" | "fise" | "machete" | "permisiuni" | "import"; user: WithPerms }) {
   const tabs = tabsOf(user);
   return (
     <nav className="tabs" aria-label="Setări">

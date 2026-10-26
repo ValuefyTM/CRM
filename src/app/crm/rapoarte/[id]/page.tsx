@@ -343,6 +343,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.8 7L3 21l2-6.2A8 8 0 1 1 21 12z" /></svg>
               Mesaje{messages.length > 0 && <b>{messages.length}</b>}
             </a>
+            {/* drafting mode: the texts for the bank's application, chapter by chapter */}
+            {assets.length > 0 && r.status !== "cancelled" && <a className="btn btnGhost btnSm dDraft" href={`${base}/rapoarte/${r.id}/redactare`}>Redactare raport</a>}
             {c.docs && <a className="btn btnGold btnSm" href={final && c.deliver && !r.delivered_at ? `${href("documente")}&predare=1` : href("documente")}>{final ? "Livrare raport" : "Încarcă raportul final"}</a>}
             {/* "Finalizat" goes through the delivery (date, values per asset, euro, approach), never straight to the status. */}
             {c.status && <StatusButton id={r.id} status={r.status} reason={r.suspend_reason} locked={acc.locked}
