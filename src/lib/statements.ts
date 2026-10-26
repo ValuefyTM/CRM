@@ -506,22 +506,26 @@ export async function monthBoard(db: D1Database, period: string, kind: Kind, mem
     for (const [k, v] of Object.entries(await recipientsOf(db, missing))) recipients.set(k, v);
     return groupByBank(lines, recipients);
   };
-  const seen = new Set<string>();
-  for (const s of existing) {
-    seen.add(s.party);
-    const lines = linesWith(await linesOf(db, s), member ?? null);
-    if (member && !lines.length) continue;
-    rows.push({ party: s.party, name: s.name, sub: s.sub, source: SOURCE_OF(s.party), statement: s, total: member || s.status === "open" ? totalOf(lines) : s.total ?? totalOf(lines), lines: lines.filter((l) => !l.removed).length, banks: await banksOf(lines) });
-  }
-  for (const party of parties) {
-    const cols = partyCols(party);
-    if (!cols || seen.has(party)) continue;
-    const auto = await autoLines(db, criteriaOf(cols), period);
-    const lines = member ? auto.filter((l) => l.report_id && member.has(l.report_id)) : auto;
-    // a person with no share set (nothing to pay) does not get one
-    if (!lines.length || (kind === "payout" && !lines.some((l) => l.amount))) continue;
-    rows.push({ party, ...(await partyName(db, party)), source: SOURCE_OF(party), statement: null, total: round2(lines.reduce((t, l) => t + l.amount, 0)), lines: lines.length, banks: await banksOf(lines) });
-  }
+  const seen = new Set(existing.map((s) => s.party));
+  // every statement and every party at once (each is a few queries of its own): the month in one round, not one by one
+  const [kept, auto] = await Promise.all([
+    Promise.all(existing.map(async (s) => {
+      const lines = linesWith(await linesOf(db, s), member ?? null);
+      if (member && !lines.length) return null;
+      return { party: s.party, name: s.name, sub: s.sub, source: SOURCE_OF(s.party), statement: s, total: member || s.status === "open" ? totalOf(lines) : s.total ?? totalOf(lines), lines: lines.filter((l) => !l.removed).length, banks: await banksOf(lines) };
+    })),
+    Promise.all(parties.map(async (party) => {
+      const cols = partyCols(party);
+      if (!cols || seen.has(party)) return null;
+      const all = await autoLines(db, criteriaOf(cols), period);
+      const lines = member ? all.filter((l) => l.report_id && member.has(l.report_id)) : all;
+      // a person with no share set (nothing to pay) does not get one
+      if (!lines.length || (kind === "payout" && !lines.some((l) => l.amount))) return null;
+      const [who, banks] = await Promise.all([partyName(db, party), banksOf(lines)]);
+      return { party, ...who, source: SOURCE_OF(party), statement: null, total: round2(lines.reduce((t, l) => t + l.amount, 0)), lines: lines.length, banks };
+    })),
+  ]);
+  for (const x of [...kept, ...auto]) if (x) rows.push(x);
   const order: Record<RevSource, number> = { direct: 0, framework: 1, collab: 2, person: 3 };
   return rows.sort((a, b) => order[a.source] - order[b.source] || a.name.localeCompare(b.name, "ro"));
 }
@@ -552,19 +556,29 @@ export async function profitShares(db: D1Database, period: string) {
   const { results } = await db.prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, profit_share FROM users
       WHERE kind = 'internal' AND status <> 'deleted' AND role <> 'owner' AND pay_mode = 'profit' AND profit_share > 0 ORDER BY name`)
     .all<{ id: string; name: string; profit_share: number }>();
-  const out: { id: string; name: string; pct: number; revenue: number; paid: number; fixed: number; base: number; gross: number; cut: number }[] = [];
-  for (const u of results) {
+  return Promise.all(results.map(async (u) => {
     const r = await monthResult(db, period, u);
-    out.push({ id: u.id, name: u.name, pct: u.profit_share, revenue: r.revenue, paid: r.paid, fixed: r.fixed, ...associateCut(r.revenue, r.paid, r.fixed, u.profit_share) });
-  }
-  return out;
+    return { id: u.id, name: u.name, pct: u.profit_share, revenue: r.revenue, paid: r.paid, fixed: r.fixed, ...associateCut(r.revenue, r.paid, r.fixed, u.profit_share) };
+  }));
 }
 
 /**
  * The owner's net of a month, as at the bottom of the statements page: revenue − payouts − the fixed costs left to
  * the owner − the associates' net cuts (without associates: the profit).
  */
+// A month's net, kept a few minutes in the worker: the year so far asks for every month again at each visit.
+const netCache = new Map<string, { at: number; net: number }>();
+const NET_TTL = 5 * 60_000;
+
 export async function ownerNetOf(db: D1Database, period: string) {
+  const hit = netCache.get(period);
+  if (hit && Date.now() - hit.at < NET_TTL) return hit.net;
+  const net = await computeOwnerNet(db, period);
+  netCache.set(period, { at: Date.now(), net });
+  return net;
+}
+
+async function computeOwnerNet(db: D1Database, period: string) {
   const [res, shares] = await Promise.all([monthResult(db, period, null), profitShares(db, period)]);
   if (!shares.length) return res.profit;
   const allocated = round2(shares.reduce((t, x) => t + x.fixed, 0));
