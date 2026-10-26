@@ -238,19 +238,31 @@ export function describe(h: Hit, base: string) {
   return { id: `r${rule.id}:${row.key}${h.round ? `:${h.round}` : ""}`, at: h.at, kind, title, short, sub, href, tone: k.tone, email: !!rule.email && !h.self };
 }
 
-export type DashAlert = { key: string; tone: "err" | "warn" | "info"; title: string; hint: string; count: number; href: string; items: { label: string; sub?: string; href: string }[] };
+export type DashAlert = { key: string; kind?: AlertKind; tone: "err" | "warn" | "info"; title: string; hint: string; count: number; href: string; items: { label: string; sub?: string; href: string }[] };
 
 /** The dashboard cards: one per rule marked for it, with its open items for this user. */
 export async function dashboardAlerts(db: D1Database, u: Viewer, base: string): Promise<DashAlert[]> {
-  const rules = (await getAlertRules(db)).filter((r) => r.enabled && r.dashboard);
+  // "De rezolvat" holds what is still open now: the lasting situations (an event — an inspection done, someone put in a
+  // team — is news for the bell, nothing to solve), however old, and gone as soon as they are solved or the report closes
+  const rules = (await getAlertRules(db)).filter((r) => r.enabled && r.dashboard && ALERT_KINDS[r.kind].lasting);
   if (!rules.length) return [];
-  const hits = await alertHits(db, u, new Date(Date.now() - 30 * 86400000).toISOString(), rules);
+  const all = await alertHits(db, u, new Date(0).toISOString(), rules);
+  // one situation per report and rule (a repeated alert is still one), and a delivered report not collected only once:
+  // under "Raport predat, neîncasat", not also under "Inspecție făcută, raport neîncasat"
+  const seen = new Set<string>();
+  const delivered = new Set(all.filter((h) => h.rule.kind === "delivered_uncollected").map((h) => h.row.key));
+  const hits = all.filter((h) => {
+    const k = `${h.rule.id}:${h.row.key}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return !(h.rule.kind === "uncollected_after_insp" && delivered.has(h.row.key));
+  });
   return rules.map((rule) => {
     const mine = hits.filter((h) => h.rule.id === rule.id).map((h) => describe(h, base));
     const k = ALERT_KINDS[rule.kind];
     const list = rule.kind === "to_invoice" ? `${base}/facturare` : rule.kind === "order_new" ? `${base}/comenzi` : rule.kind === "overdue" ? `${base}/rapoarte?termen=depasit`
       : rule.kind === "review_waiting" ? `${base}/rapoarte?etapa=verificare` : k.group === "Inspecții" ? `${base}/agenda-inspectii` : mine[0]?.href ?? `${base}/rapoarte`;
-    return { key: `rule:${rule.id}`, tone: k.tone, title: rule.title || k.label, hint: k.hint, count: mine.length, href: list,
+    return { key: `rule:${rule.id}`, kind: rule.kind, tone: k.tone, title: rule.title || k.label, hint: k.hint, count: mine.length, href: list,
       items: mine.slice(0, 4).map((m) => ({ label: m.short, sub: m.sub, href: m.href })) };
   }).filter((a) => a.count > 0);
 }

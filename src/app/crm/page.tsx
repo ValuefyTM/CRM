@@ -99,7 +99,10 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
   const money = can(user, "fees.all");
   const monthLabel = new Date(`${d.today}T12:00:00Z`).toLocaleDateString("ro-RO", { month: "long", timeZone: "UTC" });
   // the configurable alerts (Setări → Alerte) first, then the built-in ones
-  const alerts = [...ruleAlerts, ...d.alerts.filter((a) => a.count > 0)];
+  // a built-in card a configured alert already covers is left out (the same reports would count twice)
+  const covered: Record<string, string> = { late: "overdue", docs: "docs_missing", stale: "insp_not_scheduled" };
+  const kinds = new Set(ruleAlerts.map((a) => a.kind));
+  const alerts = [...ruleAlerts, ...d.alerts.filter((a) => a.count > 0 && !(covered[a.key] && kinds.has(covered[a.key] as never)))];
   const urgent = alerts.filter((a) => a.tone === "err").reduce((s, a) => s + a.count, 0);
   const spark = (k: "n" | "fees") => d.months.slice(-6).map((m) => m[k]);
   const maxLoad = Math.max(1, ...d.team.map((t) => t.open + t.inspections));
