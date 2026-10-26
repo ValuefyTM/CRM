@@ -5,7 +5,6 @@ import {
   autoLines, criteriaOf, KIND_LABEL, listStatements, memberChoices, monthBoard, associateCut, linesOf, monthResult, recipientsOf, partyCols, totalOf, periodLabel, profitShares, STATUS_LABEL, thisMonth, validPeriod, type RevSource,
 } from "@/lib/statements";
 import { MemberFilter } from "./MemberFilter";
-import { YearNetFoot, YearNetRow } from "./YearNet";
 import { ExportXlsx } from "./ExportXlsx";
 import { CostAdjust } from "./CostAdjust";
 import { CrmShell } from "@/components/CrmShell";
@@ -99,9 +98,6 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
   const mine = r2(fixed - allocated);
   const ownerNet = shares && shares.length ? r2(revenue - paid - mine - shares.reduce((t, x) => t + x.cut, 0)) : null;
   // the owner's net of the year so far (January to this month), on the whole firm
-  // the year so far (January to this month): heavy, so loaded by the page after it shows
-  const ytd = owner && !who;
-  const ytdText = ytd ? <YearNetFoot period={period} /> : null;
   // the month's adjustments of the fixed costs: who sees and changes every statement
   const editCosts = !self && all && can(user, "statements.E");
   const sum = (rows: Row[]) => Math.round(rows.reduce((s, r) => s + r.total, 0) * 100) / 100;
@@ -168,9 +164,9 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
         {cut ? (
           <a className="dbKpi" href="#rezultat"><span className="dbKpiLabel"><i style={{ background: cut.cut >= 0 ? "var(--ok, #2e8b57)" : "var(--err)" }} />De primit · {who!.name}</span><b className="ctKpiMoney" style={{ color: cut.cut >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(cut.cut)}</b><small className="ctKpiFoot">{lei2(cut.base)} × {cut.pct}% − {lei2(fixed)} cheltuieli fixe</small></a>
         ) : ownerNet != null ? (
-          <a className="dbKpi" href="#rezultat"><span className="dbKpiLabel"><i style={{ background: ownerNet >= 0 ? "var(--ok, #2e8b57)" : "var(--err)" }} />Net-ul tău</span><b className="ctKpiMoney" style={{ color: ownerNet >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(ownerNet)}</b><small className="ctKpiFoot">după plăți, fixe și cotele asociaților{ytdText}</small></a>
+          <a className="dbKpi" href="#rezultat"><span className="dbKpiLabel"><i style={{ background: ownerNet >= 0 ? "var(--ok, #2e8b57)" : "var(--err)" }} />Net-ul tău</span><b className="ctKpiMoney" style={{ color: ownerNet >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(ownerNet)}</b><small className="ctKpiFoot">după plăți, fixe și cotele asociaților</small></a>
         ) : (
-          <a className="dbKpi" href="#rezultat"><span className="dbKpiLabel"><i style={{ background: profit >= 0 ? "var(--ok, #2e8b57)" : "var(--err)" }} />{profit >= 0 ? "Profit" : "Pierdere"}</span><b className="ctKpiMoney" style={profit < 0 ? { color: "var(--err)" } : undefined}>{lei2(profit)}</b><small className="ctKpiFoot">venituri − plăți − cheltuieli fixe{revenue ? ` · marjă ${Math.round(profit / revenue * 100)}%` : ""}{ytdText}</small></a>
+          <a className="dbKpi" href="#rezultat"><span className="dbKpiLabel"><i style={{ background: profit >= 0 ? "var(--ok, #2e8b57)" : "var(--err)" }} />{profit >= 0 ? "Profit" : "Pierdere"}</span><b className="ctKpiMoney" style={profit < 0 ? { color: "var(--err)" } : undefined}>{lei2(profit)}</b><small className="ctKpiFoot">venituri − plăți − cheltuieli fixe{revenue ? ` · marjă ${Math.round(profit / revenue * 100)}%` : ""}</small></a>
         )}
         </>}
       </div>
@@ -259,7 +255,6 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
             <div className="stSumTotal"><dt>{profit >= 0 ? "Profit net" : "Pierdere"}</dt><dd className="mono" style={{ color: profit >= 0 ? "var(--ok-text)" : "var(--err)" }}>{lei2(profit)}</dd></div>
           </>}
         </dl>
-        {ytd && <YearNetRow period={period} label={ownerNet != null ? "Net-ul tău" : "Profitul"} month={periodLabel(period).split(" ")[0]} />}
         {cut != null && !self && <p className="hint" style={{ margin: "8px 0 0" }}>Se setează din fișa utilizatorului (Cum e plătit → Procent din profitul net).</p>}
         {cut != null && self && <p className="hint" style={{ margin: "8px 0 0" }}>Cota ta se aplică pe veniturile rapoartelor tale minus plățile colaboratorilor implicați, apoi se scade partea ta din cheltuielile fixe.</p>}
         {shares && shares.length > 0 && (

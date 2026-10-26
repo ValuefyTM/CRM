@@ -562,37 +562,6 @@ export async function profitShares(db: D1Database, period: string) {
   }));
 }
 
-/**
- * The owner's net of a month, as at the bottom of the statements page: revenue − payouts − the fixed costs left to
- * the owner − the associates' net cuts (without associates: the profit).
- */
-// A month's net, kept a few minutes in the worker: the year so far asks for every month again at each visit.
-const netCache = new Map<string, { at: number; net: number }>();
-const NET_TTL = 5 * 60_000;
-
-export async function ownerNetOf(db: D1Database, period: string) {
-  const hit = netCache.get(period);
-  if (hit && Date.now() - hit.at < NET_TTL) return hit.net;
-  const net = await computeOwnerNet(db, period);
-  netCache.set(period, { at: Date.now(), net });
-  return net;
-}
-
-async function computeOwnerNet(db: D1Database, period: string) {
-  const [res, shares] = await Promise.all([monthResult(db, period, null), profitShares(db, period)]);
-  if (!shares.length) return res.profit;
-  const allocated = round2(shares.reduce((t, x) => t + x.fixed, 0));
-  return round2(res.revenue - res.paid - (res.fixed - allocated) - shares.reduce((t, x) => t + x.cut, 0));
-}
-
-/** The owner's net from January to the month (included): the year so far, month by month. */
-export async function ownerNetYear(db: D1Database, period: string) {
-  const [y, m] = period.split("-").map(Number);
-  const months = Array.from({ length: m }, (_, i) => `${y}-${String(i + 1).padStart(2, "0")}`);
-  const nets = await Promise.all(months.map((p) => ownerNetOf(db, p)));
-  return { total: round2(nets.reduce((t, n) => t + n, 0)), months: nets.length };
-}
-
 export async function statementLog(db: D1Database, id: string) {
   const { results } = await db.prepare(`SELECT a.at, a.actor, a.action, a.details, COALESCE(NULLIF(u.name, ''), u.email) AS actor_name FROM audit_log a
       LEFT JOIN users u ON a.actor = 'user:' || u.id WHERE a.entity = 'statement' AND a.entity_id = ? ORDER BY a.at DESC LIMIT 60`).bind(id)
