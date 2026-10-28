@@ -414,11 +414,15 @@ export async function importSheet(db: D1Database, id: string, u?: UInsp) {
         signature = `r2:${k}`;
       }
     }
+    // one photo that cannot be taken now (still uploading from the phone, a timeout) does not stop the others: it is
+    // counted as left, and the next sync tries it again
+    let failed = 0;
     for (let i = 0; i < todo.length; i += 4) {
       if (Date.now() > until) { left = todo.length - i; break; }
       await Promise.all(todo.slice(i, i + 4).map(async ({ f, sort }) => {
         const pid = `uv-${f.id}`;
-        const b = await fileOf(f.id);
+        const b = await fileOf(f.id).catch((e) => { failed++; console.error("uvalo photo", id, f.id, (e as Error).message); return null; });
+        if (!b) return;
         const k = `inspectii/${id}/${pid}.${ext(b.type)}`;
         await r2.put(k, b.bytes, { httpMetadata: { contentType: b.type, cacheControl: "private, max-age=604800" } });
         await db.prepare(`INSERT OR IGNORE INTO inspection_photos (id, inspection_id, sheet_id, category, caption, r2_key, content_type, size_bytes, taken_at, lat, lng, sort, uploaded_by)
@@ -426,6 +430,7 @@ export async function importSheet(db: D1Database, id: string, u?: UInsp) {
           f.taken_at ?? t, f.lat, f.lng, f.id === x.sheet.cover_file_id ? -1 : sort, ins.inspector_id).run();
       }));
     }
+    left += failed;
     const cover = await db.prepare("SELECT r2_key FROM inspection_photos WHERE inspection_id = ? AND deleted_at IS NULL ORDER BY category = 'exterior' DESC, sort, created_at LIMIT 1").bind(id).first<{ r2_key: string }>();
     await db.batch([
       db.prepare("UPDATE inspection_photos SET sheet_id = ? WHERE inspection_id = ? AND sheet_id IS NULL").bind(sid, id),
@@ -448,13 +453,24 @@ const PHOTOS_PENDING = "Fotografiile se copiază din UVALO.";
  */
 export async function syncFromUvalo(db: D1Database, only?: string) {
   if (!(await uvaloConfigured())) return { checked: 0, imported: 0 };
-  const { results } = await db.prepare(`SELECT id, status FROM inspections WHERE uvalo_id IS NOT NULL AND glide_id IS NULL AND (?1 = '' OR id = ?1)
-      AND ((status IN ('to_schedule', 'scheduled') AND COALESCE(uvalo_status, '') <> 'deleted') OR (status = 'done' AND uvalo_error = ?2))
-      ORDER BY updated_at LIMIT 25`).bind(only ?? "", PHOTOS_PENDING).all<{ id: string; status: string }>();
+  // done ones too: with photos left to copy or an error while copying them (30 days), and the recent ones (3 days), whose
+  // photos may still be uploading from the phone after the sheet was finished
+  const ago = (d: number) => new Date(Date.now() - d * 86400000).toISOString();
+  const { results } = await db.prepare(`SELECT id, status, uvalo_error FROM inspections WHERE uvalo_id IS NOT NULL AND glide_id IS NULL AND (?1 = '' OR id = ?1)
+      AND ((status IN ('to_schedule', 'scheduled') AND COALESCE(uvalo_status, '') <> 'deleted')
+        OR (status = 'done' AND COALESCE(uvalo_status, '') <> 'deleted' AND (uvalo_error = ?2 OR (uvalo_error IS NOT NULL AND done_at >= ?3) OR done_at >= ?4)))
+      ORDER BY uvalo_synced_at IS NOT NULL, uvalo_synced_at LIMIT 25`).bind(only ?? "", PHOTOS_PENDING, ago(30), ago(3)).all<{ id: string; status: string; uvalo_error: string | null }>();
   let imported = 0;
   for (const r of results) {
     const x = await call<{ inspection: UInsp }>(`/inspections/${encodeURIComponent(r.id)}`).then((d) => d.inspection).catch(() => null);
     if (!x) continue;
+    if (r.status === "done" && !r.uvalo_error) {
+      // already brought in: read again only when UVALO has photos the CRM does not
+      const have = new Set((await db.prepare("SELECT id FROM inspection_photos WHERE inspection_id = ?").bind(r.id).all<{ id: string }>()).results.map((p) => p.id));
+      const missing = x.files.some((f) => f.kind === "photo" && !have.has(`uv-${f.id}`));
+      await db.prepare("UPDATE inspections SET uvalo_synced_at = ? WHERE id = ?").bind(now(), r.id).run();
+      if (!missing) continue;
+    }
     if (x.status === "gata" || x.status === "pred") { if ((await importSheet(db, r.id, x)).ok && r.status !== "done") imported++; }
     else await onHook(db, { event: "inspection.updated", id: x.id, ref: r.id, status: x.status, scheduled_at: x.scheduled_at ?? null, started_at: x.started_at ?? null, finished_at: null, sheet_no: null });
   }
