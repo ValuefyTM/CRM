@@ -1,15 +1,17 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import type { Issue, LegalCheck as Check, LegalResult } from "@/lib/legal-check";
+import { GROUPS, groupOf, isProblem, verdictOf, type IssueGroup } from "@/lib/legal-groups";
 
 const ro = (s: string | null) => (s ? s.slice(0, 10).split("-").reverse().join(".") : "");
 const when = (s: string) => new Date(s).toLocaleString("ro-RO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-const LEVEL: Record<Issue["level"], [string, string]> = { critic: ["Critic", "lcCrit"], atentie: ["Atenție", "lcWarn"], info: ["Informativ", "lcInfo"] };
+const LEVEL: Record<Issue["level"], [string, string]> = { critic: ["Problemă", "lcCrit"], atentie: ["De verificat", "lcWarn"], info: ["Notă", "lcInfo"] };
+const ENC: Record<string, string> = { ipoteca: "ipotecă", sechestru: "sechestru", litigiu: "litigiu", interdictie: "interdicție", servitute: "servitute", uzufruct: "uzufruct" };
 const VERDICT: Record<LegalResult["verdict"], [string, string]> = {
-  ok: ["Dosar în regulă", "lcOk"], incomplete: ["De completat", "lcWarn"], problems: ["Probleme de rezolvat", "lcCrit"],
+  ok: ["Acte în regulă", "lcOk"], incomplete: ["De verificat", "lcWarn"], problems: ["Probleme în acte", "lcCrit"],
 };
 
 /** „1. Extras de carte funciară pentru informare nr. 12345 din 14.09.2026, emis de OCPI Timiș” */
@@ -64,10 +66,50 @@ export function LegalCheck({ report, assets, checks, canRun, enabled }: {
     router.refresh();
   };
 
-  const open = r ? r.issues.filter((i) => !check!.resolved[i.key]) : [];
-  const count = (l: Issue["level"]) => open.filter((i) => i.level === l).length;
-  const verdict: LegalResult["verdict"] | null = r ? (count("critic") ? "problems" : count("atentie") ? "incomplete" : "ok") : null;
+  // a mortgage or another encumbrance is not a finding (older checks listed them): only mentioned, in the summary
+  const issues = r ? r.issues.filter((i) => groupOf(i.key) !== "sarcini") : [];
+  const open = check ? issues.filter((i) => !check.resolved[i.key]) : [];
+  const verdict: LegalResult["verdict"] | null = r ? verdictOf(open) : null;
   const rightText = r ? right[check!.id] ?? r.rightText : "";
+  const inGroup = (g: IssueGroup) => issues.filter((i) => groupOf(i.key) === g);
+  // every finding about the chain marked solved / accepted: its breaks show as checked, not as problems
+  const chainOk = !open.some((i) => groupOf(i.key) === "lant");
+  const openIn = (g: IssueGroup) => open.filter((i) => groupOf(i.key) === g && (g === "dosar" || isProblem(i))).length;
+
+  // the findings of a section: what is wrong, where it comes from, and the evaluator's mark (solved / accepted)
+  const findings = (list: Issue[], none?: string) => !list.length ? (none ? <p className="lcNone">{none}</p> : null) : (
+    <ul className="lcFind">
+      {list.map((i) => {
+        const done = check?.resolved[i.key];
+        // the file's completeness is a note (older checks rated it higher)
+        const [l, c] = LEVEL[groupOf(i.key) === "dosar" && !i.key.startsWith("read:") ? "info" : i.level];
+        return (
+          <li key={i.key} className={`${c}${done ? " lcDone" : ""}`}>
+            <span className="lcDot" aria-hidden="true" />
+            <span className="lcTxt">
+              <b>{i.title}</b>
+              <span>{i.detail}</span>
+              <small>{done ? `${done.state === "rezolvat" ? "Rezolvat" : "Acceptat"} · ${done.by}, ${when(done.at)}${done.note ? ` · ${done.note}` : ""}` : `${l} · ${i.source}`}</small>
+              {note?.key === i.key && (
+                <span className="lcNote">
+                  <input autoFocus placeholder={note.state === "rezolvat" ? "Cum s-a rezolvat (opțional)" : "De ce se acceptă (opțional)"} value={note.text} onChange={(e) => setNote({ ...note, text: e.target.value })}
+                    onKeyDown={(e) => { if (e.key === "Enter") mark(i.key, note.state, note.text); if (e.key === "Escape") setNote(null); }} />
+                  <button type="button" className="btn btnPrimary btnSm" onClick={() => mark(i.key, note.state, note.text)}>Salvează</button>
+                  <button type="button" className="btn btnGhost btnSm" onClick={() => setNote(null)}>Renunță</button>
+                </span>
+              )}
+            </span>
+            {canRun && (done
+              ? <button type="button" className="linkBtn" onClick={() => mark(i.key, null, null)}>Redeschide</button>
+              : note?.key !== i.key && <span className="lcMarks">
+                <button type="button" className="linkBtn" onClick={() => setNote({ key: i.key, state: "rezolvat", text: "" })}>Rezolvat</button>
+                <button type="button" className="linkBtn" onClick={() => setNote({ key: i.key, state: "acceptat", text: "" })}>Acceptat</button>
+              </span>)}
+          </li>
+        );
+      })}
+    </ul>
+  );
 
   const runOrOpen = () => (check ? setShow(true) : run());
   return (
@@ -104,117 +146,98 @@ export function LegalCheck({ report, assets, checks, canRun, enabled }: {
             {msg && <p className="errTxt">{msg}</p>}
             <div className="lcScroll">
       {r && check && (
-        <div className="lcBody">
-          <div className="lcTop">
-            <div>
-              <span className="lcEyebrow">Analiză din {when(check.created_at)}{check.created_by_name ? ` · ${check.created_by_name}` : ""} · {check.docs_count} acte · data de referință {ro(r.refDate)}</span>
+        <div className="lcBody lc2">
+          <div className="lcSum">
+            <div className="lcSumHead">
               <b className={`lcVerdict ${VERDICT[verdict!][1]}`}>{VERDICT[verdict!][0]}</b>
+              <span className="lcEyebrow">{when(check.created_at)}{check.created_by_name ? ` · ${check.created_by_name}` : ""} · {check.docs_count} acte · referință {ro(r.refDate)}</span>
             </div>
-            <span className="lcPills">
-              {count("critic") > 0 && <span className="lcPill lcCrit">{count("critic")} {count("critic") === 1 ? "critică" : "critice"}</span>}
-              {count("atentie") > 0 && <span className="lcPill lcWarn">{count("atentie")} atenție</span>}
-              {count("info") > 0 && <span className="lcPill lcInfo">{count("info")} informativ{count("info") === 1 ? "" : "e"}</span>}
-              {r.issues.length - open.length > 0 && <span className="lcPill lcOk">{r.issues.length - open.length} închise</span>}
-            </span>
-          </div>
-
-          {r.issues.length === 0 ? <p className="lcNone">Nicio problemă găsită în actele citite.</p> : (
-            <ul className="lcIssues">
-              {r.issues.map((i) => {
-                const done = check.resolved[i.key];
-                const [l, c] = LEVEL[i.level];
+            <div className="lcTiles">
+              {GROUPS.map(([g, label]) => {
+                const n = openIn(g), all = inGroup(g).length;
+                const bad = g !== "dosar" && open.some((i) => groupOf(i.key) === g && i.level === "critic");
                 return (
-                  <li key={i.key} className={`${c}${done ? " lcDone" : ""}`}>
-                    <span className="lcLvl">{done ? done.state === "rezolvat" ? "Rezolvat" : "Acceptat" : l}</span>
-                    <span className="lcTxt"><b>{i.title}</b><span>{i.detail}</span>
-                      {done && <small>{done.by}, {when(done.at)}{done.note ? ` · ${done.note}` : ""}</small>}
-                      {note?.key === i.key && (
-                        <span className="lcNote">
-                          <input autoFocus placeholder={note.state === "rezolvat" ? "Cum s-a rezolvat (opțional)" : "De ce se acceptă (opțional)"} value={note.text} onChange={(e) => setNote({ ...note, text: e.target.value })}
-                            onKeyDown={(e) => { if (e.key === "Enter") mark(i.key, note.state, note.text); if (e.key === "Escape") setNote(null); }} />
-                          <button type="button" className="btn btnPrimary btnSm" onClick={() => mark(i.key, note.state, note.text)}>Salvează</button>
-                          <button type="button" className="btn btnGhost btnSm" onClick={() => setNote(null)}>Renunță</button>
-                        </span>
-                      )}
-                    </span>
-                    <span className="lcSrc">
-                      <small>{i.source}</small>
-                      {canRun && (done
-                        ? <button type="button" className="linkBtn" onClick={() => mark(i.key, null, null)}>Redeschide</button>
-                        : note?.key !== i.key && <span className="lcMarks">
-                          <button type="button" className="linkBtn" onClick={() => setNote({ key: i.key, state: "rezolvat", text: "" })}>Rezolvat</button>
-                          <button type="button" className="linkBtn" onClick={() => setNote({ key: i.key, state: "acceptat", text: "" })}>Acceptat</button>
-                        </span>)}
-                    </span>
-                  </li>
+                  <a key={g} href={`#lc-${g}`} className={`lcTile${bad ? " bad" : n ? " note" : " ok"}`}>
+                    <small>{label}</small>
+                    <b>{n ? `${n} ${g === "dosar" ? "de completat" : n === 1 ? "problemă" : "probleme"}` : all ? "rezolvat" : "în regulă"}</b>
+                  </a>
                 );
               })}
-            </ul>
-          )}
-
-          <div className="lcGrid">
-            <div className="lcBox">
-              <div className="lcBoxHead"><b>Opis acte</b><Copy text={opisText(r)} label="Copiază opisul" /></div>
-              {r.opis.length ? <ol className="lcOpis">{r.opis.map((o) => <li key={o.ref}><b>{o.title}</b>{o.number ? ` nr. ${o.number}` : ""}{o.date ? ` din ${ro(o.date)}` : ""}{o.issuer ? <span className="muted">, emis de {o.issuer}</span> : null}</li>)}</ol>
-                : <p className="hint">Niciun act citit.</p>}
             </div>
-            <div className="lcBox">
-              <div className="lcBoxHead"><b>Descrierea dreptului de proprietate</b><Copy text={rightText} label="Copiază textul" /></div>
-              <textarea className="lcRight" rows={7} value={rightText} onChange={(e) => setRight({ ...right, [check.id]: e.target.value })} aria-label="Descrierea dreptului de proprietate" />
-              <small className="muted">Generat din actele citite; îl poți corecta aici înainte de copiere.</small>
-            </div>
+            <p className="lcFacts">
+              <span><em>Proprietar</em>{r.owners.length ? r.owners.map((o) => `${o.name}${o.share ? ` (${o.share})` : ""}`).join(", ") : "—"}</span>
+              <span><em>Sarcini</em>{r.encumbrances.length ? r.encumbrances.map((e) => `${ENC[e.kind] ?? "sarcină"}${e.beneficiary ? ` ${e.beneficiary}` : ""}${e.date ? ` (${e.date.slice(0, 4)})` : ""}`).join("; ") : "niciuna"}
+                {r.encumbrances.length > 0 && <small> · se menționează în raport, nu e o problemă</small>}</span>
+            </p>
           </div>
 
-          <div className="lcBox">
-            <div className="lcBoxHead"><b>Fluxul de proprietate</b><span className="muted">din CF partea a II-a și actele de transmisiune</span></div>
-            {r.chain.length === 0 && r.owners.length === 0 ? <p className="hint">Actele citite nu descriu transmisiuni de proprietate.</p> : (
-              <div className="lcChain">
-                {r.chain.map((st, k) => (
-                  <Fragment key={k}>
-                    {k === 0 && st.from.length > 0 && <span className="lcNode lcPast"><b>{st.from.join(", ")}</b><small>proprietar anterior</small></span>}
-                    <span className={`lcArrow${st.broken || !st.registered ? " bad" : ""}`}>
-                      <small>{st.act}{st.number ? ` nr. ${st.number}` : ""}{st.date ? ` / ${st.date.slice(0, 4)}` : ""}</small>
-                      <i aria-hidden="true" />
-                      {(st.broken || !st.registered) && <small className="lcBad">{st.broken ? "lanț întrerupt" : "neintabulat"}</small>}
-                    </span>
-                    <span className={`lcNode${k === r.chain.length - 1 ? " lcNow" : st.broken ? " lcBroken" : ""}`}>
-                      <b>{st.to.map((p) => p.name).join(", ") || "—"}</b>
-                      <small>{st.to.map((p) => p.share).filter(Boolean).join(", ") || "cotă nescrisă"}{st.date ? ` · ${ro(st.date)}` : ""}</small>
-                      {k === r.chain.length - 1 && <small className="lcNowTag">proprietar actual</small>}
-                    </span>
-                  </Fragment>
-                ))}
-                {r.chain.length === 0 && r.owners.length > 0 && <span className="lcNode lcNow"><b>{r.owners.map((o) => o.name).join(", ")}</b><small>{r.owners.map((o) => o.share).filter(Boolean).join(", ")}</small><small className="lcNowTag">proprietar actual (CF)</small></span>}
-              </div>
-            )}
-            {r.encumbrances.length > 0 && (
-              <ul className="lcEnc">{r.encumbrances.map((e, k) => <li key={k}><b>{e.kind === "ipoteca" ? "Ipotecă" : e.kind === "sechestru" ? "Sechestru" : e.kind === "litigiu" ? "Litigiu" : e.kind === "interdictie" ? "Interdicție" : e.kind === "servitute" ? "Servitute" : e.kind === "uzufruct" ? "Uzufruct" : "Sarcină"}</b>{e.beneficiary ? ` · ${e.beneficiary}` : ""}{e.date ? ` · ${ro(e.date)}` : ""}<small>{e.detail}</small></li>)}</ul>
-            )}
-          </div>
+          <div className="lcCols">
+            <div className="lcMain">
+              <section id="lc-lant" className="lcSec">
+                <h3>Lanțul de proprietate</h3>
+                {r.chain.length === 0 ? <p className="hint">{r.owners.length ? `Actele citite nu descriu transmisiuni; proprietar actual în CF: ${r.owners.map((o) => o.name).join(", ")}.` : "Actele citite nu descriu transmisiuni de proprietate."}</p> : (
+                  <ol className="lcTimeline">
+                    {r.chain.map((st, k) => (
+                      <li key={k} className={st.broken && !chainOk ? "broken" : st.broken || !st.registered ? "unreg" : ""}>
+                        <span className="lcWhen">{st.date ? ro(st.date) : "fără dată"}</span>
+                        <span className="lcStep">
+                          <b>{st.from.length ? `${st.from.join(", ")} → ` : ""}{st.to.map((p) => `${p.name}${p.share ? ` (${p.share})` : ""}`).join(", ") || "—"}</b>
+                          <small>{st.act}{st.number ? ` nr. ${st.number}` : ""}{st.issuer ? ` · ${st.issuer}` : ""}</small>
+                        </span>
+                        <span className={`lcTag ${st.broken && !chainOk ? "bad" : st.broken || !st.registered ? "warn" : "ok"}`}>{st.broken ? (chainOk ? "întrerupt · verificat" : "lanț întrerupt") : !st.registered ? "neintabulat" : "intabulat"}</span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                {findings(inGroup("lant"))}
+              </section>
 
-          <div className="lcBox">
-            <div className="lcBoxHead"><b>Concordanța între acte</b><span className="muted">roșu: diferă de celelalte</span></div>
-            <div className="tableWrap">
-              <table className="table lcTable">
-                <thead><tr><th>Date</th>{r.concordance[0]?.values.map((v) => <th key={v.doc}>{v.doc}</th>)}</tr></thead>
-                <tbody>{r.concordance.filter((row) => row.values.some((v) => v.value)).map((row) => (
-                  <tr key={row.field}><td><b>{row.field}</b></td>{row.values.map((v, k) => <td key={k} className={v.off ? "lcOff" : ""}>{v.value ?? <span className="muted">—</span>}{v.off ? " ≠" : ""}</td>)}</tr>
-                ))}</tbody>
-              </table>
+              <section id="lc-concordanta" className="lcSec">
+                <h3>Concordanța între acte</h3>
+                <div className="tableWrap">
+                  <table className="table lcTable">
+                    <thead><tr><th>Date</th>{r.concordance[0]?.values.map((v) => <th key={v.doc}>{v.doc}</th>)}</tr></thead>
+                    <tbody>{r.concordance.filter((row) => row.values.some((v) => v.value)).map((row) => (
+                      <tr key={row.field}><td><b>{row.field}</b></td>{row.values.map((v, k) => <td key={k} className={v.off ? "lcOff" : ""}>{v.value ?? <span className="muted">—</span>}</td>)}</tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+                {findings(inGroup("concordanta"))}
+              </section>
+
+              <section id="lc-erori" className="lcSec">
+                <h3>Greșeli în acte</h3>
+                {findings(inGroup("erori"), "Nicio greșeală găsită în actele citite.")}
+              </section>
+
+              <section id="lc-dosar" className="lcSec lcMinor">
+                <h3>De completat la dosar <small>nu blochează analiza</small></h3>
+                {findings(inGroup("dosar"), "Dosarul e complet.")}
+              </section>
             </div>
-          </div>
 
-          <div className="lcGrid">
-            {r.clientRequest && (
+            <aside className="lcSide">
               <div className="lcBox">
-                <div className="lcBoxHead"><b>Cerere către client</b><Copy text={r.clientRequest} label="Copiază cererea" /></div>
-                <pre className="lcPre">{r.clientRequest}</pre>
+                <div className="lcBoxHead"><b>Dreptul de proprietate</b><Copy text={rightText} label="Copiază" /></div>
+                <textarea className="lcRight" rows={8} value={rightText} onChange={(e) => setRight({ ...right, [check.id]: e.target.value })} aria-label="Descrierea dreptului de proprietate" />
+                <small className="muted">Îl poți corecta aici înainte de copiere.</small>
               </div>
-            )}
-            <details className="lcBox lcDocs">
-              <summary><b>Actele citite ({r.docs.length})</b></summary>
-              <ul>{r.docs.map((d) => <li key={d.ref} className={d.ok ? "" : "lcDocBad"}><b>{d.title ?? d.name}</b><small>{d.ok ? [d.type, d.number && `nr. ${d.number}`, d.date && ro(d.date), d.issuer].filter(Boolean).join(" · ") : d.error}</small><small className="muted">{d.name}</small></li>)}</ul>
-            </details>
+              <div className="lcBox">
+                <div className="lcBoxHead"><b>Opis acte</b><Copy text={opisText(r)} label="Copiază" /></div>
+                {r.opis.length ? <ol className="lcOpis">{r.opis.map((o) => <li key={o.ref}><b>{o.title}</b>{o.number ? ` nr. ${o.number}` : ""}{o.date ? ` din ${ro(o.date)}` : ""}{o.issuer ? <span className="muted">, {o.issuer}</span> : null}</li>)}</ol>
+                  : <p className="hint">Niciun act citit.</p>}
+              </div>
+              {r.clientRequest && (
+                <div className="lcBox">
+                  <div className="lcBoxHead"><b>Cerere către client</b><Copy text={r.clientRequest} label="Copiază" /></div>
+                  <pre className="lcPre">{r.clientRequest}</pre>
+                </div>
+              )}
+              <details className="lcBox lcDocs">
+                <summary><b>Actele citite ({r.docs.length})</b></summary>
+                <ul>{r.docs.map((d) => <li key={d.ref} className={d.ok ? "" : "lcDocBad"}><b>{d.title ?? d.name}</b><small>{d.ok ? [d.type, d.number && `nr. ${d.number}`, d.date && ro(d.date), d.issuer].filter(Boolean).join(" · ") : d.error}</small><small className="muted">{d.name}</small></li>)}</ul>
+              </details>
+            </aside>
           </div>
           <p className="hint lcFoot">Verificare asistată de AI pe actele încărcate, nu aviz juridic. Fiecare constatare arată actul din care provine; decizia îți aparține.</p>
         </div>

@@ -6,6 +6,7 @@ import { can } from "@/lib/perms";
 import { cap } from "@/lib/reports";
 import { draftContext, draftingEnabled, factValues, fieldDone, legalValue } from "@/lib/drafting";
 import { allFields, SOURCES } from "@/lib/report-templates";
+import { isProblem } from "@/lib/legal-groups";
 import { DraftField, FactsField, LegalField, MarketParams, TemplatePick, WriteAll } from "./Draft";
 
 export const metadata: Metadata = { title: "Redactare raport | CRM VALUEFY" };
@@ -56,7 +57,7 @@ export default async function DraftingPage({ params, searchParams }: { params: P
   const sheetRows = c.sheet?.sections.flatMap((s) => s.rows) ?? [];
   const missing = [...new Set(ch.fields.flatMap((f) => (f.kind === "facts" ? factValues(f, c).filter((x) => !x.value).map((x) => x.label) : c.drafts[f.key]?.missing ?? [])))];
   const legal = c.legal?.result;
-  const openIssues = legal ? legal.issues.filter((i) => i.level !== "info" && !c.legal!.resolved[i.key]) : [];
+  const openIssues = legal ? legal.issues.filter((i) => isProblem(i) && !c.legal!.resolved[i.key]) : [];
   const comps = c.similar.filter((x) => x.value && x.sqm);
   const sqm = comps.map((x) => x.sqm!).sort((x, y) => x - y);
   const lei = (n: number) => n.toLocaleString("ro-RO", { maximumFractionDigits: 0 });

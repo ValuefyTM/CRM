@@ -10,6 +10,7 @@ import { now } from "./db";
 import { getReport, reportAssets } from "./reports";
 import { inspectionSheetDoc, type SheetDoc } from "./insp-sheet-doc";
 import { latestChecks, type LegalCheck } from "./legal-check";
+import { isProblem } from "./legal-groups";
 import { similarReports, type SimilarRow } from "./similar-reports";
 import { allFields, loadTemplates, pickTemplate, type Template, type TField } from "./report-templates";
 import type { User } from "./users";
@@ -165,7 +166,7 @@ function contextText(c: Ctx, f: TField): string {
       l.owners.length ? `Proprietari: ${l.owners.map((o) => `${o.name}${o.share ? ` (${o.share})` : ""}`).join(", ")}` : "",
       l.encumbrances.length ? `Sarcini: ${l.encumbrances.map((e) => `${e.detail}${e.beneficiary ? `, în favoarea ${e.beneficiary}` : ""}`).join("; ")}` : "Sarcini: niciuna găsită în acte.",
       ...l.concordance.filter((x) => x.values.some((v) => v.off)).map((x) => `Neconcordanță la ${x.field}: ${x.values.map((v) => `${v.doc} = ${v.value ?? "—"}`).join("; ")}`),
-      ...l.issues.filter((i) => i.level !== "info" && !c.legal!.resolved[i.key]).map((i) => `Problemă (${i.level}): ${i.title}${/[.!?]$/.test(i.title) ? "" : "."} ${i.detail}`),
+      ...l.issues.filter((i) => isProblem(i) && !c.legal!.resolved[i.key]).map((i) => `Problemă (${i.level}): ${i.title}${/[.!?]$/.test(i.title) ? "" : "."} ${i.detail}`),
       `Documente: ${l.opis.map((o) => `${o.title}${o.number ? ` nr. ${o.number}` : ""}${o.date ? ` din ${roDate(o.date)}` : ""}`).join("; ")}`,
     ].filter(Boolean).join("\n"));
   }

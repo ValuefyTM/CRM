@@ -3969,3 +3969,55 @@ span.rdPick { display: inline-block; }
 @media (max-width: 1099px) { .bpGrid { grid-template-columns: 1fr; } }
 @media (max-width: 899px) { .card.bpHero { grid-template-columns: 1fr; } .bpId { padding: 4px 16px 16px; } .bpPhotos { min-height: 220px; } }
 @media (max-width: 499px) { .bpKpis { grid-template-columns: 1fr 1fr; } .bpKpis > span.dark { grid-column: 1 / -1; } }
+
+/* Analiză juridică v2: rezumat pe categorii, lanțul ca listă cronologică, constatările sub fiecare secțiune */
+.lc2 { display: flex; flex-direction: column; gap: 16px; }
+.lcSum { display: flex; flex-direction: column; gap: 12px; }
+.lcSumHead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; }
+.lcSumHead .lcVerdict { font-size: 20px; }
+.lcTiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.lcTile { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--divider); background: #fff; color: var(--ink); }
+.lcTile small { font-size: 11.5px; color: var(--muted-2); }
+.lcTile b { font-size: 14px; }
+.lcTile.ok b { color: var(--ok-text); }
+.lcTile.bad { background: var(--err-bg); border-color: #f0c9c4; }
+.lcTile.bad b { color: var(--err); }
+.lcTile.note b { color: var(--acc-text); }
+.lcTile:hover { border-color: var(--ink); }
+.lcFacts { margin: 0; display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: 13px; padding: 10px 12px; border-radius: 12px; background: var(--cream); }
+.lcFacts em { font-style: normal; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-2); margin-right: 8px; }
+.lcFacts small { color: var(--muted-2); }
+.lcCols { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; align-items: start; }
+.lcMain, .lcSide { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.lcSec { display: flex; flex-direction: column; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--divider); scroll-margin-top: 12px; }
+.lcSec:last-child { border-bottom: 0; }
+.lcSec h3 { margin: 0; font-size: 15px; display: flex; align-items: baseline; gap: 8px; }
+.lcSec h3 small { font-size: 11.5px; font-weight: 400; color: var(--muted-2); }
+.lcMinor .lcFind li { padding-block: 6px; }
+.lcTimeline { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid var(--divider); display: flex; flex-direction: column; gap: 6px; }
+.lcTimeline li { position: relative; display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 6px 10px; border-radius: 10px; }
+.lcTimeline li::before { content: ""; position: absolute; left: -21px; top: 12px; width: 10px; height: 10px; border-radius: 50%; background: var(--ok); border: 2px solid #fff; }
+.lcTimeline li.unreg::before { background: var(--acc); }
+.lcTimeline li.broken { background: var(--err-bg); }
+.lcTimeline li.broken::before { background: var(--err); }
+.lcWhen { font-family: var(--mono); font-size: 12px; color: var(--muted-2); }
+.lcStep { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lcStep b { font-size: 13.5px; }
+.lcStep small { font-size: 12px; color: var(--muted-2); }
+.lcTag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.lcTag.ok { background: var(--ok-bg); color: var(--ok-text); }
+.lcTag.warn { background: var(--acc-soft); color: var(--acc-text); }
+.lcTag.bad { background: #fff; color: var(--err); border: 1px solid #f0c9c4; }
+.lcFind { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lcFind li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--divider); background: #fff; }
+.lcFind .lcDot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; background: var(--off); }
+.lcFind li.lcCrit { border-color: #f0c9c4; background: #fffafa; }
+.lcFind li.lcCrit .lcDot { background: var(--err); }
+.lcFind li.lcWarn .lcDot { background: var(--acc); }
+.lcFind li.lcDone { opacity: 0.6; background: #fff; border-color: var(--divider); }
+.lcFind li.lcDone .lcDot { background: var(--ok); }
+.lcFind .lcTxt { display: flex; flex-direction: column; gap: 2px; font-size: 13px; line-height: 1.45; }
+.lcFind .lcTxt > span { color: var(--muted); }
+.lcFind .lcTxt small { font-size: 11.5px; color: var(--muted-2); }
+.lcFind .lcMarks { display: flex; gap: 10px; }
+@media (max-width: 960px) { .lcCols { grid-template-columns: 1fr; } .lcTiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .lcTimeline li { grid-template-columns: 1fr; gap: 2px; } }

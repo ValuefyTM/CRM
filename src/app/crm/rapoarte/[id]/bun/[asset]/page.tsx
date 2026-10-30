@@ -22,6 +22,7 @@ import { AssetPhotos, type Photo } from "./AssetPhotos";
 import { SimilarReports } from "../../SimilarReports";
 import { similarReports } from "@/lib/similar-reports";
 import { latestChecks } from "@/lib/legal-check";
+import { isProblem } from "@/lib/legal-groups";
 
 export const metadata: Metadata = { title: "Bun evaluat | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -299,7 +300,7 @@ export default async function AssetPage({ params, searchParams }: {
   const similar = a.is_main || assets.length === 1 ? await similarReports(db, user, id, { radius: "1" }).catch(() => null) : null;
   const zone = similar && cur === "lei" ? similar.rows.map((x) => x.sqm).filter((x): x is number => !!x).sort((x, y) => x - y) : [];
   const [legal] = (await latestChecks(db, id)).filter((c) => c.asset_id === a.id);
-  const openIssues = legal ? legal.result.issues.filter((x) => x.level !== "info" && !legal.resolved[x.key]).length : 0;
+  const openIssues = legal ? legal.result.issues.filter((x) => isProblem(x) && !legal.resolved[x.key]).length : 0;
   const others = assets.filter((x) => x.id !== a.id);
   const sheetLink = lastDone && (sheets[lastDone.id] || lastDone.sheet_id);
 

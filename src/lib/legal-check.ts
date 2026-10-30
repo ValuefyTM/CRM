@@ -11,6 +11,7 @@ import { now, uuid } from "./db";
 import { bucket } from "./orders";
 import { validCnp } from "./id-card";
 import { fold } from "./places";
+import { groupOf, verdictOf } from "./legal-groups";
 
 export const legalEnabled = () => !!process.env.ANTHROPIC_API_KEY;
 /** Model for reading the documents: Claude Sonnet 5.5 by default; LEGAL_MODEL can switch it (e.g. claude-opus-5-5). */
@@ -371,11 +372,8 @@ export function evaluate(docs: LegalDoc[], s: Subject): LegalResult {
   for (const d of read) for (const e of d.read!.encumbrances) {
     if (!e.active) continue;
     if (encumbrances.some((x) => x.kind === e.kind && x.detail === e.detail)) continue;
+    // an encumbrance (a mortgage most often) is not a problem of the documents: it is listed and mentioned in the report
     encumbrances.push({ kind: e.kind, detail: e.detail, beneficiary: e.beneficiary, date: day(e.date), source: label(d) });
-    const heavy = ["sechestru", "litigiu", "interdictie"].includes(e.kind);
-    add({ key: `enc:${e.kind}:${encumbrances.length}`, level: heavy ? "critic" : e.kind === "ipoteca" || e.kind === "uzufruct" ? "atentie" : "info",
-      title: `${{ ipoteca: "Ipotecă", sechestru: "Sechestru", litigiu: "Litigiu notat", interdictie: "Interdicție", servitute: "Servitute", uzufruct: "Uzufruct", alta: "Sarcină" }[e.kind]} activă${e.beneficiary ? ` în favoarea ${e.beneficiary}` : ""}.`,
-      detail: `${e.detail}${e.date ? ` (${ro(day(e.date))})` : ""}. De menționat în raport.`, source: label(d) });
   }
 
   // the inventory of the documents (opis): the CF first, then the titles by date, then the rest
@@ -391,9 +389,11 @@ export function evaluate(docs: LegalDoc[], s: Subject): LegalResult {
   const docSummaries: DocSummary[] = docs.map((d) => ({ ref: d.ref, name: d.name, type: d.read ? TYPE_LABEL[d.read.doc_type] : null, title: d.read?.title ?? null, number: d.read?.act_number ?? null,
     date: day(d.read?.issue_date), issuer: d.read?.issuer ?? null, ok: !!d.read && d.read.readable, error: d.error ?? (d.read && !d.read.readable ? d.read.unreadable_note ?? "greu lizibil" : null) }));
 
+  // the file's completeness (validity, auxiliary documents) is noted, not a problem; an unreadable document is
+  for (const i of issues) if (groupOf(i.key) === "dosar" && !i.key.startsWith("read:")) i.level = "info";
   const rank = { critic: 0, atentie: 1, info: 2 };
   issues.sort((a, b) => rank[a.level] - rank[b.level]);
-  const verdict = issues.some((i) => i.level === "critic") ? "problems" : issues.some((i) => i.level === "atentie") ? "incomplete" : "ok";
+  const verdict = verdictOf(issues);
   return { verdict, refDate: ref, issues, concordance, chain: steps, owners, encumbrances, opis, rightText, clientRequest, docs: docSummaries };
 }
 
