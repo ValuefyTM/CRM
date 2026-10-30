@@ -422,6 +422,20 @@ function describeRight(cf: DocRead | null, owners: { name: string; share: string
   return parts.join("").replace(/\.\./g, ".");
 }
 
+export type Progress = { at: string; step: "read" | "rules"; docs: { name: string; state: "wait" | "read" | "done" | "error" }[] };
+const progressKey = (reportId: string, assetId: string) => `legal_progress:${reportId}:${assetId}`;
+const saveProgress = (db: D1Database, reportId: string, assetId: string, p: Progress) =>
+  db.prepare("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at")
+    .bind(progressKey(reportId, assetId), JSON.stringify(p), now()).run().catch(() => null);
+
+/** How far the running check of an asset has got (null: none running). */
+export async function legalProgress(db: D1Database, reportId: string, assetId: string): Promise<Progress | null> {
+  const row = await db.prepare("SELECT value, updated_at FROM settings WHERE key = ?").bind(progressKey(reportId, assetId)).first<{ value: string; updated_at: string }>().catch(() => null);
+  // a run that stopped half way (an error, a timeout) is not shown for ever
+  if (!row || Date.now() - new Date(row.updated_at).getTime() > 5 * 60000) return null;
+  try { return JSON.parse(row.value) as Progress; } catch { return null; }
+}
+
 /** Reads the asset's documents (4 at a time), checks them and keeps the result on the report. */
 export async function runLegalCheck(db: D1Database, reportId: string, assetId: string, userId: string) {
   if (!legalEnabled()) return { ok: false as const, error: "Citirea automată nu este configurată (ANTHROPIC_API_KEY)." };
@@ -436,11 +450,28 @@ export async function runLegalCheck(db: D1Database, reportId: string, assetId: s
   const t0 = Date.now();
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const out: LegalDoc[] = [];
-  for (let i = 0; i < docs.length; i += 4) out.push(...(await Promise.all(docs.slice(i, i + 4).map((d) => readDoc(db, client, d)))));
+  // the progress, read by the page while it waits (each document: waiting, being read, read, failed)
+  const state: Progress = { at: now(), step: "read", docs: docs.map((d) => ({ name: d.name, state: "wait" })) };
+  const save = () => saveProgress(db, reportId, assetId, state);
+  await save();
+  for (let i = 0; i < docs.length; i += 4) {
+    const batch = docs.slice(i, i + 4);
+    batch.forEach((_, k) => { state.docs[i + k].state = "read"; });
+    await save();
+    out.push(...(await Promise.all(batch.map(async (d, k) => {
+      const r = await readDoc(db, client, d);
+      state.docs[i + k].state = r.error ? "error" : "done";
+      await save();
+      return r;
+    }))));
+  }
+  state.step = "rules";
+  await save();
   const result = evaluate(out, s);
   const id = uuid(), at = now();
   await db.prepare("INSERT INTO legal_checks (id, report_id, asset_id, verdict, result, docs_count, ms, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
     .bind(id, reportId, assetId, result.verdict, JSON.stringify(result), out.length, Date.now() - t0, userId, at).run();
+  await db.prepare("DELETE FROM settings WHERE key = ?").bind(progressKey(reportId, assetId)).run().catch(() => null);
   return { ok: true as const, id };
 }
 

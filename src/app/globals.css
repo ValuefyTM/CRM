@@ -4021,3 +4021,23 @@ span.rdPick { display: inline-block; }
 .lcFind .lcTxt small { font-size: 11.5px; color: var(--muted-2); }
 .lcFind .lcMarks { display: flex; gap: 10px; }
 @media (max-width: 960px) { .lcCols { grid-template-columns: 1fr; } .lcTiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .lcTimeline li { grid-template-columns: 1fr; gap: 2px; } }
+
+/* Analiză juridică: fereastra de stare cât rulează */
+.vfModal.lcRunWrap { z-index: 120; }
+.vfModalBox.lcRun { width: min(480px, 100%); }
+.lcRunHead { display: flex; gap: 14px; align-items: center; }
+.lcRunHead > span:last-child { display: flex; flex-direction: column; gap: 3px; }
+.lcRunHead small { font-size: 12.5px; color: var(--muted-2); }
+.lcRunBar { display: block; height: 6px; border-radius: 999px; background: var(--divider); overflow: hidden; }
+.lcRunBar i { display: block; height: 100%; background: var(--acc); border-radius: 999px; transition: width 0.4s var(--ease); }
+.lcRunDocs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 300px; overflow-y: auto; }
+.lcRunDocs li { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 8px; font-size: 13px; }
+.lcRunDocs li > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lcRunDocs small { font-size: 11.5px; color: var(--muted-2); }
+.lcRunDocs li.read { background: var(--acc-soft); }
+.lcRunDocs li.done .lcRunIco { color: var(--ok-text); font-weight: 800; }
+.lcRunDocs li.error { background: var(--err-bg); }
+.lcRunDocs li.error .lcRunIco, .lcRunDocs li.error small { color: var(--err); font-weight: 700; }
+.lcRunDocs li.wait { color: var(--muted-2); }
+.lcRunIco { display: inline-flex; justify-content: center; }
+.lcRunIco i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--acc-line); border-top-color: var(--acc); animation: vfSpin 0.8s linear infinite; }

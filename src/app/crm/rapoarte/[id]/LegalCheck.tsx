@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import type { Issue, LegalCheck as Check, LegalResult } from "@/lib/legal-check";
+import type { Issue, LegalCheck as Check, LegalResult, Progress } from "@/lib/legal-check";
 import { GROUPS, groupOf, isProblem, verdictOf, type IssueGroup } from "@/lib/legal-groups";
 
 const ro = (s: string | null) => (s ? s.slice(0, 10).split("-").reverse().join(".") : "");
@@ -44,8 +44,24 @@ export function LegalCheck({ report, assets, checks, canRun, enabled }: {
   const check = checks.find((c) => c.asset_id === asset) ?? null;
   const r = check?.result ?? null;
 
+  // while it runs: a status window, fed by the server's progress (asked every 1.5 s) and the time passed
+  const [progress, setProgress] = useState<Progress | null>(null);
+  const [started, setStarted] = useState(0);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!busy) return;
+    let alive = true;
+    const poll = async () => {
+      const d = await fetch(`/api/crm/reports/${encodeURIComponent(report)}/legal?progress=${encodeURIComponent(asset)}`, { cache: "no-store" }).then((x) => x.json()).catch(() => null) as { progress?: Progress | null } | null;
+      if (alive && d?.progress) setProgress(d.progress);
+    };
+    poll();
+    const a = setInterval(poll, 1500), b = setInterval(() => tick((x) => x + 1), 1000);
+    return () => { alive = false; clearInterval(a); clearInterval(b); };
+  }, [busy, report, asset]);
+
   const run = async () => {
-    setBusy(true); setMsg("");
+    setBusy(true); setMsg(""); setProgress(null); setStarted(Date.now());
     const res = await fetch(`/api/crm/reports/${encodeURIComponent(report)}/legal`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ asset }) }).catch(() => null);
     const d = (await res?.json().catch(() => ({}))) as { error?: string } | undefined;
     setBusy(false);
@@ -127,6 +143,41 @@ export function LegalCheck({ report, assets, checks, canRun, enabled }: {
         </button>
         {msg && !show && <p className="errTxt lcMsg">{msg}</p>}
       </div>
+      {busy && createPortal(
+        <div className="vfModal lcRunWrap" role="dialog" aria-modal="true" aria-labelledby="lcRunT" aria-busy="true">
+          <div className="vfModalBox lcRun">
+            <div className="lcRunHead">
+              <span className="spinner" aria-hidden="true" />
+              <span>
+                <h2 id="lcRunT">Analiza juridică rulează</h2>
+                <small role="status">{!progress ? "Pornesc…" : progress.step === "rules" ? "Verific lanțul de proprietate și concordanța actelor…" : `Citesc actele: ${progress.docs.filter((d) => d.state === "done" || d.state === "error").length} din ${progress.docs.length}`}
+                  {" · "}{Math.floor((Date.now() - started) / 1000)} s</small>
+              </span>
+            </div>
+            {progress && (
+              <>
+                <span className="lcRunBar"><i style={{ width: `${Math.round(((progress.docs.filter((d) => d.state === "done" || d.state === "error").length + (progress.step === "rules" ? 1 : 0)) / (progress.docs.length + 1)) * 100)}%` }} /></span>
+                <ul className="lcRunDocs">
+                  {progress.docs.map((d, k) => (
+                    <li key={k} className={d.state}>
+                      <span className="lcRunIco" aria-hidden="true">{d.state === "done" ? "✓" : d.state === "error" ? "!" : d.state === "read" ? <i /> : "·"}</span>
+                      <span>{d.name}</span>
+                      <small>{d.state === "done" ? "citit" : d.state === "error" ? "nu s-a putut citi" : d.state === "read" ? "se citește" : "în așteptare"}</small>
+                    </li>
+                  ))}
+                  <li className={progress.step === "rules" ? "read" : "wait"}>
+                    <span className="lcRunIco" aria-hidden="true">{progress.step === "rules" ? <i /> : "·"}</span>
+                    <span>Lanț de proprietate, concordanță, greșeli</span>
+                    <small>{progress.step === "rules" ? "se verifică" : "la final"}</small>
+                  </li>
+                </ul>
+              </>
+            )}
+            <p className="hint">Actele citite o dată rămân citite: o nouă rulare durează doar cât actele noi.</p>
+          </div>
+        </div>,
+        document.body,
+      )}
       {show && r && check && createPortal(
         <div className="vfModal" role="dialog" aria-modal="true" aria-labelledby="lcT" onClick={(e) => { if (e.target === e.currentTarget) setShow(false); }}>
           <div className="vfModalBox lcBox0">
@@ -142,7 +193,6 @@ export function LegalCheck({ report, assets, checks, canRun, enabled }: {
                 <button type="button" className="btn btnGhost btnSm" onClick={() => setShow(false)} aria-label="Închide">✕</button>
               </span>
             </div>
-            {busy && <p className="lcBusy">Citesc actele noi și verific dosarul din nou…</p>}
             {msg && <p className="errTxt">{msg}</p>}
             <div className="lcScroll">
       {r && check && (

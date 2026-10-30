@@ -1,11 +1,14 @@
 import { err, json, reportApi } from "@/lib/api";
-import { latestChecks, markIssue, runLegalCheck } from "@/lib/legal-check";
+import { latestChecks, legalProgress, markIssue, runLegalCheck } from "@/lib/legal-check";
 
-/** The newest legal check of each asset of the report. */
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+/** The newest legal check of each asset of the report; or the progress of a running one. */
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const a = await reportApi(id, "view");
   if ("res" in a) return a.res;
+  // `?progress=<asset>`: how far the running check has got
+  const asset = new URL(req.url).searchParams.get("progress");
+  if (asset) return Response.json({ progress: await legalProgress(a.db, id, asset) }, { headers: { "Cache-Control": "no-store" } });
   return Response.json({ checks: await latestChecks(a.db, id) }, { headers: { "Cache-Control": "no-store" } });
 }
 
