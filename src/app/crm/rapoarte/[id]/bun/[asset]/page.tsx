@@ -19,6 +19,9 @@ import { canAssign } from "@/lib/insp-assign";
 import { ReportDocs, type DocItem } from "../../ReportDocs";
 import { SafeImg } from "../../ReportActions";
 import { AssetPhotos, type Photo } from "./AssetPhotos";
+import { SimilarReports } from "../../SimilarReports";
+import { similarReports } from "@/lib/similar-reports";
+import { latestChecks } from "@/lib/legal-check";
 
 export const metadata: Metadata = { title: "Bun evaluat | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -183,12 +186,6 @@ export default async function AssetPage({ params, searchParams }: {
     year_built: a.year_built ? String(a.year_built) : null, vehicle_make: a.vehicle_make, vehicle_model: a.vehicle_model, reg_number: a.reg_number, vin: a.vin,
     mileage: num(a.mileage, " km"), cf_number: a.cf_number, cad_building: a.cad_building !== a.cf_number ? a.cad_building : null, cad_land: a.cad_land,
   };
-  const facts = p.fields.filter((k) => k !== "construction" && val[k]).map((k) => {
-    const label = (p.labels[k] ?? FIELD_LABELS[k]).replace(/ \((mp|km)\)$/, "");
-    return [label, /CF|cad|VIN|înmatriculare/i.test(label) ? <span className="mono">{val[k]}</span> : val[k]] as const;
-  });
-  const reportRows = [...facts, ...(mineVal ? [["Valoare", <span key="v" className="mono">{lei(mineVal, cur)}</span>] as const] : []), ...(a.approach ? [["Abordare", APPROACH[a.approach]] as const] : []),
-    ...(a.no_inspection ? [["Fără inspecție", a.no_inspection] as const] : [])];
   const ll = parseGeo(a.geo);
   const title = `${cap(a.type) || "Bun"}${a.construction === "under_construction" ? " · în construcție" : ""}`;
   const address = a.full_address && a.city && !a.full_address.toLowerCase().includes(a.city.toLowerCase()) ? `${a.full_address}, ${a.city}` : a.full_address ?? a.city;
@@ -197,7 +194,7 @@ export default async function AssetPage({ params, searchParams }: {
   const backToReport = `${base}/rapoarte/${id}?tab=bunuri&bun=${a.id}`;
   const nav: [Tab, string, number | null][] = [
     ["prezentare", "Prezentare", null], ["inspectii", "Inspecții", insp.length || null], ["fotografii", "Fotografii", photos.length || null], ["acte", "Acte", docItems.length || null],
-    ...(analytics ? [["analiza", "Analiză valoare", series.length] as [Tab, string, number]] : []),
+    ...(analytics ? [["analiza", "Istoric valoare", series.length] as [Tab, string, number]] : []),
   ];
   const tab: Tab = nav.find(([k]) => k === asked)?.[0] ?? "prezentare";
   const self = (t: Tab) => `${base}/rapoarte/${id}/bun/${a.id}?${[t !== "prezentare" ? `tab=${t}` : "", from ? `din=${from.id}.${from.asset}` : ""].filter(Boolean).join("&")}`.replace(/\?$/, "");
@@ -270,6 +267,42 @@ export default async function AssetPage({ params, searchParams }: {
     </section>
   );
 
+  // Acte / CRM against what the inspection found: the same characteristic side by side, a difference marked.
+  const PAIR: Partial<Record<ProfileField, string>> = { usable_area: "usable_area", land_area: "land_area", rooms: "rooms", floor: "floor", height_regime: "height_regime", year_built: "year_built" };
+  const featOf = (k: string) => (feat && feat[k] != null && feat[k] !== "" ? feat[k] : null);
+  const norm = (v: unknown) => String(v ?? "").toLowerCase().replace(/\s+/g, "").replace(",", ".");
+  const cmpRows: { label: string; crm: React.ReactNode; seen: React.ReactNode; mark: "" | "ok" | "near" | "diff" }[] = [];
+  for (const k of p.fields) {
+    if (k === "construction" || k === "cf_number" || k === "cad_building" || k === "cad_land") continue;
+    const fk = PAIR[k], fv = fk ? featOf(fk) : null;
+    if (!val[k] && fv == null) continue;
+    const label = (p.labels[k] ?? FIELD_LABELS[k]).replace(/ \((mp|km)\)$/, "");
+    const unit = fk && FEATURES.find(([c]) => c === fk)?.[2];
+    const area = k === "usable_area" || k === "land_area";
+    const seen = fv == null ? null : `${typeof fv === "number" && area ? fv.toLocaleString("ro-RO") : fv}${unit ? ` ${unit}` : ""}`;
+    const crmRaw = (a as Record<string, unknown>)[k];
+    let mark: "" | "ok" | "near" | "diff" = "";
+    if (crmRaw != null && crmRaw !== "" && fv != null) {
+      const x = Number(norm(crmRaw)), y = Number(norm(fv));
+      // areas within 3% are measurement differences (≈); everything else must match
+      mark = Number.isFinite(x) && Number.isFinite(y) && x && y ? (x === y ? "ok" : area && Math.abs(x - y) / Math.max(x, y) <= 0.03 ? "near" : "diff") : norm(crmRaw) === norm(fv) ? "ok" : "diff";
+    }
+    cmpRows.push({ label, crm: val[k] ?? null, seen, mark });
+  }
+  const paired = new Set(Object.values(PAIR));
+  for (const [l, v] of found) if (!FEATURES.some(([c, fl]) => fl === l && paired.has(c))) cmpRows.push({ label: l, crm: null, seen: v, mark: "" });
+  const diffs = cmpRows.filter((x) => x.mark === "diff").length;
+  // The photo collage: the profile photo big, the next one, the rest as a count.
+  const collage = [coverSrc, ...photos.map((x) => x.src).filter((x) => x !== coverSrc)].filter((x): x is string => !!x);
+  const area0 = area && mineVal ? Math.round(mineVal / area) : null;
+  // Similar reports nearby: for the main asset (the report's subject).
+  const similar = a.is_main || assets.length === 1 ? await similarReports(db, user, id, { radius: "1" }).catch(() => null) : null;
+  const zone = similar && cur === "lei" ? similar.rows.map((x) => x.sqm).filter((x): x is number => !!x).sort((x, y) => x - y) : [];
+  const [legal] = (await latestChecks(db, id)).filter((c) => c.asset_id === a.id);
+  const openIssues = legal ? legal.result.issues.filter((x) => x.level !== "info" && !legal.resolved[x.key]).length : 0;
+  const others = assets.filter((x) => x.id !== a.id);
+  const sheetLink = lastDone && (sheets[lastDone.id] || lastDone.sheet_id);
+
   return (
     <CrmShell user={user} base={base} active="reports" title={`${title} · Detaliu bun`} subtitle={`Operațional / Rapoarte / ${r.number ? `Nr. ${r.number}` : r.label ?? "Raport"}`} bare>
       {from && (
@@ -278,106 +311,176 @@ export default async function AssetPage({ params, searchParams }: {
           <a className="btn btnNavy btnSm" href={`${base}/rapoarte/${from.id}/bun/${from.asset}`}>← Înapoi la raportul {from.number ? `nr. ${from.number}` : "curent"}</a>
         </div>
       )}
-      <section className="bvHead">
-        <a className="bvBack" href={backToReport}>← Raport {r.number ? `nr. ${r.number}` : r.label ?? ""} · Bunuri</a>
-        <div className="bvTop">
-          <a className="bvCoverBox" href={self("fotografii")} aria-label="Fotografiile bunului">
-            {coverSrc ? <SafeImg src={coverSrc} alt="" className="bvCover" fallback={<span className="bvNoPh">Fără fotografie</span>} /> : <span className="bvNoPh">Fără fotografie</span>}
-            {photos.length > 0 && <span className="bvPhCount">{photos.length} fotografii →</span>}
-          </a>
-          <div className="bvTitle">
-            <span className="bvEyebrow">{cap(a.category) || "Bun"}{a.is_main && assets.length > 1 ? " · bun principal" : ""} · raport {rs.toLowerCase()}</span>
-            <h1>{title}</h1>
-            <p>{address ?? "fără adresă"}{a.county && !address?.includes(a.county) ? `, jud. ${a.county}` : ""}{a.cf_number ? ` · CF ${a.cf_number}` : ""}</p>
-            <div className="bvKpis">
-              <div><em>Valoare</em><b>{mineVal ? lei(mineVal, cur) : "—"}</b>{a.approach && <small>abordarea {APPROACH[a.approach]?.toLowerCase()}</small>}</div>
-              {area && mineVal ? <div><em>{cur} / mp</em><b>{Math.round(mineVal / area).toLocaleString("ro-RO")}</b><small>{area.toLocaleString("ro-RO")} mp</small></div> : null}
-              {prevMine?.val && mineVal ? <div><em>Față de anterioara</em><b className={mineVal >= prevMine.val ? "up" : "down"}>{pct(((mineVal - prevMine.val) / prevMine.val) * 100)}</b><small>{fmtDate(prevMine.date)}</small></div> : null}
-              <div><em>Inspecție</em><b className="sm">{lastDone ? `✓ ${fmtDate(lastDone.done_at ?? lastDone.created_at)}` : a.no_inspection ? "fără inspecție" : insp[0] ? (INSP_STATUS[insp[0].status]?.[0] ?? insp[0].status).toLowerCase() : "nealocată"}</b>{lastDone?.inspector && <small>{lastDone.inspector}</small>}</div>
-            </div>
-          </div>
+      <div className="bpBar">
+        <nav className="bpCrumbs" aria-label="Unde ești">
+          <a href={`${base}/rapoarte`}>Rapoarte</a><span aria-hidden="true">›</span>
+          <a href={backToReport}>{r.number ? `Nr. ${r.number}` : r.label ?? "Raport"}{r.bank_code ? ` · ${r.bank_code}` : ""}</a><span aria-hidden="true">›</span>
+          <b>{cap(a.type) || "Bun"}</b>
+          {assets.length > 1 && <span className="bpTag">{a.is_main ? "bun principal · " : ""}{assets.indexOf(a) + 1} din {assets.length}</span>}
+        </nav>
+        <span className="bpActs">
+          {others.slice(0, 3).map((x) => <a key={x.id} className="btn btnGhost btnSm" href={`${base}/rapoarte/${id}/bun/${x.id}${from ? `?din=${from.id}.${from.asset}` : ""}`}>{cap(x.type) || "Bun"} →</a>)}
+          {sheetLink && <InspSheet doc={sheets[lastDone.id] ?? null} src={`/api/crm/reports/${id}/sheet/${a.id}?insp=${encodeURIComponent(lastDone.id)}`} firm={firm} pdf={`${base}/rapoarte/${id}/fisa/${a.id}`} label="Fișa de inspecție" />}
+        </span>
+      </div>
+
+      <section className="card bpHero">
+        <div className={`bpPhotos n${Math.min(collage.length, 3)}`}>
+          {collage.length === 0 ? <span className="bpNoPh">Fără fotografii</span> : <>
+            <a className="bpPh big" href={self("fotografii")}><SafeImg src={collage[0]} alt="" fallback={<i />} /></a>
+            {collage[1] && <a className="bpPh" href={self("fotografii")}><SafeImg src={collage[1]} alt="" fallback={<i />} /></a>}
+            {collage.length > 2 && <a className="bpPh more" href={self("fotografii")}><b>+{collage.length - 2}</b><small>toate cele {collage.length} fotografii</small></a>}
+          </>}
         </div>
-        {history.length > 1 && (
-          <div className="bvAxis">
-            <div className="bvAxisHead"><b>Axa evaluărilor</b><span>Alege o evaluare ca să vezi bunul așa cum era atunci</span></div>
-            <ol className="bvAxisLine">
-              {history.map((v) => {
-                const body = <><i /><b>{fmtDate(v.date)}</b><small>{[v.id === id ? (from ? "vezi acum" : "raportul acesta") : v.number ? `nr. ${v.number}` : "fără număr", v.val ? lei(v.val, v.cur) : null].filter(Boolean).join(" · ")}</small>
-                  {v.open && v.id !== id && (v.client || v.evaluator) && <small className="who">{[v.client && niceName(v.client), v.evaluator].filter(Boolean).join(" · ")}</small>}</>;
-                return (
-                  <li key={v.id + v.asset_id} className={v.id === id ? "on" : v.open ? "" : "off"}>
-                    {v.id !== id && v.open
-                      ? <a href={from && from.id === v.id ? `${base}/rapoarte/${v.id}/bun/${v.asset_id}` : `${base}/rapoarte/${v.id}/bun/${v.asset_id}?${keep}`}>{body}</a>
-                      : <span title={v.open ? undefined : "Nu faci parte din echipa acestui raport"}>{body}</span>}
-                  </li>
-                );
-              })}
-            </ol>
+        <div className="bpId">
+          <span className="bpEyebrow">{cap(a.category) || "Bun"} · raport {rs.toLowerCase()}</span>
+          <h1>{title}{a.rooms && !/camer/i.test(title) ? ` ${a.rooms} ${a.rooms === 1 ? "cameră" : "camere"}` : ""}</h1>
+          <p>{address ?? "fără adresă"}{a.county && !address?.includes(a.county) ? `, jud. ${a.county}` : ""}</p>
+          <span className="bpChips">
+            {a.cf_number && <span className="mono">CF {a.cf_number}</span>}
+            {a.cad_building && a.cad_building !== a.cf_number && <span className="mono">cad. {a.cad_building}</span>}
+            {a.cad_land && <span className="mono">cad. teren {a.cad_land}</span>}
+            {a.usable_area ? <span>{a.usable_area.toLocaleString("ro-RO")} mp utili</span> : null}
+            {a.land_area ? <span>{a.land_area.toLocaleString("ro-RO")} mp teren</span> : null}
+            {(a.height_regime || a.year_built) && <span>{[a.height_regime, a.year_built].filter(Boolean).join(" · ")}</span>}
+          </span>
+          <div className="bpKpis">
+            <span className="dark"><small>Valoare</small><b className="mono">{mineVal ? lei(mineVal, cur) : "—"}</b><small>{a.approach ? `abordarea ${APPROACH[a.approach]?.toLowerCase()}` : mineVal ? "" : "nestabilită încă"}</small></span>
+            {area0 ? <span><small>{cur} / mp</small><b className="mono">{area0.toLocaleString("ro-RO")}</b><small>{zone.length >= 3 ? `zona: ${Math.round(zone[Math.floor(zone.length * 0.25)]).toLocaleString("ro-RO")}–${Math.round(zone[Math.floor(zone.length * 0.75)]).toLocaleString("ro-RO")}` : `${area!.toLocaleString("ro-RO")} mp`}</small></span> : null}
+            {prevMine?.val && mineVal ? <span><small>Față de {new Date(prevMine.date).getFullYear()}</small><b className={`mono ${mineVal >= prevMine.val ? "up" : "down"}`}>{pct(((mineVal - prevMine.val) / prevMine.val) * 100)}</b><small>{lei(prevMine.val, cur)}{prevMine.number ? ` · nr. ${prevMine.number}` : ""}</small></span>
+              : <span><small>Inspecție</small><b>{lastDone ? `✓ ${fmtDate(lastDone.done_at ?? lastDone.created_at)}` : a.no_inspection ? "fără" : insp[0] ? (INSP_STATUS[insp[0].status]?.[0] ?? insp[0].status) : "nealocată"}</b><small>{lastDone?.inspector ?? ""}</small></span>}
           </div>
-        )}
+          {ll ? <div className="bpMap"><MapZoom point={{ lat: ll[0], lng: ll[1], source: "adresa" }} height={90} link={`https://www.google.com/maps?q=${ll[0]},${ll[1]}`} /></div>
+            : <p className="hint">Bunul nu are coordonate: se completează din adresă sau din cadastru, la proprietate.</p>}
+        </div>
       </section>
 
-      <div className="bvBody">
-        <nav className="bvNav" aria-label="Secțiuni bun">
-          {nav.map(([k, l, n]) => <a key={k} href={self(k)} aria-current={tab === k ? "page" : undefined}>{l}{n ? <b>{n}</b> : null}</a>)}
-          {assets.length > 1 && (
-            <div className="bvOthers">
-              <small>Alte bunuri în raport</small>
-              {assets.filter((x) => x.id !== a.id).map((x) => <a key={x.id} href={`${base}/rapoarte/${id}/bun/${x.id}${from ? `?din=${from.id}.${from.asset}` : ""}`}>{cap(x.type) || "Bun"}<span>{x.full_address ?? x.city ?? ""}</span></a>)}
-            </div>
-          )}
-        </nav>
+      <nav className="bpTabs" aria-label="Secțiunile bunului">
+        {nav.map(([k, l, n]) => <a key={k} href={self(k)} aria-current={tab === k ? "page" : undefined}>{l}{n ? <small>{n}</small> : null}</a>)}
+      </nav>
 
-        <main className="bvMain">
-          {tab === "prezentare" && (
-            <>
-              <div className="bvTwo">
-                <section className="card">
-                  <span className="bvKick">Din raport</span>
-                  <h2>Date bun</h2>
-                  {reportRows.length ? <Kv rows={reportRows} /> : <p className="hint">Fără date completate.</p>}
-                  {a.description && <p className="prose">{a.description}</p>}
-                  {a.notes && <p className="hint">{a.notes}</p>}
-                </section>
-                <section className="card">
-                  <span className="bvKick">{lastDone?.done_at ? `Din fișa de inspecție · ${fmtDate(lastDone.done_at)}` : "Din fișa de inspecție"}</span>
-                  <h2>Constatat la fața locului</h2>
-                  {found.length ? <Kv rows={found.slice(0, 10)} /> : <p className="hint">{lastDone ? "Fișa nu are caracteristici completate." : "Bunul nu a fost inspectat încă."}</p>}
-                  {found.length > 10 && <a className="link" href={self("inspectii")}>toate cele {found.length} caracteristici →</a>}
-                </section>
-              </div>
+      {tab === "prezentare" && (
+        <div className="bpGrid">
+          <div className="bpCol">
+            <section className="card flush">
+              <div className="cardHead"><h2>Caracteristici · acte față de inspecție</h2>
+                <span className={diffs ? "bpDiffs" : "muted"}>{!lastDone ? "bunul nu a fost inspectat încă" : diffs ? `${diffs} ${diffs === 1 ? "diferență" : "diferențe"}` : "fără diferențe"}</span></div>
+              {cmpRows.length === 0 ? <p className="hint pad">Fără date completate.</p> : (
+                <div className="tableWrap">
+                  <table className="table bpCmp">
+                    <thead><tr><th>Caracteristică</th><th>Din acte / CRM</th><th>Constatat la inspecție</th><th aria-label="Stare" /></tr></thead>
+                    <tbody>
+                      {cmpRows.map((x) => (
+                        <tr key={x.label} className={x.mark === "diff" ? "diff" : ""}>
+                          <td className="muted">{x.label}</td>
+                          <td>{x.crm ?? <span className="bpNone">—</span>}</td>
+                          <td>{x.seen ?? <span className="bpNone">—</span>}</td>
+                          <td className={`bpMark ${x.mark}`}>{x.mark === "ok" ? "✓" : x.mark === "near" ? "≈" : x.mark === "diff" ? "!" : ""}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {diffs > 0 && <p className="hint pad">Corectează datele bunului în raport sau cere completări inspectorului.</p>}
+            </section>
+            {(a.description || a.notes) && (
               <section className="card">
-                <div className="cardHead"><h2>Inspecții efectuate</h2><span className="muted">{done.length} {done.length === 1 ? "realizată" : "realizate"}{insp.length > done.length ? ` · ${insp.length - done.length} deschise` : ""}</span></div>
-                {insp.length ? inspCards : <p className="hint">{a.no_inspection ? `Evaluat fără inspecție: ${a.no_inspection}.` : "Nicio inspecție alocată pentru acest bun."}</p>}
+                <h2>Descriere</h2>
+                {a.description && <p className="prose">{a.description}</p>}
+                {a.notes && <p className="hint">{a.notes}</p>}
               </section>
-              {valueCard(false)}
-              <section className="card flush">
-                <div className="cardHead"><h2>Localizare</h2>{ll && <a className="link" href={`https://www.google.com/maps?q=${ll[0]},${ll[1]}`} target="_blank" rel="noopener">Deschide în Google Maps ↗</a>}</div>
-                {ll ? <div className="pad" style={{ paddingTop: 0 }}><MapZoom point={{ lat: ll[0], lng: ll[1], source: "adresa" }} height={150} link={`https://www.google.com/maps?q=${ll[0]},${ll[1]}`} /></div> : <p className="hint pad">Bunul nu are coordonate. Se completează din adresă sau din cadastru, la proprietate.</p>}
-              </section>
-            </>
-          )}
-
-          {tab === "inspectii" && (
-            <>
+            )}
+            {history.length > 1 && (
               <section className="card">
-                <div className="cardHead"><h2>Inspecții</h2><span className="muted">{insp.length}</span></div>
-                {insp.length ? inspCards : <p className="hint">Nicio inspecție pentru acest bun.</p>}
+                <div className="cardHead"><h2>Istoric evaluări</h2>{analytics && <a className="link" href={self("analiza")}>Analiză valoare →</a>}</div>
+                <p className="hint" style={{ marginTop: -6 }}>Alege o evaluare ca să vezi bunul așa cum era atunci.</p>
+                <div className="bpHist">
+                  {history.map((v) => {
+                    const pv = v.val && v.cur === cur ? prevOf(v.id) : null;
+                    const body = <><small>{monthYear(v.date)} · {v.id === id ? (from ? "vezi acum" : "acesta") : v.number ? `nr. ${v.number}` : "fără număr"}</small><b className="mono">{v.val ? lei(v.val, v.cur) : "—"}</b>
+                      <small className={pv?.val && v.val ? (v.val >= pv.val ? "up" : "down") : ""}>{pv?.val && v.val ? pct(((v.val - pv.val) / pv.val) * 100) : v.open && v.client ? niceName(v.client) : v.open ? "" : "altă echipă"}</small></>;
+                    return v.id !== id && v.open
+                      ? <a key={v.id + v.asset_id} href={from && from.id === v.id ? `${base}/rapoarte/${v.id}/bun/${v.asset_id}` : `${base}/rapoarte/${v.id}/bun/${v.asset_id}?${keep}`}>{body}</a>
+                      : <span key={v.id + v.asset_id} className={v.id === id ? "on" : "off"} title={v.open ? undefined : "Nu faci parte din echipa acestui raport"}>{body}</span>;
+                  })}
+                </div>
               </section>
-              {found.length > 0 && <section className="card"><span className="bvKick">{lastDone?.done_at ? `Fișa din ${fmtDate(lastDone.done_at)}` : "Ultima fișă"}</span><h2>Constatat la fața locului</h2><Kv rows={found} /></section>}
-            </>
-          )}
+            )}
+          </div>
 
-          {tab === "fotografii" && (
-            <AssetPhotos report={id} name={zipName} photos={photos} covers={covers} edit={acc.can.assets}
-              inspections={insp.filter((i) => photos.some((x) => x.inspection === i.id)).map((i) => ({ id: i.id, label: `Inspecția din ${fmtDate(i.done_at ?? i.scheduled_at ?? i.created_at)}${i.inspector ? ` · ${i.inspector}` : ""}` }))} />
-          )}
+          <div className="bpCol">
+            <section className="card">
+              <div className="cardHead"><h2>Inspecția</h2>{insp[0] && (() => { const [t, k] = INSP_STATUS[(lastDone ?? insp[0]).status] ?? ["", ""]; return <span className={`pill ${k}`}><i />{t}</span>; })()}</div>
+              {!insp.length ? <p className="hint">{a.no_inspection ? `Evaluat fără inspecție: ${a.no_inspection}.` : "Nicio inspecție alocată pentru acest bun."}</p> : (() => {
+                const i = lastDone ?? insp[0];
+                return (
+                  <>
+                    <dl className="kv">
+                      <div><dt>{i.status === "done" ? "Data" : i.status === "scheduled" ? "Programată" : "Alocată"}</dt><dd>{i.status === "done" ? fmtDate(i.done_at ?? i.created_at, true) : i.scheduled_at ? fmtDate(i.scheduled_at, true) : fmtDate(i.created_at)}</dd></div>
+                      {i.inspector && <div><dt>Inspector</dt><dd>{i.inspector}</dd></div>}
+                      {i.present_person && <div><dt>Prezent</dt><dd>{i.present_person}{i.signature_url ? " · semnată" : ""}</dd></div>}
+                      <div><dt>Fotografii</dt><dd>{i.photos}{i.uvalo_id ? " · prin UVALO" : i.glide_id ? " · vechiul CRM" : ""}</dd></div>
+                    </dl>
+                    {i.sheet_status === "revision" && i.rev_note && <div className="bvRev"><b>Completări cerute{i.rev_at ? ` · ${fmtDate(i.rev_at, true)}` : ""}</b><span>{i.rev_note}</span></div>}
+                    <div className="bpBtns">
+                      {(sheets[i.id] || (i.status === "done" && i.sheet_id)) && <InspSheet doc={sheets[i.id] ?? null} src={`/api/crm/reports/${id}/sheet/${a.id}?insp=${encodeURIComponent(i.id)}`} firm={firm} pdf={`${base}/rapoarte/${id}/fisa/${a.id}`} label="Deschide fișa" />}
+                      {askRevision && i.sheet_status === "submitted" && !i.uvalo_id && !i.glide_id && !i.sheet_glide && <RevisionAsk report={id} inspection={i.id} inspector={i.inspector} />}
+                    </div>
+                    {insp.length > 1 && <a className="link" href={self("inspectii")}>toate cele {insp.length} inspecții →</a>}
+                  </>
+                );
+              })()}
+            </section>
 
-          {tab === "acte" && <ReportDocs report={id} assets={[{ id: a.id, label: cap(a.type) || "Bunul", sub: address }]} items={docItems} edit={acc.can.docs} remove={acc.can.docsDelete} />}
+            <section className="card">
+              <div className="cardHead"><h2>Acte</h2><a className="link" href={self("acte")}>toate {docItems.length} →</a></div>
+              {!docItems.length ? <p className="hint">Niciun act încărcat.</p> : (
+                <ul className="bpDocs">
+                  {docItems.slice(0, 6).map((d) => <li key={d.origin + d.id} className={d.status === "missing" ? "miss" : ""}><span>{d.name}</span><b>{d.status === "missing" ? "lipsă" : "✓"}</b></li>)}
+                </ul>
+              )}
+              {legal ? (
+                <a className="bpLegal" href={`${base}/rapoarte/${id}?tab=documente`}>
+                  <b>Analiza juridică · {fmtDate(legal.created_at)}</b>
+                  <span>{legal.result.owners.length ? `${legal.result.owners.length === 1 ? "Proprietar" : "Proprietari"}: ${legal.result.owners.map((o) => o.name).join(", ")}. ` : ""}{legal.result.encumbrances.length ? `${legal.result.encumbrances.length} ${legal.result.encumbrances.length === 1 ? "sarcină" : "sarcini"}. ` : "Fără sarcini. "}{openIssues ? `${openIssues} ${openIssues === 1 ? "problemă" : "probleme"} de rezolvat.` : "Nimic de rezolvat."}</span>
+                  <small>Deschide analiza →</small>
+                </a>
+              ) : <p className="hint">Analiza juridică nu a fost rulată. <a className="link" href={`${base}/rapoarte/${id}?tab=documente`}>Acte & livrare →</a></p>}
+            </section>
 
-          {tab === "analiza" && valueCard(true)}
-        </main>
-      </div>
+            {similar?.located && (
+              <section className="card">
+                <div className="cardHead"><h2>În zonă</h2><span className="muted">1 km</span></div>
+                <dl className="kv">
+                  <div><dt>Rapoarte similare</dt><dd>{similar.rows.length}</dd></div>
+                  {zone.length > 0 && <div><dt>Median {cur}/mp</dt><dd className="mono">{Math.round(zone[Math.floor(zone.length / 2)]).toLocaleString("ro-RO")}</dd></div>}
+                </dl>
+                {similar.rows.length > 0 && <SimilarReports report={id} base={base} count={similar.rows.length} bank={similar.subject?.bank ?? null} />}
+              </section>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === "inspectii" && (
+        <>
+          <section className="card">
+            <div className="cardHead"><h2>Inspecții</h2><span className="muted">{insp.length}</span></div>
+            {insp.length ? inspCards : <p className="hint">Nicio inspecție pentru acest bun.</p>}
+          </section>
+          {found.length > 0 && <section className="card"><span className="bvKick">{lastDone?.done_at ? `Fișa din ${fmtDate(lastDone.done_at)}` : "Ultima fișă"}</span><h2>Constatat la fața locului</h2><Kv rows={found} /></section>}
+        </>
+      )}
+
+      {tab === "fotografii" && (
+        <AssetPhotos report={id} name={zipName} photos={photos} covers={covers} edit={acc.can.assets}
+          inspections={insp.filter((i) => photos.some((x) => x.inspection === i.id)).map((i) => ({ id: i.id, label: `Inspecția din ${fmtDate(i.done_at ?? i.scheduled_at ?? i.created_at)}${i.inspector ? ` · ${i.inspector}` : ""}` }))} />
+      )}
+
+      {tab === "acte" && <ReportDocs report={id} assets={[{ id: a.id, label: cap(a.type) || "Bunul", sub: address }]} items={docItems} edit={acc.can.docs} remove={acc.can.docsDelete} />}
+
+      {tab === "analiza" && valueCard(true)}
     </CrmShell>
   );
 }

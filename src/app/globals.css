@@ -3900,3 +3900,72 @@ span.rdPick { display: inline-block; }
 .mtEx { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--divider); }
 .mtExItem { display: flex; gap: 8px; align-items: flex-start; }
 @media (max-width: 899px) { .mtCols { grid-template-columns: 1fr; } }
+
+/* ---------- Bunul evaluat (pagina bunului): antet deschis, acte față de inspecție, coloana din dreapta ---------- */
+.bpBar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+.bpCrumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted-2); }
+.bpCrumbs a { font-weight: 600; color: var(--acc-text); }
+.bpCrumbs a:hover { color: var(--ink); }
+.bpCrumbs b { color: var(--ink); }
+.bpTag { padding: 2px 8px; border-radius: 999px; background: var(--acc-soft); color: var(--acc-text); font-size: 11px; font-weight: 700; }
+.bpActs { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.bpActs .btn { height: 36px; }
+.card.bpHero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 0; padding: 0; }
+.bpPhotos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: 1fr 1fr; gap: 6px; padding: 10px; min-height: 280px; }
+.bpPhotos.n1 .bpPh.big { grid-column: 1 / -1; }
+.bpPhotos.n2 .bpPh:not(.big) { grid-row: span 2; }
+.bpPh { position: relative; display: block; border-radius: 12px; overflow: hidden; background: var(--cream-2); }
+.bpPh.big { grid-column: span 2; grid-row: span 2; }
+.bpPh img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bpPh.more { background: var(--navy); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; text-align: center; padding: 6px; }
+.bpPh.more b { font-size: 20px; }
+.bpPh.more small { font-size: 11px; color: rgba(255, 255, 255, 0.7); }
+.bpNoPh { grid-column: 1 / -1; grid-row: 1 / -1; border-radius: 12px; border: 1px dashed var(--dashed); display: flex; align-items: center; justify-content: center; color: var(--muted-2); }
+.bpId { padding: 18px 20px 18px 10px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.bpEyebrow { font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--acc-text); }
+.bpId h1 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
+.bpId p { margin: 0; color: var(--muted); line-height: 1.5; }
+.bpChips { display: flex; flex-wrap: wrap; gap: 6px; }
+.bpChips span { padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; font-size: 11.5px; }
+.bpKpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.bpKpis > span { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--cream); border: 1px solid var(--divider); min-width: 0; }
+.bpKpis > span.dark { background: var(--navy); border-color: var(--navy); color: #fff; }
+.bpKpis small { font-size: 11px; color: var(--muted-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bpKpis small:first-child { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; }
+.bpKpis .dark small { color: rgba(255, 255, 255, 0.65); }
+.bpKpis b { font-size: 17px; font-weight: 700; }
+.bpKpis b.up { color: var(--ok-text); } .bpKpis b.down { color: var(--err); }
+.bpMap { border-radius: 12px; overflow: hidden; }
+.bpTabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.bpTabs a { padding: 10px 14px; font-size: 13.5px; font-weight: 600; color: var(--muted-2); border-bottom: 3px solid transparent; margin-bottom: -1px; display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+.bpTabs a:hover { color: var(--ink); }
+.bpTabs a[aria-current="page"] { color: var(--ink); font-weight: 700; border-bottom-color: var(--acc); }
+.bpTabs small { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--divider); color: var(--muted); }
+.bpTabs a[aria-current="page"] small { background: var(--acc-soft); color: var(--acc-text); }
+.bpGrid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+.bpCol { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.bpDiffs { font-size: 12px; font-weight: 700; color: var(--err); }
+.bpCmp td { font-size: 13px; }
+.bpCmp tr.diff td { background: var(--err-bg); }
+.bpNone { color: var(--off); }
+.bpMark { width: 36px; text-align: center; font-weight: 800; }
+.bpMark.ok { color: var(--ok-text); } .bpMark.near { color: var(--acc-text); } .bpMark.diff { color: var(--err); }
+.bpHist { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.bpHist > a, .bpHist > span { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: 1px solid var(--divider); border-radius: 12px; color: var(--ink); }
+.bpHist > a:hover { border-color: var(--acc); }
+.bpHist > .on { border: 2px solid var(--acc); background: var(--acc-soft); }
+.bpHist > .off { opacity: 0.6; }
+.bpHist small { font-size: 11.5px; color: var(--muted-2); }
+.bpHist small.up { color: var(--ok-text); } .bpHist small.down { color: var(--err); }
+.bpBtns { display: flex; flex-wrap: wrap; gap: 8px; }
+.bpDocs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; font-size: 13px; }
+.bpDocs li { display: flex; justify-content: space-between; gap: 10px; }
+.bpDocs li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bpDocs li b { color: var(--ok-text); flex-shrink: 0; }
+.bpDocs li.miss b { color: var(--err); }
+.bpLegal { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px; background: var(--acc-soft); border: 1px solid var(--acc-line); font-size: 12.5px; line-height: 1.5; color: var(--ink); }
+.bpLegal b { color: var(--acc-text); }
+.bpLegal small { font-weight: 700; color: var(--acc-text); }
+@media (max-width: 1099px) { .bpGrid { grid-template-columns: 1fr; } }
+@media (max-width: 899px) { .card.bpHero { grid-template-columns: 1fr; } .bpId { padding: 4px 16px 16px; } .bpPhotos { min-height: 220px; } }
+@media (max-width: 499px) { .bpKpis { grid-template-columns: 1fr 1fr; } .bpKpis > span.dark { grid-column: 1 / -1; } }
