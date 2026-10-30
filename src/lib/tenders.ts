@@ -43,7 +43,12 @@ export async function saveRules(db: D1Database, r: TenderRules, userId: string) 
     .bind(JSON.stringify(r), now(), userId).run();
 }
 
-export type RunInfo = { at: string; ok: boolean; error: string | null; fetched: number; matched: number; added: number; sample: string | null };
+/** `found`: matched the CPV / words before the county filter; `elsewhere`: of those, from counties outside the list. */
+export type RunInfo = { at: string; ok: boolean; error: string | null; fetched: number; matched: number; added: number; sample: string | null; found?: number; elsewhere?: number };
+
+const ALL_COUNTIES = ["Alba", "Arad", "Argeș", "Bacău", "Bihor", "Bistrița-Năsăud", "Botoșani", "Brașov", "Brăila", "București", "Buzău", "Caraș-Severin", "Călărași",
+  "Cluj", "Constanța", "Covasna", "Dâmbovița", "Dolj", "Galați", "Giurgiu", "Gorj", "Harghita", "Hunedoara", "Ialomița", "Iași", "Ilfov", "Maramureș", "Mehedinți",
+  "Mureș", "Neamț", "Olt", "Prahova", "Satu Mare", "Sălaj", "Sibiu", "Suceava", "Teleorman", "Timiș", "Tulcea", "Vaslui", "Vâlcea", "Vrancea"];
 export async function lastRun(db: D1Database): Promise<RunInfo | null> {
   const row = await db.prepare("SELECT value FROM settings WHERE key = 'tenders_run'").first<{ value: string }>().catch(() => null);
   try { return row ? (JSON.parse(row.value) as RunInfo) : null; } catch { return null; }
@@ -124,16 +129,23 @@ async function directs(from: string, to: string): Promise<Item[]> {
   return out;
 }
 
-/** The county of the authority: from the notice details (address), else from the authority name. */
-async function countyOf(it: Item, counties: string[]): Promise<string | null> {
-  const find = (text: string) => counties.find((c) => plain(text).includes(plain(c))) ?? null;
+/**
+ * The county of the authority: from its name or the title, else from the notice details (address). `null` when it
+ * cannot be told (a commune's name rarely says it): such a notice is kept, not lost.
+ */
+async function countyOf(it: Item): Promise<string | null> {
+  const find = (text: string) => {
+    const t = ` ${plain(text).replace(/[^a-z0-9]+/g, " ")} `;
+    return ALL_COUNTIES.find((c) => t.includes(` ${plain(c).replace(/[^a-z0-9]+/g, " ")} `) || (plain(c) === "timis" && t.includes(" timisoara "))) ?? null;
+  };
   const inName = find(`${it.authority ?? ""} ${it.title}`);
-  if (inName) return inName;
-  if (it.kind !== "notice") return null;
-  try {
-    const r = await fetch(`${BASE}/api-pub/C_PUBLIC_CANotice/get/${it.ext}`, { headers: { Accept: "application/json", Referer: `${BASE}/pub` } });
-    if (r.ok) return find(await r.text());
-  } catch { /* the list is enough */ }
+  if (inName || it.kind !== "notice") return inName;
+  for (const path of [`/api-pub/C_PUBLIC_CNotice/get/${it.ext}`, `/api-pub/C_PUBLIC_CANotice/get/${it.ext}`]) {
+    try {
+      const r = await fetch(`${BASE}${path}`, { headers: { Accept: "application/json", Referer: `${BASE}/pub`, "User-Agent": "Mozilla/5.0 (VALUEFY CRM; licitatii)" } });
+      if (r.ok) { const c = find(await r.text()); if (c) return c; }
+    } catch { /* the list is enough */ }
+  }
   return null;
 }
 
@@ -164,8 +176,10 @@ export async function runTenders(db: D1Database, days = 2, force = false) {
     for (const it of items) {
       const reason = matches(it, r);
       if (!reason) continue;
-      const county = await countyOf(it, r.counties);
-      if (r.counties.length && !county) continue;
+      info.found = (info.found ?? 0) + 1;
+      // out only when it is surely from another county; when the county cannot be told, kept for a look
+      const county = await countyOf(it);
+      if (r.counties.length && county && !r.counties.some((c) => plain(c) === plain(county))) { info.elsewhere = (info.elsewhere ?? 0) + 1; continue; }
       info.matched++;
       const res = await db.prepare(
         `INSERT INTO tenders (id, kind, ext_id, notice_no, title, authority, county, cpv, value_ron, published_at, deadline_at, procedure, url, match_reason, raw)

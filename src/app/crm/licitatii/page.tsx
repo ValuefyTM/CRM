@@ -58,7 +58,7 @@ export default async function TendersPage({ searchParams }: { searchParams: Prom
             {run ? (
               <dl className="kv">
                 <div><dt>Ultima verificare</dt><dd>{fmtDate(run.at, true)}</dd></div>
-                <div><dt>Rezultat</dt><dd>{run.ok ? `${run.fetched} anunțuri citite · ${run.matched} potrivite · ${run.added} noi` : <span style={{ color: "var(--err)" }}>{run.error}</span>}</dd></div>
+                <div><dt>Rezultat</dt><dd>{run.ok ? `${run.fetched} anunțuri citite · ${run.matched} potrivite${run.elsewhere ? ` (+${run.elsewhere} din alte județe)` : ""} · ${run.added} noi${run.fetched === 0 ? " · SEAP nu a trimis niciun anunț: probabil blochează cererea" : ""}` : <span style={{ color: "var(--err)" }}>{run.error}</span>}</dd></div>
               </dl>
             ) : <p className="hint">Încă nu a rulat nicio verificare.</p>}
             {run?.sample && can(user, "tenders:rules") && (
