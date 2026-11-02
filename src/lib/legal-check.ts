@@ -190,6 +190,13 @@ const day = (s: string | null | undefined) => (s && /^\d{4}-\d{2}-\d{2}/.test(s)
 const ro = (s: string | null) => (s ? s.split("-").reverse().join(".") : "");
 const days = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5);
 const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
+/** A CF or cadastral number written one way: upper case, no spaces or "nr.", one kind of dash. */
+const idNo = (s: string | null | undefined) => (s ?? "").toUpperCase().replace(/^\s*(NR\.?|CF|CAD\.?)\s*/g, "").replace(/[\u2010-\u2015\u2212]/g, "-").replace(/\s+/g, "").replace(/^-+|-+$/g, "");
+/**
+ * Two CF / cadastral numbers of the same property: equal, or one is the other's base — the land "406069" of the unit
+ * "406069-C2-U3" (a floor survey or an older act often gives only the land's number, without the building and unit).
+ */
+const sameNo = (a: string, b: string) => a === b || a.startsWith(`${b}-`) || b.startsWith(`${a}-`);
 const label = (d: LegalDoc) => (d.read ? `${d.read.title}${d.read.act_number ? ` nr. ${d.read.act_number}` : ""}` : d.name);
 
 /** "Popescu Ioan" ≈ "POPESCU ION": same tokens, each equal or one letter apart. */
@@ -285,12 +292,12 @@ export function evaluate(docs: LegalDoc[], s: Subject): LegalResult {
     return v.length > 1 && Math.max(...v) / Math.min(...v) - 1 > 0.02;
   };
   const ua = cols.map((c) => c.r.usable_area), la = cols.map((c) => c.r.land_area);
-  const cfNo = cols.map((c) => digits(c.r.cf_number) || null);
-  const cads = cols.map((c) => (c.r.cad_numbers ?? []).map((x) => x.trim().toUpperCase()));
+  const cfNo = cols.map((c) => idNo(c.r.cf_number) || null);
+  const cads = cols.map((c) => (c.r.cad_numbers ?? []).map(idNo).filter(Boolean));
   const concordance = [
     { field: "Proprietar", values: cols.map((c) => ({ doc: c.doc, value: c.r.owners || null, off: false })) },
-    { field: "Nr. CF", values: cols.map((c, i) => ({ doc: c.doc, value: c.r.cf_number ?? null, off: !!cfNo[i] && cfNo.some((x) => x && x !== cfNo[i]) })) },
-    { field: "Nr. cadastral", values: cols.map((c, i) => ({ doc: c.doc, value: cads[i].join(", ") || null, off: cads[i].length > 0 && cads.some((x) => x.length > 0 && !x.some((y) => cads[i].includes(y))) })) },
+    { field: "Nr. CF", values: cols.map((c, i) => ({ doc: c.doc, value: c.r.cf_number ?? null, off: !!cfNo[i] && cfNo.some((x) => x && !sameNo(x, cfNo[i]!)) })) },
+    { field: "Nr. cadastral", values: cols.map((c, i) => ({ doc: c.doc, value: cads[i].join(", ") || null, off: cads[i].length > 0 && cads.some((x) => x.length > 0 && !x.some((y) => cads[i].some((z) => sameNo(y, z)))) })) },
     { field: "Suprafață utilă", values: cols.map((c) => ({ doc: c.doc, value: c.r.usable_area ? `${c.r.usable_area.toLocaleString("ro-RO")} mp` : null, off: false })) },
     { field: "Suprafață teren", values: cols.map((c) => ({ doc: c.doc, value: c.r.land_area ? `${c.r.land_area.toLocaleString("ro-RO")} mp` : null, off: false })) },
     { field: "Adresă", values: cols.map((c) => ({ doc: c.doc, value: c.r.address ?? null, off: false })) },
