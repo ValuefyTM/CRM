@@ -1,11 +1,13 @@
 "use client";
+
 // "Recomandată de": the collaborator who brought the work — one of the collaborators' accounts (Utilizatori →
 // Colaboratori: brokers, agents of partner firms). A new one is made in Utilizatori (link, for who may add users).
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Avatar } from "./Avatar";
 
-export type Referral = { id: string; name: string; phone?: string | null; email?: string | null; firm?: string | null };
-type Hit = { id: string; name: string; phone: string | null; email: string | null; firm: string | null };
+export type Referral = { id: string; name: string; phone?: string | null; email?: string | null; firm?: string | null; photo?: string | null };
+type Hit = { id: string; name: string; phone: string | null; email: string | null; firm: string | null; photo?: string | null };
 
 const initials = (s: string) => s.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "CO";
 const subOf = (h: { phone?: string | null; email?: string | null; firm?: string | null }) => [h.firm, h.phone, h.email].filter(Boolean).join(" · ") || "colaborator";
@@ -35,7 +37,7 @@ export function ReferralPick({ value, onChange, canAdd, label = "Recomandată de
     return () => document.removeEventListener("mousedown", off);
   }, [open]);
   const picker = value ? (
-    <div className="nwClient ok"><span className="nwKind company">{initials(value.name)}</span><span><b>{value.name}</b><small>{subOf(value)}</small></span>
+    <div className="nwClient ok">{value.photo ? <Avatar id={value.id} name={value.name} size={34} photo={value.photo} /> : <span className="nwKind company">{initials(value.name)}</span>}<span><b>{value.name}</b><small>{subOf(value)}</small></span>
       <button type="button" className="linkBtn" onClick={() => onChange(null)}>schimbă</button></div>
   ) : (
     <div className="nwSearch" ref={box}>
@@ -46,7 +48,7 @@ export function ReferralPick({ value, onChange, canAdd, label = "Recomandată de
         <div className="nwSearchPanel" role="listbox">
           {hits.map((h) => (
             <button key={h.id} type="button" role="option" aria-selected={false} className="nwSearchHit" onMouseDown={(e) => { e.preventDefault(); onChange(h); setOpen(false); setQ(""); }}>
-              <span className="nwKind company">{initials(h.name)}</span>
+              {h.photo ? <Avatar id={h.id} name={h.name} size={34} photo={h.photo} /> : <span className="nwKind company">{initials(h.name)}</span>}
               <span><b>{h.name}</b><small>{subOf(h)}</small></span>
             </button>
           ))}
@@ -84,7 +86,7 @@ export function ReferralEdit({ order, report, value, canEdit, canAdd, base }: { 
   );
   return (
     <span>
-      {value ? <a className="rowLink" href={`${base}/utilizatori/${value.id}`}>{value.name}</a> : <span className="muted">—</span>}
+      {value ? <a className="rowLink refWho" href={`${base}/utilizatori/${value.id}`}><Avatar id={value.id} name={value.name} size={22} photo={value.photo} />{value.name}</a> : <span className="muted">—</span>}
       {canEdit && <> <button type="button" className="linkBtn" onClick={() => setEditing(true)}>{value ? "schimbă" : "alege"}</button></>}
     </span>
   );

@@ -24,6 +24,7 @@ import { CancelReason } from "@/components/CancelReason";
 import { Messages } from "@/components/Messages";
 import { messagesOf } from "@/lib/messages";
 import { photoUrl, presenceOf } from "@/lib/presence";
+import { Avatar } from "@/components/Avatar";
 import { orderProgress } from "@/lib/delivery";
 import { IssueInvoice, InvoiceList } from "@/components/Invoices";
 import { draftForReport, invoicesFor } from "@/lib/billing";
@@ -87,7 +88,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
   const contractOrder = o.source === "bank" || o.source === "collab";
   // "Recomandată de": the collaborator's account, changed in place (also on its reports)
   const refEdit = <ReferralEdit order={o.id} base={base} canEdit={can(user, "orders.E")} canAdd={can(user, "users.A")}
-    value={o.referral_user_id ? { id: o.referral_user_id, name: o.referral_name ?? "colaborator" } : null} />;
+    value={o.referral_user_id ? { id: o.referral_user_id, name: o.referral_name ?? "colaborator", photo: photoUrl(o.referral_user_id, o.referral_avatar_at) } : null} />;
   let offerInitial: OfferInput | null = null;
   if (offerable) {
     const draft = offerDraft(o, docs, evaluators.find((e) => e.id === user.id && e.role === "evaluator") ?? evaluators.find((e) => e.role === "evaluator") ?? null);
@@ -142,7 +143,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
             <section className="card">
               <h2>Trimisă de</h2>
               <dl className="dl">
-                <div><dt>{o.source === "partner" ? "Colaborator" : "Client"}</dt><dd>{o.created_by ? <a className="rowLink" href={`${base}/utilizatori/${o.created_by}`}>{o.creator_name || o.creator_email}</a> : "—"}</dd></div>
+                <div><dt>{o.source === "partner" ? "Colaborator" : "Client"}</dt><dd>{o.created_by ? <a className="rowLink refWho" href={`${base}/utilizatori/${o.created_by}`}><Avatar id={o.created_by} name={o.creator_name || o.creator_email || "?"} size={22} photo={photoUrl(o.created_by, o.creator_avatar_at)} />{o.creator_name || o.creator_email}</a> : "—"}</dd></div>
                 {o.partner_id && <div><dt>Firmă</dt><dd><a className="rowLink" href={`${base}/utilizatori/firme/${o.partner_id}`}>{o.partner_name}</a></dd></div>}
                 {o.creator_email && <div><dt>Email</dt><dd><a href={`mailto:${o.creator_email}`}>{o.creator_email}</a></dd></div>}
                 {o.bank_branch && <div><dt>Agenție</dt><dd>{o.bank_branch}</dd></div>}

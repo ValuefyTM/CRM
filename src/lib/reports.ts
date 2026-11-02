@@ -220,7 +220,7 @@ export type Report = ReportRow & {
   collected: number; collected_at: string | null; verified_at: string | null; verified_by: string | null;
   client_kind: string | null; client_phone: string | null; client_email: string | null; client_cui: string | null; client_address: string | null;
   bank_name: string | null; contract_number: string | null; contract_kind: string | null; contract_date: string | null; contract_fee: number | null;
-  referral_name: string | null; referral_id: string | null;
+  referral_name: string | null; referral_id: string | null; referral_avatar_at?: string | null;
   /** a valuation note: its initial report */
   parent_report_id?: string | null;
   notes: string | null; delivered_at: string | null; delivered_by_name: string | null; updated_at: string;
@@ -237,7 +237,7 @@ export async function getReport(db: D1Database, id: string) {
         COALESCE(b.code, b.name) AS bank_code, b.name AS bank_name, i.name AS issuer_name, i.logo_url AS issuer_logo, i.color AS issuer_color,
         COALESCE(NULLIF(i.code, ''), i.name) AS issuer_short, b.logo_url AS bank_logo, c.logo_url AS client_logo, o.created_at AS ordered_at, COALESCE(o.urgent, 0) AS urgent,
         k.number AS contract_number, k.kind AS contract_kind, k.signed_on AS contract_date, k.fee AS contract_fee,
-        ru.name AS referral_name, ru.id AS referral_id, COALESCE(NULLIF(du.name, ''), du.email) AS delivered_by_name,
+        ru.name AS referral_name, ru.id AS referral_id, ru.avatar_at AS referral_avatar_at, COALESCE(NULLIF(du.name, ''), du.email) AS delivered_by_name,
         o.seq AS order_seq, o.bank_ref AS order_bank_ref, o.source AS order_source, st.number AS statement_number, c.code AS client_code,
         b.kind AS recipient_kind, b.email AS recipient_email, b.phone AS recipient_phone, b.code AS recipient_code
        FROM reports r LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id LEFT JOIN entities i ON i.id = r.issuer_id

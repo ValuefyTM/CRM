@@ -3,6 +3,7 @@
 // statement (borderou) — and opens its report file in the same step.
 import { isAvFirm } from "./av-labels";
 import { now, uuid } from "./db";
+import { photoUrl } from "./presence";
 import { audit } from "./auth";
 import { propertyType } from "./process-order";
 import { capType, type AssetInput } from "./asset-labels";
@@ -73,11 +74,11 @@ export async function referralOf(db: D1Database, v: unknown) {
 export async function referralPeople(db: D1Database, q: string) {
   const s = q.trim().replace(/[%_]/g, "");
   const like = `%${s}%`;
-  const { results } = await db.prepare(`SELECT u.id, COALESCE(NULLIF(u.name, ''), u.email) AS name, u.phone, u.email, p.name AS firm
+  const { results } = await db.prepare(`SELECT u.id, COALESCE(NULLIF(u.name, ''), u.email) AS name, u.phone, u.email, p.name AS firm, u.avatar_at
       FROM users u LEFT JOIN partners p ON p.id = u.partner_id WHERE u.kind = 'partner' AND u.status <> 'deleted'
       ${s ? "AND (u.name LIKE ?1 OR u.email LIKE ?1 OR u.phone LIKE ?1 OR p.name LIKE ?1)" : ""} ORDER BY u.status = 'active' DESC, name LIMIT 30`)
-    .bind(...(s ? [like] : [])).all<{ id: string; name: string; phone: string | null; email: string | null; firm: string | null }>();
-  return results;
+    .bind(...(s ? [like] : [])).all<{ id: string; name: string; phone: string | null; email: string | null; firm: string | null; avatar_at: string | null }>();
+  return results.map(({ avatar_at, ...x }) => ({ ...x, photo: photoUrl(x.id, avatar_at) }));
 }
 
 /**

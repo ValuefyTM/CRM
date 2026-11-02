@@ -91,7 +91,9 @@ export async function processPartnerOrder(db: D1Database, user: User, orderId: s
   // the report's term, type of valuation, value type and designated user
   await db.prepare("UPDATE reports SET term_days = ?, valuation_types = ?, value_type = COALESCE(?, value_type), recipient_id = ?, updated_at = ? WHERE id = ?")
     .bind(term, kinds.join(","), valueType, rec?.id ?? null, now(), reportId).run();
-  await db.prepare("UPDATE orders SET processed_at = COALESCE(processed_at, ?) WHERE id = ?").bind(now(), orderId).run();
+  // the collaborator who sent the order is its referral ("Recomandată de"), on the order and on its report
+  await db.prepare("UPDATE orders SET processed_at = COALESCE(processed_at, ?), referral_user_id = COALESCE(referral_user_id, created_by) WHERE id = ?").bind(now(), orderId).run();
+  if (o.created_by) await db.prepare("UPDATE reports SET referral_user_id = COALESCE(referral_user_id, ?) WHERE id = ?").bind(o.created_by, reportId).run();
 
   // the order's documents on the main asset of the report (a copy each: the order keeps its own)
   const copied = await copyDocs(db, orderId, reportId, user.id);

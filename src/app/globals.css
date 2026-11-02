@@ -4041,3 +4041,7 @@ span.rdPick { display: inline-block; }
 .lcRunDocs li.wait { color: var(--muted-2); }
 .lcRunIco { display: inline-flex; justify-content: center; }
 .lcRunIco i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--acc-line); border-top-color: var(--acc); animation: vfSpin 0.8s linear infinite; }
+
+/* „Recomandată de” / colaboratorul: poza lângă nume */
+.refWho { display: inline-flex; align-items: center; gap: 8px; vertical-align: middle; }
+.refWho .pAvatar { flex-shrink: 0; }

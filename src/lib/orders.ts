@@ -42,6 +42,7 @@ export type Order = Nullable<Pick<PortalFields, "property_type" | "city" | "addr
   parent_report_id?: string | null;
   // joined
   creator_name: string | null; creator_email: string | null; partner_name: string | null; doc_count: number;
+  creator_avatar_at?: string | null; referral_avatar_at?: string | null;
   collab_firm: string | null; contract_number: string | null; contract_kind: string | null;
   /** the bank's logo (bank orders) and the order's latest report */
   bank_logo: string | null; report_id: string | null; report_number: string | null;
@@ -52,7 +53,7 @@ export type OrderDocument = {
   uploader_name: string | null; uploader_kind: string | null;
 };
 
-const SELECT = `SELECT o.*, u.name AS creator_name, u.email AS creator_email, p.name AS partner_name, COALESCE((SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE x.id = o.referral_user_id), (SELECT x.name FROM entities x WHERE x.id = o.referral_id)) AS referral_name,
+const SELECT = `SELECT o.*, u.name AS creator_name, u.email AS creator_email, u.avatar_at AS creator_avatar_at, (SELECT x.avatar_at FROM users x WHERE x.id = o.referral_user_id) AS referral_avatar_at, p.name AS partner_name, COALESCE((SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE x.id = o.referral_user_id), (SELECT x.name FROM entities x WHERE x.id = o.referral_id)) AS referral_name,
   (SELECT COUNT(*) FROM order_documents d WHERE d.order_id = o.id) AS doc_count,
   (SELECT e.name FROM collaborations c JOIN entities e ON e.id = c.firm_id WHERE c.id = o.collaboration_id) AS collab_firm,
   k.number AS contract_number, k.kind AS contract_kind, (SELECT x.lead_id FROM order_leads x WHERE x.order_id = o.id) AS lead_id,
@@ -127,14 +128,16 @@ export async function createOrder(db: D1Database, user: User, v: OrderInput) {
       await db
         .prepare(
           `INSERT INTO orders (id, seq, source, created_by, partner_id, property_type, city, address, surface_area, land_area, rooms, purpose, bank, urgent,
-            client_name, client_phone, client_email, contact_name, contact_phone, inspection_notes, may_contact_client, notes, docs_missing, client_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+            client_name, client_phone, client_email, contact_name, contact_phone, inspection_notes, may_contact_client, notes, docs_missing, client_id, referral_user_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
         )
         .bind(
           id, next, user.kind === "partner" ? "partner" : "client", user.id, user.kind === "partner" ? user.partner_id : null,
           v.property_type, v.city, v.address, v.surface_area, v.land_area, v.rooms, v.purpose, v.bank, v.urgent,
           v.client_name, v.client_phone, v.client_email, v.contact_name, v.contact_phone, v.inspection_notes, v.may_contact_client, v.notes,
           user.kind === "client" ? user.entity_id ?? null : null,
+          // a collaborator's order: they brought the work ("Recomandată de")
+          user.kind === "partner" ? user.id : null,
         )
         .run();
       return { id, seq: next };

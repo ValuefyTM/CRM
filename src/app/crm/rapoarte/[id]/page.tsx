@@ -37,6 +37,7 @@ import { sheetFits, STD, templateList } from "@/lib/insp-templates-db";
 import { docsByAsset } from "@/lib/insp-docs";
 import { guessDocKind } from "@/lib/doc-kinds";
 import { Avatar, PersonLine } from "@/components/Avatar";
+import { photoUrl } from "@/lib/presence";
 import { Messages } from "@/components/Messages";
 import { messagesOf } from "@/lib/messages";
 import { AddMember, CollectedToggle, DeliverButton, ReportNumberEdit, FinalDrop, MissingDoc, NotesEditor, RemoveMember, SafeImg, StageActions, StatusButton, UploadButton, VerifyActions } from "./ReportActions";
@@ -399,7 +400,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                 <Row k="Tip client">{r.client_kind ? KIND[r.client_kind] ?? r.client_kind : null}</Row>
                 {r.bank_branch && <Row k="Agenție bancară">{r.bank_branch}</Row>}
                 <Row k="Recomandată de"><ReferralEdit report={r.id} base={base} canEdit={c.edit} canAdd={can(user, "users.A")}
-                  value={r.referral_id ? { id: r.referral_id, name: r.referral_name ?? "colaborator" } : null} /></Row>
+                  value={r.referral_id ? { id: r.referral_id, name: r.referral_name ?? "colaborator", photo: photoUrl(r.referral_id, r.referral_avatar_at) } : null} /></Row>
                 {note && <Row k="Raport inițial"><NoteParentEdit note={r.id} client={r.client_id} parent={parentRep ?? null} canEdit={c.edit} base={base} /></Row>}
                 <Row k="Emitent">{r.issuer_name}</Row>
               </dl>
