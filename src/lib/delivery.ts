@@ -20,10 +20,11 @@ export type Progress = {
 
 /** Where an order stands: received → offer accepted / confirmed → inspection → drafting → review → delivered. */
 export async function orderProgress(db: D1Database, o: Order): Promise<Progress> {
-  const contract = o.source === "bank" || o.source === "collab";
+  // under a contract (bank, collaboration) or processed without an offer (a collaborator's portal order): confirmed, not offered
+  const contract = o.source === "bank" || o.source === "collab" || !!o.processed_at;
   const [offer, rep] = await Promise.all([
     contract ? null : offerForOrder(db, o.id),
-    db.prepare("SELECT id, stage, delivered_at, status, due_on, term_days, created_at FROM reports WHERE order_id = ? ORDER BY created_at LIMIT 1").bind(o.id)
+    db.prepare("SELECT id, stage, delivered_at, status, due_on, term_days, created_at FROM reports WHERE order_id = ? ORDER BY created_at LIMIT 1").bind(o.linked_order_id ?? o.id)
       .first<{ id: string; stage: string | null; delivered_at: string | null; status: string; due_on: string | null; term_days: number | null; created_at: string }>(),
   ]);
   const [insp, counts, final] = rep
@@ -67,7 +68,13 @@ export const hasValues = (reportType: string | null | undefined) => !/inspec|inf
 export const nextReportNumber = nextOwnNumber;
 
 /** Who hears that the report is ready, and where they download it: the portal account, or the offer page (website orders). */
-async function clientNotice(db: D1Database, o: Order) {
+async function clientNotice(db: D1Database, o: Order): Promise<{ to: string; name: string | null; link: string; where: string } | null> {
+  // a collaboration order made from a collaborator's portal order: the collaborator hears, in the portal
+  if (o.source === "collab") {
+    const portal = await db.prepare("SELECT id FROM orders WHERE linked_order_id = ? LIMIT 1").bind(o.id).first<{ id: string }>();
+    const po = portal ? await getOrder(db, portal.id) : null;
+    if (po) return clientNotice(db, po);
+  }
   if ((o.source === "client" || o.source === "partner") && o.creator_email) {
     return { to: o.creator_email, name: o.creator_name, link: await appUrl("portal", `/comenzi/${o.id}`), where: "în portal" };
   }
@@ -122,6 +129,8 @@ export async function deliverReport(db: D1Database, user: { id: string }, report
       result_value = CASE WHEN ? THEN ? ELSE result_value END, result_eur = CASE WHEN ? THEN ? ELSE result_eur END, eur_rate = CASE WHEN ? THEN ? ELSE eur_rate END, updated_at = ? WHERE id = ?`)
       .bind(number, date, t.slice(0, 10), t, user.id, date, t.slice(0, 10), valued ? 1 : 0, total, valued ? 1 : 0, totalEur, valued ? 1 : 0, rate, t, reportId),
     ...(r.order_id ? [db.prepare("UPDATE orders SET status = 'done', updated_at = ? WHERE id = ? AND status <> 'cancelled'").bind(t, r.order_id)] : []),
+    // a portal order worked through a collaboration order: done with it
+    ...(r.order_id ? [db.prepare("UPDATE orders SET status = 'done', updated_at = ? WHERE linked_order_id = ? AND status <> 'cancelled'").bind(t, r.order_id)] : []),
   ]);
   const what = [number && `nr. ${number}`, valued && `rezultat ${totalEur.toLocaleString("ro-RO")} €${total != null ? ` · ${total.toLocaleString("ro-RO")} lei la ${rate}` : ""}`].filter(Boolean).join(" · ");
   await audit(db, `user:${user.id}`, "report.delivered", "report", reportId, what || undefined);
@@ -155,8 +164,9 @@ export async function deliverReport(db: D1Database, user: { id: string }, report
 
 /** The signed report PDF of an order, once delivered (portal and offer page downloads). */
 export async function deliveredFile(db: D1Database, orderId: string) {
+  // a portal order worked through a collaboration order: the report is that order's
   const d = await db.prepare(`SELECT d.filename, d.content_type, d.r2_key FROM reports r JOIN report_documents d ON d.report_id = r.id
-      WHERE r.order_id = ? AND r.delivered_at IS NOT NULL AND d.kind = 'final' AND d.status = 'uploaded' ORDER BY d.created_at DESC LIMIT 1`)
+      WHERE r.order_id = COALESCE((SELECT linked_order_id FROM orders WHERE id = ?1), ?1) AND r.delivered_at IS NOT NULL AND d.kind = 'final' AND d.status = 'uploaded' ORDER BY d.created_at DESC LIMIT 1`)
     .bind(orderId).first<{ filename: string; content_type: string | null; r2_key: string | null }>();
   const obj = d?.r2_key ? await (await bucket())?.get(d.r2_key) : null;
   if (!d || !obj) return new Response("Raportul nu este disponibil.", { status: 404 });

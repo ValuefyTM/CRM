@@ -21,6 +21,9 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const expired = offer?.status === "sent" && isExpired(offer);
   const nou = (await searchParams).nou;
   const failed = nou?.startsWith("eroare-") ? Number(nou.slice(7)) : 0;
+  // a collaborator's order: no offer; the fee and the term are set by the team when it is processed
+  const direct = o.source === "partner";
+  const term = direct && rep ? (await db.prepare("SELECT term_days FROM reports WHERE id = ?").bind(rep.id).first<{ term_days: number | null }>())?.term_days ?? null : null;
 
   return (
     <PortalShell back={{ href: `${base}/comenzi`, label: "Comenzi" }} user={user} base={base} active="orders" title={`Comanda ${orderCode(o)}`} subtitle={`${orderWhat(o)} · ${orderPlace(o)} · trimisă ${fmtDate(o.created_at, !o.glide_id)}`}>
@@ -28,7 +31,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         <div className={failed ? "note" : "okMsg"}>
           {failed
             ? `Comanda ${orderCode(o)} a fost trimisă, dar ${failed} document${failed > 1 ? "e nu au" : " nu a"} putut fi încărcat${failed > 1 ? "e" : ""}. Încearcă din nou mai jos.`
-            : `Comanda ${orderCode(o)} a fost trimisă. Pregătim oferta și revenim în cel mai scurt timp.`}
+            : `Comanda ${orderCode(o)} a fost trimisă. ${direct ? "Stabilim onorariul și termenul" : "Pregătim oferta"} și revenim în cel mai scurt timp.`}
         </div>
       )}
       <div className="cols">
@@ -68,7 +71,24 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
               </a>
             </section>
           )}
-          {!offer && o.status === "received" && <section className="card" style={{ border: "1.5px solid var(--line)" }}>
+          {direct && o.processed_at && o.fee != null && (
+            <section className="card">
+              <div className="cardHead"><h2>Comanda confirmată</h2><span className="pill pillOk"><i />În lucru</span></div>
+              <dl className="dl">
+                <div><dt>Onorariu</dt><dd>{money(o.fee)} + TVA</dd></div>
+                {term && <div><dt>Termen de predare</dt><dd>{term} zile lucrătoare de la inspecție{o.urgent ? " · urgent" : ""}</dd></div>}
+                <div><dt>Confirmată</dt><dd>{fmtDate(o.processed_at)}</dd></div>
+              </dl>
+            </section>
+          )}
+          {direct && !o.processed_at && o.status === "received" && <section className="card" style={{ border: "1.5px solid var(--line)" }}>
+            <div className="cardHead"><h2>Confirmarea comenzii</h2><span className="pill"><i />În analiză</span></div>
+            <div className="actions" style={{ flexWrap: "nowrap" }}>
+              <span className="spinner" aria-hidden />
+              <p className="hint" style={{ fontSize: 14 }}>Analizăm comanda și stabilim onorariul și termenul de predare. Te anunțăm pe email.</p>
+            </div>
+          </section>}
+          {!direct && !offer && o.status === "received" && <section className="card" style={{ border: "1.5px solid var(--line)" }}>
             <div className="cardHead"><h2>Oferta de evaluare</h2><span className="pill"><i />În pregătire</span></div>
             <div className="actions" style={{ flexWrap: "nowrap" }}>
               <span className="spinner" aria-hidden />

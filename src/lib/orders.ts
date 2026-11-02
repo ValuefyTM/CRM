@@ -36,6 +36,8 @@ export type Order = Nullable<Pick<PortalFields, "property_type" | "city" | "addr
   /** the collaborator who brought the work (entity of kind "broker") */
   /** "Recomandată de": the collaborator's account (referral_id: an older pick among the entities) */
   referral_id?: string | null; referral_user_id?: string | null; referral_name?: string | null;
+  /** a collaborator's portal order worked through a collaboration order: that order */
+  linked_order_id?: string | null;
   /** a valuation note: its initial report */
   parent_report_id?: string | null;
   // joined

@@ -13,6 +13,8 @@ export async function sendOrderEmails(user: User, id: string, seq: number, v: Or
   const portalLink = await appUrl("portal", `/comenzi/${id}`);
   const crmLink = await appUrl("crm", `/comenzi/${id}`);
   const hello = user.name ? `Bună, ${user.name.split(" ")[0]}!` : "Bună!";
+  // a collaborator's order is confirmed directly (fee and term), a client's gets an offer
+  const next = user.kind === "partner" ? "Stabilim onorariul și termenul" : "Pregătim oferta";
   const rows = [
     ["Proprietate", what],
     ["Scop", v.purpose + (v.bank ? ` · ${v.bank}` : "")],
@@ -27,11 +29,11 @@ export async function sendOrderEmails(user: User, id: string, seq: number, v: Or
     sendEmail({
       to: user.email,
       subject: `Am primit comanda ${ref}`,
-      text: `${hello}\nAm primit comanda ${ref} (${what}). Pregătim oferta și revenim în cel mai scurt timp.\nUrmărește comanda: ${portalLink}`,
+      text: `${hello}\nAm primit comanda ${ref} (${what}). ${next} și revenim în cel mai scurt timp.\nUrmărește comanda: ${portalLink}`,
       html: layout({
         eyebrow: `Comanda ${ref}`,
         title: `${hello} Am primit comanda.`,
-        body: `<p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#4A4A4A">Pregătim oferta (onorariu și termen) și revenim în cel mai scurt timp.</p>${table}`,
+        body: `<p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#4A4A4A">${user.kind === "partner" ? "Stabilim onorariul și termenul de predare" : "Pregătim oferta (onorariu și termen)"} și revenim în cel mai scurt timp.</p>${table}`,
         button: { label: "Vezi comanda →", url: portalLink },
         foot: "Poți adăuga oricând documentele lipsă din pagina comenzii.",
       }),

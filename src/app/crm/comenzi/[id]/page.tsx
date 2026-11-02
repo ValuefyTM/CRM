@@ -56,7 +56,9 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
   const lead = o.lead_id ? await getLead(db, o.lead_id) : null;
 
   // Offers: for orders from the portal and the website (bank orders follow the framework contract).
-  const offerable = !o.glide_id && (portal || o.source === "site" || o.source === "direct");
+  // a collaborator's portal order (source "partner") is processed without an offer: fee, term and where, then the report
+  const partnerFlow = o.source === "partner" && !o.glide_id;
+  const offerable = !o.glide_id && !partnerFlow && (portal || o.source === "site" || o.source === "direct");
   const offer = offerable ? await offerForOrder(db, id) : null;
   const evaluators = !o.glide_id
     ? (await db.prepare(`SELECT id, COALESCE(NULLIF(name, ''), email) AS name, anevar_no, role, duties, last_seen_at, avatar_at FROM users WHERE kind = 'internal' AND status NOT IN ('disabled', 'deleted') AND (${dutySql("evaluator")} OR ${dutySql("verifier")}) ORDER BY name`)
@@ -183,10 +185,15 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
             <section className="card" style={{ border: `1.5px solid ${dossier ? "var(--line)" : "var(--acc)"}` }}>
               <div className="cardHead">
                 <h2>Procesare</h2>
-                <span className={`pill ${dossier ? "pillOk" : offer?.status === "accepted" || contractOrder ? "pillWarn" : ""}`}><i />
-                  {dossier ? "Raport creat" : offer?.status === "accepted" || contractOrder ? "De creat raportul" : "Așteaptă acceptarea ofertei"}</span>
+                <span className={`pill ${dossier || o.linked_order_id ? "pillOk" : offer?.status === "accepted" || contractOrder || partnerFlow ? "pillWarn" : ""}`}><i />
+                  {dossier || o.linked_order_id ? "Raport creat" : offer?.status === "accepted" || contractOrder || partnerFlow ? "De creat raportul" : "Așteaptă acceptarea ofertei"}</span>
               </div>
-              {dossier ? (
+              {partnerFlow && o.linked_order_id ? (
+                <div className="actions">
+                  <p className="hint" style={{ margin: 0 }}>Lucrată pe colaborare: comanda și raportul sunt în comanda de colaborare creată din aceasta{o.fee ? ` · ${lei(o.fee)} + TVA` : ""}.</p>
+                  <a className="btn btnNavy btnSm" href={`${base}/comenzi/${o.linked_order_id}`}>Deschide comanda de colaborare →</a>
+                </div>
+              ) : dossier ? (
                 <>
                   <div className="actions">
                     <p className="hint" style={{ margin: 0 }}>Comanda se lucrează în raportul {dossier.number ? `nr. ${dossier.number}` : dossier.label ?? ""}: inspecție, redactare, verificare și livrare.</p>
@@ -199,11 +206,14 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
               ) : (
                 <div className="actions">
                   <p className="hint" style={{ margin: 0, flex: "1 1 260px" }}>
-                    {contractOrder ? `Comandă ${o.source === "bank" ? `${o.bank ?? "bancă"}${o.contract_number ? ` · contract cadru ${o.contract_number}` : ""}` : `colaborare ${o.collab_firm ?? ""}`}: fără ofertă. Completezi clientul și bunurile (din captura aplicației băncii sau manual) și se creează raportul.`
+                    {partnerFlow ? "Comandă de la colaborator: fără ofertă. Stabilești tariful și termenul, unde se lucrează (VALUEFY sau o firmă colaboratoare), tipul evaluării și utilizatorul; bunul se completează din comandă, iar actele se atașează automat."
+                      : contractOrder ? `Comandă ${o.source === "bank" ? `${o.bank ?? "bancă"}${o.contract_number ? ` · contract cadru ${o.contract_number}` : ""}` : `colaborare ${o.collab_firm ?? ""}`}: fără ofertă. Completezi clientul și bunurile (din captura aplicației băncii sau manual) și se creează raportul.`
                       : offer?.status === "accepted" ? "Oferta e semnată. Creează raportul și alocă evaluatorul; inspecțiile le aloci apoi pe raport, pentru fiecare bun."
                       : "Raportul se creează automat când clientul semnează oferta, pe evaluatorul din ofertă. Dacă a acceptat pe alt canal (telefon, email), îl poți crea acum."}
                   </p>
-                  {contractOrder ? (
+                  {partnerFlow ? (
+                    <a className="btn btnGold" href={`${base}/comenzi/${o.id}/procesare`}>Procesează: tarif, termen, unde se lucrează →</a>
+                  ) : contractOrder ? (
                     <a className="btn btnGold" href={`${base}/comenzi/${o.id}/procesare`}>Procesează: client, bunuri, echipă →</a>
                   ) : <DossierOpen
                     order={o.id} base={base} me={user.id} evaluator={offer?.evaluator_id ?? null}
