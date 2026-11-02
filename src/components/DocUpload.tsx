@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { ACCEPT, MAX_FILE_MB } from "@/lib/order-labels";
 
 /** Upload button for one document of an existing order; reloads the page when done. */
-export function DocUpload({ orderId, kind, label = "↑ Încarcă" }: { orderId: string; kind: string; label?: string }) {
+export function DocUpload({ orderId, kind, label = "↑ Încarcă", request }: { orderId: string; kind: string; label?: string; request?: string }) {
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -17,6 +17,7 @@ export function DocUpload({ orderId, kind, label = "↑ Încarcă" }: { orderId:
     for (const file of files) {
       const fd = new FormData();
       fd.set("kind", kind); fd.set("file", file);
+      if (request) fd.set("request", request);
       const r = await fetch(`/api/portal/orders/${orderId}/documents`, { method: "POST", body: fd }).catch(() => null);
       if (!r?.ok) {
         const d = (await r?.json().catch(() => ({}))) as { error?: string } | undefined;
@@ -30,7 +31,7 @@ export function DocUpload({ orderId, kind, label = "↑ Încarcă" }: { orderId:
     <span className="actions" style={{ gap: 6 }}>
       {error && <span className="error" style={{ fontSize: 12 }}>{error}</span>}
       <button type="button" className="btn btnGhost btnSm" disabled={busy} onClick={() => ref.current?.click()}>{busy ? "Se încarcă…" : label}</button>
-      <input ref={ref} type="file" hidden accept={ACCEPT} multiple={kind === "other"} onChange={(e) => { upload(e.target.files); e.target.value = ""; }} />
+      <input ref={ref} type="file" hidden accept={ACCEPT} multiple={kind === "other" && !request} onChange={(e) => { upload(e.target.files); e.target.value = ""; }} />
     </span>
   );
 }

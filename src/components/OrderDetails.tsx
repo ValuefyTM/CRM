@@ -2,6 +2,8 @@
 import { fmtDate } from "@/lib/guard";
 import { DOCS, docLabel, fmtSize, missingDocs, orderCode, orderPlace, orderStatus, orderWhat, STAGES, type Order, type OrderDocument } from "@/lib/orders";
 import { DocUpload } from "./DocUpload";
+import { CancelDocRequest } from "./DocRequests";
+import type { DocRequest } from "@/lib/order-chat";
 
 export type OrderProgress = { steps: { label: string; at: string | null }[]; reached: number; due?: string | null };
 
@@ -76,21 +78,40 @@ export function OrderInfo({ o, showSource }: { o: Order; showSource?: boolean })
 }
 
 /** Uploaded documents (open / download) and, in the portal, upload buttons for what is still missing. */
-export function OrderDocuments({ o, docs, href, canUpload }: { o: Order; docs: OrderDocument[]; href: (d: OrderDocument) => string; canUpload: boolean }) {
-  const missing = missingDocs(o.property_type, docs);
+/**
+ * `requests`: the documents asked by the team (a collaborator's order): open ones with an upload button in the portal
+ * (`canUpload`), and a way to withdraw them in the CRM (`staff`); `tools`: the CRM's "Solicită acte".
+ */
+export function OrderDocuments({ o, docs, href, canUpload, requests = [], staff, tools }: { o: Order; docs: OrderDocument[]; href: (d: OrderDocument) => string; canUpload: boolean;
+  requests?: DocRequest[]; staff?: boolean; tools?: React.ReactNode }) {
+  const open = requests.filter((q) => !q.done_at);
+  // a standard document asked by the team shows once: as the request
+  const missing = missingDocs(o.property_type, docs).filter((d) => !open.some((q) => q.name === d.label));
+  const asked = (d: OrderDocument) => requests.find((q) => q.doc_id === d.id);
   const optional = o.property_type ? DOCS[o.property_type].filter((d) => d.optional && !docs.some((x) => x.kind === d.key)) : [];
   return (
     <section className="card">
       <div className="cardHead">
         <h2>Documente</h2>
-        <span className={`pill ${missing.length ? "pillWarn" : "pillOk"}`}><i />{docs.length} încărcat{docs.length === 1 ? "" : "e"}{missing.length ? ` · ${missing.length} lipsă` : ""}</span>
+        <span className="actions" style={{ gap: 8 }}>
+          {tools}
+          <span className={`pill ${missing.length || open.length ? "pillWarn" : "pillOk"}`}><i />{docs.length} încărcat{docs.length === 1 ? "" : "e"}{missing.length + open.length ? ` · ${missing.length + open.length} lipsă` : ""}</span>
+        </span>
       </div>
       <ul className="docList">
+        {open.map((q) => (
+          <li key={q.id} className="docAsked">
+            <span className="docDot miss" aria-hidden>!</span>
+            <span className="who"><b>{q.name}</b><span className="muted">solicitat {fmtDate(q.requested_at, true)}{q.requested_by_name ? ` de ${q.requested_by_name}` : ""}</span></span>
+            {canUpload && <DocUpload orderId={o.id} kind="other" request={q.id} />}
+            {staff && <CancelDocRequest order={o.id} request={q.id} />}
+          </li>
+        ))}
         {docs.map((d) => (
           <li key={d.id}>
             <span className="docDot file" aria-hidden>{(d.filename.split(".").pop() || "").slice(0, 4).toUpperCase()}</span>
             <span className="who">
-              <b>{docLabel(o.property_type ?? "other", d.kind)}</b>
+              <b>{asked(d)?.name ?? docLabel(o.property_type ?? "other", d.kind)}</b>
               <span className="muted">{d.filename} · {fmtSize(d.size_bytes)} · {fmtDate(d.created_at, true)}{d.uploader_name ? ` · ${d.uploader_name}` : ""}</span>
             </span>
             <a className="btn btnGhost btnSm" href={href(d)} target="_blank" rel="noopener">Deschide</a>
@@ -117,7 +138,7 @@ export function OrderDocuments({ o, docs, href, canUpload }: { o: Order; docs: O
             <DocUpload orderId={o.id} kind="other" label="↑ Adaugă" />
           </li>
         )}
-        {!docs.length && !missing.length && !canUpload && <li><span className="muted">Niciun document încărcat.</span></li>}
+        {!docs.length && !missing.length && !open.length && !canUpload && <li><span className="muted">Niciun document încărcat.</span></li>}
       </ul>
     </section>
   );

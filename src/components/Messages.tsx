@@ -26,10 +26,14 @@ const dayOf = (iso: string) => {
  * line; the list opens on the latest message. `full` is the big chat of the Mesaje tab (with the days between messages);
  * `limit` + `more` show only the latest few, with a link to the whole chat.
  */
-export function Messages({ entity, id, rows, title = "Mesaje", hint, full, limit, more, readOnly }: {
+export function Messages({ entity, id, rows, title = "Mesaje", hint, full, limit, more, readOnly, post, empty }: {
   entity: "report" | "order"; id: string; rows: Msg[]; title?: string; hint?: string; full?: boolean; limit?: number; more?: string;
   /** Only read (a finished report): no new messages. */
   readOnly?: string | null;
+  /** where a new message goes (the portal: the order's own address, `{ body }`); the CRM's by default */
+  post?: string;
+  /** the text of an empty chat */
+  empty?: string;
 }) {
   const router = useRouter();
   const [v, setV] = useState("");
@@ -40,7 +44,7 @@ export function Messages({ entity, id, rows, title = "Mesaje", hint, full, limit
   const send = async () => {
     if (!v.trim() || busy) return;
     setBusy(true); setErr("");
-    const r = await fetch("/api/crm/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ entity, id, body: v }) }).catch(() => null);
+    const r = await fetch(post ?? "/api/crm/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(post ? { body: v } : { entity, id, body: v }) }).catch(() => null);
     const d = (await r?.json().catch(() => ({}))) as { error?: string };
     setBusy(false);
     if (!r?.ok) return setErr(d?.error ?? "Mesajul nu a putut fi trimis.");
@@ -58,7 +62,7 @@ export function Messages({ entity, id, rows, title = "Mesaje", hint, full, limit
       {shown.length === 0 ? (
         <div className="msgEmpty">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.8 7L3 21l2-6.2A8 8 0 1 1 21 12z" /></svg>
-          <span>Niciun mesaj încă. Scrie primul mesaj pentru echipă.</span>
+          <span>{empty ?? "Niciun mesaj încă. Scrie primul mesaj pentru echipă."}</span>
         </div>
       ) : (
         <ul className="msgList" ref={list}>
@@ -81,7 +85,7 @@ export function Messages({ entity, id, rows, title = "Mesaje", hint, full, limit
         </ul>
       )}
       {readOnly ? <p className="msgLocked">{readOnly}</p> : <div className="msgCompose">
-        <textarea className="textarea" rows={full ? 3 : 2} value={v} onChange={(e) => setV(e.target.value)} placeholder={full ? "Scrie un mesaj echipei… (Enter trimite, Shift+Enter rând nou)" : "Scrie un mesaj…"} aria-label="Mesaj nou"
+        <textarea className="textarea" rows={full ? 3 : 2} value={v} onChange={(e) => setV(e.target.value)} placeholder={full ? "Scrie un mesaj echipei… (Enter trimite, Shift+Enter rând nou)" : "Scrie un mesaj… (Enter trimite)"} aria-label="Mesaj nou"
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }} />
         <button type="button" className="btn btnNavy btnSm msgSend" disabled={busy || !v.trim()} onClick={send} aria-label="Trimite mesajul">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4 20-7z" /><path d="M22 2 11 13" /></svg>

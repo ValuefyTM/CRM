@@ -6,6 +6,9 @@ import { PortalShell } from "@/components/PortalShell";
 import { OrderDocuments, OrderInfo, OrderStatusCard } from "@/components/OrderDetails";
 import { isExpired, money, offerForOrder, offerTotals } from "@/lib/offers";
 import { orderProgress } from "@/lib/delivery";
+import { messagesOf } from "@/lib/messages";
+import { docRequests, sharedChat } from "@/lib/order-chat";
+import { Messages } from "@/components/Messages";
 
 export const metadata: Metadata = { title: "Comandă | Portal VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -17,6 +20,9 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   if (!o || !canSee(user, o)) notFound();
   const [docs, found, progress] = await Promise.all([orderDocuments(db, id), offerForOrder(db, id), orderProgress(db, o)]);
   const rep = progress.report;
+  // a collaborator's order: the conversation with the team, and the documents the team asked for
+  const chat = sharedChat(o);
+  const [messages, requests] = chat ? await Promise.all([messagesOf(db, "order", id, user.id, true), docRequests(db, id)]) : [[], []];
   const offer = found && found.status !== "draft" ? found : null;
   const expired = offer?.status === "sent" && isExpired(offer);
   const nou = (await searchParams).nou;
@@ -95,10 +101,14 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
               <p className="hint" style={{ fontSize: 14 }}>Analizăm comanda și pregătim oferta: onorariul și termenul de livrare. Te anunțăm pe email când este gata.</p>
             </div>
           </section>}
-          {!o.glide_id && <OrderDocuments o={o} docs={docs} canUpload={o.status !== "done" && o.status !== "cancelled"} href={(d) => `/api/portal/orders/${o.id}/documents/${d.id}`} />}
+          {!o.glide_id && <OrderDocuments o={o} docs={docs} canUpload={o.status !== "done" && o.status !== "cancelled"} href={(d) => `/api/portal/orders/${o.id}/documents/${d.id}`} requests={requests} />}
           <OrderInfo o={o} />
         </div>
-        <OrderStatusCard o={o} docs={docs} progress={{ ...progress, due: rep?.due }} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+          <OrderStatusCard o={o} docs={docs} progress={{ ...progress, due: rep?.due }} />
+          {chat && <Messages entity="order" id={o.id} rows={messages} post={`/api/portal/orders/${o.id}/messages`} title="Mesaje cu echipa VALUEFY"
+            hint="Întrebări despre comandă, acte, programare: îți răspundem aici și pe email." empty="Niciun mesaj încă. Scrie-ne dacă ai o întrebare." />}
+        </div>
       </div>
     </PortalShell>
   );

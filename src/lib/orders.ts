@@ -231,7 +231,8 @@ export async function addDocument(db: D1Database, order: { id: string; seq: numb
   const id = uuid();
   const safeName = file.name.replace(/[^\w.\-() ăâîșțĂÂÎȘȚ]/g, "_").slice(-120) || "document";
   const key = `orders/${order.id}/${id}-${safeName}`;
-  await r2.put(key, file.stream(), { httpMetadata: { contentType: fileType(safeName) }, customMetadata: { order: `CO-${order.seq}`, kind: validKind } });
+  // the whole file (at most MAX_FILE_MB): a form's file stream has no known length in every runtime
+  await r2.put(key, await file.arrayBuffer(), { httpMetadata: { contentType: fileType(safeName) }, customMetadata: { order: `CO-${order.seq}`, kind: validKind } });
   await db
     .prepare("INSERT INTO order_documents (id, order_id, kind, filename, content_type, size_bytes, r2_key, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
     .bind(id, order.id, validKind, safeName, fileType(safeName), file.size, key, userId)

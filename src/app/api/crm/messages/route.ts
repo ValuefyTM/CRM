@@ -1,6 +1,7 @@
 import { err, json, reportApi, staffApi } from "@/lib/api";
 import { can } from "@/lib/perms";
 import { addMessage } from "@/lib/messages";
+import { orderMessage } from "@/lib/order-chat";
 import { pushLater } from "@/lib/push";
 
 /** A message on a report or an order: `{ entity: "report" | "order", id, body }`. */
@@ -17,7 +18,8 @@ export async function POST(req: Request) {
     const r = await reportApi(b.id, "messages", true);
     if ("res" in r) return r.res;
   }
-  const r = await addMessage(a.db, entity, b.id, a.user, body);
+  // an order's chat: shared with the collaborator who sent it (portal + email)
+  const r = entity === "order" ? await orderMessage(a.db, b.id, a.user, body) : await addMessage(a.db, entity, b.id, a.user, body);
   if (!r.ok) return err(r.error, 404);
   pushLater(a.db);
   return Response.json({ ok: true });

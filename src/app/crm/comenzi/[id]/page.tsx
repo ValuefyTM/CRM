@@ -12,6 +12,9 @@ import { getLead, leadStatus } from "@/lib/leads";
 import { CrmShell } from "@/components/CrmShell";
 import { History } from "@/components/History";
 import { OrderDocuments, OrderInfo, OrderStatusCard } from "@/components/OrderDetails";
+import { RequestDocs } from "@/components/DocRequests";
+import { docRequests, sharedChat } from "@/lib/order-chat";
+import { DOCS } from "@/lib/order-labels";
 import { ReferralEdit } from "@/components/ReferralPick";
 import { ReportList } from "@/components/ReportList";
 import { hasDuty, dutySql } from "@/lib/labels";
@@ -50,6 +53,10 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
     await audit(db, `user:${user.id}`, "order.view", "order", id);
   }
   const [docs, log, reports] = await Promise.all([orderDocuments(db, id), history(db, [id]), reportsForOrder(db, id)]);
+  // a collaborator's order: the chat is with them, and documents are asked of them from here
+  const withBroker = sharedChat(o);
+  const requests = withBroker ? await docRequests(db, id) : [];
+  const suggestions = withBroker ? [...new Set([...(o.property_type ? DOCS[o.property_type].map((d) => d.label) : []), "Act de identitate proprietar", "Certificat de performanță energetică"])] : [];
   // a work for Appraisal & Valuation: their order form (Excel), filled from the order's report
   const avId = reports[0] && (await avReport(db, reports[0].id)) ? reports[0].id : null;
   const portal = o.source === "partner" || o.source === "client";
@@ -245,11 +252,15 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
           {o.source !== "direct" && o.source !== "bank" && o.source !== "collab" && !o.glide_id && (
             <section className="card"><dl className="dl"><div><dt>Recomandată de</dt><dd>{refEdit}</dd></div></dl></section>
           )}
-          {!o.glide_id && o.source !== "site" && <OrderDocuments o={o} docs={docs} canUpload={false} href={(d) => `/api/crm/orders/${o.id}/documents/${d.id}`} />}
+          {!o.glide_id && o.source !== "site" && <OrderDocuments o={o} docs={docs} canUpload={false} href={(d) => `/api/crm/orders/${o.id}/documents/${d.id}`}
+            requests={requests} staff={can(user, "orders.E")} tools={withBroker && can(user, "orders") && o.status !== "cancelled" ? <RequestDocs order={o.id} suggestions={suggestions} /> : null} />}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
           <OrderStatusCard o={o} docs={docs} progress={progress ? { ...progress, due: progress.report?.due } : undefined} />
-          <Messages entity="order" id={o.id} rows={messages} />
+          {withBroker
+            ? <Messages entity="order" id={o.id} rows={messages} title={`Mesaje cu ${o.creator_name || "colaboratorul"}`}
+              hint="Se văd și în portalul colaboratorului, care primește fiecare mesaj pe email; răspunsul lui vine tot aici (și pe email)." empty="Niciun mesaj încă. Scrie-i colaboratorului o întrebare." />
+            : <Messages entity="order" id={o.id} rows={messages} />}
           <History log={log} />
         </div>
       </div>
