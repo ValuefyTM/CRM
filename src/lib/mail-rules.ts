@@ -171,9 +171,24 @@ export async function closeTasksForOrder(db: D1Database, orderId: string, ref: s
   return r?.meta.changes ?? 0;
 }
 
-/** Who a task is for: the roles and the people its rule names (team accounts, active). */
-export const taskFor = (t: { notify_roles: string | null; notify_users: string | null }, u: { id: string; role: string }) =>
-  (t.notify_roles ?? "").split(",").map((x) => x.trim()).includes(u.role) || (t.notify_users ?? "").split(",").map((x) => x.trim()).includes(u.id);
+type TaskWho = { kind?: string; bank_id?: string | null; notify_roles: string | null; notify_users: string | null };
+
+/** The banks whose framework contracts (open) a person is accredited on (agreeri): they process those banks' orders. */
+export async function accreditedBanks(db: D1Database, userId: string) {
+  const { results } = await db.prepare(`SELECT DISTINCT k.client_id AS bank FROM contract_accreditations ca JOIN contracts k ON k.id = ca.contract_id
+      WHERE ca.user_id = ? AND k.kind = 'framework' AND k.closed_on IS NULL AND k.client_id IS NOT NULL`).bind(userId).all<{ bank: string }>().catch(() => ({ results: [] as { bank: string }[] }));
+  return new Set(results.map((r) => r.bank));
+}
+
+/**
+ * Who a task is for: the roles and the people its rule names (team accounts, active) and, for a bank order, those
+ * accredited on that bank's framework contract (they may process its orders).
+ */
+export const taskFor = (t: TaskWho, u: { id: string; role: string }, banks?: Set<string>) =>
+  (t.notify_roles ?? "").split(",").map((x) => x.trim()).includes(u.role) || (t.notify_users ?? "").split(",").map((x) => x.trim()).includes(u.id)
+  || (t.kind === "bank_order" && !!t.bank_id && !!banks?.has(t.bank_id));
+
+export const canSeeTask = async (db: D1Database, t: TaskWho, u: { id: string; role: string }) => taskFor(t, u) || taskFor(t, u, await accreditedBanks(db, u.id));
 
 export type OpenTask = { id: string; kind: string; title: string; ref: string | null; client_name: string | null; created_at: string; opened_at: string | null; opened_name: string | null;
   bank_id: string | null; bank_code: string | null; bank_name: string | null; bank_logo: string | null; notify_roles: string | null; notify_users: string | null; email_id: string | null };
@@ -184,5 +199,7 @@ export async function openTasks(db: D1Database, u: { id: string; role: string },
         e.code AS bank_code, e.name AS bank_name, e.logo_url AS bank_logo, COALESCE(NULLIF(ou.name, ''), ou.email) AS opened_name
       FROM mail_tasks t LEFT JOIN entities e ON e.id = t.bank_id LEFT JOIN users ou ON ou.id = t.opened_by
       WHERE t.status = 'open' ORDER BY t.created_at`).all<OpenTask>().catch(() => ({ results: [] as OpenTask[] }));
-  return all ? results : results.filter((t) => taskFor(t, u));
+  if (all || !results.length) return results;
+  const banks = await accreditedBanks(db, u.id);
+  return results.filter((t) => taskFor(t, u, banks));
 }

@@ -115,6 +115,7 @@ export function RulesEditor(p: { rules: RuleForm[]; draft: RuleForm | null; open
             </div>
 
             <div className="section">4 · Pe cine anunță <small>(clopoțel, telefon, email; reamintire la 2 ore până se procesează)</small></div>
+            {edit.action === "bank_order" && <p className="hint" style={{ margin: 0 }}>În plus, task-ul îl văd și îl pot procesa automat cei agreați pe contractul cadru al băncii (fișa utilizatorului → Agreeri).</p>}
             <div className="chips" role="group" aria-label="Roluri">
               {p.roles.map(([k, l]) => <button key={k} type="button" className="chip" role="checkbox" aria-checked={edit.notify_roles.includes(k)} onClick={() => toggle("notify_roles", k)}>{l}</button>)}
             </div>

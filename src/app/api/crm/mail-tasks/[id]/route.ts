@@ -1,16 +1,16 @@
 import { audit } from "@/lib/auth";
 import { err, json, staffApi } from "@/lib/api";
 import { can } from "@/lib/perms";
-import { taskFor } from "@/lib/mail-rules";
+import { canSeeTask } from "@/lib/mail-rules";
 
 /** A task from an email closed by hand: done (a plain task) or dismissed (a bank request without an order), with a note. */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const a = await staffApi("any", true);
   if ("res" in a) return a.res;
   const { id } = await params;
-  const t = await a.db.prepare("SELECT id, title, status, notify_roles, notify_users FROM mail_tasks WHERE id = ?").bind(id).first<{ id: string; title: string; status: string; notify_roles: string | null; notify_users: string | null }>();
+  const t = await a.db.prepare("SELECT id, kind, bank_id, title, status, notify_roles, notify_users FROM mail_tasks WHERE id = ?").bind(id).first<{ id: string; kind: string; bank_id: string | null; title: string; status: string; notify_roles: string | null; notify_users: string | null }>();
   if (!t) return err("Task-ul nu există.", 404);
-  if (!can(a.user, "orders") && !taskFor(t, a.user)) return err("Nu ai acces la acest task.", 403);
+  if (!can(a.user, "orders") && !(await canSeeTask(a.db, t, a.user))) return err("Nu ai acces la acest task.", 403);
   if (t.status !== "open") return err("Task-ul e deja închis.");
   const b = await json(req);
   const note = typeof b.note === "string" ? b.note.trim().slice(0, 500) : "";
