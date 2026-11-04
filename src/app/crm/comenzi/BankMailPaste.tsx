@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 
-/** "Adaugă din email": paste a BCR / BRD notice; the bank order is created as if it came to the intake address. */
+/** "Adaugă din email": paste an email; it goes to Emailuri primite and through the rules, as if it came to the intake address. */
 export function BankMailPaste({ base }: { base: string }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
@@ -13,11 +13,12 @@ export function BankMailPaste({ base }: { base: string }) {
     e.preventDefault();
     setBusy(true); setMsg("");
     const r = await fetch("/api/crm/bank-emails", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) }).catch(() => null);
-    const d = (await r?.json().catch(() => ({}))) as { error?: string; order?: string; status?: string } | undefined;
+    const d = (await r?.json().catch(() => ({}))) as { error?: string; order?: string; task?: string; email?: string; status?: string } | undefined;
     setBusy(false);
-    if (!r?.ok || !d?.order) return setMsg(d?.error || "Nu am putut adăuga comanda.");
-    if (d.status === "duplicate") alert("Comanda există deja. Te duc la ea.");
-    location.href = `${base}/comenzi/${d.order}`;
+    if (!r?.ok || !d?.email) return setMsg(d?.error || "Nu am putut adăuga emailul.");
+    // a processing task: straight to "Comandă nouă", filled in; the same request: its order or its task; else the email
+    if (d.status === "duplicate") alert(d.order ? "Comanda există deja. Te duc la ea." : "Există deja un task pentru această cerere.");
+    location.href = d.order ? `${base}/comenzi/${d.order}` : d.task ? `${base}/emailuri/task/${d.task}` : `${base}/emailuri/${d.email}`;
   };
   return (
     <>
@@ -25,12 +26,12 @@ export function BankMailPaste({ base }: { base: string }) {
       {open && createPortal(
         <div className="vfModal" role="dialog" aria-modal="true" aria-labelledby="pasteTitle" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
           <form className="vfModalBox" onSubmit={submit}>
-            <h2 id="pasteTitle">Comandă bancă din email</h2>
-            <p className="hint">Copiază emailul primit de la bancă (subiectul și textul) și lipește-l aici. Recunosc notificările BCR și BRD: numărul cererii și numele clientului.</p>
+            <h2 id="pasteTitle">Comandă din email</h2>
+            <p className="hint">Copiază emailul primit de la bancă (subiectul și textul) și lipește-l aici. Regulile din Emailuri primite îl recunosc (BCR, BRD…) și deschid task-ul de procesare, cu numărul cererii și clientul completate.</p>
             <textarea className="textarea" rows={9} value={text} onChange={(e) => setText(e.target.value)} placeholder={"Cerere nouă primită în aplicatia de Valuator: EV2610070000000045\nNumele clientului: …\nCodul cererii: Prima evaluare"} autoFocus />
             {msg && <div role="alert" className="error">{msg}</div>}
             <div className="actions">
-              <button type="submit" className="btn btnNavy" disabled={busy || text.trim().length < 20}>{busy ? "Se adaugă…" : "Adaugă comanda"}</button>
+              <button type="submit" className="btn btnNavy" disabled={busy || text.trim().length < 20}>{busy ? "Se adaugă…" : "Adaugă"}</button>
               <button type="button" className="btn btnGhost" onClick={() => setOpen(false)}>Renunță</button>
             </div>
           </form>

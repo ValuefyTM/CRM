@@ -1,6 +1,7 @@
 // Server-only: work under a framework contract (banks) or a collaboration agreement (other valuation firms).
 // There is no offer: the fee comes from the contract. One form registers the order — the line that goes on the
 // statement (borderou) — and opens its report file in the same step.
+import { closeTasksForOrder } from "./mail-rules";
 import { isAvFirm } from "./av-labels";
 import { now, uuid } from "./db";
 import { photoUrl } from "./presence";
@@ -160,5 +161,7 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
     if (nr) await db.prepare("UPDATE orders SET collab_report_number = ? WHERE id = ?").bind(nr, id).run();
   }
   await audit(db, `user:${actor}`, "order.create", "order", id, kind === "bank" ? `${contract!.bank} ${str(b.bank_ref, 60)}` : `colaborare ${collab!.firm}`);
+  // the processing task of the request (Emailuri primite) is done: by the task it was opened from, or by the number
+  await closeTasksForOrder(db, id, kind === "bank" ? str(b.bank_ref, 60) || null : null, str(b.mail_task, 80) || null, actor).catch((e) => console.error("mail task", e));
   return { ok: true as const, id, clientId };
 }

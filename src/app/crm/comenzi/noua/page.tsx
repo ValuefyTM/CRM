@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { staffPage } from "@/lib/guard";
+import { fmtDate, staffPage } from "@/lib/guard";
 import { contractChoices } from "@/lib/contract-orders";
 import { evaluatorChoices } from "@/lib/dossier";
 import { inspectorChoices } from "@/lib/insp-assign";
@@ -15,7 +15,7 @@ export const metadata: Metadata = { title: "Lucrare nouă | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
 
 /** Work under a framework contract (bank) or a collaboration: order (statement line) and report file in one step. */
-export default async function NewContractOrder({ searchParams }: { searchParams: Promise<{ tip?: string; contract?: string }> }) {
+export default async function NewContractOrder({ searchParams }: { searchParams: Promise<{ tip?: string; contract?: string; task?: string }> }) {
   const { db, user, base } = await staffPage("orders.A");
   // Accredited only (agreeri, without the Comenzi module on every order): the bank contracts they are accredited on.
   const limited = can(user, "orders.contract") && !can(user, "orders.all");
@@ -27,11 +27,16 @@ export default async function NewContractOrder({ searchParams }: { searchParams:
     .map((e) => ({ id: e.id, name: niceName(e.name) || e.name, kind: e.kind, code: e.code, logo: e.logo }));
   const sp = await searchParams;
   const kind = sp.tip === "colaborare" && !limited ? "collab" : "bank";
+  // opened from a processing task (Emailuri primite): the bank's number and the client from its email
+  const task = sp.task ? await db.prepare("SELECT t.id, t.title, t.ref, t.client_name, t.request_type, t.email_id, t.created_at, t.bank_id FROM mail_tasks t WHERE t.id = ? AND t.status = 'open'").bind(sp.task)
+    .first<{ id: string; title: string; ref: string | null; client_name: string | null; request_type: string | null; email_id: string | null; created_at: string; bank_id: string | null }>().catch(() => null) : null;
+  const taskContract = task?.bank_id && !sp.contract ? contracts.find((c) => c.bank_id === task.bank_id)?.id ?? null : null;
   return (
     <CrmShell back={can(user, "orders") ? { href: `${base}/comenzi?tab=banci`, label: "Comenzi" } : { href: base || "/", label: "Tablou de bord" }} user={user} base={base} active="orders" title={limited ? "Comandă nouă" : "Lucrare nouă"}
       subtitle={limited ? "Comandă pe contractele cadru pe care ești agreat · se procesează direct, fără ofertă" : "Comandă din contract cadru (bancă) sau din colaborare · se procesează direct, fără ofertă"}>
       {limited && contracts.length === 0 && <div className="note">Nu ești agreat pe niciun contract cadru deschis. Agreerile le dă un administrator, din fișa ta de utilizator.</div>}
-      <ContractOrderForm base={base} me={user.id} initialKind={kind} bankOnly={limited} nextOrder={next?.n ?? 1} initialContract={sp.contract ?? null} vatPercent={billing.vatPercent} canAddReferral={can(user, "users.A")} parties={parties}
+      <ContractOrderForm base={base} me={user.id} initialKind={kind} bankOnly={limited} nextOrder={next?.n ?? 1} initialContract={sp.contract ?? taskContract} vatPercent={billing.vatPercent} canAddReferral={can(user, "users.A")} parties={parties}
+        fromTask={task ? { id: task.id, ref: task.ref, client: task.client_name, type: task.request_type, title: task.title, emailHref: task.email_id ? `${base}/emailuri/${task.email_id}` : null, received: fmtDate(task.created_at, true) } : undefined}
         contracts={contracts.map((c) => ({ ...c, logo: fileSrc(c.logo) }))} collabs={limited ? [] : collabs.map((c) => ({ ...c, logo: fileSrc(c.logo) }))}
         evaluators={evaluators.map((e) => ({ id: e.id, name: e.name, sub: e.sub, presence: e.presence, seen: e.seen, photo: e.photo, duties: e.duties }))}
         inspectors={inspectors.map((x) => ({ id: x.id, name: x.name, sub: [roleLabel("internal", x.role), x.coverage && `zone: ${x.coverage}`].filter(Boolean).join(" · "), presence: x.presence, seen: x.seen, photo: x.photo }))} />

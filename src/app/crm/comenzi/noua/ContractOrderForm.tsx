@@ -7,6 +7,7 @@ import { PersonPicker, type PickPerson } from "@/components/PersonPicker";
 import { dutyIn } from "@/lib/labels";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { TaskClose } from "../../emailuri/TaskClose";
 import { PURPOSES } from "@/lib/order-labels";
 import { assetMissing, assetProfile, capType, emptyAsset, type AssetForm } from "@/lib/asset-labels";
 import { feeKindLabel, feeKindOf, gridRate, netFromGrid, parseFeeGrid } from "@/lib/fee-grid";
@@ -91,6 +92,8 @@ export function ContractOrderForm(p: {
   canAddReferral?: boolean;
   /** the designated users a report can be made for (banks, IFN, institutions) */
   parties?: { id: string; name: string; kind: string; code?: string | null; logo?: string | null }[];
+  /** opened from a processing task (Emailuri primite): the bank's number and the client, read from its email */
+  fromTask?: { id: string; ref: string | null; client: string | null; type: string | null; title: string; emailHref: string | null; received: string };
 }) {
   const [referral, setReferral] = useState<Referral | null>(null);
   const [idScan, setIdScan] = useState<IdScan | null>(null);
@@ -98,9 +101,9 @@ export function ContractOrderForm(p: {
   const [kind, setKind] = useState(p.initialKind);
   const preset = p.contracts.find((c) => c.id === p.initialContract) ?? (p.contracts.length === 1 ? p.contracts[0] : null);
   const [f, setF] = useState({
-    contract_id: preset?.id ?? "", collaboration_id: "", bank_ref: "", bank_branch: "", ordered_on: today, report_type: kindOf(preset?.report_type), purpose: preset?.purpose || "Garantare bancară",
-    fee: preset?.fee ? String(preset.fee) : "", fee_later: false, report_number: "", client_id: "", client_kind: "person" as "person" | "company", client_name: "", client_phone: "", client_email: "", client_cui: "",
-    recipient_id: "", client_only: false, inspection_notes: "", notes: "", evaluator_id: p.evaluators.some((e) => e.id === p.me && dutyIn(e.duties, "evaluator")) ? p.me : "", verifier_id: "", inspector_id: "", due_on: inThreeDays(), urgent: false,
+    contract_id: preset?.id ?? "", collaboration_id: "", bank_ref: p.fromTask?.ref ?? "", bank_branch: "", ordered_on: today, report_type: kindOf(preset?.report_type), purpose: preset?.purpose || "Garantare bancară",
+    fee: preset?.fee ? String(preset.fee) : "", fee_later: false, report_number: "", client_id: "", client_kind: "person" as "person" | "company", client_name: p.fromTask?.client ?? "", client_phone: "", client_email: "", client_cui: "",
+    recipient_id: "", client_only: false, inspection_notes: "", notes: p.fromTask?.type ? `Tip cerere: ${p.fromTask.type}` : "", evaluator_id: p.evaluators.some((e) => e.id === p.me && dutyIn(e.duties, "evaluator")) ? p.me : "", verifier_id: "", inspector_id: "", due_on: inThreeDays(), urgent: false,
   });
   // The fee field unlocked by hand (an exception to the grid).
   const [feeFree, setFeeFree] = useState(false);
@@ -197,7 +200,7 @@ export function ContractOrderForm(p: {
       return;
     }
     setBusy(true); setMsg("");
-    const r = await fetch("/api/crm/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, recipient_id: recipient, kind, referral_id: referral?.id ?? "", parent_report_id: note ? parent ?? "" : "", assets: assets.map((a, i) => ({
+    const r = await fetch("/api/crm/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, mail_task: p.fromTask?.id ?? "", recipient_id: recipient, kind, referral_id: referral?.id ?? "", parent_report_id: note ? parent ?? "" : "", assets: assets.map((a, i) => ({
       ...a, is_main: i === 0, ...(a.contact_kind === "client" ? { contact_name: f.client_name, contact_phone: f.client_phone } : {}),
     })) }) }).catch(() => null);
     const d = (await r?.json().catch(() => ({}))) as { report?: string; client?: string; error?: string; inspections?: number; assets?: string[] } | undefined;
@@ -235,6 +238,13 @@ export function ContractOrderForm(p: {
 
   return (
     <form onSubmit={submit} noValidate className="nwForm">
+      {p.fromTask && (
+        <div className="note mtFrom" role="note">
+          <b>{p.fromTask.title}</b>
+          <span>Din emailul primit {p.fromTask.received}. Numărul comenzii și clientul sunt completate din email; completează restul. Task-ul se închide la înregistrarea comenzii.</span>
+          <span className="actions">{p.fromTask.emailHref && <a className="btn btnGhost btnSm" href={p.fromTask.emailHref}>Vezi emailul</a>}<TaskClose task={p.fromTask.id} base={p.base} /></span>
+        </div>
+      )}
       <div className="nwTop">
         <section className="card nwCard">
           <Step n={1} title="Sursa lucrării" sub="De unde vine comanda" done={sourceDone} />

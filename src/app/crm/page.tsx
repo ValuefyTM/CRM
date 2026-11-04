@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { staffPage } from "@/lib/guard";
 import { can } from "@/lib/perms";
 import { MyHome } from "./acasa/MyHome";
+import { BankTasksCard } from "./emailuri/BankTasksCard";
 import { BillingTasksCard } from "@/components/BillingTasksCard";
 import { dashboard, type Alert } from "@/lib/dashboard";
 import { dashboardAlerts } from "@/lib/alerts";
@@ -86,7 +87,7 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
   const dateTitle = new Date(`${today}T12:00:00Z`).toLocaleDateString("ro-RO", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
   // Without the firm's dashboard: the user's own reports and inspections.
   if (!can(user, "dashboard.all")) {
-    return <CrmShell user={user} base={base} active="home" title={dateTitle} dateTitle><MyHome user={user} base={base} denied={denied} /></CrmShell>;
+    return <CrmShell user={user} base={base} active="home" title={dateTitle} dateTitle><BankTasksCard user={user} base={base} /><MyHome user={user} base={base} denied={denied} /></CrmShell>;
   }
   const [d, ruleAlerts, firm] = await Promise.all([
     dashboard(db, base),
@@ -111,7 +112,7 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
   const quick: [string, string, React.ReactNode, string?][] = [
     ...(can(user, "orders") ? [
       ["Lucrare nouă", `${base}/comenzi/noua`, I.plus, "bancă sau colaborare"],
-      ["Email bancă", `${base}/comenzi?tab=banci`, I.mail, "lipește comanda"],
+      ["Emailuri primite", `${base}/emailuri`, I.mail, "task-uri și reguli"],
       ["Comenzi", `${base}/comenzi`, I.inbox, d.newOrders.n ? `${d.newOrders.n} luna aceasta` : undefined],
     ] as [string, string, React.ReactNode, string?][] : []),
     ["Rapoarte în lucru", `${base}/rapoarte?status=deschise`, I.doc, `${d.openCount} în firmă`],
@@ -122,6 +123,7 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
   return (
     <CrmShell user={user} base={base} active="home" title={dateTitle} dateTitle>
       {denied && <div className="note">Nu ai acces la pagina aceea. Ce vezi în CRM stabilește administratorul, în Setări → Permisiuni.</div>}
+      <BankTasksCard user={user} base={base} />
       <section className="dbHello">
         <div className="dbHelloText">
           {/* The firm's dashboard: the whole company, not the user's own work. */}
