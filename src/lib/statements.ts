@@ -741,7 +741,7 @@ async function linesSheet(db: D1Database, name: string, lines: Line[], keys: str
   const fields = EXPORT_FIELDS.filter((f) => keys.includes(f.key));
   const reps = await reportData(db, [...new Set(lines.map((l) => l.report_id).filter((x): x is string => !!x))]);
   // the inspection lines: how far from the office (straight line), as on the page
-  const km = keys.includes("km") ? await inspectionDistances(db, [...new Set(lines.filter((l) => l.source === "inspector" && l.inspection_id).map((l) => l.inspection_id!))]).catch(() => ({} as Record<string, number>)) : {};
+  const km = keys.includes("km") ? await inspectionDistances(db, [...new Set(lines.filter((l) => l.source === "inspector" && l.inspection_id).map((l) => l.inspection_id!))]).catch(() => ({} as Awaited<ReturnType<typeof inspectionDistances>>)) : {};
   const ymd = (d: string | null | undefined) => (d ? String(d).slice(0, 10).split("-").reverse().join(".") : null);
   const lineVal = (l: Line, i: number, k: string): Cell => {
     switch (k) {
@@ -755,7 +755,7 @@ async function linesSheet(db: D1Database, name: string, lines: Line[], keys: str
       case "amount": return l.removed ? 0 : l.amount;
       case "adjust": return l.removed ? "scoasă" : !l.key ? "adăugată manual" : l.changed_at ? "modificată" : null;
       case "reason": return l.reason;
-      case "km": return l.inspection_id ? km[l.inspection_id] ?? null : null;
+      case "km": return l.inspection_id ? km[l.inspection_id]?.km ?? null : null;
     }
     const r = l.report_id ? reps.get(l.report_id) : undefined;
     const v = r?.[k] ?? null;

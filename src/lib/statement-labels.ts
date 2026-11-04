@@ -53,7 +53,7 @@ export const EXPORT_FIELDS: { key: string; label: string; group: "Linie" | "Rapo
   { key: "amount", label: "Sumă pe borderou (lei)", group: "Linie" },
   { key: "adjust", label: "Ajustare (scoasă / modificată / adăugată)", group: "Linie" },
   { key: "reason", label: "Motivul ajustării", group: "Linie" },
-  { key: "km", label: "Distanța inspecției de la sediu (km)", group: "Linie" },
+  { key: "km", label: "Distanța pe drum de la sediu (km)", group: "Linie" },
   { key: "number", label: "Nr. raport", group: "Raport" },
   { key: "report_date", label: "Data raportului", group: "Raport" },
   { key: "delivered_at", label: "Data predării", group: "Raport" },

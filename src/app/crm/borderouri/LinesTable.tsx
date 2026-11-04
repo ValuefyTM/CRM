@@ -12,9 +12,11 @@ const day = (d: string | null) => (d ? d.slice(0, 10).split("-").reverse().join(
  * `adjust`: the column of the firm's adjustments (amount and comment) — on a payout statement; `accept`: the
  * collaborator ticks each adjustment as accepted (their own statement); `locked`: issued.
  */
-/** The distance tag of an inspection: green under 5 km, yellow 5–10 km, orange over 10 km (straight line from the office). */
-export function KmTag({ km }: { km: number }) {
-  return <span className={`kmTag ${km < 5 ? "near" : km <= 10 ? "mid" : "far"}`} title="Distanța de la sediu (adresa de corespondență), în linie dreaptă">{km.toLocaleString("ro-RO", { maximumFractionDigits: 1 })} km</span>;
+/** The distance tag of an inspection: green under 5 km, yellow 5–10 km, orange over 10 km (by road from the office). */
+export function KmTag({ d }: { d: { km: number; road: boolean } }) {
+  const v = d.km.toLocaleString("ro-RO", { maximumFractionDigits: 1 });
+  return <span className={`kmTag ${d.km < 5 ? "near" : d.km <= 10 ? "mid" : "far"}`}
+    title={d.road ? "Distanța pe drum, cu mașina, de la sediu (adresa de corespondență)" : "În linie dreaptă: distanța pe drum se calculează la următoarea deschidere"}>{d.road ? "" : "≈ "}{v} km</span>;
 }
 
 export function LinesTable({ lines, base, statement, canEdit, print = false, adjust = false, accept = false, locked = false, banks, km, byKm = false }: {
@@ -22,7 +24,7 @@ export function LinesTable({ lines, base, statement, canEdit, print = false, adj
   /** the designated user (bank / institution) of each report: the lines grouped by it, with subtotals */
   banks?: Record<string, string>;
   /** inspection → km from the office (the inspection lines show it as a coloured tag) */
-  km?: Record<string, number>;
+  km?: Record<string, { km: number; road: boolean }>;
   /** sorted by that distance, farthest first (one list, no grouping by bank) */
   byKm?: boolean;
 }) {
@@ -32,7 +34,7 @@ export function LinesTable({ lines, base, statement, canEdit, print = false, adj
   const groupOf = (l: Line) => (l.report_id ? banks?.[l.report_id] || "Doar clientul (fără bancă)" : "Alte linii");
   // grouped: the banks by their total (biggest first), the other lines last
   const dist = (l: Line) => (l.inspection_id && km ? km[l.inspection_id] : undefined);
-  const groups = byKm ? [{ g: "", lines: [...lines].sort((a, b) => (dist(b) ?? -1) - (dist(a) ?? -1)) }] : banks ? [...new Set(lines.map(groupOf))].map((g) => ({ g, lines: lines.filter((l) => groupOf(l) === g) }))
+  const groups = byKm ? [{ g: "", lines: [...lines].sort((a, b) => (dist(b)?.km ?? -1) - (dist(a)?.km ?? -1)) }] : banks ? [...new Set(lines.map(groupOf))].map((g) => ({ g, lines: lines.filter((l) => groupOf(l) === g) }))
     .sort((a, b) => (a.g === "Alte linii" ? 1 : b.g === "Alte linii" ? -1 : totalOf(b.lines) - totalOf(a.lines))) : [{ g: "", lines }];
   const cols = 5 + (col ? 1 : 0) + (canEdit && !print ? 1 : 0);
   let n = 0;
@@ -57,7 +59,7 @@ export function LinesTable({ lines, base, statement, canEdit, print = false, adj
                 <td className="muted">{i + 1}</td>
                 <td>
                   <b>{l.report_id && !print ? <a className="link" href={`${base}/rapoarte/${l.report_id}`}>{l.label}</a> : l.label}</b>
-                  {dist(l) != null && <> <KmTag km={dist(l)!} /></>}
+                  {dist(l) && <> <KmTag d={dist(l)!} /></>}
                   <div className="muted">{[SOURCE_LABEL[l.source], l.detail].filter(Boolean).join(" · ")}</div>
                 </td>
                 <td style={{ whiteSpace: "nowrap" }}>{day(l.on_date)}</td>

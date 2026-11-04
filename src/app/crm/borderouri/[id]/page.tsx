@@ -36,7 +36,7 @@ export default async function StatementPage({ params, searchParams }: { params: 
   if (self && !lines.length) redirect(`${base}/borderouri`);
   // the inspection lines (only the inspection billed): how far from the office, and the order by it
   const inspIds = [...new Set(lines.filter((l) => l.source === "inspector" && l.inspection_id).map((l) => l.inspection_id!))];
-  const km = inspIds.length ? await inspectionDistances(db, inspIds).catch(() => ({} as Record<string, number>)) : {};
+  const km = inspIds.length ? await inspectionDistances(db, inspIds).catch(() => ({} as Awaited<ReturnType<typeof inspectionDistances>>)) : {};
   const hasKm = Object.keys(km).length > 0;
   const byKm = hasKm && ordine === "distanta";
   const sortHref = (o: string | null) => `${base}/borderouri/${id}?${[evaluator ? `evaluator=${encodeURIComponent(evaluator)}` : "", o ? `ordine=${o}` : ""].filter(Boolean).join("&")}`.replace(/\?$/, "");
