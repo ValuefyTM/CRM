@@ -27,21 +27,24 @@ export const RULE_ACTIONS: [MailRule["action"], string, string][] = [
 /** The roles a rule can notify (the custom roles of Permisiuni are added by the page). */
 export const BASE_ROLES: [string, string][] = [["owner", "Proprietar"], ["admin", "Administrator"], ["operator", "Secretariat"], ["evaluator", "Evaluator"]];
 export const REMIND_HOURS = 2;
-/** The working hours (Romania's time): the reminders count only this time, and go out only in it. */
+/** The working hours (Romania's time, Monday to Friday): the reminders count only this time, and go out only in it. */
 export const WORK_FROM = 8, WORK_TO = 18;
 
-/** Hour and minute on the wall clock in Romania. */
+/** Minutes since midnight on the wall clock in Romania, and whether it is a weekend day there. */
 function wall(t: number) {
-  const p = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Bucharest", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(t));
-  return Number(p.find((x) => x.type === "hour")?.value ?? 0) * 60 + Number(p.find((x) => x.type === "minute")?.value ?? 0);
+  const p = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Bucharest", weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(t));
+  const v = (k: string) => p.find((x) => x.type === k)?.value ?? "";
+  return { m: Number(v("hour")) * 60 + Number(v("minute")), weekend: v("weekday") === "Sat" || v("weekday") === "Sun" };
 }
 
-/** The moment `minutes` of working time (8:00–18:00) have passed since `start` (the nights skipped). */
+/** The moment `minutes` of working time (8:00–18:00, Monday to Friday) have passed since `start` (nights, weekends skipped). */
 export function addWorking(start: number, minutes: number) {
   let t = start, left = minutes;
   for (let i = 0; i < 400 && left > 0; i++) {
-    const m = wall(t);
-    if (m >= WORK_FROM * 60 && m < WORK_TO * 60) {
+    const { m, weekend } = wall(t);
+    // a weekend day: to 8:00 the next day (checked again: Sunday → Monday)
+    if (weekend) t += (1440 - m + WORK_FROM * 60) * 60000;
+    else if (m >= WORK_FROM * 60 && m < WORK_TO * 60) {
       const take = Math.min(left, WORK_TO * 60 - m);
       t += take * 60000; left -= take;
     } else t += (((WORK_FROM * 60 - m) % 1440) + 1440) % 1440 * 60000;
