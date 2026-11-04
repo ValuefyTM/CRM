@@ -16,6 +16,7 @@ export const FIRM_FIELDS: [key: keyof Firm, label: string, hint?: string][] = [
   ["reg", "Nr. înmatriculare (ONRC)"],
   ["address", "Sediul social"],
   ["mail", "Adresa de corespondență"],
+  ["geo", "Coordonate sediu (lat, lng)", "opțional, ex. 45.6936, 21.2367 — din Google Maps (clic dreapta pe punct); folosite la distanțele din borderouri"],
   ["iban", "IBAN / bancă", "ex. RO11INGB… / ING BANK"],
   ["rep", "Reprezentant legal"],
   ["repRole", "Calitatea reprezentantului", "ex. Administrator"],
@@ -60,6 +61,7 @@ export async function saveFirm(db: D1Database, actor: string, body: Record<strin
     if (typeof v === "string") next[k] = v.trim().replace(/\s+/g, " ").slice(0, 200);
   }
   if (!next.name || !next.cui) return { ok: false as const, error: "Denumirea și CUI-ul sunt obligatorii." };
+  if (next.geo && !/^\s*-?\d+(\.\d+)?\s*[,; ]\s*-?\d+(\.\d+)?\s*$/.test(next.geo)) return { ok: false as const, error: "Coordonatele sediului: „lat, lng”, ex. 45.6936, 21.2367." };
   if (next.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next.email)) return { ok: false as const, error: "Emailul nu pare corect." };
   const changed = FIRM_FIELDS.filter(([k]) => before[k] !== next[k]).map(([k, l]) => `${l}: ${before[k] || "—"} → ${next[k] || "—"}`);
   if (!changed.length) return { ok: true as const };

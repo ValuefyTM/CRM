@@ -15,21 +15,60 @@ export function km(a: Point, b: Point) {
   return 2 * R * Math.asin(Math.sqrt(x));
 }
 
-/** The office's point: from the correspondence address (else the registered office), placed once. */
-export async function officePoint(db: D1Database): Promise<{ point: Point; address: string } | null> {
+/** "Giroc, Strada Bega, Nr. 25/4, Județul Timiș" → street "Strada Bega 25", city "Giroc", county "Timiș". */
+export function splitAddress(a: string) {
+  const parts = a.split(/[,;]/).map((x) => x.trim()).filter(Boolean);
+  let street = "", no = "", city = "", county = "";
+  for (const x of parts) {
+    const j = x.match(/^(?:jud(?:ețul|etul|\.)?|județ|judet)\s*\.?\s*(.+)$/i);
+    if (j) { county = j[1].trim(); continue; }
+    if (/^(?:mun(?:icipiul|\.)?|ora[sș]ul|com(?:una|\.)?|sat(?:ul)?|loc(?:alitatea|\.)?)\s/i.test(x) && !city) { city = x.replace(/^\S+\s+/, ""); continue; }
+    const n = x.match(/^(?:nr|num[aă]rul)\.?\s*(\d+\w?)/i);
+    if (n) { no = n[1]; continue; }
+    if (/^\d{6}$/.test(x) || /^(?:cod|rom[aâ]nia)/i.test(x)) continue;
+    if (/^(?:str|strada|bd|b-dul|bulevardul|calea|aleea|al|pia[tț]a|p-ta|[sș]os|[sș]oseaua|intrarea|splaiul|drumul|dn)\b/i.test(x) && !street) {
+      const m = x.match(/^(.*?)(?:,?\s*nr\.?\s*|\s+)(\d+\w?)(?:\/\S*)?$/i);
+      if (m && /\D/.test(m[1])) { street = m[1].trim(); no ||= m[2]; } else street = x;
+      continue;
+    }
+    if (/^(?:bl|sc|et|ap|cam)\b/i.test(x)) continue;
+    if (!city) city = x;
+  }
+  street = street.replace(/^str\.?\s+/i, "Strada ").replace(/^bd\.?\s+|^b-dul\s+/i, "Bulevardul ");
+  return { street: [street, no].filter(Boolean).join(" "), city, county };
+}
+
+/**
+ * The office's point: the coordinates in Setări → Date firmă when filled; else the correspondence address (then the
+ * registered office) placed on the map once — the street, else the centre of the locality. A failed attempt is not
+ * retried for 6 hours (so a page does not wait on the maps each time).
+ */
+export async function officePoint(db: D1Database): Promise<{ point: Point; address: string; approx?: boolean } | null> {
   const firm = await getFirm(db);
-  const address = (firm.mail || firm.address || "").trim();
-  if (!address) return null;
+  const manual = parseGeo(firm.geo || null);
+  if (manual) return { point: manual, address: "coordonatele din Setări" };
+  const addresses = [...new Set([firm.mail, firm.address].map((x) => (x || "").trim()).filter(Boolean))];
+  if (!addresses.length) return null;
+  const sig = addresses.join(" | ");
   const row = await db.prepare("SELECT value FROM settings WHERE key = 'office_geo'").first<{ value: string }>().catch(() => null);
   try {
-    const kept = row ? (JSON.parse(row.value) as { address: string; lat: number; lng: number }) : null;
-    if (kept && kept.address === address) return { point: [kept.lat, kept.lng], address };
+    const kept = row ? (JSON.parse(row.value) as { address: string; lat?: number; lng?: number; source?: string; failed_at?: string }) : null;
+    if (kept && kept.address === sig) {
+      if (kept.lat != null && kept.lng != null) return { point: [kept.lat, kept.lng], address: sig, approx: kept.source === "localitate" };
+      if (kept.failed_at && Date.now() - Date.parse(kept.failed_at) < 6 * 3600e3) return null;
+    }
   } catch { /* placed again */ }
-  const hit = await geocodeAddress({ address });
-  if (!hit) return null;
+  let hit: Awaited<ReturnType<typeof geocodeAddress>> = null;
+  for (const a of addresses) {
+    const { street, city, county } = splitAddress(a);
+    hit = await geocodeAddress({ address: street || a, city, county }).catch(() => null);
+    if (hit) break;
+  }
+  const value = hit ? { address: sig, lat: hit.lat, lng: hit.lng, source: hit.source, note: hit.note } : { address: sig, failed_at: new Date().toISOString() };
   await db.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('office_geo', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at")
-    .bind(JSON.stringify({ address, lat: hit.lat, lng: hit.lng, note: hit.note }), now()).run().catch(() => null);
-  return { point: [hit.lat, hit.lng], address };
+    .bind(JSON.stringify(value), now()).run().catch(() => null);
+  if (!hit) console.error("office geocode failed", sig);
+  return hit ? { point: [hit.lat, hit.lng], address: sig, approx: hit.source === "localitate" } : null;
 }
 
 export type Distance = { km: number; road: boolean };

@@ -14,6 +14,8 @@ export const FIRM = {
   email: "office@valuefy.ro",
   anevar: "0754",
   court: "București",
+  /** the office on the map, "lat, lng" (when empty: found from the correspondence address) */
+  geo: "",
 };
 
 export const PURPOSE_BOXES: [key: string, label: string, match: RegExp][] = [

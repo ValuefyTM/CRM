@@ -9,7 +9,7 @@ import { LinesTable, lei2 } from "../LinesTable";
 import { NotesEdit, StatementActions } from "../StatementActions";
 import { AddLine } from "../LineActions";
 import { ExportXlsx } from "../ExportXlsx";
-import { inspectionDistances } from "@/lib/distance";
+import { inspectionDistances, officePoint } from "@/lib/distance";
 
 export const metadata: Metadata = { title: "Borderou | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -39,6 +39,9 @@ export default async function StatementPage({ params, searchParams }: { params: 
   const km = inspIds.length ? await inspectionDistances(db, inspIds).catch(() => ({} as Awaited<ReturnType<typeof inspectionDistances>>)) : {};
   const hasKm = Object.keys(km).length > 0;
   const byKm = hasKm && ordine === "distanta";
+  // why no distance shows: the office not on the map, or the inspections without a place
+  const office = inspIds.length ? await officePoint(db).catch(() => null) : null;
+  const kmWhy = !inspIds.length ? null : !office ? "office" : !hasKm ? "places" : Object.keys(km).length < inspIds.length ? "some" : office.approx ? "approx" : null;
   const sortHref = (o: string | null) => `${base}/borderouri/${id}?${[evaluator ? `evaluator=${encodeURIComponent(evaluator)}` : "", o ? `ordine=${o}` : ""].filter(Boolean).join("&")}`.replace(/\?$/, "");
   const [st, cls] = STATUS_LABEL[s.status];
   const back = `${base}/borderouri`;
@@ -78,6 +81,14 @@ export default async function StatementPage({ params, searchParams }: { params: 
             {canEdit && s.status !== "issued" && <AddLine statement={s.id} />}
           </span>
         </div>
+        {kmWhy && (
+          <p className="hint pad" role="note">
+            {kmWhy === "office" && <>Distanțele de la sediu nu se pot calcula: adresa de corespondență nu a fost găsită pe hartă. Completează <b>Coordonate sediu</b> în <a className="link" href={`${base}/setari`}>Setări → Date firmă</a>.</>}
+            {kmWhy === "places" && <>Distanțele nu se pot calcula: inspecțiile din borderou nu au locație (nici GPS din fișa de inspecție, nici pinul proprietății).</>}
+            {kmWhy === "some" && <>{inspIds.length - Object.keys(km).length} din {inspIds.length} inspecții nu au locație, deci nici distanță.</>}
+            {kmWhy === "approx" && <>Sediul e pus aproximativ, în centrul localității. Pentru distanțe exacte completează <b>Coordonate sediu</b> în <a className="link" href={`${base}/setari`}>Setări → Date firmă</a>.</>}
+          </p>
+        )}
         <LinesTable lines={lines} base={base} statement={s.id} canEdit={canEdit && s.status !== "issued"} adjust={s.kind === "payout"} accept={mine} locked={s.status === "issued"} banks={banks} km={km} byKm={byKm} />
       </section>
       <div className="dGrid2">
