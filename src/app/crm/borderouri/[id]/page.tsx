@@ -9,15 +9,16 @@ import { LinesTable, lei2 } from "../LinesTable";
 import { NotesEdit, StatementActions } from "../StatementActions";
 import { AddLine } from "../LineActions";
 import { ExportXlsx } from "../ExportXlsx";
+import { inspectionDistances } from "@/lib/distance";
 
 export const metadata: Metadata = { title: "Borderou | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
 
 /** One statement: its lines (live while open, frozen after validation), the adjustments with their reasons, the history. */
-export default async function StatementPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ evaluator?: string }> }) {
+export default async function StatementPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ evaluator?: string; ordine?: string }> }) {
   const { db, user, base } = await staffPage("statements");
   const { id } = await params;
-  const { evaluator } = await searchParams;
+  const { evaluator, ordine } = await searchParams;
   const s = await getStatement(db, id);
   if (!s) notFound();
   const all = can(user, "statements.all");
@@ -33,6 +34,12 @@ export default async function StatementPage({ params, searchParams }: { params: 
   // the lines by designated user (bank / institution)
   const banks = await recipientsOf(db, [...new Set(lines.map((l) => l.report_id).filter((x): x is string => !!x))]);
   if (self && !lines.length) redirect(`${base}/borderouri`);
+  // the inspection lines (only the inspection billed): how far from the office, and the order by it
+  const inspIds = [...new Set(lines.filter((l) => l.source === "inspector" && l.inspection_id).map((l) => l.inspection_id!))];
+  const km = inspIds.length ? await inspectionDistances(db, inspIds).catch(() => ({} as Record<string, number>)) : {};
+  const hasKm = Object.keys(km).length > 0;
+  const byKm = hasKm && ordine === "distanta";
+  const sortHref = (o: string | null) => `${base}/borderouri/${id}?${[evaluator ? `evaluator=${encodeURIComponent(evaluator)}` : "", o ? `ordine=${o}` : ""].filter(Boolean).join("&")}`.replace(/\?$/, "");
   const [st, cls] = STATUS_LABEL[s.status];
   const back = `${base}/borderouri`;
   const total = who || s.status === "open" ? totalOf(lines) : s.total ?? totalOf(lines);
@@ -58,8 +65,20 @@ export default async function StatementPage({ params, searchParams }: { params: 
       {s.status === "open" && !all && !self && <div className="note">Borderoul e în curs: se actualizează pe măsură ce lucrările se predau. La final de lună îl validează și îl emite firma; orice ajustare apare aici, cu motivul.</div>}
       {mine && lines.some((l) => l.changed_at && !l.accepted_at) && <div className="note"><b>Ai ajustări de confirmat.</b> Uită-te în coloana „Ajustare · comentariu” și bifează „Accept ajustarea” la fiecare.</div>}
       <section className="card flush">
-        <div className="cardHead"><h2>Linii</h2>{canEdit && s.status !== "issued" && <AddLine statement={s.id} />}</div>
-        <LinesTable lines={lines} base={base} statement={s.id} canEdit={canEdit && s.status !== "issued"} adjust={s.kind === "payout"} accept={mine} locked={s.status === "issued"} banks={banks} />
+        <div className="cardHead"><h2>Linii</h2>
+          <span className="actions">
+            {hasKm && (
+              <span className="kmSort" role="group" aria-label="Ordinea liniilor">
+                <span className="muted">Ordine:</span>
+                <a href={sortHref(null)} aria-current={!byKm ? "true" : undefined}>implicită</a>
+                <a href={sortHref("distanta")} aria-current={byKm ? "true" : undefined}>după distanță ↓</a>
+                <span className="kmLegend"><span className="kmTag near">&lt; 5 km</span><span className="kmTag mid">5–10 km</span><span className="kmTag far">10+ km</span></span>
+              </span>
+            )}
+            {canEdit && s.status !== "issued" && <AddLine statement={s.id} />}
+          </span>
+        </div>
+        <LinesTable lines={lines} base={base} statement={s.id} canEdit={canEdit && s.status !== "issued"} adjust={s.kind === "payout"} accept={mine} locked={s.status === "issued"} banks={banks} km={km} byKm={byKm} />
       </section>
       <div className="dGrid2">
           <section className="card">

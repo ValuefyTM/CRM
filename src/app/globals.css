@@ -4049,3 +4049,13 @@ span.rdPick { display: inline-block; }
 /* Acte solicitate colaboratorului (comandă din portal) */
 .docList li.docAsked { background: var(--acc-soft); border-radius: 10px; }
 .docList li.docAsked .docDot.miss { background: var(--acc); color: var(--ink); }
+
+/* Borderou: distanța inspecției de la sediu (verde < 5 km, galben 5–10 km, portocaliu 10+ km) */
+.kmTag { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; vertical-align: 1px; }
+.kmTag.near { background: #e7f7ef; color: #157f55; border: 1px solid #bfe6d2; }
+.kmTag.mid { background: #fff6cc; color: #7a5a00; border: 1px solid #f0dc8a; }
+.kmTag.far { background: #ffe6d1; color: #a34a00; border: 1px solid #f7c39a; }
+.kmSort { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12.5px; }
+.kmSort a { font-weight: 600; color: var(--muted-2); padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); }
+.kmSort a[aria-current] { color: var(--ink); background: var(--acc-soft); border-color: var(--acc-line); }
+.kmLegend { display: inline-flex; gap: 4px; }
