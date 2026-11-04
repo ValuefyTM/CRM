@@ -4,7 +4,7 @@
 import { can, type WithPerms } from "./perms";
 import { orderCode } from "./order-labels";
 import { alertHits, describe } from "./alerts";
-import { openTasks, REMIND_HOURS } from "./mail-rules";
+import { lastReminder, openTasks } from "./mail-rules";
 
 export type Notice = { id: string; at: string; kind: "message" | "team" | "review" | "verified" | "back" | "inspection" | "order" | "collect" | "alert"; title: string; sub: string; href: string;
   /** also sent by email (a configurable alert with the email tick) */
@@ -20,15 +20,15 @@ export async function notificationsFor(db: D1Database, u: WithPerms & { id: stri
   const rep = (id: string) => `${base}/rapoarte/${id}`;
 
   // Tasks from the emails received (Emailuri primite), for the people their rule names: at arrival, then a reminder
-  // every 2 hours while nobody has processed them (bell, push, email).
+  // every 2 working hours (8:00–18:00) while nobody has processed them (bell, push, email).
   const tasks = await openTasks(db, u).catch(() => []);
   const taskItems: Notice[] = tasks.flatMap((t) => {
-    const at0 = Date.parse(t.created_at), k = Math.floor((Date.now() - at0) / (REMIND_HOURS * 3600e3));
+    const due = lastReminder(t.created_at);
     const href = `${base}/emailuri/task/${t.id}`;
     const first: Notice = { id: `t${t.id}`, at: t.created_at, kind: "order", title: t.title, sub: t.kind === "bank_order" ? "Task urgent de procesare · din emailul băncii" : "Task din email", href, email: true };
-    if (k < 1) return [first];
-    const h = k * REMIND_HOURS;
-    return [first, { id: `t${t.id}r${k}`, at: new Date(at0 + h * 3600e3).toISOString(), kind: "alert", title: `Reamintire: ${t.title}`, sub: `Neprocesat de ${h} ${h === 1 ? "oră" : "ore"}${t.opened_name ? ` · deschis de ${t.opened_name}` : ""}`, href, email: true }];
+    if (!due) return [first];
+    const h = Math.round((due.at - Date.parse(t.created_at)) / 3600e3);
+    return [first, { id: `t${t.id}r${due.k}`, at: new Date(due.at).toISOString(), kind: "alert", title: `Reamintire: ${t.title}`, sub: `Neprocesat de ${h} ${h === 1 ? "oră" : "ore"}${t.opened_name ? ` · deschis de ${t.opened_name}` : ""}`, href, email: true }];
   });
 
   const [msgs, log, insp, orders, rules, resent] = await Promise.all([

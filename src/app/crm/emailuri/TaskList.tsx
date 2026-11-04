@@ -1,7 +1,7 @@
 // The open tasks from the emails received (server component): the bank's logo, the request, how long it has waited
-// (red after 2 hours), who opened it; a click opens it (a bank order: "Comandă nouă", filled in).
+// (red after 2 working hours), who opened it; a click opens it (a bank order: "Comandă nouă", filled in).
 import { fileSrc } from "@/lib/files";
-import { REMIND_HOURS, type OpenTask } from "@/lib/mail-rules";
+import { lastReminder, type OpenTask } from "@/lib/mail-rules";
 
 const age = (iso: string) => {
   const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
@@ -14,7 +14,7 @@ export function TaskList({ tasks, base, title }: { tasks: OpenTask[]; base: stri
       {title && <div className="cardHead"><h2>{title}</h2><span className="pill pillErr"><i />{tasks.length} {tasks.length === 1 ? "urgent" : "urgente"}</span></div>}
       <ul className="tkList">
         {tasks.map((t) => {
-          const late = Date.now() - Date.parse(t.created_at) >= REMIND_HOURS * 3600e3;
+          const late = !!lastReminder(t.created_at);
           const logo = fileSrc(t.bank_logo);
           return (
             <li key={t.id} className={late ? "late" : ""}>
