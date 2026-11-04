@@ -112,9 +112,9 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
   const quick: [string, string, React.ReactNode, string?][] = [
     ...(can(user, "orders") ? [
       ["Lucrare nouă", `${base}/comenzi/noua`, I.plus, "bancă sau colaborare"],
-      ["Emailuri primite", `${base}/emailuri`, I.mail, "task-uri și reguli"],
       ["Comenzi", `${base}/comenzi`, I.inbox, d.newOrders.n ? `${d.newOrders.n} luna aceasta` : undefined],
     ] as [string, string, React.ReactNode, string?][] : []),
+    ...(user.role === "owner" ? [["Emailuri primite", `${base}/setari/emailuri`, I.mail, "reguli și task-uri"] as [string, string, React.ReactNode, string]] : []),
     ["Rapoarte în lucru", `${base}/rapoarte?status=deschise`, I.doc, `${d.openCount} în firmă`],
     ...(can(user, "clients") ? [["Client nou", `${base}/clienti/nou`, I.user] as [string, string, React.ReactNode]] : []),
     ...(can(user, "users") ? [["Echipa", `${base}/utilizatori`, I.team] as [string, string, React.ReactNode]] : []),
@@ -123,7 +123,6 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
   return (
     <CrmShell user={user} base={base} active="home" title={dateTitle} dateTitle>
       {denied && <div className="note">Nu ai acces la pagina aceea. Ce vezi în CRM stabilește administratorul, în Setări → Permisiuni.</div>}
-      <BankTasksCard user={user} base={base} />
       <section className="dbHello">
         <div className="dbHelloText">
           {/* The firm's dashboard: the whole company, not the user's own work. */}
@@ -145,6 +144,7 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
           ))}
         </nav>
       </section>
+      <BankTasksCard user={user} base={base} />
       {/* "Emite factura" without the Facturare module: the reports to invoice, right here. */}
       {can(user, "billing:issue") && !can(user, "billing") && <BillingTasksCard user={user} base={base} />}
 

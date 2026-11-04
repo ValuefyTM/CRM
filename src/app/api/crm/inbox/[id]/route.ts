@@ -4,10 +4,11 @@ import { bucket } from "@/lib/orders";
 import { runRules } from "@/lib/mail-rules";
 import { pushLater } from "@/lib/push";
 
-/** An attachment of an email received (team members who see Emailuri primite). */
+/** An attachment of an email received (the owner: Setări → Emailuri primite). */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi("orders");
+  const a = await staffApi();
   if ("res" in a) return a.res;
+  if (a.user.role !== "owner") return err("Emailurile primite le vede doar proprietarul.", 403);
   const { id } = await params;
   const file = new URL(req.url).searchParams.get("file") ?? "";
   const f = await a.db.prepare("SELECT filename, content_type, r2_key FROM mail_attachments WHERE id = ? AND email_id = ?").bind(file, id).first<{ filename: string; content_type: string | null; r2_key: string }>();
@@ -19,8 +20,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
 /** The rules run again on an email (after a rule was added or changed), or the email ignored. */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const a = await staffApi("orders", true);
+  const a = await staffApi("any", true);
   if ("res" in a) return a.res;
+  if (a.user.role !== "owner") return err("Emailurile primite le vede doar proprietarul.", 403);
   const { id } = await params;
   const e = await a.db.prepare("SELECT id, received_at, mail_from, mail_to, subject, body, status FROM bank_emails WHERE id = ?").bind(id)
     .first<{ id: string; received_at: string; mail_from: string | null; mail_to: string | null; subject: string | null; body: string | null; status: string }>();

@@ -69,7 +69,7 @@ export function EmailActions({ email, body, subject, from, base, admin }: { emai
             {draft.client_after && <li>Clientul: cuvintele de după „<b>{draft.client_after}</b>”</li>}
           </ul>
           {!draft.body_has && <p className="hint" style={{ margin: 0 }}>Alege și fraza care recunoaște emailul, altfel regula se aplică după expeditor.</p>}
-          <a className="btn btnGold btnSm" href={`${base}/emailuri/reguli?${q}`}>Continuă la regulă →</a>
+          <a className="btn btnGold btnSm" href={`${base}/setari/emailuri/reguli?${q}`}>Continuă la regulă →</a>
         </div>
       )}
     </>

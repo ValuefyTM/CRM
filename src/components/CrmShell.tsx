@@ -1,5 +1,4 @@
 import { getDb } from "@/lib/db";
-import { openTasks } from "@/lib/mail-rules";
 import { initials } from "@/lib/guard";
 import { isAdmin, roleLabel, type User } from "@/lib/users";
 import { can, type Perm } from "@/lib/perms";
@@ -63,8 +62,6 @@ export async function CrmShell(props: { user: User; base: string; active: string
   // Inspecții: the ones still to do (to schedule or scheduled), as the page shows them to this user.
   // Oferte: the ones still open (to send or waiting for an answer).
   const quotesN = db && may("orders") ? await openQuotes(db) : 0;
-  // Emailuri primite: the processing tasks still open (all, for those with Comenzi; else the ones their rule names)
-  const tasksN = db ? await openTasks(db, u, may("orders")).then((t) => t.length).catch(() => 0) : 0;
   const inspN = db && may("inspections") ? await activeInspections(db, scopeOf(u, "inspections") as "all" | "lead" | "own", u.id) : 0;
   return (
     <Shell
@@ -82,7 +79,6 @@ export async function CrmShell(props: { user: User; base: string; active: string
           may("contracts") && { key: "contracts", label: "Contracte", href: `${b}/contracte` },
           may("orders") && { key: "quotes", label: "Oferte", href: `${b}/oferte`, badge: quotesN },
           may("orders") && { key: "orders", label: "Comenzi", href: `${b}/comenzi`, badge: unread, hot: true },
-          may("orders") && { key: "inbox", label: "Emailuri primite", href: `${b}/emailuri`, badge: tasksN, hot: true },
           may("tenders") && { key: "tenders", label: "Licitații SEAP", href: `${b}/licitatii` },
           may("listings") && { key: "listings", label: "Anunțuri imobiliare", href: `${b}/anunturi`, badge: inquiries, hot: true },
         ]),

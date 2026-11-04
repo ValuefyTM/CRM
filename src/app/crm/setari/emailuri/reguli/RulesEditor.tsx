@@ -37,7 +37,7 @@ export function RulesEditor(p: { rules: RuleForm[]; draft: RuleForm | null; open
     const d = await post({ id: edit.id, rule: edit });
     setBusy(false);
     if (d.error) return setMsg(d.error);
-    location.href = p.fromEmail ? `${p.base}/emailuri/${p.fromEmail.id}` : `${p.base}/emailuri/reguli`;
+    location.href = p.fromEmail ? `${p.base}/setari/emailuri/${p.fromEmail.id}` : `${p.base}/setari/emailuri/reguli`;
   };
   const run = async () => {
     if (!edit) return;
@@ -51,7 +51,7 @@ export function RulesEditor(p: { rules: RuleForm[]; draft: RuleForm | null; open
   const remove = async (id: string) => {
     if (!confirm("Ștergi regula? Emailurile și task-urile rămân.")) return;
     await fetch(`/api/crm/mail-rules?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => null);
-    location.href = `${p.base}/emailuri/reguli`;
+    location.href = `${p.base}/setari/emailuri/reguli`;
   };
   const what = (r: RuleForm) => [r.from_has && `expeditor: ${r.from_has}`, r.subject_has && `subiect: ${r.subject_has}`, r.body_has && `text: ${r.body_has}`].filter(Boolean).join(" · ");
 
@@ -136,7 +136,7 @@ export function RulesEditor(p: { rules: RuleForm[]; draft: RuleForm | null; open
               <b>Se potrivește cu {test.hits.length}{test.hits.length === 30 ? "+" : ""} din ultimele {test.total} emailuri</b>
               {test.hits.length > 0 && (
                 <table className="table"><thead><tr><th>Primit</th><th>Subiect</th><th>Nr. comandă</th><th>Client</th></tr></thead>
-                  <tbody>{test.hits.map((h) => <tr key={h.id}><td className="muted">{day(h.at)}</td><td><a className="link" href={`${p.base}/emailuri/${h.id}`} target="_blank" rel="noreferrer">{h.subject || "(fără subiect)"}</a></td>
+                  <tbody>{test.hits.map((h) => <tr key={h.id}><td className="muted">{day(h.at)}</td><td><a className="link" href={`${p.base}/setari/emailuri/${h.id}`} target="_blank" rel="noreferrer">{h.subject || "(fără subiect)"}</a></td>
                     <td className={`mono${h.ref ? "" : " neg"}`}>{h.ref ?? "negăsit"}</td><td>{h.client ?? <span className="muted">—</span>}</td></tr>)}</tbody></table>
               )}
             </div>

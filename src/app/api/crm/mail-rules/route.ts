@@ -1,6 +1,5 @@
 import { audit } from "@/lib/auth";
 import { err, json, staffApi } from "@/lib/api";
-import { isAdmin } from "@/lib/users";
 import { extract, loadRules, matches, type MailRule } from "@/lib/mail-rules";
 
 const s = (v: unknown, n: number) => (typeof v === "string" ? v.trim().replace(/\s+/g, " ").slice(0, n) || null : null);
@@ -24,11 +23,11 @@ function ruleOf(b: Record<string, unknown>): { ok: true; rule: Omit<MailRule, "i
   return { ok: true, rule };
 }
 
-/** Save a rule (new or changed), test one on the emails received, or move one up / down. Administrators only. */
+/** Save a rule (new or changed), test one on the emails received, or move one up / down. The owner only. */
 export async function POST(req: Request) {
   const a = await staffApi("any", true);
   if ("res" in a) return a.res;
-  if (!isAdmin(a.user)) return err("Regulile le modifică proprietarul sau un administrator.", 403);
+  if (a.user.role !== "owner") return err("Regulile le modifică doar proprietarul.", 403);
   const b = await json(req);
   const actor = `user:${a.user.id}`;
 
@@ -82,7 +81,7 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   const a = await staffApi("any", true);
   if ("res" in a) return a.res;
-  if (!isAdmin(a.user)) return err("Regulile le modifică proprietarul sau un administrator.", 403);
+  if (a.user.role !== "owner") return err("Regulile le modifică doar proprietarul.", 403);
   const id = new URL(req.url).searchParams.get("id") ?? "";
   await a.db.prepare("UPDATE bank_emails SET rule_id = NULL WHERE rule_id = ?").bind(id).run();
   await a.db.prepare("UPDATE mail_tasks SET rule_id = NULL WHERE rule_id = ?").bind(id).run();

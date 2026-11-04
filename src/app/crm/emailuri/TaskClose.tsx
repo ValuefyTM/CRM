@@ -13,7 +13,7 @@ export function TaskClose({ task, done = false, base }: { task: string; done?: b
     const r = await fetch(`/api/crm/mail-tasks/${encodeURIComponent(task)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: done ? "done" : "dismiss", note }) }).catch(() => null);
     setBusy(false);
     if (!r?.ok) return alert(((await r?.json().catch(() => ({}))) as { error?: string })?.error ?? "Nu s-a putut închide.");
-    location.href = `${base}/emailuri`;
+    location.href = base || "/";
   };
   return <button type="button" className={done ? "btn btnGold btnSm" : "btn btnGhost btnSm"} disabled={busy} onClick={close}>{busy ? "…" : done ? "Marchează rezolvat" : "Închide fără comandă"}</button>;
 }

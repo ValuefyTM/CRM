@@ -18,7 +18,8 @@ export function BankMailPaste({ base }: { base: string }) {
     if (!r?.ok || !d?.email) return setMsg(d?.error || "Nu am putut adăuga emailul.");
     // a processing task: straight to "Comandă nouă", filled in; the same request: its order or its task; else the email
     if (d.status === "duplicate") alert(d.order ? "Comanda există deja. Te duc la ea." : "Există deja un task pentru această cerere.");
-    location.href = d.order ? `${base}/comenzi/${d.order}` : d.task ? `${base}/emailuri/task/${d.task}` : `${base}/emailuri/${d.email}`;
+    if (!d.order && !d.task) return setMsg(d.status === "ignored" ? "Emailul a fost păstrat; regula lui spune să fie ignorat." : "Nu am recunoscut emailul: nicio regulă nu se potrivește (regulile le setează proprietarul, în Setări → Emailuri primite).");
+    location.href = d.order ? `${base}/comenzi/${d.order}` : `${base}/emailuri/task/${d.task}`;
   };
   return (
     <>

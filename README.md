@@ -41,8 +41,8 @@ CRM migrations are numbered `1xxx` (`migrations/`) so they never clash with the 
 
 ## Emailuri primite (bank orders by email, rules)
 The worker entry is `worker.ts`: the Next.js app plus an **email handler**. Every email sent or redirected to the intake
-address is kept (with its attachments, in R2) in **Emailuri primite** (`/crm/emailuri`), from any sender. The **rules**
-(Emailuri primite → Reguli, owner and administrators) decide, in order, what an email becomes: a **processing task for
+address is kept (with its attachments, in R2) in **Emailuri primite** (Setări → Emailuri primite, `/crm/setari/emailuri`, the owner only), from any sender. The **rules**
+(Setări → Emailuri primite → Reguli, the owner) decide, in order, what an email becomes: a **processing task for
 a bank order** (opens „Comandă nouă” on the bank's framework contract with the order number and the client filled in;
 closed when the order is saved), a plain task, or nothing (ignored). A rule is a pattern (sender / subject / text
 contains) and what it reads (the code after a text, the client's name after a text). Two rules come ready: BRD

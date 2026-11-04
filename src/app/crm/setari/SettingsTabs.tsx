@@ -10,6 +10,7 @@ const tabsOf = (user: WithPerms): [string, string, string, boolean][] => [
   ["facturare", "Facturare · Oblio", "/facturare", can(user, "billing.E")],
   ["alerte", "Alerte", "/alerte", can(user, "settings")],
   ["claude", "Conexiuni Claude", "/claude", can(user, "settings")],
+  ["emailuri", "Emailuri primite", "/emailuri", user.role === "owner"],
   ["import", "Import istoric", "/import", user.role === "owner"],
 ];
 
@@ -20,7 +21,7 @@ export function settingsHome(base: string, user: WithPerms) {
 }
 
 /** Tabs of Setări (one item in the menu): each one only for those who may open it. */
-export function SettingsTabs({ base, active, user }: { base: string; active: "firma" | "contract" | "facturare" | "alerte" | "claude" | "fise" | "machete" | "permisiuni" | "import"; user: WithPerms }) {
+export function SettingsTabs({ base, active, user }: { base: string; active: "firma" | "contract" | "facturare" | "alerte" | "claude" | "fise" | "machete" | "permisiuni" | "import" | "emailuri"; user: WithPerms }) {
   const tabs = tabsOf(user);
   return (
     <nav className="tabs" aria-label="Setări">

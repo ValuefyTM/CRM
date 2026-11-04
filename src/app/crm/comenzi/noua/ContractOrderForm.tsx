@@ -239,7 +239,7 @@ export function ContractOrderForm(p: {
   return (
     <form onSubmit={submit} noValidate className="nwForm">
       {p.fromTask && (
-        <div className="note mtFrom" role="note">
+        <div className="note tkFrom" role="note">
           <b>{p.fromTask.title}</b>
           <span>Din emailul primit {p.fromTask.received}. Numărul comenzii și clientul sunt completate din email; completează restul. Task-ul se închide la înregistrarea comenzii.</span>
           <span className="actions">{p.fromTask.emailHref && <a className="btn btnGhost btnSm" href={p.fromTask.emailHref}>Vezi emailul</a>}<TaskClose task={p.fromTask.id} base={p.base} /></span>

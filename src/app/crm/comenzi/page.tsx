@@ -90,7 +90,7 @@ export default async function CrmOrdersPage({ searchParams }: { searchParams: Pr
           <>
             {!banksOnly && (
               <div className="actions" style={{ justifyContent: "space-between" }}>
-                <p className="hint" style={{ margin: 0 }}>Emailurile BCR și BRD ajung în <a className="link" href={`${base}/emailuri`}>Emailuri primite</a>, unde regulile deschid task-ul de procesare.</p>
+                <p className="hint" style={{ margin: 0 }}>Emailurile BCR și BRD deschid automat un task de procesare (pe tabloul de bord); îl poți și lipi aici.</p>
                 <BankMailPaste base={base} />
               </div>
             )}

@@ -10,18 +10,18 @@ const age = (iso: string) => {
 
 export function TaskList({ tasks, base, title }: { tasks: OpenTask[]; base: string; title?: string }) {
   return (
-    <section className="card mtCard">
+    <section className="card tkCard">
       {title && <div className="cardHead"><h2>{title}</h2><span className="pill pillErr"><i />{tasks.length} {tasks.length === 1 ? "urgent" : "urgente"}</span></div>}
-      <ul className="mtList">
+      <ul className="tkList">
         {tasks.map((t) => {
           const late = Date.now() - Date.parse(t.created_at) >= REMIND_HOURS * 3600e3;
           const logo = fileSrc(t.bank_logo);
           return (
             <li key={t.id} className={late ? "late" : ""}>
               <a href={`${base}/emailuri/task/${t.id}`}>
-                <span className="mtLogo">{logo ? <img src={logo} alt="" /> : <b>{(t.bank_code || t.bank_name || "✉").slice(0, 3)}</b>}</span>
-                <span className="mtTxt"><b>{t.title}</b><small>{t.kind === "bank_order" ? "Procesare comandă" : "Task din email"} · primit {age(t.created_at)}{t.opened_name ? ` · deschis de ${t.opened_name}` : ""}</small></span>
-                <span className="mtGo">{t.kind === "bank_order" ? "Procesează →" : "Deschide →"}</span>
+                <span className="tkLogo">{logo ? <img src={logo} alt="" /> : <b>{(t.bank_code || t.bank_name || "✉").slice(0, 3)}</b>}</span>
+                <span className="tkTxt"><b>{t.title}</b><small>{t.kind === "bank_order" ? "Procesare comandă" : "Task din email"} · primit {age(t.created_at)}{t.opened_name ? ` · deschis de ${t.opened_name}` : ""}</small></span>
+                <span className="tkGo">{t.kind === "bank_order" ? "Procesează →" : "Deschide →"}</span>
               </a>
             </li>
           );

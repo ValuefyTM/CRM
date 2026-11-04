@@ -23,7 +23,7 @@ export default async function MailTaskPage({ params }: { params: Promise<{ id: s
   if (t.status === "open" && !t.opened_at) await db.prepare("UPDATE mail_tasks SET opened_at = ?, opened_by = ? WHERE id = ? AND opened_at IS NULL").bind(new Date().toISOString(), user.id, id).run();
   if (t.status === "open" && t.kind === "bank_order" && can(user, "orders.A")) redirect(`${base}/comenzi/noua?task=${encodeURIComponent(id)}`);
   return (
-    <CrmShell back={{ href: `${base}/emailuri`, label: "Emailuri primite" }} user={user} base={base} active="inbox" title={t.title} subtitle={`Primit ${fmtDate(t.created_at, true)}`}>
+    <CrmShell back={{ href: base || "/", label: "Tablou de bord" }} user={user} base={base} active="home" title={t.title} subtitle={`Primit ${fmtDate(t.created_at, true)}`}>
       <section className="card">
         {t.status === "open"
           ? <div className="actions" style={{ justifyContent: "space-between" }}><span className="pill pillErr"><i />Deschis</span><TaskClose task={t.id} done base={base} /></div>
@@ -33,7 +33,7 @@ export default async function MailTaskPage({ params }: { params: Promise<{ id: s
         <dl className="dl">
           {t.ref && <div><dt>Nr. comandă</dt><dd className="mono">{t.ref}</dd></div>}
           {t.client_name && <div><dt>Client</dt><dd>{t.client_name}</dd></div>}
-          <div><dt>Email</dt><dd>{t.email_id ? <a className="link" href={`${base}/emailuri/${t.email_id}`}>{t.subject || "(fără subiect)"}</a> : "—"}{t.mail_from ? ` · ${t.mail_from}` : ""}</dd></div>
+          <div><dt>Email</dt><dd>{t.email_id && user.role === "owner" ? <a className="link" href={`${base}/setari/emailuri/${t.email_id}`}>{t.subject || "(fără subiect)"}</a> : t.subject || "—"}{t.mail_from ? ` · ${t.mail_from}` : ""}</dd></div>
         </dl>
         {t.body && <pre className="ibBody">{t.body}</pre>}
       </section>

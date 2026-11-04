@@ -4,8 +4,8 @@ import { staffPage } from "@/lib/guard";
 import { CrmShell } from "@/components/CrmShell";
 import { BASE_ROLES, loadRules } from "@/lib/mail-rules";
 import { getConfig } from "@/lib/perms-db";
-import { isAdmin } from "@/lib/users";
 import { niceName } from "@/lib/labels";
+import { SettingsTabs } from "../../SettingsTabs";
 import { RulesEditor, type RuleForm } from "./RulesEditor";
 
 export const metadata: Metadata = { title: "Reguli emailuri | CRM VALUEFY" };
@@ -13,8 +13,8 @@ export const dynamic = "force-dynamic";
 
 /** The rules of Emailuri primite: pattern → action, in order (the first that matches wins). Administrators only. */
 export default async function MailRulesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const { db, user, base } = await staffPage("orders");
-  if (!isAdmin(user)) redirect(`${base}/emailuri`);
+  const { db, user, base } = await staffPage();
+  if (user.role !== "owner") redirect(base || "/");
   const sp = await searchParams;
   const [rules, cfg, banks, people] = await Promise.all([
     loadRules(db, true),
@@ -35,8 +35,9 @@ export default async function MailRulesPage({ searchParams }: { searchParams: Pr
     notify_roles: (r.notify_roles ?? "").split(",").filter(Boolean), notify_users: (r.notify_users ?? "").split(",").filter(Boolean),
   });
   return (
-    <CrmShell back={{ href: `${base}/emailuri`, label: "Emailuri primite" }} user={user} base={base} active="inbox" title="Reguli pentru emailuri"
+    <CrmShell back={{ href: `${base}/setari/emailuri`, label: "Emailuri primite" }} user={user} base={base} active="settings" title="Reguli pentru emailuri"
       subtitle="Ce devine fiecare email primit: regulile se încearcă în ordine, prima care se potrivește decide">
+      <SettingsTabs base={base} active="emailuri" user={user} />
       <RulesEditor rules={rules.map(form)} draft={draft} openId={sp.regula ?? null} fromEmail={fromEmail ? { id: fromEmail.id, subject: fromEmail.subject ?? "", from: fromEmail.mail_from ?? "" } : null}
         banks={banks.map((b) => ({ id: b.id, name: b.code ? `${b.code} · ${niceName(b.name) || b.name}` : niceName(b.name) || b.name }))} roles={roles} people={people} base={base} />
     </CrmShell>

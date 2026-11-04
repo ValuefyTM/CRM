@@ -4072,27 +4072,27 @@ span.rdPick { display: inline-block; }
 .ibPick { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; border: 1px solid var(--acc-line); background: var(--acc-soft); border-radius: 12px; position: sticky; bottom: 12px; }
 .ibDraft { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; padding: 12px 14px; border: 1px dashed var(--acc-line); border-radius: 12px; }
 .ibDraft ul { margin: 0; padding-left: 18px; font-size: 14px; }
-.mtFrom { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
-.mtFrom > span:not(.actions) { flex: 1 1 320px; }
-.mtCard { gap: 10px; }
-.mtList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.mtList a { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
-.mtList a:hover { border-color: var(--acc-line); background: var(--acc-soft); }
-.mtList li.late a { border-color: #f3b4ae; background: #fff4f3; }
-.mtLogo { width: 40px; height: 40px; flex: none; border-radius: 10px; border: 1px solid var(--line); background: #fff; display: grid; place-items: center; overflow: hidden; font-size: 11px; }
-.mtLogo img { width: 100%; height: 100%; object-fit: contain; padding: 4px; }
-.mtTxt { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-.mtTxt b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mtTxt small { color: var(--muted); font-size: 12px; }
-.mtList li.late .mtTxt small { color: var(--err); font-weight: 700; }
-.mtGo { font-weight: 700; font-size: 13px; color: var(--acc-ink); white-space: nowrap; }
-.mtBanks.hot { border-color: #f3b4ae; box-shadow: 0 0 0 3px #fde4e1, 0 12px 28px -22px rgba(17, 17, 17, 0.35); }
-.mtBankRow { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
-.mtBank { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; }
-.mtBank.hot { border-color: #f3b4ae; background: #fff4f3; }
-.mtN { display: flex; flex-direction: column; align-items: center; font-size: 22px; font-weight: 800; line-height: 1; color: var(--muted-2); }
-.mtN small { font-size: 11px; font-weight: 600; }
-.mtN.hot { color: var(--err); }
+.tkFrom { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.tkFrom > span:not(.actions) { flex: 1 1 320px; }
+.tkCard { gap: 10px; }
+.tkList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tkList a { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.tkList a:hover { border-color: var(--acc-line); background: var(--acc-soft); }
+.tkList li.late a { border-color: #f3b4ae; background: #fff4f3; }
+.tkLogo { width: 40px; height: 40px; flex: none; border-radius: 10px; border: 1px solid var(--line); background: #fff; display: grid; place-items: center; overflow: hidden; font-size: 11px; }
+.tkLogo img { width: 100%; height: 100%; object-fit: contain; padding: 4px; }
+.tkTxt { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.tkTxt b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tkTxt small { color: var(--muted); font-size: 12px; }
+.tkList li.late .tkTxt small { color: var(--err); font-weight: 700; }
+.tkGo { font-weight: 700; font-size: 13px; color: var(--acc-ink); white-space: nowrap; }
+.tkBanks.hot { border-color: #f3b4ae; box-shadow: 0 0 0 3px #fde4e1, 0 12px 28px -22px rgba(17, 17, 17, 0.35); }
+.tkBankRow { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.tkBank { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; }
+.tkBank.hot { border-color: #f3b4ae; background: #fff4f3; }
+.tkN { display: flex; flex-direction: column; align-items: center; font-size: 22px; font-weight: 800; line-height: 1; color: var(--muted-2); }
+.tkN small { font-size: 11px; font-weight: 600; }
+.tkN.hot { color: var(--err); }
 .ruGrid { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 18px; align-items: start; }
 @media (max-width: 979px) { .ruGrid { grid-template-columns: 1fr; } }
 .ruList { list-style: none; margin: 0; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }

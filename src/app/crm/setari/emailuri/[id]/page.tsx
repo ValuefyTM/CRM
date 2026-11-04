@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { CrmShell } from "@/components/CrmShell";
 import { STATUS_LABEL, inboxEmail } from "@/lib/inbox";
-import { isAdmin } from "@/lib/users";
 import { EmailActions } from "./EmailActions";
 
 export const metadata: Metadata = { title: "Email primit | CRM VALUEFY" };
@@ -13,18 +12,19 @@ const size = (n: number) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 102
 
 /** One email received: its text and attachments, the rule that took it and what it made; a rule can be made from it. */
 export default async function InboxEmailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { db, user, base } = await staffPage("orders");
+  const { db, user, base } = await staffPage();
+  if (user.role !== "owner") redirect(base || "/");
   const { id } = await params;
   const e = await inboxEmail(db, id);
   if (!e) notFound();
   const [label, cls] = STATUS_LABEL[e.status] ?? [e.status, ""];
   return (
-    <CrmShell back={{ href: `${base}/emailuri`, label: "Emailuri primite" }} user={user} base={base} active="inbox" title={e.subject || "(fără subiect)"}
+    <CrmShell back={{ href: `${base}/setari/emailuri`, label: "Emailuri primite" }} user={user} base={base} active="settings" title={e.subject || "(fără subiect)"}
       subtitle={`${e.mail_from ?? (e.via === "paste" ? `lipit în CRM${e.created_name ? ` de ${e.created_name}` : ""}` : "—")} · ${fmtDate(e.received_at, true)}`}>
       <div className="ibGrid">
         <section className="card">
           <div className="cardHead"><h2>Conținut</h2><span className="muted">{e.mail_to ? `către ${e.mail_to}` : ""}</span></div>
-          <EmailActions email={e.id} body={e.body ?? ""} subject={e.subject ?? ""} from={e.mail_from ?? ""} base={base} admin={isAdmin(user)} />
+          <EmailActions email={e.id} body={e.body ?? ""} subject={e.subject ?? ""} from={e.mail_from ?? ""} base={base} admin />
           {e.files.length > 0 && (
             <div className="ibFiles">
               <b>Atașamente</b>
@@ -36,7 +36,7 @@ export default async function InboxEmailPage({ params }: { params: Promise<{ id:
           <div className="cardHead"><h2>Ce s-a întâmplat</h2></div>
           <p><span className={`pill ${cls}`}><i />{label}</span></p>
           <dl className="dl">
-            <div><dt>Regula</dt><dd>{e.rule_name ? (isAdmin(user) ? <a className="link" href={`${base}/emailuri/reguli?regula=${e.rule_id}`}>{e.rule_name}</a> : e.rule_name) : "niciuna nu s-a potrivit"}</dd></div>
+            <div><dt>Regula</dt><dd>{e.rule_name ? <a className="link" href={`${base}/setari/emailuri/reguli?regula=${e.rule_id}`}>{e.rule_name}</a> : "niciuna nu s-a potrivit"}</dd></div>
             {e.bank_ref && <div><dt>Nr. comandă</dt><dd className="mono">{e.bank} {e.bank_ref}</dd></div>}
             {e.client_name && <div><dt>Client</dt><dd>{e.client_name}</dd></div>}
             {e.request_type && <div><dt>Tip cerere</dt><dd>{e.request_type}</dd></div>}

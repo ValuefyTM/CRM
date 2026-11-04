@@ -19,16 +19,16 @@ export async function BankTasksCard({ user, base }: { user: WithPerms & { id: st
     .all<{ id: string; name: string; code: string | null; logo: string | null; open: number }>().catch(() => ({ results: [] as never[] }));
   if (!banks.length && !tasks.length) return null;
   return (
-    <section className={`card mtBanks${tasks.length ? " hot" : ""}`} aria-label="Comenzi noi de la bănci">
+    <section className={`card tkBanks${tasks.length ? " hot" : ""}`} aria-label="Comenzi noi de la bănci">
       <div className="cardHead"><h2>Comenzi noi de la bănci</h2>{tasks.length > 0 ? <span className="pill pillErr"><i />{tasks.length} de procesat</span> : <span className="pill pillOk"><i />toate procesate</span>}</div>
-      <div className="mtBankRow">
+      <div className="tkBankRow">
         {banks.map((b) => {
           const n = tasks.filter((t) => t.bank_id === b.id).length, logo = fileSrc(b.logo);
           return (
-            <a key={b.id} className={`mtBank${n ? " hot" : ""}`} href={orders ? `${base}/comenzi?tab=banci` : undefined}>
-              <span className="mtLogo">{logo ? <img src={logo} alt="" /> : <b>{(b.code || b.name).slice(0, 3)}</b>}</span>
-              <span className="mtTxt"><b>{b.code || (niceName(b.name) || b.name).split(/\s+/)[0]}</b><small>{b.open} în curs</small></span>
-              <span className={`mtN${n ? " hot" : ""}`}>{n}<small>{n === 1 ? "nouă" : "noi"}</small></span>
+            <a key={b.id} className={`tkBank${n ? " hot" : ""}`} href={orders ? `${base}/comenzi?tab=banci` : undefined}>
+              <span className="tkLogo">{logo ? <img src={logo} alt="" /> : <b>{(b.code || b.name).slice(0, 3)}</b>}</span>
+              <span className="tkTxt"><b>{b.code || (niceName(b.name) || b.name).split(/\s+/)[0]}</b><small>{b.open} în curs</small></span>
+              <span className={`tkN${n ? " hot" : ""}`}>{n}<small>{n === 1 ? "nouă" : "noi"}</small></span>
             </a>
           );
         })}
