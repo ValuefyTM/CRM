@@ -39,9 +39,14 @@ export default async function StatementPage({ params, searchParams }: { params: 
   const km = inspIds.length ? await inspectionDistances(db, inspIds).catch(() => ({} as Awaited<ReturnType<typeof inspectionDistances>>)) : {};
   const hasKm = Object.keys(km).length > 0;
   const byKm = hasKm && ordine === "distanta";
-  // why no distance shows: the office not on the map, or the inspections without a place
-  const office = inspIds.length ? await officePoint(db).catch(() => null) : null;
-  const kmWhy = !inspIds.length ? null : !office ? "office" : !hasKm ? "places" : Object.keys(km).length < inspIds.length ? "some" : office.approx ? "approx" : null;
+  // why a distance does not show: the start not known (the office not on the map, the inspector's address not
+  // written), or the inspection without a place
+  const missing = inspIds.filter((x) => !km[x]);
+  const why = missing.length ? await db.prepare(`SELECT COALESCE(u.distance_from, 'office') AS f, u.base_lat IS NOT NULL AS has, u.id AS uid FROM inspections i LEFT JOIN users u ON u.id = i.inspector_id WHERE i.id IN (${missing.map(() => "?").join(",")})`)
+    .bind(...missing).all<{ f: string; has: number; uid: string | null }>().then((r) => r.results).catch(() => []) : [];
+  const office = why.some((w) => w.f !== "base") ? await officePoint(db).catch(() => null) : null;
+  const noBase = why.find((w) => w.f === "base" && !w.has);
+  const kmWhy = !missing.length ? null : noBase ? "base" : why.some((w) => w.f !== "base") && !office ? "office" : "places";
   const sortHref = (o: string | null) => `${base}/borderouri/${id}?${[evaluator ? `evaluator=${encodeURIComponent(evaluator)}` : "", o ? `ordine=${o}` : ""].filter(Boolean).join("&")}`.replace(/\?$/, "");
   const [st, cls] = STATUS_LABEL[s.status];
   const back = `${base}/borderouri`;
@@ -83,10 +88,9 @@ export default async function StatementPage({ params, searchParams }: { params: 
         </div>
         {kmWhy && (
           <p className="hint pad" role="note">
+            {kmWhy === "base" && <>Distanțele lipsesc: pe fișa inspectorului e aleasă „De la adresa lui”, dar adresa nu e completată. Completeaz-o în <a className="link" href={`${base}/utilizatori/${noBase?.uid}`}>fișa utilizatorului</a>, la Distanța la inspecții.</>}
             {kmWhy === "office" && <>Distanțele de la sediu nu se pot calcula: adresa de corespondență nu a fost găsită pe hartă. Completează <b>Coordonate sediu</b> în <a className="link" href={`${base}/setari`}>Setări → Date firmă</a>.</>}
-            {kmWhy === "places" && <>Distanțele nu se pot calcula: inspecțiile din borderou nu au locație (nici GPS din fișa de inspecție, nici pinul proprietății).</>}
-            {kmWhy === "some" && <>{inspIds.length - Object.keys(km).length} din {inspIds.length} inspecții nu au locație, deci nici distanță.</>}
-            {kmWhy === "approx" && <>Sediul e pus aproximativ, în centrul localității. Pentru distanțe exacte completează <b>Coordonate sediu</b> în <a className="link" href={`${base}/setari`}>Setări → Date firmă</a>.</>}
+            {kmWhy === "places" && <>{missing.length === inspIds.length ? "Inspecțiile din borderou nu au" : `${missing.length} din ${inspIds.length} inspecții nu au`} locație (nici GPS din fișa de inspecție, nici pinul proprietății), deci nici distanță.</>}
           </p>
         )}
         <LinesTable lines={lines} base={base} statement={s.id} canEdit={canEdit && s.status !== "issued"} adjust={s.kind === "payout"} accept={mine} locked={s.status === "issued"} banks={banks} km={km} byKm={byKm} />

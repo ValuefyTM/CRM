@@ -12,6 +12,7 @@ export type User = {
   id: string; kind: Kind; email: string; name: string; phone: string | null; role: string; status: "invited" | "active" | "disabled" | "deleted";
   partner_id: string | null; partner_name: string | null; partner_status: string | null;
   engagement: string | null; anevar_no: string | null; specializations: string | null; coverage: string | null; duties: string | null;
+  distance_from?: string | null; base_address?: string | null; base_lat?: number | null; base_lng?: number | null; base_note?: string | null;
   client_type: string | null; company: string | null; cui: string | null; city: string | null; notes: string | null;
   entity_id?: string | null; created_by: string | null; invited_at: string | null; activated_at: string | null; last_login_at: string | null; created_at: string; updated_at: string;
   last_seen_at?: string | null; avatar_at?: string | null;

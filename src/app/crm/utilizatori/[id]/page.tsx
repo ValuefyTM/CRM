@@ -14,6 +14,7 @@ import { photoUrl, presenceOf } from "@/lib/presence";
 import { History } from "@/components/History";
 import { UserForm } from "../UserForm";
 import { AccessPanel } from "./AccessPanel";
+import { DistancePanel } from "./DistancePanel";
 import { AccreditationsPanel } from "./AccreditationsPanel";
 
 export const metadata: Metadata = { title: "Utilizator | CRM VALUEFY" };
@@ -96,6 +97,10 @@ export default async function UserPage({ params, searchParams }: { params: Promi
               profit_share: me.role === "owner" ? numStr(shares?.profit_share) : "", pay_mode: me.role === "owner" && shares?.pay_mode === "profit" ? "profit" : "commission",
             }}
           />
+          {u.kind === "internal" && !gone && (
+            <DistancePanel userId={u.id} canEdit={canManage} from={u.distance_from === "base" ? "base" : "office"} address={u.base_address ?? ""}
+              coords={u.base_lat != null && u.base_lng != null ? `${u.base_lat}, ${u.base_lng}` : ""} note={u.base_note ?? ""} />
+          )}
           {u.kind === "internal" && !gone && can(me, "users") && u.role !== "owner" && (
             <AccreditationsPanel userId={u.id} contracts={fw.map((c) => ({ id: c.id, bank: c.bank, number: c.number, closed: !!c.closed }))} initial={accred} canEdit={canManage && can(me, "users.E")} />
           )}

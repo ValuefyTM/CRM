@@ -12,11 +12,12 @@ const day = (d: string | null) => (d ? d.slice(0, 10).split("-").reverse().join(
  * `adjust`: the column of the firm's adjustments (amount and comment) — on a payout statement; `accept`: the
  * collaborator ticks each adjustment as accepted (their own statement); `locked`: issued.
  */
-/** The distance tag of an inspection: green under 5 km, yellow 5–10 km, orange over 10 km (by road from the office). */
-export function KmTag({ d }: { d: { km: number; road: boolean } }) {
+/** The distance tag of an inspection: green under 5 km, yellow 5–10 km, orange over 10 km (by road from the inspector's base address or the office). */
+export function KmTag({ d }: { d: { km: number; road: boolean; from?: "base" | "office" } }) {
+  const start = d.from === "base" ? "de la adresa inspectorului" : "de la sediu (adresa de corespondență)";
   const v = d.km.toLocaleString("ro-RO", { maximumFractionDigits: 1 });
   return <span className={`kmTag ${d.km < 5 ? "near" : d.km <= 10 ? "mid" : "far"}`}
-    title={d.road ? "Distanța pe drum, cu mașina, de la sediu (adresa de corespondență)" : "În linie dreaptă: distanța pe drum se calculează la următoarea deschidere"}>{d.road ? "" : "≈ "}{v} km</span>;
+    title={d.road ? `Distanța pe drum, cu mașina, ${start}` : `În linie dreaptă, ${start}: distanța pe drum se calculează la următoarea deschidere`}>{d.road ? "" : "≈ "}{v} km</span>;
 }
 
 export function LinesTable({ lines, base, statement, canEdit, print = false, adjust = false, accept = false, locked = false, banks, km, byKm = false }: {
@@ -24,7 +25,7 @@ export function LinesTable({ lines, base, statement, canEdit, print = false, adj
   /** the designated user (bank / institution) of each report: the lines grouped by it, with subtotals */
   banks?: Record<string, string>;
   /** inspection → km from the office (the inspection lines show it as a coloured tag) */
-  km?: Record<string, { km: number; road: boolean }>;
+  km?: Record<string, { km: number; road: boolean; from?: "base" | "office" }>;
   /** sorted by that distance, farthest first (one list, no grouping by bank) */
   byKm?: boolean;
 }) {

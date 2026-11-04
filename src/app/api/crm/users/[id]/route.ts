@@ -7,6 +7,7 @@ import { bucket } from "@/lib/orders";
 import { err, json, staffApi } from "@/lib/api";
 import { can, roleNames } from "@/lib/perms";
 import { setAccreditations } from "@/lib/accreditations";
+import { saveBase } from "@/lib/distance";
 
 /** Edit an account, (re)send the invitation, disable or re-enable it. */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -59,6 +60,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const r = await setAccreditations(a.db, u.id, results.map((x) => x.id), a.user.id);
     if (r.added.length || r.removed.length) await audit(a.db, actor, "user.accreditations", "user", id, `agreeri: +${r.added.length} −${r.removed.length}`);
     return NextResponse.json({ ok: true, contracts: results.map((x) => x.id) });
+  }
+  // Where their inspections are measured from on the statements: the office, or their own base address.
+  if (b.action === "base") {
+    if (u.kind !== "internal") return err("Adresa de bază e doar pentru conturile echipei.");
+    const r = await saveBase(a.db, u.id, b.from === "base" ? "base" : "office", typeof b.address === "string" ? b.address : "", typeof b.coords === "string" ? b.coords : "");
+    if (!r.ok) return err(r.error);
+    await audit(a.db, actor, "user.base", "user", id, b.from === "base" ? `distanța de la adresa lui: ${typeof b.address === "string" && b.address.trim() ? b.address.trim().slice(0, 200) : String(b.coords ?? "")}` : "distanța de la sediul firmei");
+    return NextResponse.json(r);
   }
   if (b.action === "invite") {
     if (u.status === "disabled") return err("Contul este dezactivat. Reactivează-l întâi.");
