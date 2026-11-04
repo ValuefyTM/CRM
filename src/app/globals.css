@@ -4052,9 +4052,10 @@ span.rdPick { display: inline-block; }
 
 /* Borderou: distanța inspecției de la sediu (verde < 5 km, galben 5–10 km, portocaliu 10+ km) */
 .kmTag { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; vertical-align: 1px; }
-.kmTag.near { background: #e7f7ef; color: #157f55; border: 1px solid #bfe6d2; }
-.kmTag.mid { background: #fff6cc; color: #7a5a00; border: 1px solid #f0dc8a; }
-.kmTag.far { background: #ffe6d1; color: #a34a00; border: 1px solid #f7c39a; }
+.kmTag.near { background: #1f9d55; color: #fff; border: 1px solid #1a8a4a; }
+.kmTag.mid { background: #f5c518; color: #3d2e00; border: 1px solid #ddb000; }
+.kmTag.far { background: #f2780c; color: #fff; border: 1px solid #d96a08; }
+.kmTag.vfar { background: #d92d20; color: #fff; border: 1px solid #b42318; }
 .kmSort { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12.5px; }
 .kmSort a { font-weight: 600; color: var(--muted-2); padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); }
 .kmSort a[aria-current] { color: var(--ink); background: var(--acc-soft); border-color: var(--acc-line); }

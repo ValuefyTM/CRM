@@ -80,7 +80,7 @@ export default async function StatementPage({ params, searchParams }: { params: 
                 <span className="muted">Ordine:</span>
                 <a href={sortHref(null)} aria-current={!byKm ? "true" : undefined}>implicită</a>
                 <a href={sortHref("distanta")} aria-current={byKm ? "true" : undefined}>după distanță ↓</a>
-                <span className="kmLegend"><span className="kmTag near">&lt; 5 km</span><span className="kmTag mid">5–10 km</span><span className="kmTag far">10+ km</span></span>
+                <span className="kmLegend"><span className="kmTag near">&lt; 5 km</span><span className="kmTag mid">5–10 km</span><span className="kmTag far">10–30 km</span><span className="kmTag vfar">30+ km</span></span>
               </span>
             )}
             {canEdit && s.status !== "issued" && <AddLine statement={s.id} />}

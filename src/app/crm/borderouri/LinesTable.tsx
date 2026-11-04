@@ -12,11 +12,11 @@ const day = (d: string | null) => (d ? d.slice(0, 10).split("-").reverse().join(
  * `adjust`: the column of the firm's adjustments (amount and comment) — on a payout statement; `accept`: the
  * collaborator ticks each adjustment as accepted (their own statement); `locked`: issued.
  */
-/** The distance tag of an inspection: green under 5 km, yellow 5–10 km, orange over 10 km (by road from the inspector's base address or the office). */
+/** The distance tag of an inspection: green under 5 km, yellow 5–10 km, orange 10–30 km, red over 30 km (by road from the inspector's base address or the office). */
 export function KmTag({ d }: { d: { km: number; road: boolean; from?: "base" | "office" } }) {
   const start = d.from === "base" ? "de la adresa inspectorului" : "de la sediu (adresa de corespondență)";
   const v = d.km.toLocaleString("ro-RO", { maximumFractionDigits: 1 });
-  return <span className={`kmTag ${d.km < 5 ? "near" : d.km <= 10 ? "mid" : "far"}`}
+  return <span className={`kmTag ${d.km < 5 ? "near" : d.km <= 10 ? "mid" : d.km <= 30 ? "far" : "vfar"}`}
     title={d.road ? `Distanța pe drum, cu mașina, ${start}` : `În linie dreaptă, ${start}: distanța pe drum se calculează la următoarea deschidere`}>{d.road ? "" : "≈ "}{v} km</span>;
 }
 
