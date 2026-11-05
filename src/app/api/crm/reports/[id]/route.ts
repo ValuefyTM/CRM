@@ -111,9 +111,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       .bind(b.status, why ? reason : null, now(), id).run();
     // The pause: suspending stops the report's time; leaving the suspension adds the pause to the days left out (and
     // moves the delivery deadline by as many working days).
-    const pause = await setPause(a.db, id, r.status, b.status);
-    await audit(a.db, actor, "report.status", "report", id, `${REPORT_STATUS[r.status]?.[0] ?? r.status} → ${REPORT_STATUS[b.status][0]}${why ? ` (${reason})` : ""}${pause ? ` · pauză ${pause} ${pause === 1 ? "zi lucrătoare" : "zile lucrătoare"}` : ""}`);
-    if (why) await addMessage(a.db, "report", id, a.user, `${b.status === "suspended" ? (r.status === "suspended" ? "Motivul suspendării" : "Raport suspendat") : (r.status === "cancelled" ? "Motivul anulării" : "Raport anulat")}: ${reason}`);
+    // suspended earlier than now (recorded late): from that moment, not before the report and not in the future
+    let since: string | null = null;
+    if (b.status === "suspended" && r.status !== "suspended" && typeof b.since === "string" && b.since) {
+      const t = Date.parse(b.since);
+      const made = await a.db.prepare("SELECT created_at FROM reports WHERE id = ?").bind(id).first<{ created_at: string }>();
+      if (!Number.isFinite(t) || t > Date.now() + 60000) return err("Data suspendării nu poate fi în viitor.");
+      if (made && t < Date.parse(made.created_at) - 86400000) return err("Data suspendării e înainte de crearea raportului.");
+      if (Date.now() - t > 5 * 60000) since = new Date(t).toISOString();
+    }
+    const pause = await setPause(a.db, id, r.status, b.status, since);
+    await audit(a.db, actor, "report.status", "report", id, `${REPORT_STATUS[r.status]?.[0] ?? r.status} → ${REPORT_STATUS[b.status][0]}${why ? ` (${reason})` : ""}${since ? ` · din ${new Date(since).toLocaleString("ro-RO", { timeZone: "Europe/Bucharest", dateStyle: "short", timeStyle: "short" })}` : ""}${pause ? ` · pauză ${pause} ${pause === 1 ? "zi lucrătoare" : "zile lucrătoare"}` : ""}`);
+    if (why) await addMessage(a.db, "report", id, a.user, `${b.status === "suspended" ? (r.status === "suspended" ? "Motivul suspendării" : `Raport suspendat${since ? ` din ${new Date(since).toLocaleString("ro-RO", { timeZone: "Europe/Bucharest", dateStyle: "short", timeStyle: "short" })}` : ""}`) : (r.status === "cancelled" ? "Motivul anulării" : "Raport anulat")}: ${reason}`);
     if (r.status === "suspended" && b.status === "in_progress") await addMessage(a.db, "report", id, a.user, `Raport reluat în lucru${pause ? ` după ${pause} ${pause === 1 ? "zi lucrătoare" : "zile lucrătoare"} de pauză` : ""}.`);
     // the team hears of it on their phones: suspended (with the reason) or resumed
     if (b.status !== r.status && (b.status === "suspended" || (r.status === "suspended" && b.status === "in_progress")))

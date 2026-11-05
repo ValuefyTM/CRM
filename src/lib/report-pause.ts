@@ -9,10 +9,13 @@ import { appUrl } from "./site";
 
 const today = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
 
-/** The pause after a change of status: begins at a suspension, ends (counted) when it leaves it. Returns the days ended. */
-export async function setPause(db: D1Database, id: string, from: string, to: string) {
+/**
+ * The pause after a change of status: begins at a suspension (now, or `since`: suspended earlier and recorded late),
+ * ends (counted) when it leaves it. Returns the days ended.
+ */
+export async function setPause(db: D1Database, id: string, from: string, to: string, since?: string | null) {
   if (to === "suspended" && from !== "suspended") {
-    await db.prepare("UPDATE reports SET suspended_at = ? WHERE id = ?").bind(now(), id).run();
+    await db.prepare("UPDATE reports SET suspended_at = ? WHERE id = ?").bind(since || now(), id).run();
     return 0;
   }
   if (from !== "suspended" || to === "suspended") return 0;

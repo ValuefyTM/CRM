@@ -42,14 +42,18 @@ export function StatusActions({ id, status, reason, locked = false, finish = nul
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const [menu, setMenu] = useState(false);
+  // when it was suspended: now by default, earlier when it is recorded late (the pause counts from then)
+  const [since, setSince] = useState("");
+  const local = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   const go = async (s: string, r = "") => {
     setBusy(true); setMsg("");
-    const error = await patch(id, { status: s, reason: r });
+    const at = s === "suspended" && ask?.kind === "suspended" && since ? new Date(since).toISOString() : undefined;
+    const error = await patch(id, { status: s, reason: r, ...(at ? { since: at } : {}) });
     setBusy(false);
     if (error) { if (ask) setMsg(error); else alert(error); return; }
     location.reload();
   };
-  const open = (k: Ask["kind"]) => { setAsk(ASK[k]); setWhy(k === "reason" ? reason ?? "" : ""); setMsg(""); setMenu(false); };
+  const open = (k: Ask["kind"]) => { setAsk(ASK[k]); setWhy(k === "reason" ? reason ?? "" : ""); setSince(local(new Date())); setMsg(""); setMenu(false); };
   const submit = () => {
     if (!ask || !why.trim()) return setMsg("Scrie motivul.");
     go(ask.kind === "reopen" ? "in_progress" : ask.kind === "reason" ? "suspended" : ask.kind, why.trim());
@@ -87,6 +91,11 @@ export function StatusActions({ id, status, reason, locked = false, finish = nul
             {ask.kind === "reopen" && <p className="hint">Raportul redevine editabil; după modificări se predă din nou.</p>}
             {ask.quick && <span className="chips">{ask.quick.map((q) => <button key={q} type="button" className="chip" aria-pressed={why === q} onClick={() => setWhy(q)}>{q}</button>)}</span>}
             <label className="field">{ask.label}<textarea className="textarea" rows={3} value={why} onChange={(e) => setWhy(e.target.value)} autoFocus placeholder={ask.placeholder} /></label>
+            {ask.kind === "suspended" && (
+              <label className="field">Suspendat din <small>(implicit acum; schimbă dacă s-a suspendat mai demult și nu s-a notat)</small>
+                <input className="input" type="datetime-local" value={since} max={local(new Date())} onChange={(e) => setSince(e.target.value)} />
+              </label>
+            )}
             {msg && <div role="alert" className="error">{msg}</div>}
             <div className="actions" style={{ justifyContent: "flex-end" }}>
               <button type="button" className="btn btnGhost" onClick={() => setAsk(null)}>Renunță</button>
