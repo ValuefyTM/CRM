@@ -4136,3 +4136,71 @@ span.rdPick { display: inline-block; }
 .dPaused b { color: #ffd84d; }
 .dPaused small { color: var(--on-navy-2); flex-basis: 100%; }
 .dbHelloLine a.dbSusp { display: inline-flex; align-items: baseline; gap: 4px; padding: 1px 10px; border-radius: 999px; background: rgba(245, 197, 24, 0.16); border: 1px solid rgba(245, 197, 24, 0.5); color: #ffd84d; text-decoration: none; }
+
+/* Anexă foto / Anexă documente (the asset's annex builder, as UVALO's Word add-in) */
+.axEntry { display: flex; align-items: center; justify-content: space-between; gap: 12px 18px; flex-wrap: wrap; padding: 14px 18px; border: 1px solid var(--acc-line); background: var(--acc-soft); border-radius: 16px; }
+.axEntry > div { display: flex; flex-direction: column; gap: 2px; max-width: 760px; }
+.axEntry span { color: var(--muted); font-size: 13px; }
+.axWrap { display: flex; flex-direction: column; gap: 14px; }
+.axTabs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; position: sticky; top: 0; z-index: 20; background: var(--page); padding: 6px 0; }
+.axTabs > button { all: unset; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; padding: 9px 16px; border-radius: 999px; border: 1px solid var(--line); background: #fff; font-weight: 700; font-size: 14px; }
+.axTabs > button small { font-weight: 600; color: var(--muted); font-size: 12px; }
+.axTabs > button[aria-selected="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+.axTabs > button[aria-selected="true"] small { color: var(--on-navy-2); }
+.axGo { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+.axBusy { position: relative; height: 34px; border-radius: 10px; background: var(--cream); border: 1px solid var(--line); overflow: hidden; display: flex; align-items: center; padding: 0 12px; }
+.axBusy span { position: absolute; inset: 0 auto 0 0; background: var(--acc-soft); transition: width 0.2s; }
+.axBusy b { position: relative; font-size: 13px; }
+.axBar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: center; }
+.axBtns { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.axChk { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; font-weight: 600; cursor: pointer; }
+.axDrop { display: flex; flex-direction: column; gap: 12px; min-height: 120px; }
+.axGrid { display: flex; flex-wrap: wrap; gap: 10px; }
+.axCard { display: flex; flex-direction: column; gap: 4px; position: relative; border-radius: 12px; padding: 6px; border: 1px solid var(--line); background: #fff; opacity: 0.55; }
+.axCard.on { opacity: 1; border-color: var(--acc); box-shadow: 0 0 0 2px var(--acc-soft); }
+.axCard.drag { outline: 2px dashed var(--acc); }
+.axCard.bad { opacity: 0.35; }
+.axThumb { all: unset; cursor: pointer; position: relative; display: grid; place-items: center; background: var(--cream); border-radius: 8px; overflow: hidden; }
+.axThumb img { max-width: 100%; max-height: 100%; object-fit: contain; transition: transform 0.2s; }
+.axNo { position: absolute; left: 6px; top: 6px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: rgba(20, 20, 20, 0.75); color: #fff; font-size: 11px; display: grid; place-items: center; }
+.axTick { position: absolute; right: 6px; top: 6px; width: 22px; height: 22px; border-radius: 50%; background: var(--acc); color: var(--ink); font-style: normal; font-weight: 800; font-size: 13px; display: grid; place-items: center; }
+.axTools { position: absolute; right: 10px; top: 34px; display: none; flex-direction: column; gap: 4px; }
+.axCard:hover .axTools, .axCard:focus-within .axTools { display: flex; }
+.axTools button { all: unset; cursor: pointer; width: 26px; height: 26px; border-radius: 8px; background: rgba(255, 255, 255, 0.95); border: 1px solid var(--line); display: grid; place-items: center; font-size: 13px; }
+.axName { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.axDesc { width: 100%; box-sizing: border-box; font: 500 12px var(--font); padding: 5px 7px; border: 1px solid var(--line); border-radius: 8px; background: var(--cream); }
+.axWait { color: var(--muted); font-size: 12px; }
+.axDoc { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.axDoc.drag { outline: 2px dashed var(--acc); }
+.axDocHead { display: flex; gap: 8px; align-items: center; }
+.axHandle { cursor: grab; font-size: 18px; color: var(--muted); padding: 0 4px; }
+.axDocNo { min-width: 24px; height: 24px; border-radius: 12px; background: var(--ink); color: #fff; font-size: 12px; display: grid; place-items: center; }
+.axDocTitle { flex: 1; min-width: 0; }
+.axMini { width: 60px; border-radius: 6px; border: 1px solid var(--line); }
+.axArr { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; align-items: start; }
+.axArr h2 { margin: 0; font-size: 16px; }
+.axGrids { display: flex; flex-wrap: wrap; gap: 8px; }
+.axGridPick { all: unset; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px; border-radius: 12px; border: 1px solid var(--line); background: #fff; width: 58px; }
+.axGridPick[aria-pressed="true"] { border-color: var(--acc); background: var(--acc-soft); }
+.axGridPick span { display: grid; gap: 2px; width: 30px; height: 40px; }
+.axGridPick i { background: var(--muted-2); border-radius: 2px; opacity: 0.5; }
+.axGridPick[aria-pressed="true"] i { background: var(--acc-ink); opacity: 1; }
+.axGridPick b { font-size: 13px; } .axGridPick small { font-size: 10px; color: var(--muted); }
+.axRow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.axMargins { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.axPages { display: grid; gap: 18px; }
+.axPage { position: relative; margin: 0; background: #fff; border: 1px solid var(--line); box-shadow: 0 10px 24px -18px rgba(0, 0, 0, 0.45); container-type: inline-size; overflow: hidden; }
+.axPage figcaption { position: absolute; right: 8px; bottom: 6px; font-size: 10px; color: var(--muted); }
+.axPvImg { position: absolute; overflow: hidden; background: #f2f2f2; }
+.axPvImg.b { outline: 1px solid #7f7f7f; }
+.axPvText { position: absolute; line-height: 1.2; color: #141414; font-family: Arial, var(--font); }
+.axPvText.cap { text-align: center; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.axLight .axLightBox { width: min(1100px, 96vw); max-height: 94vh; display: flex; flex-direction: column; gap: 10px; background: #fff; border-radius: 18px; padding: 16px; }
+.axLightHead { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.axLightHead .axBtns { margin-left: auto; }
+.axLightImg { display: flex; align-items: center; gap: 8px; min-height: 0; flex: 1; }
+.axLightImg img { flex: 1; min-width: 0; max-height: 68vh; object-fit: contain; }
+.axNav { all: unset; cursor: pointer; font-size: 32px; padding: 0 10px; color: var(--muted); }
+.axNav:disabled { opacity: 0.25; cursor: default; }
+@media (max-width: 720px) { .axGo { margin-left: 0; width: 100%; } .axMargins { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.axArr .segment { flex-wrap: wrap; }

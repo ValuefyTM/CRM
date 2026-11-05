@@ -475,10 +475,18 @@ export default async function AssetPage({ params, searchParams }: {
       )}
 
       {tab === "fotografii" && (
+        <div className="axEntry"><div><b>Anexă foto</b><span>Alegi pozele și ordinea, câte pe pagină, legendele și titlul, apoi descarci PDF sau Word (ca în add-in-ul UVALO din Word).</span></div>
+          <a className="btn btnGold btnSm" href={`${base}/rapoarte/${id}/bun/${a.id}/anexa?mod=foto`}>Fă anexa foto →</a></div>
+      )}
+      {tab === "fotografii" && (
         <AssetPhotos report={id} name={zipName} photos={photos} covers={covers} edit={acc.can.assets}
           inspections={insp.filter((i) => photos.some((x) => x.inspection === i.id)).map((i) => ({ id: i.id, label: `Inspecția din ${fmtDate(i.done_at ?? i.scheduled_at ?? i.created_at)}${i.inspector ? ` · ${i.inspector}` : ""}` }))} />
       )}
 
+      {tab === "acte" && (
+        <div className="axEntry"><div><b>Anexă documente</b><span>Pui actele (PDF, imagini) în ordine, alegi, rotești sau scoți pagini, cu titlu pe fiecare document, apoi descarci PDF sau Word.</span></div>
+          <a className="btn btnGold btnSm" href={`${base}/rapoarte/${id}/bun/${a.id}/anexa?mod=acte`}>Fă anexa documente →</a></div>
+      )}
       {tab === "acte" && <ReportDocs report={id} assets={[{ id: a.id, label: cap(a.type) || "Bunul", sub: address }]} items={docItems} edit={acc.can.docs} remove={acc.can.docsDelete} />}
 
       {tab === "analiza" && valueCard(true)}
