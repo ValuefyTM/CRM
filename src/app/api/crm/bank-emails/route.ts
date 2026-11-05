@@ -12,5 +12,5 @@ export async function POST(req: Request) {
   const r = await ingestEmail(a.db, { subject: typeof b.subject === "string" ? b.subject : null, text, from: null }, "paste", a.user.id);
   if (r.status === "unmatched") return Response.json({ ok: true, status: r.status, email: r.emailId });
   if (r.status === "task") pushLater(a.db);
-  return Response.json({ ok: true, status: r.status, email: r.emailId, task: r.taskId, order: r.orderId, ref: r.fields?.ref, client: r.fields?.client, rule: r.rule?.name });
+  return Response.json({ ok: true, status: r.status, email: r.emailId, task: r.taskId, order: r.orderId, report: r.reportId ?? null, ref: r.fields?.ref, client: r.fields?.client, rule: r.rule?.name });
 }

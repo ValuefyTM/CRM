@@ -27,17 +27,19 @@ export async function setPause(db: D1Database, id: string, from: string, to: str
 }
 
 /** Push to the report's team (not who did it): suspended, with the reason, or resumed. */
-export async function pushTeam(db: D1Database, id: string, actor: { id: string; name: string; email: string }, reason: string | null) {
+export async function pushTeam(db: D1Database, id: string, actor: { id: string; name: string; email: string }, reason: string | null, link?: string, info?: string) {
   const r = await db.prepare("SELECT number, label FROM reports WHERE id = ?").bind(id).first<{ number: string | null; label: string | null }>();
   const { results } = await db.prepare("SELECT DISTINCT m.user_id FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = ? AND u.status = 'active' AND m.user_id <> ?")
     .bind(id, actor.id).all<{ user_id: string }>();
   if (!results.length) return 0;
   const name = r?.number ? `Raportul nr. ${r.number}` : r?.label ? `Raportul ${r.label}` : "Raportul";
   const who = actor.name || actor.email;
-  const href = await appUrl("crm", `/rapoarte/${id}`);
+  const href = link ?? await appUrl("crm", `/rapoarte/${id}`).catch(() => `${process.env.CRM_URL || "https://crm.valuefy.ro"}/rapoarte/${id}`);
   let n = 0;
   for (const m of results)
-    n += await pushToUser(db, m.user_id, "crm", reason !== null
+    n += await pushToUser(db, m.user_id, "crm", info
+      ? { id: `info-${id}-${Date.now()}`, title: `${name}: informații primite`, body: info.slice(0, 160), href }
+      : reason !== null
       ? { id: `susp-${id}-${Date.now()}`, title: `⏸ ${name} a fost suspendat`, body: `${who}: ${reason.slice(0, 160)}`, href }
       : { id: `resume-${id}-${Date.now()}`, title: `▶ ${name} a fost reluat`, body: `${who} l-a repus în lucru; timpul curge din nou.`, href }).catch(() => 0);
   return n;

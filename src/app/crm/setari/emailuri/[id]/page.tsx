@@ -41,8 +41,10 @@ export default async function InboxEmailPage({ params }: { params: Promise<{ id:
             {e.client_name && <div><dt>Client</dt><dd>{e.client_name}</dd></div>}
             {e.request_type && <div><dt>Tip cerere</dt><dd>{e.request_type}</dd></div>}
             {e.task && <div><dt>Task</dt><dd><a className="link" href={`${base}/emailuri/task/${e.task.id}`}>{e.task.title}</a><div className="muted">{e.task.status === "open" ? "deschis" : `${e.task.status === "done" ? "rezolvat" : "închis"}${e.task.done_name ? ` de ${e.task.done_name}` : ""} ${fmtDate(e.task.done_at, true)}${e.task.done_note ? ` · ${e.task.done_note}` : ""}`}</div></dd></div>}
+            {e.report_id && <div><dt>Raportul</dt><dd><a className="link" href={`${base}/rapoarte/${e.report_id}`}>deschide raportul</a></dd></div>}
             {e.order_id && <div><dt>Comanda</dt><dd><a className="link" href={`${base}/comenzi/${e.order_id}`}>deschide comanda</a></dd></div>}
           </dl>
+          {e.status === "no_report" && <div className="note">Regula a găsit cererea {e.bank_ref}, dar nu există încă un raport pentru comanda cu acest număr.</div>}
           {e.status === "incomplete" && <div className="note">Regula s-a potrivit, dar nu a găsit numărul comenzii în email. Verifică tiparul „număr comandă” din regulă.</div>}
         </aside>
       </div>

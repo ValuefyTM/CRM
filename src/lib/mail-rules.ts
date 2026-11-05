@@ -5,6 +5,8 @@
 // the people the rule names see it on the dashboard and the bell, with a reminder every 2 hours (notifications.ts).
 // Also runs in the worker's email handler (worker.ts), outside Next.js: relative imports only, no Next APIs.
 
+import { resumeFromEmail } from "./report-resume";
+
 const now = () => new Date().toISOString();
 const uuid = () => crypto.randomUUID();
 
@@ -12,7 +14,7 @@ export type MailRule = {
   id: string; name: string; active: number; sort: number;
   from_has: string | null; subject_has: string | null; body_has: string | null;
   ref_after: string | null; ref_shape: string | null; client_after: string | null; type_after: string | null;
-  action: "bank_order" | "task" | "ignore"; bank_id: string | null; task_title: string | null;
+  action: "bank_order" | "task" | "ignore" | "resume_report"; bank_id: string | null; task_title: string | null;
   notify_roles: string | null; notify_users: string | null; updated_at: string | null;
 };
 export type MailIn = { from?: string | null; to?: string | null; subject?: string | null; text?: string | null; html?: string | null };
@@ -22,6 +24,7 @@ export type Attachment = { filename: string; contentType: string | null; content
 export const RULE_ACTIONS: [MailRule["action"], string, string][] = [
   ["bank_order", "Procesare comandă bancă", "task urgent: deschide „Comandă nouă” pe contractul cadru al băncii, cu numărul și clientul completate"],
   ["task", "Task simplu", "un task cu titlul ales, de bifat când e rezolvat"],
+  ["resume_report", "Reia raportul suspendat", "găsește raportul după nr. comenzii; dacă e suspendat îl trece în lucru; anunță echipa (push și email)"],
   ["ignore", "Ignoră", "emailul e doar păstrat (reclame, newslettere)"],
 ];
 /** The roles a rule can notify (the custom roles of Permisiuni are added by the page). */
@@ -134,7 +137,8 @@ export function matches(rule: MailRule, m: MailIn) {
 export const loadRules = (db: D1Database, all = false) =>
   db.prepare(`SELECT * FROM mail_rules ${all ? "" : "WHERE active = 1"} ORDER BY sort, created_at`).all<MailRule>().then((r) => r.results).catch(() => [] as MailRule[]);
 
-export type Ingested = { status: "task" | "duplicate" | "unmatched" | "ignored" | "incomplete"; emailId: string; taskId: string | null; orderId: string | null; rule: MailRule | null; fields: Extracted | null };
+export type Ingested = { status: "task" | "duplicate" | "unmatched" | "ignored" | "incomplete" | "resumed" | "noted" | "no_report"; emailId: string; taskId: string | null; orderId: string | null;
+  reportId?: string | null; rule: MailRule | null; fields: Extracted | null };
 
 const audit = (db: D1Database, actor: string, action: string, entity: string, entityId: string, details: string) =>
   db.prepare("INSERT INTO audit_log (actor, action, entity, entity_id, details) VALUES (?, ?, ?, ?, ?)").bind(actor, action, entity, entityId, details).run().catch(() => null);
@@ -144,6 +148,12 @@ async function apply(db: D1Database, rule: MailRule, m: MailIn, emailId: string,
   if (rule.action === "ignore") return { status: "ignored", taskId: null, orderId: null, fields: null };
   const fields = extract(rule, m);
   const bank = rule.bank_id ? await db.prepare("SELECT id, name, code FROM entities WHERE id = ?").bind(rule.bank_id).first<{ id: string; name: string; code: string | null }>() : null;
+  // a report of the bank's request: back in work if it was suspended (the bank sent what was asked)
+  if (rule.action === "resume_report") {
+    if (!fields.ref) return { status: "incomplete", taskId: null, orderId: null, fields };
+    const r = await resumeFromEmail(db, fields.ref, { id: bank?.id ?? null, name: bank?.code || bank?.name.split(/\s+/)[0] || "Banca" }, rule.name, m.subject ?? null);
+    return { status: r.status, taskId: null, orderId: r.orderId, reportId: r.reportId, fields };
+  }
   if (rule.action === "bank_order") {
     if (!fields.ref) return { status: "incomplete", taskId: null, orderId: null, fields };
     // the same request: an order already made with it, or a task already opened for it
@@ -191,8 +201,8 @@ export async function runRules(db: D1Database, emailId: string, m: MailIn, recei
   for (const rule of rules) {
     if (!matches(rule, m)) continue;
     const r = await apply(db, rule, m, emailId, receivedAt);
-    await db.prepare("UPDATE bank_emails SET status = ?, rule_id = ?, task_id = ?, order_id = ?, bank_ref = ?, client_name = ?, request_type = ?, bank = (SELECT COALESCE(code, name) FROM entities WHERE id = ?) WHERE id = ?")
-      .bind(r.status, rule.id, r.taskId, r.orderId, r.fields?.ref ?? null, r.fields?.client ?? null, r.fields?.type ?? null, rule.bank_id, emailId).run();
+    await db.prepare("UPDATE bank_emails SET status = ?, rule_id = ?, task_id = ?, order_id = ?, report_id = ?, bank_ref = ?, client_name = ?, request_type = ?, bank = (SELECT COALESCE(code, name) FROM entities WHERE id = ?) WHERE id = ?")
+      .bind(r.status, rule.id, r.taskId, r.orderId, r.reportId ?? null, r.fields?.ref ?? null, r.fields?.client ?? null, r.fields?.type ?? null, rule.bank_id, emailId).run();
     return { ...r, emailId, rule };
   }
   return { status: "unmatched", emailId, taskId: null, orderId: null, rule: null, fields: null };

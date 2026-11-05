@@ -2,22 +2,23 @@
 import type { MailRule } from "./mail-rules";
 
 export type InboxRow = { id: string; received_at: string; via: string; mail_from: string | null; subject: string | null; status: string; bank: string | null; bank_ref: string | null;
-  client_name: string | null; rule_id: string | null; rule_name: string | null; task_id: string | null; task_status: string | null; order_id: string | null; files: number };
+  client_name: string | null; rule_id: string | null; rule_name: string | null; task_id: string | null; task_status: string | null; order_id: string | null; report_id: string | null; files: number };
 
 /** Which tab an email is in: with a rule (a task, or the same request again), without, or ignored. */
 export const INBOX_TABS: [key: string, label: string, sql: string][] = [
   ["toate", "Toate", "1"],
-  ["cu", "Cu regulă", "b.status IN ('task', 'duplicate', 'order', 'incomplete')"],
+  ["cu", "Cu regulă", "b.status IN ('task', 'duplicate', 'order', 'incomplete', 'resumed', 'noted', 'no_report')"],
   ["fara", "Fără regulă", "b.status IN ('unmatched', 'unrecognised', 'new')"],
   ["ignorate", "Ignorate", "b.status = 'ignored'"],
 ];
 
 export const STATUS_LABEL: Record<string, [string, string]> = {
   task: ["Task creat", "pillInfo"], order: ["Comandă creată", "pillOk"], duplicate: ["Aceeași cerere", ""], incomplete: ["Regulă fără nr. comandă", "pillWarn"],
+  resumed: ["Raport reluat în lucru", "pillOk"], noted: ["Notat pe raport", "pillInfo"], no_report: ["Raport negăsit", "pillWarn"],
   unmatched: ["Fără regulă", "pillWarn"], unrecognised: ["Fără regulă", "pillWarn"], new: ["Fără regulă", "pillWarn"], ignored: ["Ignorat", ""],
 };
 
-const COLS = `b.id, b.received_at, b.via, b.mail_from, b.subject, b.status, b.bank, b.bank_ref, b.client_name, b.rule_id, r.name AS rule_name, b.task_id, t.status AS task_status, b.order_id,
+const COLS = `b.id, b.received_at, b.via, b.mail_from, b.subject, b.status, b.bank, b.bank_ref, b.client_name, b.rule_id, r.name AS rule_name, b.task_id, t.status AS task_status, b.order_id, b.report_id,
   (SELECT COUNT(*) FROM mail_attachments a WHERE a.email_id = b.id) AS files`;
 const FROM = "FROM bank_emails b LEFT JOIN mail_rules r ON r.id = b.rule_id LEFT JOIN mail_tasks t ON t.id = b.task_id";
 

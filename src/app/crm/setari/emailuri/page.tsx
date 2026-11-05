@@ -48,7 +48,8 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
                     <td>
                       <span className={`pill ${cls}`}><i />{label}</span>
                       {m.task_id && <div><a className="link" href={`${base}/emailuri/task/${m.task_id}`}>{m.task_status === "open" ? "deschide task-ul" : m.task_status === "done" ? "task rezolvat" : "task închis"}</a></div>}
-                      {m.order_id && <div><a className="link" href={`${base}/comenzi/${m.order_id}`}>vezi comanda</a></div>}
+                      {m.report_id ? <div><a className="link" href={`${base}/rapoarte/${m.report_id}`}>vezi raportul</a></div>
+                        : m.order_id && <div><a className="link" href={`${base}/comenzi/${m.order_id}`}>vezi comanda</a></div>}
                     </td>
                   </tr>
                 );

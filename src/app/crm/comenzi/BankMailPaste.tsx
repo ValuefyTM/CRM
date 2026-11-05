@@ -13,11 +13,14 @@ export function BankMailPaste({ base }: { base: string }) {
     e.preventDefault();
     setBusy(true); setMsg("");
     const r = await fetch("/api/crm/bank-emails", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) }).catch(() => null);
-    const d = (await r?.json().catch(() => ({}))) as { error?: string; order?: string; task?: string; email?: string; status?: string } | undefined;
+    const d = (await r?.json().catch(() => ({}))) as { error?: string; order?: string; task?: string; report?: string | null; email?: string; status?: string } | undefined;
     setBusy(false);
     if (!r?.ok || !d?.email) return setMsg(d?.error || "Nu am putut adăuga emailul.");
     // a processing task: straight to "Comandă nouă", filled in; the same request: its order or its task; else the email
     if (d.status === "duplicate") alert(d.order ? "Comanda există deja. Te duc la ea." : "Există deja un task pentru această cerere.");
+    // a report the email acted on (back in work, or noted): to the report
+    if (d.report) { if (d.status === "resumed") alert("Raportul a fost reluat în lucru."); location.href = `${base}/rapoarte/${d.report}`; return; }
+    if (d.status === "no_report") return setMsg("Am recunoscut cererea, dar nu există încă un raport pentru comanda cu acest număr.");
     if (!d.order && !d.task) return setMsg(d.status === "ignored" ? "Emailul a fost păstrat; regula lui spune să fie ignorat." : "Nu am recunoscut emailul: nicio regulă nu se potrivește (regulile le setează proprietarul, în Setări → Emailuri primite).");
     location.href = d.order ? `${base}/comenzi/${d.order}` : `${base}/emailuri/task/${d.task}`;
   };

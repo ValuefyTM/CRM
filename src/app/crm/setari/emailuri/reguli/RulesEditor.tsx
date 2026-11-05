@@ -6,12 +6,13 @@ import { useState } from "react";
 
 export type RuleForm = {
   id: string | null; name: string; active: boolean; from_has: string; subject_has: string; body_has: string; ref_after: string; ref_shape: string; client_after: string; type_after: string;
-  action: "bank_order" | "task" | "ignore"; bank_id: string; task_title: string; notify_roles: string[]; notify_users: string[];
+  action: "bank_order" | "task" | "ignore" | "resume_report"; bank_id: string; task_title: string; notify_roles: string[]; notify_users: string[];
 };
 type Hit = { id: string; at: string; subject: string | null; from: string | null; ref: string | null; client: string | null; type: string | null };
 const ACTIONS: [RuleForm["action"], string, string][] = [
   ["bank_order", "Procesare comandă bancă", "task urgent: deschide „Comandă nouă” pe contractul cadru al băncii, cu numărul și clientul completate"],
   ["task", "Task simplu", "un task cu titlul ales, de marcat rezolvat"],
+  ["resume_report", "Reia raportul suspendat", "găsește raportul după nr. comenzii; dacă e suspendat îl trece în lucru (timpul curge din nou); notează în Mesaje; anunță echipa raportului pe telefon și email"],
   ["ignore", "Ignoră", "emailul e doar păstrat (reclame, newslettere)"],
 ];
 const EMPTY: RuleForm = { id: null, name: "", active: true, from_has: "", subject_has: "", body_has: "", ref_after: "", ref_shape: "", client_after: "", type_after: "", action: "bank_order", bank_id: "", task_title: "", notify_roles: ["owner", "admin", "operator"], notify_users: [] };
@@ -98,8 +99,8 @@ export function RulesEditor(p: { rules: RuleForm[]; draft: RuleForm | null; open
             {ACTIONS.map(([k, l]) => <button key={k} type="button" className="chip" role="radio" aria-checked={edit.action === k} onClick={() => set("action", k)}>{l}</button>)}
           </div>
           <p className="hint" style={{ margin: "4px 0 0" }}>{ACTIONS.find(([k]) => k === edit.action)?.[2]}</p>
-          {edit.action === "bank_order" && (
-            <label className="field">Banca <select className="select" value={edit.bank_id} onChange={(e) => set("bank_id", e.target.value)}><option value="">Alege banca…</option>{p.banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
+          {(edit.action === "bank_order" || edit.action === "resume_report") && (
+            <label className="field">Banca{edit.action === "resume_report" ? <small> (opțional: caută comanda doar la această bancă)</small> : null} <select className="select" value={edit.bank_id} onChange={(e) => set("bank_id", e.target.value)}><option value="">Alege banca…</option>{p.banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
           )}
           {edit.action === "task" && <label className="field">Titlul task-ului <small>({"{ref}"} = nr. comandă, {"{client}"} = clientul)</small><input className="input" value={edit.task_title} onChange={(e) => set("task_title", e.target.value)} placeholder="ex. Informații primite {ref} · {client}" /></label>}
 
@@ -114,6 +115,7 @@ export function RulesEditor(p: { rules: RuleForm[]; draft: RuleForm | null; open
               <label className="field">Tipul cererii, de după <small>(opțional)</small><input className="input" value={edit.type_after} onChange={(e) => set("type_after", e.target.value)} placeholder="ex. Codul cererii:" /></label>
             </div>
 
+            {edit.action !== "resume_report" && <>
             <div className="section">4 · Pe cine anunță <small>(clopoțel, telefon, email; reamintire la 2 ore, luni–vineri 8:00–18:00, până se procesează)</small></div>
             {edit.action === "bank_order" && <p className="hint" style={{ margin: 0 }}>În plus, task-ul îl văd și îl pot procesa automat cei agreați pe contractul cadru al băncii (fișa utilizatorului → Agreeri).</p>}
             <div className="chips" role="group" aria-label="Roluri">
@@ -122,6 +124,8 @@ export function RulesEditor(p: { rules: RuleForm[]; draft: RuleForm | null; open
             <details className="ruPeople"><summary>și persoane anume {edit.notify_users.length ? `(${edit.notify_users.length})` : ""}</summary>
               <div className="chips">{p.people.map((u) => <button key={u.id} type="button" className="chip" role="checkbox" aria-checked={edit.notify_users.includes(u.id)} onClick={() => toggle("notify_users", u.id)}>{u.name}</button>)}</div>
             </details>
+            </>}
+            {edit.action === "resume_report" && <p className="hint" style={{ margin: 0 }}>Anunță automat membrii raportului găsit (push și email).</p>}
           </>}
 
           {msg && <div role="alert" className="error">{msg}</div>}

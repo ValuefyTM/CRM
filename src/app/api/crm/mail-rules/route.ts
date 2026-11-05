@@ -7,19 +7,19 @@ const csv = (v: unknown) => (Array.isArray(v) ? (v as unknown[]).filter((x): x i
 
 /** The rule as sent by the editor (validated). */
 function ruleOf(b: Record<string, unknown>): { ok: true; rule: Omit<MailRule, "id" | "sort" | "updated_at"> } | { ok: false; error: string } {
-  const action = b.action === "task" || b.action === "ignore" ? b.action : "bank_order";
+  const action = b.action === "task" || b.action === "ignore" || b.action === "resume_report" ? b.action : "bank_order";
   const rule = {
     name: s(b.name, 120) ?? "", active: b.active === false ? 0 : 1,
     from_has: s(b.from_has, 300), subject_has: s(b.subject_has, 300), body_has: s(b.body_has, 600),
     ref_after: s(b.ref_after, 200), ref_shape: s(b.ref_shape, 60), client_after: s(b.client_after, 200), type_after: s(b.type_after, 200),
-    action, bank_id: action === "bank_order" ? s(b.bank_id, 80) : null, task_title: action === "task" ? s(b.task_title, 200) : null,
-    notify_roles: action === "ignore" ? null : csv(b.notify_roles), notify_users: action === "ignore" ? null : csv(b.notify_users),
+    action, bank_id: action === "bank_order" || action === "resume_report" ? s(b.bank_id, 80) : null, task_title: action === "task" ? s(b.task_title, 200) : null,
+    notify_roles: action === "ignore" || action === "resume_report" ? null : csv(b.notify_roles), notify_users: action === "ignore" || action === "resume_report" ? null : csv(b.notify_users),
   } as Omit<MailRule, "id" | "sort" | "updated_at">;
   if (!rule.name) return { ok: false, error: "Dă un nume regulii (ex. Procesare comandă BRD)." };
   if (!rule.from_has && !rule.subject_has && !rule.body_has) return { ok: false, error: "Completează cel puțin o condiție: expeditorul, subiectul sau textul conține…" };
   if (action === "bank_order" && !rule.bank_id) return { ok: false, error: "Alege banca." };
-  if (action === "bank_order" && !rule.ref_after && !rule.ref_shape) return { ok: false, error: "Spune de unde se ia numărul comenzii (textul dinainte sau literele codului)." };
-  if (action !== "ignore" && !rule.notify_roles && !rule.notify_users) return { ok: false, error: "Alege pe cine anunță regula." };
+  if ((action === "bank_order" || action === "resume_report") && !rule.ref_after && !rule.ref_shape) return { ok: false, error: "Spune de unde se ia numărul comenzii (textul dinainte sau literele codului)." };
+  if (action !== "ignore" && action !== "resume_report" && !rule.notify_roles && !rule.notify_users) return { ok: false, error: "Alege pe cine anunță regula." };
   return { ok: true, rule };
 }
 
