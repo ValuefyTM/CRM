@@ -1,4 +1,5 @@
 // The dashboard of a team member without the firm's dashboard (Permisiuni): their reports and inspections only.
+import { BankTasksCard } from "../emailuri/BankTasksCard";
 import { fmtDate } from "@/lib/guard";
 import { getDb } from "@/lib/db";
 import { cap, listReports } from "@/lib/reports";
@@ -78,6 +79,8 @@ export async function MyHome({ user, base, denied }: { user: User; base: string;
           {quick.map(([label, href, sub]) => <a key={label} href={href}><span><b>{label}</b>{sub && <small>{sub}</small>}</span></a>)}
         </nav>
       </section>
+      {/* the processing tasks of the banks' orders (for those their rule names, or accredited on the bank's contract) */}
+      <BankTasksCard user={user} base={base} />
       <div className="dbKpis">
         <a className="dbKpi" href={`${base}/rapoarte?status=deschise`}><span className="dbKpiLabel"><i style={{ background: "var(--acc)" }} />Rapoarte în lucru</span><b>{counts?.open ?? 0}</b></a>
         <a className="dbKpi" href={`${base}/rapoarte?termen=peste`}><span className="dbKpiLabel"><i style={{ background: "var(--err)" }} />Peste termen</span><b style={late ? { color: "var(--err)" } : undefined}>{late}</b></a>

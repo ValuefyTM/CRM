@@ -87,7 +87,7 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
   const dateTitle = new Date(`${today}T12:00:00Z`).toLocaleDateString("ro-RO", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
   // Without the firm's dashboard: the user's own reports and inspections.
   if (!can(user, "dashboard.all")) {
-    return <CrmShell user={user} base={base} active="home" title={dateTitle} dateTitle><BankTasksCard user={user} base={base} /><MyHome user={user} base={base} denied={denied} /></CrmShell>;
+    return <CrmShell user={user} base={base} active="home" title={dateTitle} dateTitle><MyHome user={user} base={base} denied={denied} /></CrmShell>;
   }
   const [d, ruleAlerts, firm] = await Promise.all([
     dashboard(db, base),
