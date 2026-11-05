@@ -9,6 +9,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const a = await reportApi(id, "edit", true);
   if ("res" in a) return a.res;
+  if (a.user.role !== "owner") return err("Modul de redactare e deocamdată doar pentru proprietar.", 403);
   const b = await json(req);
   const c = await draftContext(a.db, a.user, id, typeof b.asset === "string" ? b.asset : null);
   if (!c) return err("Raportul nu are bunuri.", 404);
@@ -30,6 +31,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params;
   const a = await reportApi(id, "edit", true);
   if ("res" in a) return a.res;
+  if (a.user.role !== "owner") return err("Modul de redactare e deocamdată doar pentru proprietar.", 403);
   const b = await json(req);
   const c = await draftContext(a.db, a.user, id, typeof b.asset === "string" ? b.asset : null);
   if (!c) return err("Raportul nu are bunuri.", 404);

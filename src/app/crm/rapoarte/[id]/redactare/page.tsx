@@ -23,6 +23,8 @@ const srcText = (list: string[]) => list.map((s) => SOURCES.find(([k]) => k === 
 export default async function DraftingPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ cap?: string; bun?: string }> }) {
   const { db, user, base } = await staffPage();
   const { id } = await params;
+  // the drafting mode is being built: the owner only, for now
+  if (user.role !== "owner") redirect(`${base}/rapoarte/${id}`);
   const { cap: askedCap, bun } = await searchParams;
   const head = await db.prepare("SELECT id, status, delivered_at FROM reports WHERE id = ?").bind(id).first<{ id: string; status: string; delivered_at: string | null }>();
   if (!head) notFound();

@@ -340,8 +340,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             </div>
           </div>
           <div className="dActs">
-            {/* drafting mode: the texts for the bank's application, chapter by chapter (administrators, while it is being built) */}
-            {isAdmin(user) && assets.length > 0 && r.status !== "cancelled" && <a className="stBtn draft" href={`${base}/rapoarte/${r.id}/redactare`}>Redactare raport</a>}
+            {/* drafting mode: the texts for the bank's application, chapter by chapter (the owner only, while it is being built) */}
+            {user.role === "owner" && assets.length > 0 && r.status !== "cancelled" && <a className="stBtn draft" href={`${base}/rapoarte/${r.id}/redactare`}>Redactare raport</a>}
             {/* the status as what can be done next; "Finalizează" goes through the delivery (date, values per asset, euro, approach) */}
             {c.status && <StatusActions id={r.id} status={r.status} reason={r.suspend_reason} locked={acc.locked} canCancel={isAdmin(user)} pausedDays={d.pausedTotal}
               finish={r.delivered_at ? null : !c.deliver ? "Raportul îl finalizează evaluatorul principal, din „Predă raportul”." : final ? `${href("documente")}&predare=1` : "Încarcă întâi raportul final (PDF semnat) în „Acte & livrare”; apoi îl predai cu valorile."} />}
