@@ -9,6 +9,7 @@ import { fileSrc } from "@/lib/files";
 import { fmtSize } from "@/lib/orders";
 import { orderCode, SOURCE_LABEL } from "@/lib/order-labels";
 import { SPECIALIZATIONS } from "@/lib/labels";
+import { isAdmin } from "@/lib/users";
 import { CrmShell } from "@/components/CrmShell";
 import { ReportList } from "@/components/ReportList";
 import { AllocateAll, AssignInspection, CancelInspection, DeleteInspection, MarkInspectionDone, NeedsInspection, UvaloAction, type AllocRow } from "./InspectionActions";
@@ -40,7 +41,7 @@ import { Avatar, PersonLine } from "@/components/Avatar";
 import { photoUrl } from "@/lib/presence";
 import { Messages } from "@/components/Messages";
 import { messagesOf } from "@/lib/messages";
-import { AddMember, CollectedToggle, DeliverButton, ReportNumberEdit, FinalDrop, MissingDoc, NotesEditor, RemoveMember, SafeImg, StageActions, StatusButton, UploadButton, VerifyActions } from "./ReportActions";
+import { AddMember, CollectedToggle, DeliverButton, ReportNumberEdit, FinalDrop, MissingDoc, NotesEditor, RemoveMember, SafeImg, StageActions, StatusActions, UploadButton, VerifyActions } from "./ReportActions";
 import { dueOf, STAGE_LABEL, stageOf } from "@/lib/dossier";
 import { hasValues, nextReportNumber, noticeTarget } from "@/lib/delivery";
 import { inspVisible, typeOfOrderDoc, typeOfReportDoc } from "@/lib/insp-docs";
@@ -211,6 +212,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
     insp_total: tasks.length + waiting, insp_done: tasks.filter((a) => a.inspection_status === "done").length, no_insp: assets.filter((a) => a.no_inspection).length,
     insp_next: nextVisit, insp_last: inspectedOn, invoiced: repInvoices.length ? 1 : 0,
     ordered_at: r.ordered_at, received_on: r.received_on, created_at: r.created_at, term_days: r.term_days,
+    suspended_at: r.suspended_at, paused_days: r.paused_days,
   };
   const { seg } = segmentsOf(stageRow, today);
   const d = daysOf(stageRow, today);
@@ -255,7 +257,6 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
     const st = inspState(a);
     return st === "none" ? ["Fără inspecție", ""] : st === "done" ? ["Inspecție realizată", "pillOk"] : st === "open" ? [a.inspection_status === "scheduled" ? "Inspecție programată" : "Inspecție de programat", "pillInfo"] : ["Inspecție nealocată", "pillWarn"];
   };
-  const fresh = messages.length > 0 && !messages[messages.length - 1].mine;
   // When the inspector's documents were last sent (the update button, or the allocation with its documents), and by whom.
   const inspSent = await db.prepare(`SELECT l.at, COALESCE(NULLIF(u.name, ''), u.email) AS who FROM audit_log l LEFT JOIN users u ON 'user:' || u.id = l.actor
       WHERE l.entity = 'report' AND l.entity_id = ? AND l.action IN ('report.document_insp', 'report.inspection_assign') ORDER BY l.at DESC LIMIT 1`).bind(r.id)
@@ -339,18 +340,12 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             </div>
           </div>
           <div className="dActs">
-            <a className={`dMsgBtn${fresh ? " fresh" : ""}`} href={href("mesaje")} aria-current={tab === "mesaje" ? "page" : undefined}
-              title={messages.length ? `${messages.length} ${messages.length === 1 ? "mesaj" : "mesaje"} în echipă${fresh ? " · ultimul de la " + messages[messages.length - 1].author : ""}` : "Mesajele echipei"}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.8 7L3 21l2-6.2A8 8 0 1 1 21 12z" /></svg>
-              Mesaje{messages.length > 0 && <b>{messages.length}</b>}
-            </a>
-            {/* drafting mode: the texts for the bank's application, chapter by chapter */}
-            {assets.length > 0 && r.status !== "cancelled" && <a className="btn btnGhost btnSm dDraft" href={`${base}/rapoarte/${r.id}/redactare`}>Redactare raport</a>}
-            {c.docs && <a className="btn btnGold btnSm" href={final && c.deliver && !r.delivered_at ? `${href("documente")}&predare=1` : href("documente")}>{final ? "Livrare raport" : "Încarcă raportul final"}</a>}
-            {/* "Finalizat" goes through the delivery (date, values per asset, euro, approach), never straight to the status. */}
-            {c.status && <StatusButton id={r.id} status={r.status} reason={r.suspend_reason} locked={acc.locked}
-              finish={r.delivered_at ? null : !c.deliver ? "Raportul îl finalizează evaluatorul principal, din „Predă raportul”." : final ? `${href("documente")}&predare=1` : "Încarcă întâi raportul final (PDF semnat) în Documente; apoi îl predai cu valorile."} />}
-            {c.status && !acc.locked && !r.glide_id && r.status !== "cancelled" && <StageActions id={r.id} stage={stage} hasVerifier={!!verifier} />}
+            {/* drafting mode: the texts for the bank's application, chapter by chapter (administrators, while it is being built) */}
+            {isAdmin(user) && assets.length > 0 && r.status !== "cancelled" && <a className="stBtn draft" href={`${base}/rapoarte/${r.id}/redactare`}>Redactare raport</a>}
+            {/* the status as what can be done next; "Finalizează" goes through the delivery (date, values per asset, euro, approach) */}
+            {c.status && <StatusActions id={r.id} status={r.status} reason={r.suspend_reason} locked={acc.locked} canCancel={isAdmin(user)} pausedDays={d.pausedTotal}
+              finish={r.delivered_at ? null : !c.deliver ? "Raportul îl finalizează evaluatorul principal, din „Predă raportul”." : final ? `${href("documente")}&predare=1` : "Încarcă întâi raportul final (PDF semnat) în „Acte & livrare”; apoi îl predai cu valorile."} />}
+            {c.status && !acc.locked && !r.glide_id && r.status !== "cancelled" && r.status !== "suspended" && <StageActions id={r.id} stage={stage} hasVerifier={!!verifier} />}
           </div>
         </div>
         {r.status !== "cancelled" && (
@@ -358,16 +353,17 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             {SEGMENTS.map((t, i) => (
               <div key={t} className={`dSeg ${seg[i]}`}><i /><b>{t}</b><small>{segNote[i] || "—"}</small></div>
             ))}
-            <div className={`dDays${d.late ? " late" : d.delivered ? " done" : ""}`} title={`Zile lucrătoare de la comandă · termen ${d.term} zile`}>
-              <b>{d.days}</b><small>{d.late ? `din ${d.term} zile · +${d.over}` : `din ${d.term} zile`}</small>
+            <div className={`dDays${d.paused ? " paused" : d.late ? " late" : d.delivered ? " done" : ""}`} title={`Zile lucrătoare de la comandă, fără zilele de pauză (suspendat)${d.pausedTotal ? `: ${d.pausedTotal}` : ""} · termen ${d.term} zile`}>
+              <b>{d.days}</b><small>{d.paused ? `pe pauză de ${d.pausedNow} ${d.pausedNow === 1 ? "zi" : "zile"}` : d.late ? `din ${d.term} zile · +${d.over}` : `din ${d.term} zile`}</small>
               {d.delivered && r.report_date && <small className="dDaysDate">raport din {fmtDate(r.report_date)}</small>}
             </div>
           </div>
         )}
+        {r.status === "suspended" && <div className="dPaused"><b><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5" y="4" width="5" height="16" rx="1.5" /><rect x="14" y="4" width="5" height="16" rx="1.5" /></svg> Suspendat{r.suspended_at ? ` din ${fmtDate(r.suspended_at, true)}` : ""}</b><span>{r.suspend_reason ?? "fără motiv"}</span><small>Timpul raportului e pe pauză până la „Reia lucrul”.</small></div>}
         {c.verify && stage === "review" && <div className="dVerify"><span>Raportul așteaptă verificarea.</span><VerifyActions id={r.id} verified={r.verified_at ? fmtDate(r.verified_at, true) : null} /></div>}
       </section>
-      {acc.locked && <div className="note dLocked"><b>Raport finalizat · blocat.</b> Actele, bunurile, inspecțiile, echipa și mesajele nu se mai modifică. Pentru modificări, redeschide-l din „Schimbă status” (cu motivul).</div>}
-      {(r.status === "suspended" || r.status === "cancelled") && r.suspend_reason && <div className="note"><b>{r.status === "suspended" ? "Suspendat" : "Anulat"}:</b> {r.suspend_reason}</div>}
+      {acc.locked && <div className="note dLocked"><b>Raport finalizat · blocat.</b> Actele, bunurile, inspecțiile, echipa și mesajele nu se mai modifică. Pentru modificări, întoarce-l în lucru (butonul „Întoarce în lucru”, cu motivul).</div>}
+      {r.status === "cancelled" && r.suspend_reason && <div className="note"><b>Anulat:</b> {r.suspend_reason}</div>}
 
       <nav className="pillTabs dTabs" aria-label="Secțiuni raport">
         {TABS.map(([k, l]) => (

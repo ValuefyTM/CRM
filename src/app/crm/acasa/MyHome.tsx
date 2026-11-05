@@ -14,7 +14,7 @@ import { niceName } from "@/lib/labels";
 const today = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
 
 /** The line under the greeting (both dashboards): reports in work, how many past the standard term, inspections left. */
-export function HelloLine({ base, open, late, visits }: { base: string; open: number; late: number; visits: number }) {
+export function HelloLine({ base, open, late, visits, susp = 0 }: { base: string; open: number; late: number; visits: number; susp?: number }) {
   return (
     <p className="dbHelloLine">
       Ai <a href={`${base}/rapoarte?status=deschise`}><b>{open}</b> {open === 1 ? "raport" : "rapoarte"} în lucru</a>
@@ -24,6 +24,7 @@ export function HelloLine({ base, open, late, visits }: { base: string; open: nu
       {visits > 0
         ? <>, și <a href={`${base}/agenda-inspectii`}><b>{visits}</b> {visits === 1 ? "inspecție" : "inspecții"} de făcut</a>.</>
         : ". Nicio inspecție de făcut."}
+      {susp > 0 && <>{" "}<a href={`${base}/rapoarte?status=suspended`} className="dbSusp"><b>{susp}</b> {susp === 1 ? "raport suspendat" : "rapoarte suspendate"}</a>.</>}
     </p>
   );
 }
@@ -36,8 +37,9 @@ export async function MyHome({ user, base, denied }: { user: User; base: string;
     listReports(db, { status: "deschise", mine: { id: user.id, sql: mySql(user) } }),
     db.prepare(`SELECT SUM(r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL) AS open,
         SUM(r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL AND ${OVER_TERM_SQL}) AS late,
-        SUM(r.status = 'done' AND substr(COALESCE(r.report_date, r.delivered_at), 1, 7) = substr(?, 1, 7)) AS done_month
-      FROM reports r WHERE ${mySql(user)}`).bind(t, t, user.id).first<{ open: number | null; late: number | null; done_month: number | null }>(),
+        SUM(r.status = 'done' AND substr(COALESCE(r.report_date, r.delivered_at), 1, 7) = substr(?, 1, 7)) AS done_month,
+        SUM(r.status = 'suspended') AS susp
+      FROM reports r WHERE ${mySql(user)}`).bind(t, t, user.id).first<{ open: number | null; late: number | null; done_month: number | null; susp: number | null }>(),
     // `can_open`: the report of the inspection is one of the user's (a report they only inspect for: no link to it)
     db.prepare(`SELECT i.id, i.status, i.scheduled_at, i.report_id, r.number, p.type, COALESCE(NULLIF(i.address, ''), p.full_address, p.city) AS address,
         ${can(user, "reports.all") ? "1" : `(r.id IS NOT NULL AND ${mySql(user)})`} AS can_open
@@ -70,7 +72,7 @@ export async function MyHome({ user, base, denied }: { user: User; base: string;
       <section className="dbHello">
         <div className="dbHelloText">
           <h2>{hello}{first ? `, ${first}` : ""}.</h2>
-          <HelloLine base={base} open={counts?.open ?? 0} late={late} visits={left} />
+          <HelloLine base={base} open={counts?.open ?? 0} late={late} visits={left} susp={counts?.susp ?? 0} />
         </div>
         <nav className="dbQuick" aria-label="Acțiuni rapide">
           {quick.map(([label, href, sub]) => <a key={label} href={href}><span><b>{label}</b>{sub && <small>{sub}</small>}</span></a>)}

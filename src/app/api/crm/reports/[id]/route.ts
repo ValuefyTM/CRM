@@ -10,6 +10,7 @@ import { addMessage } from "@/lib/messages";
 import { canFrame, isFinished } from "@/lib/perms-db";
 import type { TeamRight } from "@/lib/perms";
 import { pushLater } from "@/lib/push";
+import { pushTeam, setPause } from "@/lib/report-pause";
 import { checkFirmNumber, isOwnIssuer } from "@/lib/report-numbers";
 
 /** Report changes from its page: `{ status, suspend_reason? }`, `{ stage }`, `{ notes }` or `{ delivered: true, number, report_date, notify }`. */
@@ -86,7 +87,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   const closed = isFinished(r);
-  if (closed && typeof b.status !== "string" && typeof b.collected !== "boolean") return err("Raportul este finalizat și nu se mai modifică. Redeschide-l din „Schimbă status”.", 409);
+  if (closed && typeof b.status !== "string" && typeof b.collected !== "boolean") return err("Raportul este finalizat și nu se mai modifică. Întoarce-l în lucru („Întoarce în lucru”).", 409);
   if (typeof b.status === "string") {
     if (!REPORT_STATUS[b.status]) return err("Status necunoscut.");
     // Reopening a finished report: back to "În lucru" with the reason; it is delivered again when it is ready.
@@ -108,8 +109,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (why && !reason) return err(b.status === "suspended" ? "Scrie motivul suspendării." : "Scrie motivul anulării.");
     await a.db.prepare("UPDATE reports SET status = ?, suspend_reason = ?, updated_at = ? WHERE id = ?")
       .bind(b.status, why ? reason : null, now(), id).run();
-    await audit(a.db, actor, "report.status", "report", id, `${REPORT_STATUS[r.status]?.[0] ?? r.status} → ${REPORT_STATUS[b.status][0]}${why ? ` (${reason})` : ""}`);
+    // The pause: suspending stops the report's time; leaving the suspension adds the pause to the days left out (and
+    // moves the delivery deadline by as many working days).
+    const pause = await setPause(a.db, id, r.status, b.status);
+    await audit(a.db, actor, "report.status", "report", id, `${REPORT_STATUS[r.status]?.[0] ?? r.status} → ${REPORT_STATUS[b.status][0]}${why ? ` (${reason})` : ""}${pause ? ` · pauză ${pause} ${pause === 1 ? "zi lucrătoare" : "zile lucrătoare"}` : ""}`);
     if (why) await addMessage(a.db, "report", id, a.user, `${b.status === "suspended" ? (r.status === "suspended" ? "Motivul suspendării" : "Raport suspendat") : (r.status === "cancelled" ? "Motivul anulării" : "Raport anulat")}: ${reason}`);
+    if (r.status === "suspended" && b.status === "in_progress") await addMessage(a.db, "report", id, a.user, `Raport reluat în lucru${pause ? ` după ${pause} ${pause === 1 ? "zi lucrătoare" : "zile lucrătoare"} de pauză` : ""}.`);
+    // the team hears of it on their phones: suspended (with the reason) or resumed
+    if (b.status !== r.status && (b.status === "suspended" || (r.status === "suspended" && b.status === "in_progress")))
+      await pushTeam(a.db, id, a.user, b.status === "suspended" ? reason : null).catch((e) => console.error("push suspend", e));
     return Response.json({ ok: true });
   }
   // Payment collected (marked by hand, for reports not paid through an invoice of the CRM).

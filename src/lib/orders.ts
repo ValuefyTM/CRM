@@ -320,7 +320,7 @@ export async function cancelOrder(db: D1Database, actor: string, id: string, can
   if (cancel) {
     if (!reason) return { ok: false as const, error: "Scrie motivul anulării." };
     const rep = await db.prepare("SELECT id FROM reports WHERE order_id = ? AND status <> 'cancelled' LIMIT 1").bind(id).first();
-    if (rep) return { ok: false as const, error: "Comanda are deja raport: anulează raportul (din „Schimbă status”)." };
+    if (rep) return { ok: false as const, error: "Comanda are deja raport: anulează raportul (din pagina raportului, „⋯” → Anulează)." };
     await db.prepare(`UPDATE orders SET status = 'cancelled', cancel_reason = ?, cancelled_at = ?, cancelled_by = ?, viewed_at = COALESCE(viewed_at, ?), updated_at = ? WHERE id = ?`)
       .bind(reason, t, actor.replace(/^user:/, ""), t, t, id).run();
   } else {

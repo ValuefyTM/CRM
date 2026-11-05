@@ -4106,3 +4106,33 @@ span.rdPick { display: inline-block; }
 .ruEdit .section small { font-weight: 500; text-transform: none; letter-spacing: 0; }
 .ruPeople summary { cursor: pointer; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
 .ruTest { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+
+/* The report's status buttons in its header (StatusActions): one per next step, with its icon and colour */
+.stActs { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+.stBtn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; border-radius: 14px; font: 700 14px var(--font); cursor: pointer; text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.06); color: #fff; transition: transform 0.15s var(--ease), box-shadow 0.15s var(--ease), background 0.15s; }
+.stBtn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 18px -10px rgba(0, 0, 0, 0.6); }
+.stBtn:disabled { opacity: 0.6; cursor: default; }
+.stBtn svg { flex: none; }
+.stBtn.finish { background: linear-gradient(180deg, #2fb36f, #1f9d55); border-color: #1a8a4a; }
+.stBtn.pause { background: rgba(245, 197, 24, 0.12); border-color: rgba(245, 197, 24, 0.55); color: #ffd84d; }
+.stBtn.pause:hover:not(:disabled) { background: rgba(245, 197, 24, 0.22); }
+.stBtn.resume { background: linear-gradient(180deg, #f6c35a, var(--acc)); border-color: var(--acc); color: var(--ink); }
+.stBtn.reopen { background: rgba(255, 255, 255, 0.1); }
+.stBtn.draft { background: #fff; color: var(--ink); border-color: #fff; }
+.stBtn.ghost { padding: 10px 12px; }
+.stActs > .stBtn, .stActs > .stMore { flex: 1 1 auto; }
+.stActs { flex-direction: row; flex-wrap: wrap; }
+.stActs > .stBtn { flex: 1 1 120px; }
+.stMore { position: relative; display: inline-flex; flex: 0 0 auto !important; }
+.stMenu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 240px; background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.45); padding: 6px; display: flex; flex-direction: column; }
+.stMenu button { all: unset; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 10px; font-size: 14px; font-weight: 600; color: var(--ink); }
+.stMenu button:hover { background: var(--cream); }
+.stMenu button.neg { color: var(--err); }
+.stAsk .chips { margin: 4px 0; }
+.dActs .actions .btnNavy { padding: 10px 16px; border-radius: 14px; font-size: 14px; }
+.dDays.paused { background: #f5c518; color: #3d2e00; }
+.dPaused { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; margin-top: 12px; padding: 12px 16px; border-radius: 14px; background: rgba(245, 197, 24, 0.14); border: 1px solid rgba(245, 197, 24, 0.45); color: #fff; }
+.dPaused b { color: #ffd84d; }
+.dPaused small { color: var(--on-navy-2); flex-basis: 100%; }
+.dbHelloLine a.dbSusp { display: inline-flex; align-items: baseline; gap: 4px; padding: 1px 10px; border-radius: 999px; background: rgba(245, 197, 24, 0.16); border: 1px solid rgba(245, 197, 24, 0.5); color: #ffd84d; text-decoration: none; }

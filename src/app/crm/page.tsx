@@ -95,7 +95,8 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
     // Past the standard term (red in the list) and the inspections still to do, for the whole firm.
     db.prepare(`SELECT (SELECT COUNT(*) FROM reports r WHERE r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL AND ${OVER_TERM_SQL}) AS late,
         (SELECT COUNT(*) FROM inspections i JOIN reports r ON r.id = i.report_id WHERE i.status IN ('to_schedule', 'scheduled') AND i.glide_id IS NULL
-          AND r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL) AS insp`).bind(today).first<{ late: number; insp: number }>(),
+          AND r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL) AS insp,
+        (SELECT COUNT(*) FROM reports r WHERE r.status = 'suspended') AS susp`).bind(today).first<{ late: number; insp: number; susp: number }>(),
   ]);
   const money = can(user, "fees.all");
   const monthLabel = new Date(`${d.today}T12:00:00Z`).toLocaleDateString("ro-RO", { month: "long", timeZone: "UTC" });
@@ -135,6 +136,7 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
             {" "}{(firm?.insp ?? 0) > 0
               ? <>Echipa mai are <a href={`${base}/agenda-inspectii`}><b>{firm?.insp}</b> {firm?.insp === 1 ? "inspecție" : "inspecții"} de făcut</a>.</>
               : "Nicio inspecție în așteptare."}
+            {(firm?.susp ?? 0) > 0 && <>{" "}<a href={`${base}/rapoarte?status=suspended`} className="dbSusp"><b>{firm?.susp}</b> {firm?.susp === 1 ? "raport suspendat" : "rapoarte suspendate"}</a>.</>}
             {" "}Luna aceasta: <b>{d.delivered.n}</b> {d.delivered.n === 1 ? "raport finalizat" : "rapoarte finalizate"} și <b>{d.newOrders.n}</b> {d.newOrders.n === 1 ? "comandă nouă" : "comenzi noi"}.
           </p>
         </div>

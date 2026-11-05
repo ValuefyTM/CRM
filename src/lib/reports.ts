@@ -25,6 +25,7 @@ export type ReportRow = {
   stage: string | null; delivered_at: string | null; verified_at: string | null; invoiced: number;
   /** The "Achitat" tick of the report (paid). */
   collected: number; collected_at: string | null; ordered_at: string | null; received_on: string | null; created_at: string; term_days: number | null;
+  suspended_at: string | null; paused_days: number | null;
   /** The team, one per line: id, name, role, avatar_at (see rowMembers). */
   members: string | null;
 };
@@ -38,7 +39,7 @@ export const rowMembers = (r: Pick<ReportRow, "members">): RowMember[] =>
   });
 
 const ROW = `SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.result_value, r.result_eur, r.collected, r.collected_at, r.report_type, r.purpose, r.value_type,
-  r.stage, r.delivered_at, r.verified_at, r.received_on, r.created_at, r.term_days, o.created_at AS ordered_at, i.color AS issuer_color,
+  r.stage, r.delivered_at, r.verified_at, r.received_on, r.created_at, r.term_days, r.suspended_at, r.paused_days, o.created_at AS ordered_at, i.color AS issuer_color,
   EXISTS (SELECT 1 FROM invoices v, json_each(v.report_ids) j WHERE j.value = r.id AND v.kind = 'invoice' AND v.status <> 'cancelled') AS invoiced,
   c.name AS client_name, COALESCE(b.code, b.name) AS bank_code, b.name AS bank_name, b.logo_url AS bank_logo, i.name AS issuer_name, COALESCE(NULLIF(i.code, ''), i.name) AS issuer_short, i.logo_url AS issuer_logo,
   (SELECT group_concat(line, char(10)) FROM (SELECT m.user_id || char(31) || COALESCE(NULLIF(u.name, ''), u.email) || char(31) || m.role || char(31) || COALESCE(u.avatar_at, '') AS line
@@ -112,12 +113,13 @@ export const STAGE_FILTERS: Record<string, string> = { inspectie: "inspection", 
 export const DUE_FILTERS: Record<string, string> = { depasit: "Termen depășit", curand: "Termen în 2 zile", peste: "Peste termenul standard" };
 /**
  * Past the standard term, like the red days counter of the list (report-stage.ts daysOf): working days (no Saturdays,
- * no Sundays) since the order (or since the report came in) over the term set at processing, 3 by default. Binds today once.
+ * no Sundays) since the order (or since the report came in), less the days on pause (suspended), over the term set at
+ * processing, 3 by default. Binds today once.
  */
 export const OVER_TERM_SQL = `(SELECT d - 2 * (d / 7) - (d % 7 >= COALESCE(NULLIF((13 - ws) % 7, 0), 7)) - (d % 7 >= COALESCE(NULLIF((7 - ws) % 7, 0), 7))
     FROM (SELECT CAST(julianday(?) - julianday(s) AS INTEGER) AS d, CAST(strftime('%w', s) AS INTEGER) AS ws
       FROM (SELECT substr(COALESCE((SELECT o.created_at FROM orders o WHERE o.id = r.order_id), r.received_on, r.created_at), 1, 10) AS s)))
-  > COALESCE(NULLIF(r.term_days, 0), 3)`;
+  - COALESCE(r.paused_days, 0) > COALESCE(NULLIF(r.term_days, 0), 3)`;
 const bucharestToday = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
 
 function where(f: ReportFilters) {
@@ -225,6 +227,7 @@ export type Report = ReportRow & {
   parent_report_id?: string | null;
   notes: string | null; delivered_at: string | null; delivered_by_name: string | null; updated_at: string;
   stage: string | null; term_days: number | null; due_on: string | null; offer_id: string | null; client_notified_at: string | null;
+  suspended_at: string | null; paused_days: number | null;
   order_seq: number | null; order_bank_ref: string | null; order_source: string | null; statement_number: string | null; client_code: string | null;
   recipient_kind: string | null; recipient_email: string | null; recipient_phone: string | null; recipient_code: string | null; issuer_logo: string | null;
   issuer_color: string | null; issuer_short: string | null; bank_logo: string | null; client_logo: string | null; ordered_at: string | null; urgent: number;

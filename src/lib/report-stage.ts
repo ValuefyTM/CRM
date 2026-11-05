@@ -10,6 +10,8 @@ export type StageRow = {
   status: string; stage: string | null; delivered_at: string | null; verified_at: string | null; report_date: string | null;
   insp_total: number; insp_done: number; no_insp: number; insp_next: string | null; insp_last: string | null;
   invoiced: number; ordered_at: string | null; received_on: string | null; created_at: string; term_days: number | null;
+  /** the pause of a suspended report: since when (while suspended) and the working days of the pauses that ended */
+  suspended_at?: string | null; paused_days?: number | null;
 };
 export const SEGMENTS = ["Inspecție", "Raport", "Verificare", "Predare / facturare"];
 export const DEFAULT_TERM = 3;
@@ -29,14 +31,24 @@ const short = (iso: string, time = false) => {
   return time && iso.length > 10 ? `${s}, ${d.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Bucharest" })}` : s;
 };
 
-/** Working days since the order (or since the report came in), the term set at processing and whether it is past. */
+/** The working days a report has been on pause (suspended): the pauses that ended, and the one going on. */
+export function pausedOf(r: Pick<StageRow, "status" | "suspended_at" | "paused_days">, today: string) {
+  const now = r.status === "suspended" && r.suspended_at ? workdaysBetween(r.suspended_at, today) : 0;
+  return { total: (r.paused_days ?? 0) + now, now, paused: r.status === "suspended" };
+}
+
+/**
+ * Working days since the order (or since the report came in), the term set at processing and whether it is past. The
+ * days the report was suspended do not count: the counter stops while it is on pause and goes on when it is resumed.
+ */
 export function daysOf(r: StageRow, today: string) {
   const start = day(r.ordered_at) ?? day(r.received_on) ?? day(r.created_at)!;
   const delivered = r.delivered_at || r.status === "done";
   const end = delivered ? (day(r.delivered_at) ?? day(r.report_date) ?? today) : today;
-  const days = workdaysBetween(start, end);
+  const pause = pausedOf(r, today);
+  const days = Math.max(0, workdaysBetween(start, end) - pause.total);
   const term = r.term_days && r.term_days > 0 ? r.term_days : DEFAULT_TERM;
-  return { days, term, over: Math.max(0, days - term), late: days > term, delivered };
+  return { days, term, over: Math.max(0, days - term), late: days > term, delivered, paused: pause.paused, pausedNow: pause.now, pausedTotal: pause.total };
 }
 
 /** The four segments and a one-line caption under them. */

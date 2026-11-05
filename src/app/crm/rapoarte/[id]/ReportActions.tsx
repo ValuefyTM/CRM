@@ -6,9 +6,6 @@ import { dutyIn, type Duty } from "@/lib/labels";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-// "Draft" is shown as "În lucru" (a report being worked on): one choice, not two that look the same.
-const STATUSES: [string, string][] = [["in_progress", "În lucru"], ["suspended", "Suspendat"], ["done", "Finalizat"], ["cancelled", "Anulat"]];
-
 async function send(url: string, init: RequestInit) {
   const r = await fetch(url, init).catch(() => null);
   const d = (await r?.json().catch(() => ({}))) as { error?: string } | undefined;
@@ -16,82 +13,88 @@ async function send(url: string, init: RequestInit) {
 }
 const patch = (id: string, body: object) => send(`/api/crm/reports/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
-const STATUS_HINT: Record<string, string> = {
-  in_progress: "Raportul se lucrează (inspecție, redactare, verificare).",
-  suspended: "Lucrul e oprit temporar; scrii motivul.",
-  done: "Raportul e gata și predat.",
-  cancelled: "Lucrarea nu se mai face; scrii motivul.",
+const Ico = ({ d }: { d: string }) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
+const I = {
+  pause: "M9 5v14M15 5v14", play: "M7 4.5v15l12-7.5z", check: "M4.5 12.5l5 5L19.5 7", back: "M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11",
+  more: "M5 12h.01M12 12h.01M19 12h.01", stop: "M5 5l14 14M19 5 5 19",
 };
-// Suspending or cancelling asks for the reason (kept on the report and posted in the team's messages).
-const REOPEN: [string, string, string] = ["Motivul redeschiderii", "ex. banca cere corectarea suprafeței", "Redeschide raportul"];
-const NEEDS_REASON: Record<string, [label: string, placeholder: string, button: string]> = {
-  suspended: ["Motivul suspendării", "ex. așteptăm actele de la client", "Suspendă raportul"],
-  cancelled: ["Motivul anulării", "ex. clientul a renunțat la credit", "Anulează raportul"],
+type Ask = { kind: "suspended" | "cancelled" | "reopen" | "reason"; title: string; label: string; placeholder: string; button: string; quick?: string[] };
+const ASK: Record<Ask["kind"], Ask> = {
+  suspended: { kind: "suspended", title: "Suspendă raportul", label: "Motivul suspendării", placeholder: "ex. așteptăm extrasul CF de la client", button: "Suspendă și pune timpul pe pauză",
+    quick: ["Lipsă acte de la client", "Așteaptă informații de la bancă", "Inspecția amânată de client", "Clientul nu răspunde"] },
+  reason: { kind: "reason", title: "Motivul suspendării", label: "Motivul", placeholder: "", button: "Actualizează motivul" },
+  cancelled: { kind: "cancelled", title: "Anulează raportul", label: "Motivul anulării", placeholder: "ex. clientul a renunțat la credit", button: "Anulează raportul" },
+  reopen: { kind: "reopen", title: "Întoarce raportul în lucru", label: "Motivul", placeholder: "ex. banca cere corectarea suprafeței", button: "Întoarce în lucru" },
 };
 
-/** "Schimbă status" in the report header: a sheet (from the bottom on a phone) with one big button per status. */
-/** `locked`: the report is finished; it can only be reopened ("În lucru"), with the reason. */
-/** `finish`: "Finalizat" opens the delivery (a link) or tells why it cannot yet (a message); null: no delivery step (already delivered). */
-export function StatusButton({ id, status, reason, locked = false, finish = null }: { id: string; status: string; reason: string | null; locked?: boolean; finish?: string | null }) {
+/**
+ * The report's status in its header, as buttons for what can be done next: in work → Suspendă (with the reason; the
+ * time goes on pause) and Finalizează (the delivery); suspended → Reia lucrul; finished → Întoarce în lucru (with the
+ * reason). Cancelling (with the reason) is in "⋯", for administrators.
+ * `finish`: the delivery (a link) or why it cannot be yet (a message); null: already delivered.
+ */
+export function StatusActions({ id, status, reason, locked = false, finish = null, canCancel = false, pausedDays = 0 }: {
+  id: string; status: string; reason: string | null; locked?: boolean; finish?: string | null; canCancel?: boolean; pausedDays?: number;
+}) {
   const cur = locked ? "done" : status === "draft" ? "in_progress" : status;
-  const why_ = (s: string) => (locked && s === "in_progress" ? REOPEN : NEEDS_REASON[s]);
-  const [open, setOpen] = useState(false);
-  const [pick, setPick] = useState<string | null>(null);
+  const [ask, setAsk] = useState<Ask | null>(null);
   const [why, setWhy] = useState("");
   const [msg, setMsg] = useState("");
-  const [busy, setBusy] = useState<string | null>(null);
-  const save = async (s: string) => {
-    if (why_(s) && !why.trim()) return setMsg("Scrie motivul.");
-    setBusy(s); setMsg("");
-    const error = await patch(id, { status: s, reason: why });
-    setBusy(null);
-    if (error) return setMsg(error);
+  const [busy, setBusy] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const go = async (s: string, r = "") => {
+    setBusy(true); setMsg("");
+    const error = await patch(id, { status: s, reason: r });
+    setBusy(false);
+    if (error) { if (ask) setMsg(error); else alert(error); return; }
     location.reload();
   };
-  const choose = (s: string) => {
-    // Finishing is the delivery: number, date, the value of each asset (lei, euro, approach).
-    if (s === "done" && s !== cur && finish) {
-      if (finish.startsWith("/")) { location.href = finish; return; }
-      setPick(null); setMsg(finish); return;
-    }
-    if (why_(s)) { setPick(s); setWhy(s === cur ? reason ?? "" : ""); setMsg(""); return; }
-    if (s === cur) return setOpen(false);
-    save(s);
+  const open = (k: Ask["kind"]) => { setAsk(ASK[k]); setWhy(k === "reason" ? reason ?? "" : ""); setMsg(""); setMenu(false); };
+  const submit = () => {
+    if (!ask || !why.trim()) return setMsg("Scrie motivul.");
+    go(ask.kind === "reopen" ? "in_progress" : ask.kind === "reason" ? "suspended" : ask.kind, why.trim());
   };
-  const curLabel = STATUSES.find(([k]) => k === cur)?.[1] ?? cur;
+  const finishNow = () => {
+    if (!finish) return;
+    if (finish.startsWith("/")) location.href = finish; else alert(finish);
+  };
   return (
-    <>
-      <button type="button" className="btn btnOnNavy btnSm" onClick={() => { setOpen(true); setPick(null); setMsg(""); }}>Schimbă status</button>
-      {open && createPortal(
-        <div className="vfModal sheet" role="dialog" aria-modal="true" aria-labelledby="stTitle" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
-          <div className="vfModalBox">
-            <div className="cardHead"><h2 id="stTitle">Statusul raportului</h2><button type="button" className="btn btnGhost btnSm" onClick={() => setOpen(false)} aria-label="Închide">×</button></div>
-            <p className="stNow">Acum: <span className={`stNowPill st-${cur}`}><i />{curLabel}</span>{(cur === "suspended" || cur === "cancelled") && reason ? <small> · {reason}</small> : null}</p>
-            <div className="stChoices">
-              {STATUSES.filter(([k]) => !locked || k === "in_progress" || k === cur).map(([k, l]) => (
-                <button key={k} type="button" className={`stChoice st-${k}${k === cur ? " on" : ""}${k === pick ? " picked" : ""}`} aria-pressed={k === cur} disabled={!!busy || (locked && k === cur)}
-                  onClick={() => choose(k)}>
-                  <i aria-hidden />
-                  <span><b>{l}</b><small>{STATUS_HINT[k]}</small></span>
-                  {k === cur && <em className="stCur">✓ status actual</em>}
-                  {busy === k && <em>Se salvează…</em>}
-                </button>
-              ))}
-            </div>
-            {locked && <p className="hint">Raportul este finalizat și blocat. Îl poți redeschide (În lucru) cu motivul; după modificări se predă din nou.</p>}
-            {pick && why_(pick) && (
-              <div className="stReason">
-                <label className="field">{why_(pick)![0]}<textarea className="textarea" rows={3} value={why} onChange={(e) => setWhy(e.target.value)} autoFocus placeholder={why_(pick)![1]} /></label>
-                <small className="muted">Motivul rămâne pe raport și apare în mesajele echipei.</small>
-                <button type="button" className={`btn ${pick === "cancelled" ? "btnDanger" : "btnNavy"}`} disabled={!!busy || !why.trim()} onClick={() => save(pick)}>
-                  {busy ? "Se salvează…" : pick === cur ? "Actualizează motivul" : why_(pick)![2]}
-                </button>
-              </div>
-            )}
+    <div className="stActs">
+      {cur === "in_progress" && <>
+        <button type="button" className="stBtn pause" disabled={busy} onClick={() => open("suspended")}><Ico d={I.pause} />Suspendă</button>
+        {finish && <button type="button" className="stBtn finish" disabled={busy} onClick={finishNow}><Ico d={I.check} />Finalizează</button>}
+      </>}
+      {cur === "suspended" && <button type="button" className="stBtn resume" disabled={busy} onClick={() => go("in_progress")}><Ico d={I.play} />{busy ? "Se reia…" : "Reia lucrul"}</button>}
+      {cur === "done" && <button type="button" className="stBtn reopen" disabled={busy} onClick={() => open("reopen")}><Ico d={I.back} />Întoarce în lucru</button>}
+      {cur === "cancelled" && canCancel && <button type="button" className="stBtn reopen" disabled={busy} onClick={() => go("in_progress")}><Ico d={I.back} />Reactivează</button>}
+      {((cur === "suspended") || (canCancel && cur !== "cancelled" && cur !== "done")) && (
+        <span className="stMore">
+          <button type="button" className="stBtn ghost" aria-label="Alte acțiuni" aria-expanded={menu} onClick={() => setMenu(!menu)}><Ico d={I.more} /></button>
+          {menu && (
+            <span className="stMenu" role="menu">
+              {cur === "suspended" && <button type="button" role="menuitem" onClick={() => open("reason")}>Modifică motivul suspendării</button>}
+              {canCancel && <button type="button" role="menuitem" className="neg" onClick={() => open("cancelled")}><Ico d={I.stop} />Anulează raportul</button>}
+            </span>
+          )}
+        </span>
+      )}
+      {ask && createPortal(
+        <div className="vfModal" role="dialog" aria-modal="true" aria-labelledby="stAskT" onClick={(e) => { if (e.target === e.currentTarget) setAsk(null); }}>
+          <div className="vfModalBox stAsk">
+            <h2 id="stAskT">{ask.title}</h2>
+            {ask.kind === "suspended" && <p className="hint">Timpul raportului se oprește până îl reiei{pausedDays ? ` (are deja ${pausedDays} ${pausedDays === 1 ? "zi" : "zile"} de pauză)` : ""}. Motivul apare în Mesaje, iar echipa raportului primește o notificare pe telefon.</p>}
+            {ask.kind === "cancelled" && <p className="hint">Lucrarea nu se mai face. Motivul apare în Mesaje.</p>}
+            {ask.kind === "reopen" && <p className="hint">Raportul redevine editabil; după modificări se predă din nou.</p>}
+            {ask.quick && <span className="chips">{ask.quick.map((q) => <button key={q} type="button" className="chip" aria-pressed={why === q} onClick={() => setWhy(q)}>{q}</button>)}</span>}
+            <label className="field">{ask.label}<textarea className="textarea" rows={3} value={why} onChange={(e) => setWhy(e.target.value)} autoFocus placeholder={ask.placeholder} /></label>
             {msg && <div role="alert" className="error">{msg}</div>}
+            <div className="actions" style={{ justifyContent: "flex-end" }}>
+              <button type="button" className="btn btnGhost" onClick={() => setAsk(null)}>Renunță</button>
+              <button type="button" className={`btn ${ask.kind === "cancelled" ? "btnDanger" : ask.kind === "suspended" ? "btnGold" : "btnNavy"}`} disabled={busy || !why.trim()} onClick={submit}>{busy ? "Se salvează…" : ask.button}</button>
+            </div>
           </div>
         </div>, document.body)}
-    </>
+    </div>
   );
 }
 
