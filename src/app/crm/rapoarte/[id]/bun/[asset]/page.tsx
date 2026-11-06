@@ -23,6 +23,9 @@ import { SimilarReports } from "../../SimilarReports";
 import { similarReports } from "@/lib/similar-reports";
 import { latestChecks } from "@/lib/legal-check";
 import { isProblem } from "@/lib/legal-groups";
+import { cadastralRoot } from "@/lib/geolocate";
+import { locatorEnabled, siteAiEnabled, siteDocs, siteOf } from "@/lib/site-analysis";
+import { SiteAnalysis } from "./SiteAnalysis";
 
 export const metadata: Metadata = { title: "Bun evaluat | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -31,7 +34,7 @@ const APPROACH: Record<string, string> = { market: "Piață", income: "Venit", c
 const INSP_STATUS: Record<string, [string, string]> = {
   done: ["Realizată", "pillOk"], scheduled: ["Programată", "pillInfo"], to_schedule: ["De programat", "pillWarn"], cancelled: ["Anulată", ""],
 };
-type Tab = "prezentare" | "inspectii" | "fotografii" | "acte" | "analiza";
+type Tab = "prezentare" | "inspectii" | "fotografii" | "acte" | "amplasament" | "analiza";
 
 // What the inspection found (property_features), the most telling columns; utilities are shown apart.
 const FEATURES: [col: string, label: string, unit?: string][] = [
@@ -194,10 +197,13 @@ export default async function AssetPage({ params, searchParams }: {
   const zipName = `${cap(a.type) || "Bun"} ${r.number ? `raport ${r.number}` : ""} ${a.city ?? ""}`.trim();
   const backToReport = `${base}/rapoarte/${id}?tab=bunuri&bun=${a.id}`;
   const nav: [Tab, string, number | null][] = [
-    ["prezentare", "Prezentare", null], ["inspectii", "Inspecții", insp.length || null], ["fotografii", "Fotografii", photos.length || null], ["acte", "Acte", docItems.length || null],
+    ["prezentare", "Prezentare", null], ["inspectii", "Inspecții", insp.length || null], ["fotografii", "Fotografii", photos.length || null], ["acte", "Acte", docItems.length || null], ["amplasament", "Amplasament", null],
     ...(analytics ? [["analiza", "Istoric valoare", series.length] as [Tab, string, number]] : []),
   ];
   const tab: Tab = nav.find(([k]) => k === asked)?.[0] ?? "prezentare";
+  // the site analysis, only for real estate (not vehicles or equipment)
+  const realEstate = !/auto|vehicul|echipament|utilaj|mobil/i.test(`${a.category ?? ""} ${a.type ?? ""}`);
+  const [site, siteDocList] = tab === "amplasament" ? await Promise.all([siteOf(db, a.id), siteDocs(db, id, a.id, a.cf_file)]) : [null, []];
   const self = (t: Tab) => `${base}/rapoarte/${id}/bun/${a.id}?${[t !== "prezentare" ? `tab=${t}` : "", from ? `din=${from.id}.${from.asset}` : ""].filter(Boolean).join("&")}`.replace(/\?$/, "");
 
   const inspCards = (
@@ -357,7 +363,7 @@ export default async function AssetPage({ params, searchParams }: {
       </section>
 
       <nav className="bpTabs" aria-label="Secțiunile bunului">
-        {nav.map(([k, l, n]) => <a key={k} href={self(k)} aria-current={tab === k ? "page" : undefined}>{l}{n ? <small>{n}</small> : null}</a>)}
+        {nav.filter(([k]) => k !== "amplasament" || realEstate).map(([k, l, n]) => <a key={k} href={self(k)} aria-current={tab === k ? "page" : undefined}>{l}{n ? <small>{n}</small> : null}{k === "amplasament" && <span className="amNew">NOU</span>}</a>)}
       </nav>
 
       {tab === "prezentare" && (
@@ -488,6 +494,13 @@ export default async function AssetPage({ params, searchParams }: {
           <a className="btn btnGold btnSm" href={`${base}/rapoarte/${id}/bun/${a.id}/anexa?mod=acte`}>Fă anexa documente →</a></div>
       )}
       {tab === "acte" && <ReportDocs report={id} assets={[{ id: a.id, label: cap(a.type) || "Bunul", sub: address }]} items={docItems} edit={acc.can.docs} remove={acc.can.docsDelete} />}
+
+      {tab === "amplasament" && (
+        <SiteAnalysis report={id} asset={a.id} initial={site} docs={siteDocList.map((d) => ({ ref: d.ref, name: d.name, kind: d.kind }))}
+          nr={cadastralRoot(a.cad_land) ?? cadastralRoot(a.cad_building) ?? cadastralRoot(a.cf_number)} ll={ll} city={a.city} address={address}
+          title={`${cap(a.type) || "Bun"}${address ? ` · ${address}` : ""}`} edit={!from && (acc.can.edit || acc.can.assets)} ai={siteAiEnabled()} locator={locatorEnabled()}
+          draftHref={user.role === "owner" ? `${base}/rapoarte/${id}/redactare?bun=${a.id}` : null} annexHref={`${base}/rapoarte/${id}/bun/${a.id}/anexa?mod=foto`} />
+      )}
 
       {tab === "analiza" && valueCard(true)}
     </CrmShell>

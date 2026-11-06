@@ -7,6 +7,7 @@ import { reportAccess } from "@/lib/perms-db";
 import { photoGroup } from "@/lib/insp-sheet-doc";
 import { PHOTO_CATEGORIES } from "@/lib/insp-forms";
 import { CrmShell } from "@/components/CrmShell";
+import { siteOf } from "@/lib/site-analysis";
 import { AnexaBuilder, type SrcDoc, type SrcPhoto } from "./AnexaBuilder";
 
 export const metadata: Metadata = { title: "Anexă | CRM VALUEFY" };
@@ -43,6 +44,14 @@ export default async function AnexaPage({ params, searchParams }: { params: Prom
   });
   const inspections = insp.filter((i) => photos.some((p) => p.inspection === i.id))
     .map((i) => ({ id: i.id, label: `Inspecția din ${fmtDate(i.done_at ?? i.scheduled_at ?? i.created_at)}${i.inspector ? ` · ${i.inspector}` : ""}` }));
+  // the maps of the site analysis (tab „Amplasament”), when they were added to the annex
+  const site = await siteOf(db, a.id);
+  if (site?.in_annex && site.figures.length) {
+    const caps = ["Amplasamentul în zonă, dotări în 1,5 km", "Plan de situație"];
+    photos.unshift(...site.figures.map((k) => { const i = k.includes("/fig2-") ? 1 : 0; return { id: `site-${i + 1}`, src: `/api/crm/reports/${id}/site?fig=${encodeURIComponent(k)}`, name: `Fig. ${i + 1} ${caps[i]}.png`,
+      group: "Amplasament", desc: caps[i], taken: site.made_at, inspection: "site" }; }));
+    inspections.unshift({ id: "site", label: "Analiza amplasamentului" });
+  }
 
   // the documents of the asset (and of the whole report or order): the PDFs and the images
   const [docs, orderDocs] = await Promise.all([reportDocuments(db, id), reportOrderDocuments(db, r.order_id)]);
