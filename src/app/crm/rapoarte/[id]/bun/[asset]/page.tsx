@@ -203,7 +203,8 @@ export default async function AssetPage({ params, searchParams }: {
   const tab: Tab = nav.find(([k]) => k === asked)?.[0] ?? "prezentare";
   // the site analysis, only for real estate (not vehicles or equipment)
   const realEstate = !/auto|vehicul|echipament|utilaj|mobil/i.test(`${a.category ?? ""} ${a.type ?? ""}`);
-  const [site, siteDocList] = tab === "amplasament" ? await Promise.all([siteOf(db, a.id), siteDocs(db, id, a.id, a.cf_file)]) : [null, []];
+  const [site, siteDocList, siteEval] = tab === "amplasament" ? await Promise.all([siteOf(db, a.id), siteDocs(db, id, a.id, a.cf_file),
+    db.prepare("SELECT COALESCE(NULLIF(u.name, ''), u.email) AS name FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = ? AND m.role = 'evaluator' LIMIT 1").bind(id).first<{ name: string }>()]) : [null, [], null];
   const self = (t: Tab) => `${base}/rapoarte/${id}/bun/${a.id}?${[t !== "prezentare" ? `tab=${t}` : "", from ? `din=${from.id}.${from.asset}` : ""].filter(Boolean).join("&")}`.replace(/\?$/, "");
 
   const inspCards = (
@@ -498,7 +499,8 @@ export default async function AssetPage({ params, searchParams }: {
       {tab === "amplasament" && (
         <SiteAnalysis report={id} asset={a.id} initial={site} docs={siteDocList.map((d) => ({ ref: d.ref, name: d.name, kind: d.kind }))}
           nr={cadastralRoot(a.cad_land) ?? cadastralRoot(a.cad_building) ?? cadastralRoot(a.cf_number)} ll={ll} city={a.city} address={address}
-          title={`${cap(a.type) || "Bun"}${address ? ` · ${address}` : ""}`} edit={!from && (acc.can.edit || acc.can.assets)} ai={siteAiEnabled()} locator={locatorEnabled()}
+          title={`${cap(a.type) || "Bun"}${address ? ` · ${address}` : ""}`}
+          brand={{ company: firm.name, subtitle: firm.corp ? `Membru corporativ ANEVAR · autorizația nr. ${firm.corp}` : "", evaluator: siteEval?.name ?? "" }} edit={!from && (acc.can.edit || acc.can.assets)} ai={siteAiEnabled()} locator={locatorEnabled()}
           draftHref={user.role === "owner" ? `${base}/rapoarte/${id}/redactare?bun=${a.id}` : null} annexHref={`${base}/rapoarte/${id}/bun/${a.id}/anexa?mod=foto`} />
       )}
 

@@ -3,10 +3,13 @@
 // a document with coordinates, or only the zone), then the steps (contour → zone → maps → text), then the result:
 // the two figures, the parcel, the zone, the "Descrierea amplasamentului" text in three variants, and what the
 // valuer completes. Everything is saved on the asset; the text goes to the report's drafting, the maps to the photo annex.
-import { useMemo, useRef, useState } from "react";
-import { dist, fmt, inCity, nearest, STYLES, surfaceRo, type LL, type Site, type Style } from "@/lib/site-shared";
-import { runsOf, siteDocx, sitePdf, type Block } from "@/lib/site-export";
-import { SitePlan, ZoneMap, type FigHandle } from "./SiteFigures";
+import { useMemo, useState } from "react";
+import { dist, fmt, inCity, STYLES, surfaceRo, type LL, type Site, type Style } from "@/lib/site-shared";
+import { catCounts, CORS, figurePngs, fmtD, siteDocx, sitePdf } from "@/lib/site-export";
+
+/** "**Localizare.** Proprietatea…" → runs. */
+const runsOf = (text: string) => text.split(/(\*\*[^*]+\*\*)/).filter(Boolean).map((t) => (t.startsWith("**") ? { text: t.slice(2, -2), bold: true } : { text: t, bold: false }));
+import { SitePlan, ZoneMap } from "./SiteFigures";
 
 type Doc = { ref: string; name: string; kind: string };
 type Src = "ancpi" | "doc" | "zone";
@@ -43,7 +46,7 @@ function Prose({ text, bad }: { text: string; bad: string[] }) {
 
 export function SiteAnalysis(props: {
   report: string; asset: string; initial: Site | null; docs: Doc[]; nr: string | null; ll: LL | null; city: string | null; address: string | null;
-  title: string; edit: boolean; ai: boolean; locator: boolean; draftHref: string | null; annexHref: string;
+  title: string; brand: { company: string; subtitle: string; evaluator: string }; edit: boolean; ai: boolean; locator: boolean; draftHref: string | null; annexHref: string;
 }) {
   const { report, asset, docs, nr, ll, edit, ai } = props;
   const url = `/api/crm/reports/${report}/site`;
@@ -59,7 +62,6 @@ export function SiteAnalysis(props: {
   const [prompt, setPrompt] = useState("");
   const [base, setBase] = useState<"harta" | "satelit">("harta");
   const [editing, setEditing] = useState<string | null>(null);
-  const fig1 = useRef<FigHandle>(null), fig2 = useRef<FigHandle>(null);
 
   const setStep = (key: string, state: Step["state"], detail?: string) => setSteps((s) => s && s.map((x) => (x.key === key ? { ...x, state, detail: detail ?? x.detail } : x)));
 
@@ -81,7 +83,7 @@ export function SiteAnalysis(props: {
       setStep("zone", "run");
       cur = (await call(url, "POST", { asset, step: "zone" })).site ?? cur;
       const z = cur?.zone;
-      setStep("zone", "ok", z ? `${nearest(z).length} dotări, ${z.roads.length} străzi aproape${z.neg.length ? `, ${z.neg.length} factori negativi` : ""}${cur?.parcel?.geo?.frontage ? `; front ${fmt(cur.parcel.geo.frontage.length, 1)} m` : ""}` : "");
+      setStep("zone", "ok", z ? `${catCounts(z).length} dotări, ${z.roads.length} străzi aproape${z.neg.length ? `, ${z.neg.length} factori negativi` : ""}${cur?.parcel?.geo?.frontage ? `; front ${fmt(cur.parcel.geo.frontage.length, 1)} m` : ""}` : "");
       setStep("maps", "ok");
       setSite(cur);
       if (ai) {
@@ -110,18 +112,11 @@ export function SiteAnalysis(props: {
     catch (e) { setError((e as Error).message); return false; }
     finally { setBusy(null); }
   }
-  async function figures() {
-    const out: { name: string; blob: Blob }[] = [];
-    const a = await fig1.current?.png(), b = await fig2.current?.png();
-    if (a) out.push({ name: "fig1", blob: a });
-    if (b) out.push({ name: "fig2", blob: b });
-    return out;
-  }
   async function toAnnex() {
     setBusy("annex"); setError(null);
     try {
-      const f = await figures();
-      if (!f.length) throw new Error("Hărțile nu au putut fi salvate ca imagini (serverul hărții a refuzat). Încearcă fundalul Hartă.");
+      const f = site ? await figurePngs(site, base) : [];
+      if (!f.length) throw new Error(CORS);
       const fd = new FormData();
       fd.set("asset", asset);
       for (const x of f) fd.set(x.name, new File([x.blob], `${x.name}.png`, { type: "image/png" }));
@@ -132,7 +127,7 @@ export function SiteAnalysis(props: {
   }
 
   const s = site, p = s?.parcel ?? null, g = p?.geo ?? null, z = s?.zone ?? null;
-  const pois = useMemo(() => (z ? nearest(z) : []), [z]);
+  const pois = useMemo(() => (z ? catCounts(z).map((c) => ({ cat: c.key, label: c.label, name: c.near.name, d: c.near.d, count: c.count })) : []), [z]);
   const street = z?.roads.find((r) => r.name && r.d <= 40);
   const area = p ? p.area_plan ?? p.area_calc : null;
   const diff = p && p.area_plan && p.area_calc ? (Math.abs(p.area_plan - p.area_calc) / p.area_plan) * 100 : null;
@@ -141,39 +136,10 @@ export function SiteAnalysis(props: {
     if (!s) return;
     setBusy(kind); setError(null);
     try {
-      const f = await figures();
-      const blocks: Block[] = [];
-      const fig = async (i: number, caption: string) => { const x = f.find((q) => q.name === `fig${i}`); if (x) blocks.push({ img: new Uint8Array(await x.blob.arrayBuffer()), w: i === 1 ? 800 : 400, h: i === 1 ? 560 : 300, caption }); };
-      await fig(1, `**Fig. 1** – Amplasamentul în zonă, dotări în 1,5 km`);
-      if (p) await fig(2, `**Fig. 2** – Plan de situație: conturul din ${p.source === "ancpi" ? "planul cadastral ANCPI" : p.doc_name}${p.neighbours.length ? ", vecinii înscriși" : ""}`);
-      if (s.text) { blocks.push({ title: "Descrierea amplasamentului" }); for (const para of s.text.split(/\n\s*\n/)) blocks.push({ p: runsOf(para.trim()) }); }
-      if (p) {
-        blocks.push({ title: "Parcela" });
-        const kv: string[][] = [
-          ["Număr cadastral", p.nr ?? "—"], ["Suprafață din plan", `${fmt(area)} mp`], ...(p.area_acte ? [["Suprafață din acte", `${fmt(p.area_acte)} mp`]] : []),
-          ["Perimetru", `${fmt(p.perimeter, 2)} m`], ...(g ? [["Formă", g.shape], ...(g.frontage ? [["Deschidere la stradă", `${fmt(g.frontage.length, 1)} m${g.frontage.street ? `, la ${g.frontage.street}` : ""}`]] : []),
-            ...(g.depth ? [["Adâncime", `${fmt(g.depth, 1)} m`]] : []), ...(g.orientation ? [["Frontul orientat spre", g.orientation]] : []), ["Construcții la sol", g.sc ? `${fmt(g.sc)} mp${g.pot != null ? ` · POT ${fmt(g.pot, 1)}%` : ""}` : "fără construcții în plan"]] : []),
-          ...(s.situated ? [["Situare", s.situated]] : []), ...(p.neighbours.length ? [["Vecini înscriși", p.neighbours.map((n) => n.nr).join(", ")]] : []),
-        ];
-        for (const [k, v] of kv) blocks.push({ p: [{ text: `${k}: `, bold: true }, { text: v }] });
-      }
-      if (z) {
-        blocks.push({ title: "Zona" });
-        if (pois.length) blocks.push({ head: ["Nr.", "Dotare", "Distanța"], right: [2], table: pois.map((x, i) => [String(i + 1), x.name ? `${x.label}: ${x.name}` : x.label, dist(x.d)]) });
-        const acc = [street ? `Acces din ${street.name} (${street.kind}${street.surface ? `, ${surfaceRo(street.surface)}` : ""}).` : null, ...z.main.map((m) => `${m.label} la ${dist(m.d)}.`),
-          z.city && !inCity(z) ? `${z.city.name} la ${dist(z.city.d)}.` : null].filter(Boolean).join(" ");
-        if (acc) blocks.push({ p: [{ text: "Acces. ", bold: true }, { text: acc }] });
-        blocks.push({ p: [{ text: "Factori negativi. ", bold: true }, { text: z.neg.length ? z.neg.map((n) => `${n.label} la ${dist(n.d)}`).join("; ") + "." : "Nu s-au identificat în raza analizată." }] });
-        blocks.push({ p: [{ text: `Distanțe în linie dreaptă, din OpenStreetMap (${z.date}).` }] });
-      }
-      if (p && p.pts.length) {
-        blocks.push({ title: "Inventar de coordonate (Stereo 70)" });
-        blocks.push({ head: ["Pct.", "X (N)", "Y (E)", "Latura (m)"], right: [1, 2, 3], table: p.pts.map((q) => [q.pct, fmt(q.x, 2), fmt(q.y, 2), q.side != null ? fmt(q.side, 2) : ""]) });
-      }
-      const title = `Analiza amplasamentului · ${props.title}`;
-      const sub = [props.address, s.made_at ? `analiză din ${fmtAt(s.made_at)}` : null].filter(Boolean).join(" · ");
-      const blob = kind === "pdf" ? await sitePdf(title, sub, blocks) : siteDocx(title, sub, blocks);
-      save(blob, `Amplasament ${props.title}.${kind}`.replace(/[\\/:*?"<>|]+/g, " "));
+      const meta = { ...props.brand, title: props.title };
+      const blob = kind === "pdf" ? await sitePdf(s, meta, base) : await siteDocx(s, meta, base);
+      const id = s.parcel?.nr ? `${s.parcel.nr}_${(s.parcel.uat ?? "plan").toLowerCase().replace(/\s+/g, "-")}` : "adresa";
+      save(blob, `analiza_amplasament_${id}_${new Date().toISOString().slice(0, 10)}.${kind}`.replace(/[\\/:*?"<>|]+/g, "_"));
     } catch (e) { setError((e as Error).message || "Exportul nu a reușit."); }
     finally { setBusy(null); }
   }
@@ -252,8 +218,8 @@ export function SiteAnalysis(props: {
                 </div>
               </div>
               <div className={`amFigs${p ? "" : " one"}`}>
-                <figure><div className="amFig"><ZoneMap ref={fig1} zone={z} parcel={p} base={base} /></div><figcaption><b>Fig. 1</b> – Amplasamentul în zonă, dotări în 1,5 km</figcaption></figure>
-                {p && <figure><div className="amFig"><SitePlan ref={fig2} parcel={p} zone={z} /></div><figcaption><b>Fig. 2</b> – Plan de situație: conturul din {p.source === "ancpi" ? "planul ANCPI" : p.doc_name}{p.neighbours.length ? ", vecinii înscriși" : ""}</figcaption></figure>}
+                <figure><div className="amFig"><ZoneMap zone={z} parcel={p} base={base} /></div><figcaption><b>Fig. 1</b> — Încadrarea în zonă (rază 1 km; numerele = dotările din listă)</figcaption></figure>
+                {p && <figure><div className="amFig"><SitePlan parcel={p} zone={z} /></div><figcaption><b>Fig. 2</b> — Plan de situație</figcaption></figure>}
               </div>
             </section>
           )}
@@ -279,7 +245,7 @@ export function SiteAnalysis(props: {
               <div className="amZone">
                 <div>
                   <span className="amEyebrow">DOTĂRI ÎN 1,5 KM</span>
-                  {pois.length ? pois.map((x, i) => <div key={x.cat} className="amRow"><span><b className="amNum">{i + 1}</b>{x.name ? <>{x.name} <small>· {x.label.toLowerCase()}</small></> : x.label}</span><span className="mono">{dist(x.d)}</span></div>)
+                  {pois.length ? pois.map((x, i) => <div key={x.cat} className="amRow"><span><b className="amNum">{i + 1}</b>{x.name ? <>{x.name} <small>· {x.label.toLowerCase()}</small></> : x.label}</span><span className="mono">{fmtD(x.d)} · {x.count} în 1 km</span></div>)
                     : <p className="hint">Nicio dotare găsită în OpenStreetMap în 1,5 km.</p>}
                 </div>
                 <div>
