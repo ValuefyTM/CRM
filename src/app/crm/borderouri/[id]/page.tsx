@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { can } from "@/lib/perms";
-import { getStatement, KIND_LABEL, linesOf, linesWith, memberChoices, memberReports, periodLabel, recipientsOf, statementLog, STATUS_LABEL, BASIS_PICK, totalOf } from "@/lib/statements";
+import { getStatement, KIND_LABEL, linesOf, linesWith, memberChoices, memberReports, periodLabel, statementLog, STATUS_LABEL, BASIS_PICK, totalOf } from "@/lib/statements";
 import { CrmShell } from "@/components/CrmShell";
 import { History } from "@/components/History";
-import { LinesTable, lei2 } from "../LinesTable";
+import { LinesTable, lei2, lineOrder, type LineOrder } from "../LinesTable";
 import { NotesEdit, StatementActions } from "../StatementActions";
 import { AddLine } from "../LineActions";
 import { ExportXlsx } from "../ExportXlsx";
@@ -31,14 +31,13 @@ export default async function StatementPage({ params, searchParams }: { params: 
   const canEdit = all && can(user, "statements.E") && !who;
   const [allLines, log] = await Promise.all([linesOf(db, s), statementLog(db, id)]);
   const lines = who ? linesWith(allLines, await memberReports(db, who.id)) : allLines;
-  // the lines by designated user (bank / institution)
-  const banks = await recipientsOf(db, [...new Set(lines.map((l) => l.report_id).filter((x): x is string => !!x))]);
   if (self && !lines.length) redirect(`${base}/borderouri`);
   // the inspection lines (only the inspection billed): how far from the office, and the order by it
   const inspIds = [...new Set(lines.filter((l) => l.source === "inspector" && l.inspection_id).map((l) => l.inspection_id!))];
   const km = inspIds.length ? await inspectionDistances(db, inspIds).catch(() => ({} as Awaited<ReturnType<typeof inspectionDistances>>)) : {};
   const hasKm = Object.keys(km).length > 0;
-  const byKm = hasKm && ordine === "distanta";
+  const order: LineOrder = lineOrder(ordine) === "distanta" && !hasKm ? null : lineOrder(ordine);
+  const byKm = order === "distanta";
   // why a distance does not show: the start not known (the office not on the map, the inspector's address not
   // written), or the inspection without a place
   const missing = inspIds.filter((x) => !km[x]);
@@ -47,7 +46,7 @@ export default async function StatementPage({ params, searchParams }: { params: 
   const office = why.some((w) => w.f !== "base") ? await officePoint(db).catch(() => null) : null;
   const noBase = why.find((w) => w.f === "base" && !w.has);
   const kmWhy = !missing.length ? null : noBase ? "base" : why.some((w) => w.f !== "base") && !office ? "office" : "places";
-  const sortHref = (o: string | null) => `${base}/borderouri/${id}?${[evaluator ? `evaluator=${encodeURIComponent(evaluator)}` : "", o ? `ordine=${o}` : ""].filter(Boolean).join("&")}`.replace(/\?$/, "");
+  const sortHref = (o: LineOrder) => `${base}/borderouri/${id}?${[evaluator ? `evaluator=${encodeURIComponent(evaluator)}` : "", o ? `ordine=${o}` : ""].filter(Boolean).join("&")}`.replace(/\?$/, "");
   const [st, cls] = STATUS_LABEL[s.status];
   const back = `${base}/borderouri`;
   const total = who || s.status === "open" ? totalOf(lines) : s.total ?? totalOf(lines);
@@ -58,7 +57,7 @@ export default async function StatementPage({ params, searchParams }: { params: 
       subtitle={`${KIND_LABEL[s.kind]} · ${periodLabel(s.period)}${s.sub ? ` · ${s.sub}` : ""}`}
       actions={<>
         <ExportXlsx id={s.id} evaluator={who && !self ? who.id : null} />
-        <StatementActions id={s.id} status={s.status} canEdit={canEdit} canDelete={all && can(user, "statements.D")} back={back} lines={lines.filter((l) => !l.removed).length} />
+        <StatementActions id={s.id} status={s.status} canEdit={canEdit} canDelete={all && can(user, "statements.D")} back={back} lines={lines.filter((l) => !l.removed).length} order={order} />
       </>}>
       <div className="stHead">
         {s.kind === "payout" ? (s.status === "open" ? <span className="stBadge wait">În curs · nevalidat încă</span> : <span className="stBadge">✓ Validat de firmă{s.status === "issued" ? " · emis" : ""}</span>)
@@ -78,7 +77,7 @@ export default async function StatementPage({ params, searchParams }: { params: 
             {hasKm && (
               <span className="kmSort" role="group" aria-label="Ordinea liniilor">
                 <span className="muted">Ordine:</span>
-                <a href={sortHref(null)} aria-current={!byKm ? "true" : undefined}>implicită</a>
+                <a href={sortHref(null)} aria-current={!order ? "true" : undefined}>implicită</a>
                 <a href={sortHref("distanta")} aria-current={byKm ? "true" : undefined}>după distanță ↓</a>
                 <span className="kmLegend"><span className="kmTag near">&lt; 5 km</span><span className="kmTag mid">5–10 km</span><span className="kmTag far">10–30 km</span><span className="kmTag vfar">30+ km</span></span>
               </span>
@@ -93,7 +92,7 @@ export default async function StatementPage({ params, searchParams }: { params: 
             {kmWhy === "places" && <>{missing.length === inspIds.length ? "Inspecțiile din borderou nu au" : `${missing.length} din ${inspIds.length} inspecții nu au`} locație (nici GPS din fișa de inspecție, nici pinul proprietății), deci nici distanță.</>}
           </p>
         )}
-        <LinesTable lines={lines} base={base} statement={s.id} canEdit={canEdit && s.status !== "issued"} adjust={s.kind === "payout"} accept={mine} locked={s.status === "issued"} banks={banks} km={km} byKm={byKm} />
+        <LinesTable lines={lines} base={base} statement={s.id} canEdit={canEdit && s.status !== "issued"} adjust={s.kind === "payout"} accept={mine} locked={s.status === "issued"} km={km} order={order} orderHref={sortHref} />
       </section>
       <div className="dGrid2">
           <section className="card">

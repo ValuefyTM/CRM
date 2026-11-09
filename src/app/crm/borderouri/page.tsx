@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { can } from "@/lib/perms";
 import {
-  autoLines, criteriaOf, KIND_LABEL, listStatements, memberChoices, monthBoard, associateCut, linesOf, monthResult, recipientsOf, partyCols, totalOf, periodLabel, profitShares, STATUS_LABEL, thisMonth, validPeriod, type RevSource,
+  autoLines, criteriaOf, KIND_LABEL, listStatements, memberChoices, monthBoard, associateCut, linesOf, monthResult, partyCols, totalOf, periodLabel, profitShares, STATUS_LABEL, thisMonth, validPeriod, type RevSource,
 } from "@/lib/statements";
 import { MemberFilter } from "./MemberFilter";
 import { ExportXlsx } from "./ExportXlsx";
@@ -10,7 +10,7 @@ import { CostAdjust } from "./CostAdjust";
 import { CrmShell } from "@/components/CrmShell";
 import { ClickRow } from "@/components/ClickRow";
 import { OpenStatement } from "./StatementActions";
-import { LinesTable, lei2 } from "./LinesTable";
+import { LinesTable, lei2, lineOrder, type LineOrder } from "./LinesTable";
 
 export const metadata: Metadata = { title: "Borderouri | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -27,7 +27,7 @@ const shift = (p: string, n: number) => { const [y, m] = p.split("-").map(Number
  */
 type Row = Awaited<ReturnType<typeof monthBoard>>[number];
 
-export default async function StatementsPage({ searchParams }: { searchParams: Promise<{ luna?: string; evaluator?: string }> }) {
+export default async function StatementsPage({ searchParams }: { searchParams: Promise<{ luna?: string; evaluator?: string; ordine?: string }> }) {
   const { db, user, base } = await staffPage("statements");
   const sp = await searchParams;
   const period = validPeriod(sp.luna) ? sp.luna : thisMonth();
@@ -50,7 +50,8 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
     const [cur, prev] = await Promise.all([monthOf(now), monthOf(prevP)]);
     const delta = Math.round((cur.total - prev.total) * 100) / 100;
     const badge = (st: typeof cur.st) => (st && st.status !== "open" ? <span className="stBadge">✓ Validat de firmă{st.status === "issued" ? " · emis" : ""}</span> : <span className="stBadge wait">În curs</span>);
-    const banks = await recipientsOf(db, [...new Set(cur.lines.map((l) => l.report_id).filter((x): x is string => !!x))]);
+    const order = lineOrder(sp.ordine) === "distanta" ? null : lineOrder(sp.ordine);
+    const orderHref = (o: LineOrder) => `${here}?${[sp.luna ? `luna=${now}` : "", o ? `ordine=${o}` : ""].filter(Boolean).join("&")}#luna`.replace("?#", "#");
     const pending = cur.lines.filter((l) => l.changed_at && !l.accepted_at).length;
     return (
       <CrmShell user={user} base={base} active="statements" title="Borderoul meu" subtitle="Ce ți se cuvine lunar: cotele tale din rapoartele predate și inspecțiile făcute">
@@ -68,7 +69,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
         {pending > 0 && <div className="note"><b>Ai {pending} {pending === 1 ? "ajustare" : "ajustări"} de confirmat.</b> Le găsești în coloana „Ajustare · comentariu”; bifează „Accept ajustarea”.</div>}
         <section className="card flush" id="luna">
           <div className="cardHead"><h2>{periodLabel(now)}{now === thisMonth() ? " · luna curentă" : ""}</h2><span className="muted">{badge(cur.st)}{cur.st && <> · <a className="link" href={`${here}/${cur.st.id}`}>deschide →</a></>}</span></div>
-          <LinesTable lines={cur.lines} base={base} statement={cur.st?.id ?? ""} canEdit={false} adjust accept={!!cur.st} locked={cur.st?.status === "issued"} banks={banks} />
+          <LinesTable lines={cur.lines} base={base} statement={cur.st?.id ?? ""} canEdit={false} adjust accept={!!cur.st} locked={cur.st?.status === "issued"} order={order} orderHref={orderHref} />
           <p className="hint pad">Se calculează din rapoartele predate și inspecțiile făcute în lună, cu cotele tale. La final de lună firma îl validează și îl emite; ajustările apar cu comentariul lor și le confirmi tu.</p>
         </section>
       </CrmShell>

@@ -20,23 +20,30 @@ export function KmTag({ d }: { d: { km: number; road: boolean; from?: "base" | "
     title={d.road ? `Distanța pe drum, cu mașina, ${start}` : `În linie dreaptă, ${start}: distanța pe drum se calculează la următoarea deschidere`}>{d.road ? "" : "≈ "}{v} km</span>;
 }
 
-export function LinesTable({ lines, base, statement, canEdit, print = false, adjust = false, accept = false, locked = false, banks, km, byKm = false }: {
+export type LineOrder = "data" | "data-desc" | "distanta" | null;
+export const lineOrder = (v: string | undefined): LineOrder => (v === "data" || v === "data-desc" || v === "distanta" ? v : null);
+
+export function LinesTable({ lines, base, statement, canEdit, print = false, adjust = false, accept = false, locked = false, km, order = null, orderHref }: {
   lines: Line[]; base: string; statement: string; canEdit: boolean; print?: boolean; adjust?: boolean; accept?: boolean; locked?: boolean;
-  /** the designated user (bank / institution) of each report: the lines grouped by it, with subtotals */
-  banks?: Record<string, string>;
   /** inspection → km from the office (the inspection lines show it as a coloured tag) */
   km?: Record<string, { km: number; road: boolean; from?: "base" | "office" }>;
-  /** sorted by that distance, farthest first (one list, no grouping by bank) */
-  byKm?: boolean;
+  /** the order of the whole list: by date (up / down), by distance (farthest first), else as computed */
+  order?: LineOrder;
+  /** the link that puts the list in an order (the "Data" header toggles up / down) */
+  orderHref?: (o: LineOrder) => string;
 }) {
   if (!lines.length) return <p className="hint pad">Nicio linie în această lună.</p>;
   const adjusted = lines.filter((l) => l.removed || l.changed_at);
   const col = adjust || adjusted.length > 0;
-  const groupOf = (l: Line) => (l.report_id ? banks?.[l.report_id] || "Doar clientul (fără bancă)" : "Alte linii");
-  // grouped: the banks by their total (biggest first), the other lines last
   const dist = (l: Line) => (l.inspection_id && km ? km[l.inspection_id] : undefined);
-  const groups = byKm ? [{ g: "", lines: [...lines].sort((a, b) => (dist(b)?.km ?? -1) - (dist(a)?.km ?? -1)) }] : banks ? [...new Set(lines.map(groupOf))].map((g) => ({ g, lines: lines.filter((l) => groupOf(l) === g) }))
-    .sort((a, b) => (a.g === "Alte linii" ? 1 : b.g === "Alte linii" ? -1 : totalOf(b.lines) - totalOf(a.lines))) : [{ g: "", lines }];
+  // one list, no grouping; the lines without a date (a fixed amount, a manual line) stay at the end
+  const byDate = (a: Line, b: Line, dir: number) => (!a.on_date ? (b.on_date ? 1 : 0) : !b.on_date ? -1 : dir * a.on_date.localeCompare(b.on_date) || a.sort - b.sort);
+  const list = order === "distanta" ? [...lines].sort((a, b) => (dist(b)?.km ?? -1) - (dist(a)?.km ?? -1))
+    : order === "data" ? [...lines].sort((a, b) => byDate(a, b, 1)) : order === "data-desc" ? [...lines].sort((a, b) => byDate(a, b, -1)) : lines;
+  const groups = [{ g: "", lines: list }];
+  const dateHead = orderHref && !print
+    ? <a className="stSortHead" href={orderHref(order === "data" ? "data-desc" : "data")} title={order === "data" ? "Ordonează descrescător după dată" : "Ordonează crescător după dată"}>Data <span aria-hidden="true">{order === "data" ? "↑" : order === "data-desc" ? "↓" : "↕"}</span></a>
+    : "Data";
   const cols = 5 + (col ? 1 : 0) + (canEdit && !print ? 1 : 0);
   let n = 0;
   const diff = (l: Line) => {
@@ -48,10 +55,9 @@ export function LinesTable({ lines, base, statement, canEdit, print = false, adj
   return (
     <div className={print ? "" : "tableWrap"}>
       <table className={`table stLines${print ? " stPrint" : ""}`}>
-        <thead><tr><th>#</th><th>Ce</th><th>Data</th><th>Bază · cotă</th><th style={{ textAlign: "right" }}>Suma</th>{col && <th>Ajustare · comentariu</th>}{canEdit && !print && <th />}</tr></thead>
+        <thead><tr><th>#</th><th>Ce</th><th aria-sort={order === "data" ? "ascending" : order === "data-desc" ? "descending" : undefined}>{dateHead}</th><th>Bază · cotă</th><th style={{ textAlign: "right" }}>Suma</th>{col && <th>Ajustare · comentariu</th>}{canEdit && !print && <th />}</tr></thead>
         {groups.map(({ g, lines: part }) => (
         <tbody key={g || "all"}>
-          {g && <tr className="stBankHead"><td colSpan={cols}><b>{g}</b><span>{part.filter((l) => !l.removed).length} {part.filter((l) => !l.removed).length === 1 ? "linie" : "linii"} · <b className="mono">{lei2(totalOf(part))}</b></span></td></tr>}
           {part.map((l) => {
             const i = n++;
             const changed = !l.removed && l.changed_at && l.key;

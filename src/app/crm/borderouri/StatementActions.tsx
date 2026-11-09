@@ -29,7 +29,7 @@ export function ReasonModal({ title, hint, label, danger, onClose, onSave }: { t
     </div>, document.body);
 }
 
-export function StatementActions({ id, status, canEdit, canDelete, back, lines }: { id: string; status: "open" | "validated" | "issued"; canEdit: boolean; canDelete: boolean; back: string; lines: number }) {
+export function StatementActions({ id, status, canEdit, canDelete, back, lines, order }: { id: string; status: "open" | "validated" | "issued"; canEdit: boolean; canDelete: boolean; back: string; lines: number; order?: string | null }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [reopen, setReopen] = useState(false);
@@ -46,7 +46,7 @@ export function StatementActions({ id, status, canEdit, canDelete, back, lines }
         onClick={() => { if (confirm("Validezi borderoul? Liniile se îngheață așa cum sunt acum (le poți ajusta până la emitere).")) act("validate"); }}>Validează</button>}
       {canEdit && status === "validated" && <button type="button" className="btn btnGold btnSm" disabled={busy} onClick={() => { if (confirm("Emiți borderoul? Primește număr și nu se mai modifică.")) act("issue"); }}>Emite</button>}
       {canEdit && status !== "open" && <button type="button" className="btn btnGhost btnSm" disabled={busy} onClick={() => setReopen(true)}>{status === "issued" ? "Redeschide (emis → validat)" : "Înapoi în curs"}</button>}
-      <a className="btn btnGhost btnSm" href={`${back}/${id}/print`} target="_blank" rel="noopener">Tipărește / PDF</a>
+      <a className="btn btnGhost btnSm" href={`${back}/${id}/print${order === "data" || order === "data-desc" ? `?ordine=${order}` : ""}`} target="_blank" rel="noopener">Tipărește / PDF</a>
       {canDelete && status !== "issued" && <button type="button" className="btn btnGhost btnSm qtDel" disabled={busy} onClick={async () => {
         if (!confirm("Ștergi borderoul? Liniile adăugate și ajustările se pierd; luna se poate deschide din nou.")) return;
         setBusy(true); const r = await send(`/api/crm/statements/${id}`, "DELETE"); setBusy(false);

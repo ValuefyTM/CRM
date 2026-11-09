@@ -3,14 +3,14 @@ import { notFound, redirect } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { can } from "@/lib/perms";
 import { getFirm } from "@/lib/settings";
-import { getStatement, KIND_LABEL, linesOf, linesWith, memberReports, periodLabel, recipientsOf, STATUS_LABEL, totalOf } from "@/lib/statements";
-import { LinesTable, lei2 } from "../../LinesTable";
+import { getStatement, KIND_LABEL, linesOf, linesWith, memberReports, periodLabel, STATUS_LABEL, totalOf } from "@/lib/statements";
+import { LinesTable, lei2, lineOrder } from "../../LinesTable";
 
 export const metadata: Metadata = { title: "Borderou | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
 
 /** A printable statement (the browser's "Save as PDF"). */
-export default async function StatementPrint({ params }: { params: Promise<{ id: string }> }) {
+export default async function StatementPrint({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ordine?: string }> }) {
   const { db, user, base } = await staffPage("statements");
   const { id } = await params;
   const s = await getStatement(db, id);
@@ -20,7 +20,8 @@ export default async function StatementPrint({ params }: { params: Promise<{ id:
   const [allLines, firm] = await Promise.all([linesOf(db, s), getFirm(db)]);
   // "Profitabilitatea lui": only the lines on the user's reports
   const lines = self ? linesWith(allLines, await memberReports(db, user.id)) : allLines;
-  const banks = await recipientsOf(db, [...new Set(lines.map((l) => l.report_id).filter((x): x is string => !!x))]);
+  // the order chosen on the page (by date up / down); by distance only on the page, which has the distances
+  const o = lineOrder((await searchParams).ordine);
   if (self && !lines.length) redirect(`${base}/borderouri`);
   const total = self || s.status === "open" ? totalOf(lines) : s.total ?? totalOf(lines);
   return (
@@ -34,7 +35,7 @@ export default async function StatementPrint({ params }: { params: Promise<{ id:
         </div>
       </header>
       <p><b>{s.kind === "payout" ? "Beneficiar" : "Client"}:</b> {s.name}{s.sub ? ` · ${s.sub}` : ""}</p>
-      <LinesTable lines={lines} base={base} statement={s.id} canEdit={false} print banks={banks} />
+      <LinesTable lines={lines} base={base} statement={s.id} canEdit={false} print order={o === "distanta" ? null : o} />
       <p className="stGrand">Total: <b>{lei2(total)}</b></p>
       {s.notes && <p><b>Observații:</b> {s.notes}</p>}
       <p className="muted" style={{ fontSize: 11 }}>Generat din CRM {fmtDate(new Date().toISOString(), true)}.</p>
