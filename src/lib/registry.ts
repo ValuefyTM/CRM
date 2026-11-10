@@ -164,10 +164,11 @@ export async function registryProperty(db: D1Database, id: string) {
   const valuations = (await db.prepare(`SELECT a.id, a.value, a.is_main, a.approach, r.id AS report_id, r.number, r.status, r.delivered_at, r.result_value, r.currency, r.purpose,
       COALESCE(r.report_date, substr(r.created_at, 1, 10)) AS date, c.name AS client, b.name AS bank,
       (SELECT COUNT(*) FROM assets x WHERE x.report_id = a.report_id) AS assets,
-      (SELECT COALESCE(NULLIF(u.name, ''), u.email) FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = r.id AND m.role = 'evaluator' LIMIT 1) AS evaluator
+      (SELECT COALESCE(NULLIF(u.name, ''), u.email) FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = r.id AND m.role = 'evaluator' LIMIT 1) AS evaluator,
+      (SELECT m.user_id FROM report_members m WHERE m.report_id = r.id AND m.role = 'evaluator' LIMIT 1) AS evaluator_id
     FROM assets a LEFT JOIN reports r ON r.id = a.report_id LEFT JOIN entities c ON c.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id
     WHERE a.property_id = ? ORDER BY date DESC`).bind(id)
     .all<{ id: string; value: number | null; is_main: number; approach: string | null; report_id: string | null; number: string | null; status: string | null; delivered_at: string | null; result_value: number | null;
-      currency: string | null; purpose: string | null; date: string | null; client: string | null; bank: string | null; assets: number; evaluator: string | null }>()).results;
+      currency: string | null; purpose: string | null; date: string | null; client: string | null; bank: string | null; assets: number; evaluator: string | null; evaluator_id: string | null }>()).results;
   return { property: p, valuations };
 }

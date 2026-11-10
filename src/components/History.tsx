@@ -1,5 +1,6 @@
 import { fmtDate } from "@/lib/guard";
 import { ACTION_LABEL, type LogEntry } from "@/lib/history";
+import { Face } from "./Avatar";
 
 export function History({ log }: { log: LogEntry[] }) {
   return (
@@ -13,7 +14,7 @@ export function History({ log }: { log: LogEntry[] }) {
               <span>
                 <b>{ACTION_LABEL[l.action] ?? l.action}</b>
                 {l.details && ` · ${l.details}`}
-                {l.actor_name && <span className="muted"> · {l.actor_name}</span>}
+                {l.actor_name && <span className="muted logWho"> · <Face id={l.actor.replace(/^(user|staff):/, "")} name={l.actor_name} size={18} /> {l.actor_name}</span>}
               </span>
             </li>
           ))}

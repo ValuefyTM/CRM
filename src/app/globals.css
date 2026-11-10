@@ -4365,3 +4365,8 @@ aside.poCol { flex: 1 1 360px; }
 .poFaces > span + span { margin-left: -8px; }
 .poFaces .pAvatar { box-shadow: 0 0 0 2px #fff; }
 .poWho { display: flex; gap: 8px; align-items: center; }
+.withFace { display: inline-flex; align-items: center; gap: 7px; vertical-align: middle; }
+.withFace > span:last-child { min-width: 0; }
+.logWho .pAvatar { vertical-align: -4px; margin-right: 2px; }
+.bvBy .pAvatar { vertical-align: -4px; margin-right: 6px; }
+.stSrc > summary .pAvatar { vertical-align: -6px; margin-right: 8px; }

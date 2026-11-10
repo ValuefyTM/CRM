@@ -9,6 +9,7 @@ import { addMessage } from "./messages";
 import { bucket, getOrder, type Order } from "./orders";
 import { orderCode } from "./order-labels";
 import { guessDocKind } from "./doc-kinds";
+import { notifyLink } from "./auth";
 
 export type DocRequest = { id: string; name: string; note: string | null; requested_at: string; requested_by_name: string | null; doc_id: string | null; done_at: string | null };
 
@@ -26,9 +27,10 @@ const p = (t: string) => `<p style="margin:0 0 10px;font-size:15px;line-height:1
 const quote = (t: string) => `<div style="margin:6px 0 12px;padding:12px 14px;border-left:3px solid #F2A93B;background:#FBF8F2;font-size:14px;line-height:1.6;color:#141414;white-space:pre-wrap">${esc(t)}</div>`;
 
 /** The collaborator hears from the team (a message, documents asked). */
-async function toBroker(o: Order, subject: string, title: string, html: string, text: string) {
+async function toBroker(db: D1Database, o: Order, subject: string, title: string, html: string, text: string) {
   if (!o.creator_email) return;
-  const link = await appUrl("portal", `/comenzi/${o.id}`);
+  // the button signs them in and opens the order (a link valid 7 days); else the order page, behind the sign-in
+  const link = (o.created_by ? await notifyLink(db, o.created_by, `/comenzi/${o.id}`).catch(() => null) : null) ?? await appUrl("portal", `/comenzi/${o.id}`);
   await sendEmail({
     to: o.creator_email, subject, text: `${text}\n\nRăspunde sau încarcă actele din pagina comenzii: ${link}`,
     html: layout({ eyebrow: `Comanda ${orderCode(o)}`, title, body: html, button: { label: "Deschide comanda →", url: link }, foot: "Răspunsul îl scrii în pagina comenzii din portal, la Mesaje." }),
@@ -57,7 +59,7 @@ export async function orderMessage(db: D1Database, orderId: string, user: { id: 
   if (!r.ok || !shared) return r;
   const who = user.name || user.email;
   if (user.kind === "partner") await toTeam(db, o, `Mesaj de la ${who} · comanda ${orderCode(o)}`, `${esc(who)} a scris`, quote(body), `${who} a scris la comanda ${orderCode(o)}:\n\n${body}`);
-  else await toBroker(o, `Mesaj de la VALUEFY · comanda ${orderCode(o)}`, "Ai un mesaj de la echipă", p(`${esc(who)} ți-a scris despre comanda <b>${esc(orderCode(o))}</b>${o.client_name ? ` (${esc(o.client_name)})` : ""}:`) + quote(body), `${who} ți-a scris despre comanda ${orderCode(o)}:\n\n${body}`);
+  else await toBroker(db, o, `Mesaj de la VALUEFY · comanda ${orderCode(o)}`, "Ai un mesaj de la echipă", p(`${esc(who)} ți-a scris despre comanda <b>${esc(orderCode(o))}</b>${o.client_name ? ` (${esc(o.client_name)})` : ""}:`) + quote(body), `${who} ți-a scris despre comanda ${orderCode(o)}:\n\n${body}`);
   return r;
 }
 
@@ -74,7 +76,7 @@ export async function requestDocs(db: D1Database, orderId: string, user: { id: s
   await db.prepare("UPDATE orders SET docs_missing = 1, updated_at = ? WHERE id = ?").bind(t, orderId).run();
   const body = `Am solicitat actele:\n${list.map((n) => `• ${n}`).join("\n")}${note.trim() ? `\n\n${note.trim()}` : ""}\n\nLe poți încărca din pagina comenzii, la Documente.`;
   await addMessage(db, "order", orderId, user, body, true);
-  await toBroker(o, `Acte solicitate · comanda ${orderCode(o)}`, "Avem nevoie de câteva acte",
+  await toBroker(db, o, `Acte solicitate · comanda ${orderCode(o)}`, "Avem nevoie de câteva acte",
     p(`Pentru comanda <b>${esc(orderCode(o))}</b>${o.client_name ? ` (${esc(o.client_name)})` : ""} avem nevoie de:`)
       + `<ul style="margin:0 0 12px;padding-left:20px;font-size:15px;line-height:1.7;color:#141414">${list.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>`
       + (note.trim() ? quote(note.trim()) : "") + p("Le încarci din pagina comenzii, fiecare în dreptul lui."),

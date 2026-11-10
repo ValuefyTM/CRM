@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { WithFace } from "@/components/Avatar";
 import { notFound } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { propertyInScope, reportAccess } from "@/lib/perms-db";
@@ -108,7 +109,7 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
                     <td>{fmtDate(v.date)}</td>
                     <td>{v.open ? niceName(v.client) || "—" : <span className="muted">confidențial</span>}{v.purpose && <div className="muted">{v.purpose}</div>}</td>
                     <td>{v.open ? niceName(v.bank) || "—" : <span className="muted">—</span>}</td>
-                    <td>{v.evaluator ?? "—"}</td>
+                    <td><WithFace id={v.evaluator_id} name={v.evaluator} /></td>
                     <td>{v.approach ? APPROACH[v.approach] ?? v.approach : "—"}</td>
                     <td className="r">{lei(v.val)}</td>
                     <td className="r">{v.val && p.usable_area ? Math.round(v.val / p.usable_area).toLocaleString("ro-RO") : "—"}</td>

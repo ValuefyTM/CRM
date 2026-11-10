@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Face } from "@/components/Avatar";
 import { can } from "@/lib/perms";
 import { notFound } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
@@ -188,7 +189,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
               <div className="cardHead"><h2>Evaluatori agreați</h2>{can(user, "users") && <a className="link" href={`${base}/utilizatori?tab=interni`}>Utilizatori →</a>}</div>
               {accredited.length === 0
                 ? <p className="hint" style={{ margin: 0 }}>Nimeni nu e agreat pe acest contract. Agreerile se dau din fișa fiecărui utilizator (Utilizatori → persoana → Agreeri pe contracte cadru): persoana poate apoi înregistra și procesa comenzile băncii pe acest contract.</p>
-                : <ul className="people">{accredited.map((p) => <li key={p.id}><span className="who"><b>{can(user, "users") ? <a className="rowLink" href={`${base}/utilizatori/${p.id}`}>{p.name}</a> : p.name}</b><small>agreat din {fmtDate(p.created_at)}</small></span></li>)}</ul>}
+                : <ul className="people">{accredited.map((p) => <li key={p.id}><Face id={p.id} name={p.name} size={32} /><span className="who"><b>{can(user, "users") ? <a className="rowLink" href={`${base}/utilizatori/${p.id}`}>{p.name}</a> : p.name}</b><small>agreat din {fmtDate(p.created_at)}</small></span></li>)}</ul>}
             </section>
           )}
           <section className="card">

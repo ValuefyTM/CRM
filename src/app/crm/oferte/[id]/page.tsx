@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { WithFace } from "@/components/Avatar";
 import { notFound } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { can } from "@/lib/perms";
@@ -107,7 +108,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
           <section className="card">
             <h2>Date</h2>
             <dl className="kv">
-              <Row k="Creată">{fmtDate(q.created_at, true)}{q.author ? ` · ${q.author}` : ""}</Row>
+              <Row k="Creată">{fmtDate(q.created_at, true)}{q.author ? <> · <WithFace id={q.created_by} name={q.author} size={20} /></> : ""}</Row>
               <Row k="Modificată">{fmtDate(q.updated_at, true)}</Row>
             </dl>
           </section>

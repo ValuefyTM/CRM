@@ -122,6 +122,20 @@ export async function verifyCode(db: D1Database, kind: Kind, rawEmail: string, c
   return signInUserId(db, kind, email, app);
 }
 
+/**
+ * A sign-in link that opens a page, for a notification email (a message from the team, documents asked): valid
+ * `days` days, once; the link page signs the person in and goes to `path`. Null when the account may not sign in.
+ */
+export async function notifyLink(db: D1Database, userId: string, path: string, days = 7): Promise<string | null> {
+  const u = await getUser(db, userId);
+  if (!u || !canSignIn(u) || u.status !== "active") return null;
+  const app = appOf(u.kind);
+  const token = randomToken();
+  await db.prepare("INSERT INTO auth_codes (id, audience, purpose, email, code_hash, token_hash, expires_at) VALUES (?, ?, 'login', ?, ?, ?, ?)")
+    .bind(uuid(), u.kind, u.email, await sha256(`notify:${randomToken()}`), await sha256(token), inMinutes(days * 24 * 60)).run();
+  return appUrl(app, `/login/link?token=${encodeURIComponent(token)}&next=${encodeURIComponent(path)}`);
+}
+
 /** Checks a one-time link token (login or invite) of an app. Returns the account it belongs to and, by default, uses it up. */
 export async function consumeToken(db: D1Database, app: App, purpose: "login" | "invite", token: string, consume = true) {
   const row = await db

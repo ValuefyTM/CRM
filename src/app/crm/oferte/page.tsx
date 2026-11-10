@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { WithFace } from "@/components/Avatar";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { can } from "@/lib/perms";
 import { isExpired, listQuotes, quoteCode, quoteCounts, QUOTE_STATUS, QUOTE_TABS, quoteWhat } from "@/lib/quotes";
@@ -57,7 +58,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
                       <td>{q.valid_until ? <span className={exp ? "errTxt" : undefined}>{fmtDate(q.valid_until)}</span> : "—"}</td>
                       <td><span className={`pill ${cls}`}><i />{label}</span>{q.urgent ? <span className="pill pillErr" style={{ marginLeft: 4 }}><i />Urgent</span> : null}
                         {q.status === "converted" && <div className="muted">{q.report_number ? `raport ${q.report_number}` : q.order_seq ? `CO-${q.order_seq}` : q.contract_number ? `contract ${q.contract_number}` : ""}</div>}</td>
-                      <td>{q.author ?? "—"}</td>
+                      <td><WithFace id={q.created_by} name={q.author} /></td>
                     </ClickRow>
                   );
                 })}

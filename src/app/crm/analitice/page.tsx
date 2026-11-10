@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Face } from "@/components/Avatar";
 import { notFound } from "next/navigation";
 import { staffPage } from "@/lib/guard";
 import { periodLabel } from "@/lib/statements";
@@ -151,7 +152,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
                   const mx = Math.max(...c.byMonth, 1);
                   return (
                     <tr key={c.id}>
-                      <td><a className="link" href={`${base}/utilizatori/${c.id}`}><b>{c.name}</b></a></td>
+                      <td><span className="withFace"><Face id={c.id} name={c.name} size={24} /><a className="link" href={`${base}/utilizatori/${c.id}`}><b>{c.name}</b></a></span></td>
                       <td style={{ textAlign: "right" }}>{c.reports}</td><td style={{ textAlign: "right" }}>{c.inspections}</td>
                       <td style={{ textAlign: "right" }} className="mono">{lei(c.revenue)}</td>
                       <td style={{ textAlign: "right", color: "var(--err)" }} className="mono"><b>{lei(c.total)}</b></td>
@@ -175,7 +176,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
               <tbody>
                 {a.associates.map((x) => (
                   <tr key={x.id}>
-                    <td><b>{x.name}</b></td><td style={{ textAlign: "right" }}>{x.reports}</td>
+                    <td><span className="withFace"><Face id={x.id} name={x.name} size={24} /><b>{x.name}</b></span></td><td style={{ textAlign: "right" }}>{x.reports}</td>
                     <td style={{ textAlign: "right", color: "var(--ok-text)" }} className="mono">{lei(x.revenue)}</td>
                     <td style={{ textAlign: "right", color: "var(--err)" }} className="mono">{lei(x.paid)}</td>
                     <td style={{ textAlign: "right" }} className="mono">{lei(x.base)}</td><td style={{ textAlign: "right" }}>{x.pct}%</td>

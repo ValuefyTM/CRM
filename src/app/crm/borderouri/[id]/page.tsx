@@ -5,6 +5,7 @@ import { can } from "@/lib/perms";
 import { getStatement, KIND_LABEL, linesOf, linesWith, memberChoices, memberReports, periodLabel, statementLog, STATUS_LABEL, BASIS_PICK, totalOf } from "@/lib/statements";
 import { CrmShell } from "@/components/CrmShell";
 import { History } from "@/components/History";
+import { Face } from "@/components/Avatar";
 import { LinesTable, lei2, lineOrder, type LineOrder } from "../LinesTable";
 import { NotesEdit, StatementActions } from "../StatementActions";
 import { AddLine } from "../LineActions";
@@ -98,7 +99,7 @@ export default async function StatementPage({ params, searchParams }: { params: 
           <section className="card">
             <h2>Detalii</h2>
             <dl className="dl">
-              <div><dt>Pentru</dt><dd>{s.user_id && all ? <a className="link" href={`${base}/utilizatori/${s.user_id}`}>{s.name}</a> : s.contract_id ? <a className="link" href={`${base}/contracte/${s.contract_id}`}>{s.name}</a> : s.name}</dd></div>
+              <div><dt>Pentru</dt><dd>{s.user_id && all ? <span className="withFace"><Face id={s.user_id} name={s.name} size={22} /><a className="link" href={`${base}/utilizatori/${s.user_id}`}>{s.name}</a></span> : s.contract_id ? <a className="link" href={`${base}/contracte/${s.contract_id}`}>{s.name}</a> : s.name}</dd></div>
               <div><dt>Luna</dt><dd>{periodLabel(s.period)}</dd></div>
               <div><dt>Număr</dt><dd>{s.number ?? <span className="muted">la emitere</span>}</dd></div>
               <div><dt>Linii</dt><dd>{lines.filter((l) => !l.removed).length}{lines.some((l) => l.removed) ? ` (+${lines.filter((l) => l.removed).length} scoase)` : ""}</dd></div>

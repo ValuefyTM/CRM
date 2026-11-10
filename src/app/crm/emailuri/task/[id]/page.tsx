@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { WithFace } from "@/components/Avatar";
 import { notFound, redirect } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { CrmShell } from "@/components/CrmShell";
@@ -27,7 +28,7 @@ export default async function MailTaskPage({ params }: { params: Promise<{ id: s
       <section className="card">
         {t.status === "open"
           ? <div className="actions" style={{ justifyContent: "space-between" }}><span className="pill pillErr"><i />Deschis</span><TaskClose task={t.id} done base={base} /></div>
-          : <p><span className="pill pillOk"><i />{t.status === "done" ? "Rezolvat" : "Închis"}</span> {t.done_name ? `de ${t.done_name}` : ""} {fmtDate(t.done_at, true)}{t.done_note ? ` · ${t.done_note}` : ""}
+          : <p><span className="pill pillOk"><i />{t.status === "done" ? "Rezolvat" : "Închis"}</span> {t.done_name ? <>de <WithFace id={(t as { done_by?: string | null }).done_by} name={t.done_name} size={20} /></> : ""} {fmtDate(t.done_at, true)}{t.done_note ? ` · ${t.done_note}` : ""}
             {t.order_id && <> · <a className="link" href={`${base}/comenzi/${t.order_id}`}>vezi comanda</a></>}</p>}
         {t.kind === "bank_order" && t.status === "open" && !can(user, "orders.A") && <div className="note">Comanda o înregistrează cine poate adăuga comenzi: Secretariat, Administrator, sau cei agreați pe contractul cadru al băncii.</div>}
         <dl className="dl">

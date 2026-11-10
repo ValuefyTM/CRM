@@ -13,6 +13,7 @@ import { parseGeo } from "@/lib/registry";
 import { niceName } from "@/lib/labels";
 import { CrmShell } from "@/components/CrmShell";
 import { MapZoom } from "@/components/MapZoom";
+import { Face, WithFace } from "@/components/Avatar";
 import { InspSheet } from "../../InspSheet";
 import { RevisionAsk } from "../../../RevisionAsk";
 import { canAssign } from "@/lib/insp-assign";
@@ -105,14 +106,14 @@ export default async function AssetPage({ params, searchParams }: {
   // The inspections of the asset (the cancelled ones only when they left a sheet), newest first.
   const { results: insp } = await db.prepare(
     `SELECT i.id, i.status, i.scheduled_at, i.done_at, i.created_at, i.glide_id, i.uvalo_id, i.uvalo_code, i.sheet_type,
-        COALESCE(NULLIF(u.name, ''), u.email) AS inspector, s.id AS sheet_id, s.photo_url, s.present_person, s.signature_url, s.status AS sheet_status, s.glide_id AS sheet_glide,
+        COALESCE(NULLIF(u.name, ''), u.email) AS inspector, i.inspector_id, s.id AS sheet_id, s.photo_url, s.present_person, s.signature_url, s.status AS sheet_status, s.glide_id AS sheet_glide,
         (SELECT COUNT(*) FROM inspection_photos f WHERE f.inspection_id = i.id AND f.deleted_at IS NULL) AS photos,
         v.note AS rev_note, v.requested_at AS rev_at, v.done_at AS rev_done, (SELECT COALESCE(NULLIF(x.name, ''), x.email) FROM users x WHERE x.id = v.requested_by) AS rev_by
       FROM inspections i LEFT JOIN users u ON u.id = i.inspector_id LEFT JOIN inspection_sheets s ON s.inspection_id = i.id
       LEFT JOIN inspection_revisions v ON v.id = (SELECT y.id FROM inspection_revisions y WHERE y.inspection_id = i.id ORDER BY y.requested_at DESC LIMIT 1)
       WHERE i.asset_id = ? AND (i.status <> 'cancelled' OR s.id IS NOT NULL) ORDER BY COALESCE(i.done_at, i.scheduled_at, i.created_at) DESC`,
   ).bind(a.id).all<{ id: string; status: string; scheduled_at: string | null; done_at: string | null; created_at: string; glide_id: string | null; uvalo_id: string | null;
-    uvalo_code: string | null; sheet_type: string | null; inspector: string | null; sheet_id: string | null; photo_url: string | null; present_person: string | null;
+    uvalo_code: string | null; sheet_type: string | null; inspector: string | null; inspector_id: string | null; sheet_id: string | null; photo_url: string | null; present_person: string | null;
     signature_url: string | null; photos: number; sheet_status: string | null; sheet_glide: string | null;
     rev_note: string | null; rev_at: string | null; rev_done: string | null; rev_by: string | null }>();
   // Completions are asked by whoever gives the inspections of the report, on sheets filled in the CRM app.
@@ -147,10 +148,11 @@ export default async function AssetPage({ params, searchParams }: {
   const { results: vals } = await db.prepare(
     `SELECT a.id AS asset_id, a.value, a.approach, r.id, r.number, r.label, r.status, r.delivered_at, r.report_date, r.valuation_date, r.created_at, r.currency, r.purpose,
         c.name AS client, (SELECT COALESCE(NULLIF(u.name, ''), u.email) FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = r.id AND m.role = 'evaluator' LIMIT 1) AS evaluator,
+        (SELECT m.user_id FROM report_members m WHERE m.report_id = r.id AND m.role = 'evaluator' LIMIT 1) AS evaluator_id,
         (SELECT COUNT(*) FROM assets x WHERE x.report_id = r.id) AS n_assets, r.result_value
       FROM assets a JOIN reports r ON r.id = a.report_id LEFT JOIN entities c ON c.id = r.client_id WHERE a.property_id = ?`,
   ).bind(a.property_id).all<{ asset_id: string; value: number | null; approach: string | null; id: string; number: string | null; label: string | null; status: string; delivered_at: string | null;
-    report_date: string | null; valuation_date: string | null; created_at: string; currency: string | null; purpose: string | null; client: string | null; evaluator: string | null;
+    report_date: string | null; valuation_date: string | null; created_at: string; currency: string | null; purpose: string | null; client: string | null; evaluator: string | null; evaluator_id: string | null;
     n_assets: number; result_value: number | null }>();
   const history = (await Promise.all(vals.map(async (v) => ({
     ...v, date: dateOf(v), val: v.value ?? (v.n_assets === 1 ? v.result_value : null), cur: v.currency === "EUR" ? "EUR" : "lei",
@@ -218,7 +220,7 @@ export default async function AssetPage({ params, searchParams }: {
             {strip.length > 0 && <a className="bvStrip" href={self("fotografii")}>{strip.map((x) => <SafeImg key={x.id} src={x.src} alt="" fallback={<i />} />)}</a>}
             <div className="bvInspBody">
               <div className="bvInspTop"><b>{i.status === "done" ? fmtDate(i.done_at ?? i.created_at) : i.status === "scheduled" && i.scheduled_at ? `Programată ${fmtDate(i.scheduled_at, true)}` : `Alocată ${fmtDate(i.created_at)}`}</b><span className={`pill ${k}`}><i />{t}</span></div>
-              <small>{[i.inspector, i.uvalo_code ? `UVALO ${i.uvalo_code}` : i.uvalo_id ? "UVALO" : i.glide_id ? "din vechiul CRM" : "aplicația CRM", i.photos ? `${i.photos} fotografii` : null,
+              <small className="bvBy">{i.inspector && <Face id={i.inspector_id} name={i.inspector} size={18} />}{[i.inspector, i.uvalo_code ? `UVALO ${i.uvalo_code}` : i.uvalo_id ? "UVALO" : i.glide_id ? "din vechiul CRM" : "aplicația CRM", i.photos ? `${i.photos} fotografii` : null,
                 i.signature_url ? "semnată" : null, i.present_person && `prezent: ${i.present_person}`].filter(Boolean).join(" · ")}</small>
               {i.sheet_status === "revision" && i.rev_note && (
                 <div className="bvRev"><b>Completări cerute{i.rev_at ? ` · ${fmtDate(i.rev_at, true)}` : ""}{i.rev_by ? ` · ${i.rev_by}` : ""}</b><span>{i.rev_note}</span><small>Fișa e la inspector, în aplicație. Când o trimite din nou, primești notificare.</small></div>
@@ -260,7 +262,7 @@ export default async function AssetPage({ params, searchParams }: {
                     <td>{fmtDate(v.date)}</td>
                     <td>{v.number ? `nr. ${v.number}` : "fără număr"}{v.id === id && <small className="muted"> · acesta</small>}</td>
                     <td className="muted">{v.purpose ? cap(v.purpose) : "—"}</td>
-                    <td className="muted">{v.evaluator ?? "—"}</td>
+                    <td className="muted"><WithFace id={v.evaluator_id} name={v.evaluator} /></td>
                     <td className="num mono">{lei(v.val, cur)}</td>
                     {area ? <td className="num mono">{Math.round(v.val! / area).toLocaleString("ro-RO")}</td> : null}
                     <td className={`num ${pv ? (v.val! >= pv.val! ? "up" : "down") : ""}`}>{pv ? pct(((v.val! - pv.val!) / pv.val!) * 100) : "—"}</td>
@@ -426,7 +428,7 @@ export default async function AssetPage({ params, searchParams }: {
                   <>
                     <dl className="kv">
                       <div><dt>{i.status === "done" ? "Data" : i.status === "scheduled" ? "Programată" : "Alocată"}</dt><dd>{i.status === "done" ? fmtDate(i.done_at ?? i.created_at, true) : i.scheduled_at ? fmtDate(i.scheduled_at, true) : fmtDate(i.created_at)}</dd></div>
-                      {i.inspector && <div><dt>Inspector</dt><dd>{i.inspector}</dd></div>}
+                      {i.inspector && <div><dt>Inspector</dt><dd><WithFace id={i.inspector_id} name={i.inspector} /></dd></div>}
                       {i.present_person && <div><dt>Prezent</dt><dd>{i.present_person}{i.signature_url ? " · semnată" : ""}</dd></div>}
                       <div><dt>Fotografii</dt><dd>{i.photos}{i.uvalo_id ? " · prin UVALO" : i.glide_id ? " · vechiul CRM" : ""}</dd></div>
                     </dl>

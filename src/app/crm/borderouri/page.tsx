@@ -11,6 +11,7 @@ import { CrmShell } from "@/components/CrmShell";
 import { ClickRow } from "@/components/ClickRow";
 import { OpenStatement } from "./StatementActions";
 import { LinesTable, lei2, lineOrder, type LineOrder } from "./LinesTable";
+import { Face } from "@/components/Avatar";
 
 export const metadata: Metadata = { title: "Borderouri | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -112,7 +113,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
       <tr key={r.party}>
         <td>
           <details className="stSrc">
-            <summary><b>{r.name}</b>{r.sub && <span className="muted"> · {r.sub}</span>}<small className="stSrcHint">{r.banks.length} {r.banks.length === 1 ? "utilizator" : "utilizatori"} desemnați ▾</small></summary>
+            <summary>{r.party.startsWith("u:") && <Face id={r.party.slice(2)} name={r.name} size={22} />}<b>{r.name}</b>{r.sub && <span className="muted"> · {r.sub}</span>}<small className="stSrcHint">{r.banks.length} {r.banks.length === 1 ? "utilizator" : "utilizatori"} desemnați ▾</small></summary>
             <ul className="stBanks">
               {r.banks.map((b) => (
                 <li key={b.bank}>

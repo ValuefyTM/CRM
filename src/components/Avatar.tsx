@@ -9,7 +9,7 @@ export const initialsOf = (name: string) => {
   return ((w.length > 1 ? w[0][0] + w[w.length - 1][0] : n.slice(0, 2)) || "?").toUpperCase();
 };
 
-function colorOf(key: string) {
+export function avatarColor(key: string) {
   let h = 0;
   for (const c of key) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return COLORS[h % COLORS.length];
@@ -19,12 +19,27 @@ const LABEL: Record<Presence, string> = { online: "online", away: "activ recent"
 
 export function Avatar({ id, name, size = 36, presence, title, photo }: { id: string; name: string; size?: number; presence?: Presence | null; title?: string; photo?: string | null }) {
   return (
-    <span className="pAvatar" style={{ width: size, height: size, fontSize: Math.round(size * 0.38), background: colorOf(id || name) }} title={title ?? name} aria-hidden={!presence}>
+    <span className="pAvatar" style={{ width: size, height: size, fontSize: Math.round(size * 0.38), background: avatarColor(id || name) }} title={title ?? name} aria-hidden={!presence}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       {photo ? <img src={photo} alt="" loading="lazy" /> : initialsOf(name)}
       {presence && <i className={`pDot ${presence}`} role="img" aria-label={LABEL[presence]} />}
     </span>
   );
+}
+
+/**
+ * A team member's face from the id alone (lists that do not load the photo's date): the photo, or the initials the
+ * avatar address draws when there is none.
+ */
+export function Face({ id, name, size = 24, title }: { id: string | null | undefined; name: string | null | undefined; size?: number; title?: string }) {
+  if (!name) return null;
+  return <Avatar id={id ?? name} name={name} size={size} title={title} photo={id ? `/api/crm/users/${encodeURIComponent(id)}/avatar?fb=1` : null} />;
+}
+
+/** A name with its face before it, on one line. */
+export function WithFace({ id, name, size = 22 }: { id: string | null | undefined; name: string | null | undefined; size?: number }) {
+  if (!name) return <>—</>;
+  return <span className="withFace"><Face id={id} name={name} size={size} /><span>{name}</span></span>;
 }
 
 /** Avatar, name and a second line (role, last activity). */

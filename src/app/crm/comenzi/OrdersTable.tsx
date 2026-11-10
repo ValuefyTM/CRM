@@ -4,6 +4,7 @@ import { niceName } from "@/lib/labels";
 import { useMemo, useState } from "react";
 import { FilterSelect } from "@/components/FilterSelect";
 import { ClickRow } from "@/components/ClickRow";
+import { Face } from "@/components/Avatar";
 
 export type CrmOrderRow = {
   id: string; ref: string; created: string; type: string; address: string; client: string; clientPhone: string | null;
@@ -98,7 +99,7 @@ export function OrdersTable({ rows, base, initial }: { rows: CrmOrderRow[]; base
                   <td><a className="rowLink" href={`${base}/comenzi/${r.id}`}>{r.type}</a><div className="muted">{r.address}</div></td>
                   <td><b>{niceName(r.client)}</b><div className="muted" style={{ whiteSpace: "nowrap" }}>{r.clientPhone}</div></td>
                   <td>
-                    {r.fromId ? <a className="rowLink" style={{ fontWeight: 500 }} href={`${base}/utilizatori/${r.fromId}`}>{r.from}</a> : r.from}
+                    {r.fromId ? <span className="withFace"><Face id={r.fromId} name={r.from} size={22} /><a className="rowLink" style={{ fontWeight: 500 }} href={`${base}/utilizatori/${r.fromId}`}>{r.from}</a></span> : r.from}
                     <div className="muted">{r.firmId ? <a href={`${base}/utilizatori/firme/${r.firmId}`}>{r.firm}</a> : r.source === "collab" ? "Colaborare" : r.source === "partner" ? "Colaborator" : r.source === "site" ? "Cerere de pe site" : r.source === "direct" ? "Lucrare directă" : "Client din portal"}</div>
                   </td>
                   <td>{r.purpose}</td>

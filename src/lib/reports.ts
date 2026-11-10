@@ -19,7 +19,7 @@ export const INSPECTION_STATUS: Record<string, [string, string]> = {
 
 export type ReportRow = {
   id: string; number: string | null; label: string | null; report_date: string | null; status: string; fee: number | null; result_value: number | null; result_eur?: number | null;
-  report_type: string | null; client_name: string | null; bank_code: string | null; issuer_name: string | null; evaluator: string | null; asset: string | null; asset_photo?: string | null;
+  report_type: string | null; client_name: string | null; bank_code: string | null; issuer_name: string | null; evaluator: string | null; evaluator_id?: string | null; asset: string | null; asset_photo?: string | null;
   issuer_short: string | null; insp_total: number; insp_done: number; insp_next: string | null; insp_last: string | null; no_insp: number;
   issuer_logo: string | null; issuer_color: string | null; bank_name: string | null; bank_logo: string | null; purpose: string | null; value_type: string | null;
   stage: string | null; delivered_at: string | null; verified_at: string | null; invoiced: number;
@@ -51,6 +51,7 @@ const ROW = `SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.r
   (SELECT MAX(x.done_at) FROM inspections x WHERE x.report_id = r.id AND x.status <> 'cancelled') AS insp_last,
   (SELECT COUNT(*) FROM assets a WHERE a.report_id = r.id AND a.no_inspection IS NOT NULL) AS no_insp,
   (SELECT u.name FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = r.id AND m.role = 'evaluator' LIMIT 1) AS evaluator,
+  (SELECT m.user_id FROM report_members m WHERE m.report_id = r.id AND m.role = 'evaluator' LIMIT 1) AS evaluator_id,
   (SELECT COALESCE(p.type, '') || '|' || COALESCE(p.full_address, p.city, '') FROM assets a JOIN crm_properties p ON p.id = a.property_id
      WHERE a.report_id = r.id ORDER BY a.is_main DESC LIMIT 1) AS asset,
   -- The asset's profile photo, once its inspection is done (the sheet's photo, else the one imported with the property).
