@@ -147,7 +147,7 @@ const CONTACT: Record<string, string> = { CLIENTUL: "client", PROPRIETAR: "owner
 const ENTITY_KIND: Record<string, string> = { BANCA: "bank", IFN: "ifn", UAT: "uat", ANAF: "anaf", BROKER: "broker", DOARCLIENTUL: "other", PF: "person", PJ: "company" };
 const APPROACH: Record<string, string> = { PIATA: "market", VENIT: "income", COST: "cost" };
 const PROPERTY_KIND: Record<string, string> = {
-  APARTAMENTINBLOC: "apartment", APARTAMENTINCASA: "apartment", CASACUTEREN: "house", ANSAMBLUREZIDENTIAL: "other",
+  APARTAMENTINBLOC: "apartment", APARTAMENTINCASA: "apartment_house", CASACUTEREN: "house", ANSAMBLUREZIDENTIAL: "other",
   TERENINTRAVILANCONSTRUCTII: "land", TERENINTRAVILANARABIL: "land", TERENEXTRAVILAN: "land",
 };
 const NOTE_STATUS: Record<string, string> = { FINALIZATA: "done", TODO: "todo", INCURS: "in_progress" };

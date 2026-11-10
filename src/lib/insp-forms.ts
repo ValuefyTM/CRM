@@ -348,7 +348,7 @@ export const PRESENT_ROLES: [string, string][] = [
 export function guessSheetType(category: string | null, type: string | null, orderType?: string | null): SheetType {
   const c = (category ?? "").toUpperCase(), t = (type ?? "").toUpperCase();
   if (isAccessoryType(t)) return "accesoriu";
-  if (orderType === "apartment") return "apartament";
+  if (orderType === "apartment" || orderType === "apartment_house") return "apartament";
   if (orderType === "house") return "casa";
   if (orderType === "land") return "teren";
   if (orderType === "commercial" || orderType === "industrial") return "comercial";

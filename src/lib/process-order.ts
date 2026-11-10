@@ -25,7 +25,7 @@ export function propertyType(a: AssetInput) {
   if (a.category === "COMERCIAL" || a.category === "MIXT") return "commercial";
   if (a.category === "INDUSTRIAL") return "industrial";
   if (t.includes("CASA") && !t.includes("APARTAMENT")) return "house";
-  if (t.includes("APARTAMENT")) return "apartment";
+  if (t.includes("APARTAMENT")) return t.includes("CASA") ? "apartment_house" : "apartment";
   return "other";
 }
 

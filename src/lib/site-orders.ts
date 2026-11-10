@@ -3,7 +3,7 @@
 import { now } from "./db";
 
 const TYPE: Record<string, string> = {
-  Apartament: "apartment", "Casă": "house", Teren: "land", "Spațiu comercial": "commercial", "Hală / industrial": "industrial",
+  Apartament: "apartment", "Apartament în bloc": "apartment", "Apartament în casă": "apartment_house", "Casă": "house", Teren: "land", "Spațiu comercial": "commercial", "Hală / industrial": "industrial",
 };
 /** Website request status → order status (requests handled before the CRM existed are not shown as new). */
 const STATUS: Record<string, string> = { NEW: "received", CONTACTED: "received", OFFER: "received", WON: "in_progress", LOST: "cancelled" };

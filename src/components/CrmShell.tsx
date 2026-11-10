@@ -1,4 +1,5 @@
 import { getDb } from "@/lib/db";
+import { PresenceLive } from "./PresenceLive";
 import { initials } from "@/lib/guard";
 import { isAdmin, roleLabel, type User } from "@/lib/users";
 import { can, type Perm } from "@/lib/perms";
@@ -111,6 +112,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
       actions={props.actions}
     >
       <Heartbeat url="/api/crm/presence" />
+      <PresenceLive />
       <TableLabels />
       {props.children}
       <Pwa base={b} />

@@ -4370,3 +4370,18 @@ aside.poCol { flex: 1 1 360px; }
 .logWho .pAvatar { vertical-align: -4px; margin-right: 2px; }
 .bvBy .pAvatar { vertical-align: -4px; margin-right: 6px; }
 .stSrc > summary .pAvatar { vertical-align: -6px; margin-right: 8px; }
+/* Portal → comandă nouă: banca, cu logo */
+.bankGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.bankCard { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; cursor: pointer; text-align: left; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); }
+.bankCard:hover { border-color: var(--acc); }
+.bankCard[aria-checked="true"] { border-color: var(--acc); background: var(--acc-soft); box-shadow: 0 0 0 1px var(--acc); }
+.bankLogo { width: 34px; height: 34px; flex: none; border-radius: 8px; background: var(--cream); display: grid; place-items: center; overflow: hidden; }
+.bankLogo img { width: 100%; height: 100%; object-fit: contain; }
+.bankLogo b { font-size: 10.5px; color: var(--muted); }
+/* the online dot of avatars marked live by PresenceLive (data-presence) */
+.pAvatar[data-presence]::after { content: ""; position: absolute; right: -1px; bottom: -1px; width: 32%; height: 32%; min-width: 8px; min-height: 8px; border-radius: 50%; border: 2px solid #fff; background: #b8b6c4; box-sizing: border-box; }
+.pAvatar[data-presence="online"]::after { background: #22c55e; }
+.pAvatar[data-presence="away"]::after { background: #f5b83d; }
+.seenLine { display: block; margin-top: 3px; font-size: 11.5px; font-weight: 600; color: var(--muted-2); }
+.seenLine.online { color: var(--ok-text); }
+.seenLine.away { color: var(--acc-text); }

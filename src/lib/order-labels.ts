@@ -1,7 +1,8 @@
 // Order vocabulary shared by the portal wizard, the portal and the CRM. No server code: also used by client components.
 
 export const PROPERTY_TYPES = [
-  ["apartment", "Apartament"],
+  ["apartment", "Apartament în bloc"],
+  ["apartment_house", "Apartament în casă"],
   ["house", "Casă"],
   ["land", "Teren"],
   ["commercial", "Spațiu comercial"],
@@ -26,6 +27,7 @@ export const BANKS = ["BCR", "BRD", "Banca Transilvania", "ING Bank", "Raiffeise
 /** Which area fields a property type asks for. */
 export const AREA_FIELDS: Record<PropertyType, { surface: boolean; rooms: boolean; land: boolean }> = {
   apartment: { surface: true, rooms: true, land: false },
+  apartment_house: { surface: true, rooms: true, land: false },
   house: { surface: true, rooms: true, land: true },
   land: { surface: false, rooms: false, land: true },
   commercial: { surface: true, rooms: false, land: false },
@@ -44,6 +46,7 @@ const COMMON: DocSpec[] = [
 /** Documents to upload, by property type (from the design handoff). */
 export const DOCS: Record<PropertyType, DocSpec[]> = {
   apartment: [...COMMON, { key: "plan", label: "Releveu / plan apartament" }, { key: "energy", label: "Certificat energetic", optional: true }],
+  apartment_house: [...COMMON, { key: "plan", label: "Releveu / plan apartament" }, { key: "energy", label: "Certificat energetic", optional: true }],
   house: [
     ...COMMON,
     { key: "cadastre", label: "Releveu / documentație cadastrală" },

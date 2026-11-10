@@ -19,7 +19,8 @@ const LABEL: Record<Presence, string> = { online: "online", away: "activ recent"
 
 export function Avatar({ id, name, size = 36, presence, title, photo }: { id: string; name: string; size?: number; presence?: Presence | null; title?: string; photo?: string | null }) {
   return (
-    <span className="pAvatar" style={{ width: size, height: size, fontSize: Math.round(size * 0.38), background: avatarColor(id || name) }} title={title ?? name} aria-hidden={!presence}>
+    <span className="pAvatar" style={{ width: size, height: size, fontSize: Math.round(size * 0.38), background: avatarColor(id || name) }} title={title ?? name} aria-hidden={!presence}
+      data-uid={!presence && id && id !== name ? id : undefined} data-name={name}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       {photo ? <img src={photo} alt="" loading="lazy" /> : initialsOf(name)}
       {presence && <i className={`pDot ${presence}`} role="img" aria-label={LABEL[presence]} />}

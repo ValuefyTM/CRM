@@ -84,7 +84,7 @@ export function validateOrder(body: unknown, user: User): { ok: true; value: Ord
   const purpose = str(b.purpose, 60);
   if (!(PURPOSES as readonly string[]).includes(purpose)) return { ok: false, error: "Alege scopul evaluării." };
   const bank = purpose === "Credit bancar" ? str(b.bank, 60) : "";
-  if (bank && !(BANKS as readonly string[]).includes(bank)) return { ok: false, error: "Alege banca din listă." };
+  // the bank is checked against the CRM's banks by the order route (portalBanks), which also sets bank_id
 
   const self = user.kind === "client";
   const client_name = self ? user.company || user.name : str(b.client_name, 120);
@@ -119,7 +119,15 @@ export function validateOrder(body: unknown, user: User): { ok: true; value: Ord
 
 // ---------- read / write ----------
 
-export async function createOrder(db: D1Database, user: User, v: OrderInput) {
+/** The banks a collaborator can choose (the CRM's banks and IFNs), with the logo through the portal's own address. */
+export async function portalBanks(db: D1Database) {
+  const { results } = await db.prepare(`SELECT id, name, code, logo_url FROM entities WHERE kind IN ('bank', 'ifn') AND name IS NOT NULL AND name <> '' ORDER BY kind = 'ifn', name`)
+    .all<{ id: string; name: string; code: string | null; logo_url: string | null }>().catch(() => ({ results: [] as { id: string; name: string; code: string | null; logo_url: string | null }[] }));
+  return results.map((b) => ({ id: b.id, name: b.name, code: b.code, logo: b.logo_url && !b.logo_url.startsWith("lost:") ? `/api/portal/bank-logo/${encodeURIComponent(b.id)}` : null }));
+}
+export type PortalBank = Awaited<ReturnType<typeof portalBanks>>[number];
+
+export async function createOrder(db: D1Database, user: User, v: OrderInput, bankId: string | null = null) {
   const id = uuid();
   // Sequential reference (CO-1001, CO-1002…); retry if two orders race for the same number.
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -128,8 +136,8 @@ export async function createOrder(db: D1Database, user: User, v: OrderInput) {
       await db
         .prepare(
           `INSERT INTO orders (id, seq, source, created_by, partner_id, property_type, city, address, surface_area, land_area, rooms, purpose, bank, urgent,
-            client_name, client_phone, client_email, contact_name, contact_phone, inspection_notes, may_contact_client, notes, docs_missing, client_id, referral_user_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+            client_name, client_phone, client_email, contact_name, contact_phone, inspection_notes, may_contact_client, notes, docs_missing, client_id, referral_user_id, bank_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
         )
         .bind(
           id, next, user.kind === "partner" ? "partner" : "client", user.id, user.kind === "partner" ? user.partner_id : null,
@@ -138,6 +146,7 @@ export async function createOrder(db: D1Database, user: User, v: OrderInput) {
           user.kind === "client" ? user.entity_id ?? null : null,
           // a collaborator's order: they brought the work ("Recomandată de")
           user.kind === "partner" ? user.id : null,
+          bankId,
         )
         .run();
       return { id, seq: next };

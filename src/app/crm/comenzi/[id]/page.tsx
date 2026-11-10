@@ -47,6 +47,8 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
   // „Create de el”: only the orders the user created.
   if (!(await inScope(db, user, "orders", id))) notFound();
   const messages = await orderThread(db, o.id, user.id);
+  // whether the one who sent the order (a collaborator in the portal) is online now
+  const creatorSeen = o.created_by ? await db.prepare("SELECT last_seen_at FROM users WHERE id = ?").bind(o.created_by).first<{ last_seen_at: string | null }>().then((u) => (u ? presenceOf(u.last_seen_at) : null)) : null;
   // The first time someone in the team opens the order it stops being "new".
   if (!o.viewed_at) {
     if (!user.impersonator) await db.prepare("UPDATE orders SET viewed_at = ?, viewed_by = ? WHERE id = ? AND viewed_at IS NULL").bind(now(), user.id, id).run();
@@ -150,7 +152,8 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
             <section className="card">
               <h2>Trimisă de</h2>
               <dl className="dl">
-                <div><dt>{o.source === "partner" ? "Colaborator" : "Client"}</dt><dd>{o.created_by ? <a className="rowLink refWho" href={`${base}/utilizatori/${o.created_by}`}><Avatar id={o.created_by} name={o.creator_name || o.creator_email || "?"} size={22} photo={photoUrl(o.created_by, o.creator_avatar_at)} />{o.creator_name || o.creator_email}</a> : "—"}</dd></div>
+                <div><dt>{o.source === "partner" ? "Colaborator" : "Client"}</dt><dd>{o.created_by ? <a className="rowLink refWho" href={`${base}/utilizatori/${o.created_by}`}><Avatar id={o.created_by} name={o.creator_name || o.creator_email || "?"} size={30} photo={photoUrl(o.created_by, o.creator_avatar_at)} presence={creatorSeen?.presence} />{o.creator_name || o.creator_email}</a> : "—"}
+                  {creatorSeen && <small className={`seenLine ${creatorSeen.presence}`}>{creatorSeen.seen}</small>}</dd></div>
                 {o.partner_id && <div><dt>Firmă</dt><dd><a className="rowLink" href={`${base}/utilizatori/firme/${o.partner_id}`}>{o.partner_name}</a></dd></div>}
                 {o.creator_email && <div><dt>Email</dt><dd><a href={`mailto:${o.creator_email}`}>{o.creator_email}</a></dd></div>}
                 {o.bank_branch && <div><dt>Agenție</dt><dd>{o.bank_branch}</dd></div>}

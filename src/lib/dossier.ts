@@ -63,6 +63,7 @@ export const dueOf = (r: { due_on: string | null; term_days: number | null }, in
 
 export const PROPERTY: Record<string, [category: string | null, type: string]> = {
   apartment: ["REZIDENTIAL", "APARTAMENT IN BLOC"],
+  apartment_house: ["REZIDENTIAL", "APARTAMENT IN CASA"],
   house: ["REZIDENTIAL", "CASA CU TEREN"],
   land: ["TEREN", "TEREN INTRAVILAN CONSTRUCTII"],
   commercial: ["COMERCIAL", "SPATIU COMERCIAL - PARTE DINTR-O CLADIRE"],

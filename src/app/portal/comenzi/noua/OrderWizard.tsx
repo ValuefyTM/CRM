@@ -8,13 +8,15 @@ type Upload = { kind: string; file: File };
 
 const STEPS = ["Proprietatea", "Scop și termen", "Client și inspecție", "Documente și trimitere"];
 const STEPS_CLIENT = ["Proprietatea", "Scop și termen", "Contact și inspecție", "Documente și trimitere"];
-const ICON: Record<PropertyType, string> = { apartment: "▦", house: "⌂", land: "▱", commercial: "▤", industrial: "▥", other: "◇" };
+const ICON: Record<PropertyType, string> = { apartment: "▦", apartment_house: "⌂", house: "⌂", land: "▱", commercial: "▤", industrial: "▥", other: "◇" };
 
 const digits = (s: string) => s.replace(/\D/g, "").length;
 const okEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
 
 /** "Comandă nouă" — four steps from the design handoff (§6). Documents are optional: missing ones mark the order "Documente lipsă". */
-export function OrderWizard({ me, base }: { me: Me; base: string }) {
+type Bank = { id: string; name: string; code: string | null; logo: string | null };
+
+export function OrderWizard({ me, base, banks = [] }: { me: Me; base: string; banks?: Bank[] }) {
   const self = me.kind === "client";
   const [step, setStep] = useState(0);
   const [f, setF] = useState({
@@ -130,12 +132,23 @@ export function OrderWizard({ me, base }: { me: Me; base: string }) {
               </div>
             </div>
             {f.purpose === "Credit bancar" && (
-              <label className="field" style={{ maxWidth: 360 }}>Banca
-                <select className="select" value={f.bank} onChange={set("bank")}>
-                  <option value="">Alege banca</option>
-                  {BANKS.map((b) => <option key={b}>{b}</option>)}
-                </select>
-              </label>
+              <div className="field">Banca
+                {banks.length ? (
+                  <div className="bankGrid" role="radiogroup" aria-label="Banca">
+                    {[...banks, { id: "other", name: "Altă bancă", code: null, logo: null }].map((b) => (
+                      <button key={b.id} type="button" role="radio" aria-checked={f.bank === b.name} className="bankCard" onClick={() => setF((p) => ({ ...p, bank: p.bank === b.name ? "" : b.name }))}>
+                        <span className="bankLogo">{b.logo ? <img src={b.logo} alt="" loading="lazy" /> : <b>{(b.code || b.name).slice(0, 3).toUpperCase()}</b>}</span>
+                        <span>{b.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <select className="select" value={f.bank} onChange={set("bank")}>
+                    <option value="">Alege banca</option>
+                    {BANKS.map((b) => <option key={b}>{b}</option>)}
+                  </select>
+                )}
+              </div>
             )}
             <div className="field">Termen
               <div className="grid2">
