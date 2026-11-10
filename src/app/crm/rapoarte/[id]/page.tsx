@@ -40,7 +40,7 @@ import { guessDocKind } from "@/lib/doc-kinds";
 import { Avatar, PersonLine } from "@/components/Avatar";
 import { photoUrl } from "@/lib/presence";
 import { Messages } from "@/components/Messages";
-import { messagesOf } from "@/lib/messages";
+import { reportOrders, reportThread } from "@/lib/messages";
 import { AddMember, CollectedToggle, DeliverButton, ReportNumberEdit, FinalDrop, MissingDoc, NotesEditor, RemoveMember, SafeImg, StageActions, StatusActions, UploadButton, VerifyActions } from "./ReportActions";
 import { dueOf, STAGE_LABEL, stageOf } from "@/lib/dossier";
 import { hasValues, nextReportNumber, noticeTarget } from "@/lib/delivery";
@@ -111,7 +111,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   // What the user may do here: their role(s) in the report team, or the Rapoarte module (Setări → Permisiuni).
   const c = acc.can, fees = acc.fee === "all";
   const link = (perm: Perm, path: string, cls: string, body: React.ReactNode) => (can(user, perm) ? <a className={cls} href={`${base}${path}`}>{body}</a> : <span>{body}</span>);
-  const messages = await messagesOf(db, "report", r.id, user.id);
+  // the whole conversation: the team's, and the one with the collaborator who placed the order (portal)
+  const [messages, { broker }] = await Promise.all([reportThread(db, r.id, user.id), reportOrders(db, r.id)]);
   // worked for Appraisal & Valuation: their order form (Excel) is filled in from here
   // The institutions a report is made for (banks first), to correct its designated user.
   const frame = canFrame(user, acc);
@@ -689,7 +690,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
       )}
 
       {tab === "mesaje" && (
-        <Messages full entity="report" id={r.id} rows={messages} readOnly={c.messages ? null : acc.locked ? "Raportul este finalizat: conversația e închisă. Redeschide raportul ca să poți scrie." : "Nu poți scrie în conversația acestui raport."} title="Chat echipă" hint="Discuția echipei pe acest raport: evaluator, verificator, inspector, operatori. Clientul nu vede mesajele." />
+        <Messages full entity="report" id={r.id} rows={messages} readOnly={c.messages ? null : acc.locked ? "Raportul este finalizat: conversația e închisă. Redeschide raportul ca să poți scrie." : "Nu poți scrie în conversația acestui raport."} title="Chat echipă" broker={broker ? broker.name ?? "colaborator" : null} hint={broker ? `Discuția echipei pe acest raport și cea cu ${broker.name ?? "colaboratorul"} (broker, din portal). Un mesaj ajunge la broker doar dacă bifezi „Scrie către”; mesajele de pe comandă apar și aici.` : "Discuția echipei pe acest raport: evaluator, verificator, inspector, operatori. Clientul nu vede mesajele."} />
       )}
       </div>
       {tab !== "documente" && <aside className="dSide">
@@ -715,7 +716,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             </ul>
           )}
         </section>
-        {tab !== "mesaje" && <Messages entity="report" id={r.id} rows={messages} title="Mesaje echipă" limit={3} more={href("mesaje")} readOnly={c.messages ? null : acc.locked ? "Raport finalizat: conversația e închisă." : "Nu poți scrie în conversația acestui raport."} />}
+        {tab !== "mesaje" && <Messages entity="report" id={r.id} rows={messages} title="Mesaje echipă" limit={3} broker={broker ? broker.name ?? "colaborator" : null} more={href("mesaje")} readOnly={c.messages ? null : acc.locked ? "Raport finalizat: conversația e închisă." : "Nu poți scrie în conversația acestui raport."} />}
         {tab === "general" && <section className="card">
           <h2>Date cheie</h2>
           <dl className="kv dKv">

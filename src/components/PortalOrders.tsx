@@ -2,8 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { FilterSelect } from "./FilterSelect";
+import { Avatar } from "./Avatar";
 
-export type PortalOrderRow = { id: string; ref: string; type: string; address: string; client: string; purpose: string; urgent: boolean; docsMissing: boolean; status: [string, string]; created: string };
+export type PortalOrderRow = { id: string; ref: string; type: string; address: string; client: string; purpose: string; urgent: boolean; docsMissing: boolean; status: [string, string]; created: string;
+  /** the evaluator and the inspector of the order's report */
+  team?: { id: string; name: string; role: "evaluator" | "inspector"; photo: string | null }[] };
 
 const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
@@ -47,7 +50,7 @@ export function PortalOrders({ rows, base, partner, compact }: { rows: PortalOrd
       ) : (
         <div className="tableWrap">
           <table className="table" style={{ minWidth: 0 }}>
-            <thead><tr><th>Comandă</th><th>Proprietate</th>{partner && <th className="hideSm">Client</th>}<th className="hideSm">Scop</th><th>Status</th></tr></thead>
+            <thead><tr><th>Comandă</th><th>Proprietate</th>{partner && <th className="hideSm">Client</th>}<th className="hideSm">Scop</th><th className="hideSm">Echipa</th><th>Status</th></tr></thead>
             <tbody>
               {(compact ? shown.slice(0, 6) : shown).map((r) => (
                 <tr key={r.id}>
@@ -55,6 +58,7 @@ export function PortalOrders({ rows, base, partner, compact }: { rows: PortalOrd
                   <td><a className="rowLink" href={`${base}/comenzi/${r.id}`}>{r.type}</a><div className="muted">{r.address}</div></td>
                   {partner && <td className="hideSm">{r.client}</td>}
                   <td className="hideSm">{r.purpose}</td>
+                  <td className="hideSm">{r.team?.length ? <span className="poFaces">{r.team.map((m) => <span key={m.id + m.role} title={`${m.name} · ${m.role}`}><Avatar id={m.id} name={m.name} size={28} photo={m.photo} /></span>)}</span> : <span className="muted">—</span>}</td>
                   <td><span className="actions" style={{ gap: 6 }}>{r.urgent && <span className="pill pillErr"><i />Urgent</span>}<span className={`pill ${r.status[1]}`}><i />{r.status[0]}</span></span></td>
                 </tr>
               ))}

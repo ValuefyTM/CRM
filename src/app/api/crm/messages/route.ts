@@ -1,10 +1,14 @@
 import { err, json, reportApi, staffApi } from "@/lib/api";
 import { can } from "@/lib/perms";
-import { addMessage } from "@/lib/messages";
+import { addMessage, reportOrders } from "@/lib/messages";
 import { orderMessage } from "@/lib/order-chat";
 import { pushLater } from "@/lib/push";
 
-/** A message on a report or an order: `{ entity: "report" | "order", id, body }`. */
+/**
+ * A message on a report or an order: `{ entity: "report" | "order", id, body, broker? }`. On a report, `broker: true`
+ * sends it to the collaborator who placed the order (it goes on their portal order: portal + email); otherwise it
+ * stays with the team.
+ */
 export async function POST(req: Request) {
   const a = await staffApi("any", true);
   if ("res" in a) return a.res;
@@ -18,8 +22,15 @@ export async function POST(req: Request) {
     const r = await reportApi(b.id, "messages", true);
     if ("res" in r) return r.res;
   }
-  // an order's chat: shared with the collaborator who sent it (portal + email)
-  const r = entity === "order" ? await orderMessage(a.db, b.id, a.user, body) : await addMessage(a.db, entity, b.id, a.user, body);
+  let r;
+  if (entity === "report" && b.broker === true) {
+    const { broker } = await reportOrders(a.db, b.id);
+    if (!broker) return err("Raportul nu vine dintr-o comandă a unui colaborator din portal.");
+    r = await orderMessage(a.db, broker.id, a.user, body);
+  } else {
+    // an order's chat: shared with the collaborator who sent it (portal + email)
+    r = entity === "order" ? await orderMessage(a.db, b.id, a.user, body) : await addMessage(a.db, entity, b.id, a.user, body);
+  }
   if (!r.ok) return err(r.error, 404);
   pushLater(a.db);
   return Response.json({ ok: true });

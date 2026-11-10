@@ -25,7 +25,7 @@ import { DossierOpen } from "./DossierOpen";
 import { DeleteOrder } from "./DeleteOrder";
 import { CancelReason } from "@/components/CancelReason";
 import { Messages } from "@/components/Messages";
-import { messagesOf } from "@/lib/messages";
+import { orderThread } from "@/lib/messages";
 import { photoUrl, presenceOf } from "@/lib/presence";
 import { Avatar } from "@/components/Avatar";
 import { orderProgress } from "@/lib/delivery";
@@ -46,7 +46,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
   if (!o) notFound();
   // „Create de el”: only the orders the user created.
   if (!(await inScope(db, user, "orders", id))) notFound();
-  const messages = await messagesOf(db, "order", o.id, user.id);
+  const messages = await orderThread(db, o.id, user.id);
   // The first time someone in the team opens the order it stops being "new".
   if (!o.viewed_at) {
     if (!user.impersonator) await db.prepare("UPDATE orders SET viewed_at = ?, viewed_by = ? WHERE id = ? AND viewed_at IS NULL").bind(now(), user.id, id).run();
@@ -259,7 +259,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
           <OrderStatusCard o={o} docs={docs} progress={progress ? { ...progress, due: progress.report?.due } : undefined} />
           {withBroker
             ? <Messages entity="order" id={o.id} rows={messages} title={`Mesaje cu ${o.creator_name || "colaboratorul"}`}
-              hint="Se văd și în portalul colaboratorului, care primește fiecare mesaj pe email; răspunsul lui vine tot aici (și pe email)." empty="Niciun mesaj încă. Scrie-i colaboratorului o întrebare." />
+              hint="Se văd și în portalul colaboratorului, care primește fiecare mesaj pe email, și în chatul raportului; răspunsul lui vine tot aici (și pe email)." empty="Niciun mesaj încă. Scrie-i colaboratorului o întrebare." />
             : <Messages entity="order" id={o.id} rows={messages} />}
           <History log={log} />
         </div>

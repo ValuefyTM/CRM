@@ -4293,3 +4293,75 @@ span.rdPick { display: inline-block; }
 .stSortHead { color: inherit; text-decoration: none; display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
 .stSortHead span { color: var(--acc-text); font-size: 12px; }
 .stSortHead:hover { color: var(--ink); }
+
+/* Chat: where a message comes from (report thread / order chat) and the "to the broker" tick */
+.msgTag { font-size: 10px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; border-radius: 999px; padding: 2px 7px; white-space: nowrap; }
+.msgTag.portal { background: #e8eefb; color: #2f4f8f; border: 1px solid #c9d6f2; }
+.msgTag.broker { background: var(--acc-soft); color: var(--acc-text); border: 1px solid var(--acc-line); }
+.msgTag.order { background: var(--neutral-bg); color: var(--neutral-text); }
+.msgCard li.tag-portal .msgBubble { box-shadow: inset 0 0 0 1px #c9d6f2; }
+.msgCompose { flex-wrap: wrap; }
+.msgBroker { order: -1; flex: 1 1 100%; display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+.msgBroker input { width: 16px; height: 16px; accent-color: var(--acc); margin: 0; }
+
+/* ---------- Portal → pagina comenzii (antet, flux orizontal, livrabile, echipa) ---------- */
+.poHead { background: var(--navy); color: #fff; border-radius: 20px; padding: 18px 22px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.poHead > div { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.poHead h2 { margin: 0; font-size: 19px; letter-spacing: -0.01em; color: #fff; }
+.poHead p { margin: 0; font-size: 12.5px; color: var(--on-navy-2); }
+.poCode { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; color: var(--acc-light); }
+.poCode b { font-family: var(--mono); font-weight: 600; }
+.poState { font-size: 12.5px; font-weight: 800; color: var(--ink); background: var(--acc); border-radius: 999px; padding: 6px 12px; white-space: nowrap; }
+.poState.ok { background: #1f8a4c; color: #fff; }
+.poState.off { background: var(--neutral-bg); color: var(--neutral-text); }
+.poSteps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.poSteps li { position: relative; display: flex; flex-direction: column; gap: 6px; padding-right: 8px; min-width: 0; }
+.poSteps li::after { content: ""; position: absolute; left: 30px; right: 0; top: 13px; height: 3px; background: repeating-linear-gradient(90deg, var(--dashed) 0 6px, transparent 6px 10px); }
+.poSteps li:last-child::after { display: none; }
+.poSteps li.done::after { background: var(--ok); }
+.poSteps .poDot { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--dashed); background: #fff; color: var(--muted-2); display: grid; place-items: center; font-size: 12px; font-weight: 800; box-sizing: border-box; position: relative; z-index: 1; }
+.poSteps li.done .poDot { background: var(--ok); border-color: var(--ok); color: #fff; font-size: 13px; }
+.poSteps li.now .poDot { background: var(--acc); border-color: var(--acc); color: var(--ink); box-shadow: 0 0 0 5px var(--acc-soft); }
+.poSteps b { font-size: 13px; line-height: 1.3; }
+.poSteps li:not(.done):not(.now) b { color: var(--muted); }
+.poSteps small { font-size: 12px; color: var(--muted); line-height: 1.4; }
+.poSteps li.now small { color: var(--acc-text); font-weight: 700; }
+.poReport { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 18px; border: 1.5px solid var(--acc); }
+.poReport > div { flex: 1 1 320px; display: flex; flex-direction: column; gap: 3px; }
+.poReport b { font-size: 18px; }
+.poPdf { width: 56px; height: 68px; border-radius: 10px; background: var(--navy); color: var(--acc-light); font-size: 12px; font-weight: 800; display: grid; place-items: center; flex: none; }
+.poEyebrow { font-size: 11.5px; font-weight: 800; letter-spacing: 0.08em; color: var(--acc-text); }
+.poCols { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+.poCol { flex: 999 1 620px; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+aside.poCol { flex: 1 1 360px; }
+.poFacts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.poFacts > div { background: var(--cream); border: 1px solid var(--divider); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.poFacts small { font-size: 11.5px; color: var(--muted-2); font-weight: 600; }
+.poFacts b { font-size: 14.5px; overflow-wrap: anywhere; }
+.poFacts a { font-size: 12.5px; color: var(--acc-text); font-weight: 600; }
+.poDeliv { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.poDeliv li { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--divider); }
+.poDeliv li.ok { background: var(--ok-bg); border-color: var(--ok-line); }
+.poDeliv li > span:nth-child(2) { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.poDeliv b { font-size: 13.5px; }
+.poDeliv small { font-size: 12px; color: var(--muted); }
+.poDeliv em { font-style: normal; font-size: 12px; color: var(--muted-2); }
+.poDeliv .poDot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--dashed); box-sizing: border-box; display: grid; place-items: center; font-size: 11px; font-weight: 800; flex: none; }
+.poDeliv li.ok .poDot { background: var(--ok); border-color: var(--ok); color: #fff; }
+.poTeam { background: var(--navy); color: #fff; border: 0; gap: 10px; }
+.poTeam .poEyebrow { color: var(--acc-light); }
+.poPerson { display: flex; gap: 10px; align-items: center; }
+.poPerson > span:last-child { display: flex; flex-direction: column; }
+.poPerson small { font-size: 12px; color: var(--on-navy-2); }
+@media (max-width: 900px) {
+  .poSteps { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .poSteps li { display: grid; grid-template-columns: 28px minmax(0, 1fr); column-gap: 12px; padding: 0 0 14px; }
+  .poSteps li > b, .poSteps li > small { grid-column: 2; }
+  .poSteps li .poDot { grid-row: 1 / span 2; }
+  .poSteps li::after { left: 13px; right: auto; top: 30px; bottom: 0; width: 3px; height: auto; background: repeating-linear-gradient(180deg, var(--dashed) 0 6px, transparent 6px 10px); }
+  .poFacts { grid-template-columns: minmax(0, 1fr); }
+}
+.poFaces { display: inline-flex; }
+.poFaces > span + span { margin-left: -8px; }
+.poFaces .pAvatar { box-shadow: 0 0 0 2px #fff; }
+.poWho { display: flex; gap: 8px; align-items: center; }

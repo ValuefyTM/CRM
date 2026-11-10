@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { portalPage } from "@/lib/guard";
 import { ordersFor } from "@/lib/orders";
-import { portalKpis, portalRows } from "@/lib/portal-orders";
+import { portalKpis, portalRows, portalTeams } from "@/lib/portal-orders";
 import { PortalShell } from "@/components/PortalShell";
 import { PortalOrders } from "@/components/PortalOrders";
 import { niceName } from "@/lib/labels";
@@ -35,7 +35,7 @@ export default async function PortalHome() {
           <a key={l} href={`${base}/comenzi`} className="kpi" style={{ ["--dot" as string]: c }}><span><i />{l}</span><b>{n}</b></a>
         ))}
       </div>
-      <PortalOrders rows={portalRows(orders)} base={base} partner={partner} compact />
+      <PortalOrders rows={portalRows(orders, await portalTeams(db, orders))} base={base} partner={partner} compact />
     </PortalShell>
   );
 }

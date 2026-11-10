@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar } from "./Avatar";
 
-type Msg = { id: string; author_id: string | null; photo: string | null; author: string; mine: boolean; staff: boolean; body: string; file: string | null; at: string };
+type Msg = { id: string; author_id: string | null; photo: string | null; author: string; mine: boolean; staff: boolean; body: string; file: string | null; at: string; tag?: "portal" | "broker" | "order" | null };
+const TAGS = { portal: ["din portal", "Scris de colaborator în portal"], broker: ["către broker", "Trimis colaboratorului: îl vede în portal și pe email"], order: ["pe comandă", "Scris în chatul comenzii"] } as const;
 
 const when = (iso: string) => {
   const d = new Date(iso);
@@ -26,7 +27,7 @@ const dayOf = (iso: string) => {
  * line; the list opens on the latest message. `full` is the big chat of the Mesaje tab (with the days between messages);
  * `limit` + `more` show only the latest few, with a link to the whole chat.
  */
-export function Messages({ entity, id, rows, title = "Mesaje", hint, full, limit, more, readOnly, post, empty }: {
+export function Messages({ entity, id, rows, title = "Mesaje", hint, full, limit, more, readOnly, post, empty, broker }: {
   entity: "report" | "order"; id: string; rows: Msg[]; title?: string; hint?: string; full?: boolean; limit?: number; more?: string;
   /** Only read (a finished report): no new messages. */
   readOnly?: string | null;
@@ -34,21 +35,24 @@ export function Messages({ entity, id, rows, title = "Mesaje", hint, full, limit
   post?: string;
   /** the text of an empty chat */
   empty?: string;
+  /** a report from a collaborator's portal order: their name, for the "send to them too" tick */
+  broker?: string | null;
 }) {
   const router = useRouter();
   const [v, setV] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [toBroker, setToBroker] = useState(false);
   const list = useRef<HTMLUListElement>(null);
   useEffect(() => { if (list.current) list.current.scrollTop = list.current.scrollHeight; }, [rows.length]);
   const send = async () => {
     if (!v.trim() || busy) return;
     setBusy(true); setErr("");
-    const r = await fetch(post ?? "/api/crm/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(post ? { body: v } : { entity, id, body: v }) }).catch(() => null);
+    const r = await fetch(post ?? "/api/crm/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(post ? { body: v } : { entity, id, body: v, ...(broker && toBroker ? { broker: true } : {}) }) }).catch(() => null);
     const d = (await r?.json().catch(() => ({}))) as { error?: string };
     setBusy(false);
     if (!r?.ok) return setErr(d?.error ?? "Mesajul nu a putut fi trimis.");
-    setV(""); router.refresh();
+    setV(""); setToBroker(false); router.refresh();
   };
   const shown = limit ? rows.slice(-limit) : rows;
   return (
@@ -72,10 +76,10 @@ export function Messages({ entity, id, rows, title = "Mesaje", hint, full, limit
             const same = !newDay && !!prev && prev.author === m.author && Date.parse(m.at) - Date.parse(prev.at) < 10 * 60000;
             return [
               newDay ? <li key={`d${m.id}`} className="msgDay"><span>{dayOf(m.at)}</span></li> : null,
-              <li key={m.id} className={`${m.mine ? "mine" : m.staff ? "staff" : ""}${same ? " cont" : ""}`}>
+              <li key={m.id} className={`${m.mine ? "mine" : m.staff ? "staff" : ""}${same ? " cont" : ""}${m.tag ? ` tag-${m.tag}` : ""}`}>
                 <span className="msgAv">{!same && <Avatar id={m.author_id ?? m.author} name={m.author} size={full ? 32 : 26} photo={m.photo} />}</span>
                 <div className="msgBubble">
-                  {!same && <span className="msgHead"><b>{m.mine ? "Tu" : m.author}</b><time dateTime={m.at}>{when(m.at)}</time></span>}
+                  {(!same || m.tag) && <span className="msgHead">{!same && <b>{m.mine ? "Tu" : m.author}</b>}{m.tag && <span className={`msgTag ${m.tag}`} title={TAGS[m.tag][1]}>{TAGS[m.tag][0]}</span>}{!same && <time dateTime={m.at}>{when(m.at)}</time>}</span>}
                   <p>{m.body}</p>
                   {m.file && <a href={m.file} target="_blank" rel="noreferrer" className="msgFile">Fișier atașat ↗</a>}
                 </div>
@@ -85,8 +89,10 @@ export function Messages({ entity, id, rows, title = "Mesaje", hint, full, limit
         </ul>
       )}
       {readOnly ? <p className="msgLocked">{readOnly}</p> : <div className="msgCompose">
-        <textarea className="textarea" rows={full ? 3 : 2} value={v} onChange={(e) => setV(e.target.value)} placeholder={full ? "Scrie un mesaj echipei… (Enter trimite, Shift+Enter rând nou)" : "Scrie un mesaj… (Enter trimite)"} aria-label="Mesaj nou"
+        <textarea className="textarea" rows={full ? 3 : 2} value={v} onChange={(e) => setV(e.target.value)} placeholder={toBroker ? `Mesaj către ${broker}… (Enter trimite)` : full ? "Scrie un mesaj echipei… (Enter trimite, Shift+Enter rând nou)" : "Scrie un mesaj… (Enter trimite)"} aria-label="Mesaj nou"
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }} />
+        {broker && <label className="msgBroker"><input type="checkbox" checked={toBroker} onChange={(e) => setToBroker(e.target.checked)} />
+          <span>Scrie către <b>{broker}</b> (broker): vede mesajul în portal și îl primește pe email</span></label>}
         <button type="button" className="btn btnNavy btnSm msgSend" disabled={busy || !v.trim()} onClick={send} aria-label="Trimite mesajul">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4 20-7z" /><path d="M22 2 11 13" /></svg>
           {busy ? "…" : "Trimite"}
