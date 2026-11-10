@@ -1,4 +1,5 @@
 import { initials } from "@/lib/guard";
+import { PresenceLive } from "./PresenceLive";
 import { displayName, type User } from "@/lib/users";
 import { Shell } from "./Shell";
 
@@ -24,6 +25,7 @@ export function PortalShell(props: { user: User; base: string; active: string; t
       back={props.back}
     >
       {props.children}
+      <PresenceLive url="/api/portal/presence" />
     </Shell>
   );
 }

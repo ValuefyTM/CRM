@@ -3,7 +3,7 @@
 // presence of all of them at once, now, every minute and when new avatars appear, and marks each (data-presence).
 import { useEffect } from "react";
 
-export function PresenceLive() {
+export function PresenceLive({ url = "/api/crm/presence" }: { url?: string }) {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null, busy = false, last = "";
     const run = async (force = false) => {
@@ -14,7 +14,7 @@ export function PresenceLive() {
       if (!ids.length || (!force && key === last && els.every((e) => e.dataset.presence))) return;
       busy = true; last = key;
       try {
-        const r = await fetch(`/api/crm/presence?ids=${encodeURIComponent(key)}`, { cache: "no-store" });
+        const r = await fetch(`${url}?ids=${encodeURIComponent(key)}`, { cache: "no-store" });
         const map = (await r.json().catch(() => ({}))) as Record<string, [string, string]>;
         for (const e of document.querySelectorAll<HTMLElement>(".pAvatar[data-uid]")) {
           const p = map[e.dataset.uid!];
@@ -31,6 +31,6 @@ export function PresenceLive() {
     const obs = new MutationObserver(() => { if (timer) clearTimeout(timer); timer = setTimeout(() => run(), 400); });
     obs.observe(document.body, { childList: true, subtree: true });
     return () => { clearInterval(every); obs.disconnect(); if (timer) clearTimeout(timer); };
-  }, []);
+  }, [url]);
   return null;
 }

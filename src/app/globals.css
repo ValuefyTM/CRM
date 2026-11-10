@@ -4385,3 +4385,4 @@ aside.poCol { flex: 1 1 360px; }
 .seenLine { display: block; margin-top: 3px; font-size: 11.5px; font-weight: 600; color: var(--muted-2); }
 .seenLine.online { color: var(--ok-text); }
 .seenLine.away { color: var(--acc-text); }
+.poTeam .pAvatar[data-presence]::after { border-color: var(--navy); }
