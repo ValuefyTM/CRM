@@ -4,6 +4,7 @@ import { ordersFor } from "@/lib/orders";
 import { portalKpis, portalRows } from "@/lib/portal-orders";
 import { PortalShell } from "@/components/PortalShell";
 import { PortalOrders } from "@/components/PortalOrders";
+import { niceName } from "@/lib/labels";
 
 export const metadata: Metadata = { title: "Acasă | Portal VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -11,13 +12,14 @@ export const dynamic = "force-dynamic";
 export default async function PortalHome() {
   const { db, user, base } = await portalPage();
   const partner = user.kind === "partner";
-  const first = user.name ? user.name.split(" ")[0] : "";
+  // the full name (first and last), as written in the account
+  const full = user.name ? niceName(user.name) || user.name : "";
   const orders = await ordersFor(db, user);
   const k = portalKpis(orders);
   return (
     <PortalShell user={user} base={base} active="home" title="Acasă" subtitle={partner ? user.partner_name ?? "" : user.company || undefined}>
       <section className="hero">
-        <span className="eyebrow">Bun venit, {partner ? user.partner_name : first || "în contul tău"}</span>
+        <span className="eyebrow">Bun venit, {full || "în contul tău"}{partner && user.partner_name ? ` · ${user.partner_name}` : ""}</span>
         <h2>{partner ? "Lansează o evaluare în 2 minute." : "Evaluările tale VALUEFY, într-un singur loc."}</h2>
         <p>
           {partner

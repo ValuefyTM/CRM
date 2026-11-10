@@ -154,11 +154,11 @@ export async function getOrder(db: D1Database, id: string) {
 
 /** Orders a portal user may see: every order of their firm (partners) or their own (clients). */
 export const canSee = (user: User, o: Pick<Order, "created_by" | "partner_id">) =>
-  user.kind === "partner" ? !!user.partner_id && o.partner_id === user.partner_id : o.created_by === user.id;
+  o.created_by === user.id;
 
 export async function ordersFor(db: D1Database, user: User) {
-  const q = user.kind === "partner" ? `${SELECT} WHERE o.partner_id = ? ORDER BY o.created_at DESC` : `${SELECT} WHERE o.created_by = ? ORDER BY o.created_at DESC`;
-  const { results } = await db.prepare(q).bind(user.kind === "partner" ? user.partner_id : user.id).all<Order>();
+  // only the orders the person placed (a collaborator does not see the colleagues' orders of their firm)
+  const { results } = await db.prepare(`${SELECT} WHERE o.created_by = ? ORDER BY o.created_at DESC`).bind(user.id).all<Order>();
   return results;
 }
 
