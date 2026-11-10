@@ -94,6 +94,24 @@ export const orderStatus = (o: { docs_missing: number; status?: string }): [stri
   }
 };
 
+/**
+ * The status of an order as the team follows it in the CRM: unprocessed, then the phase of its report — processed,
+ * inspection scheduled, in valuation, in review, delivered (no "documents missing" status: that is a separate mark).
+ */
+export const crmOrderStatus = (o: { status?: string; processed_at?: string | null; report_phase?: string | null }): [label: string, cls: string, key: string] => {
+  if (o.status === "cancelled" || o.report_phase === "cancelled") return ["Anulată", "pillErr", "cancelled"];
+  if (o.status === "suspended" || o.report_phase === "suspended") return ["Suspendată", "pillWarn", "suspended"];
+  if (o.status === "done" || o.report_phase === "delivered") return ["Livrată", "pillOk", "done"];
+  if (o.status === "draft") return ["Draft", "", "progress"];
+  switch (o.report_phase) {
+    case "review": return ["În verificare", "pillInfo", "progress"];
+    case "drafting": return ["În evaluare", "pillInfo", "progress"];
+    case "scheduled": return ["Inspecție programată", "pillInfo", "progress"];
+    case "processed": return ["Procesată", "pillInfo", "progress"];
+  }
+  return o.status === "in_progress" || o.processed_at ? ["Procesată", "pillInfo", "progress"] : ["Neprocesată", "pillUnproc", "pending"];
+};
+
 /** Reference shown for an order: CO-<n> for orders placed in the CRM, the bank's number for bank orders. */
 export const orderCode = (o: { seq: number | null; bank_ref?: string | null; bank?: string | null; source?: string; id: string }) =>
   o.seq ? orderRef(o.seq) : o.bank_ref ? `${o.bank ?? "Bancă"} ${o.bank_ref}` : `${o.source === "collab" ? "COL" : "CMD"}-${o.id.replace(/^g-ord-\w-/, "").slice(0, 6).toUpperCase()}`;

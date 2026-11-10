@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { scopeFilter } from "@/lib/scope";
 import { fmtDate, staffPage } from "@/lib/guard";
-import { allOrders, orderCode, orderPlace, orderStatus, orderWhat } from "@/lib/orders";
+import { allOrders, orderCode, orderPlace, orderWhat } from "@/lib/orders";
+import { crmOrderStatus } from "@/lib/order-labels";
 import { CrmShell } from "@/components/CrmShell";
 import { OrdersTable } from "./OrdersTable";
 import { BankOrdersTable } from "./BankOrdersTable";
@@ -31,8 +32,8 @@ export default async function CrmOrdersPage({ searchParams }: { searchParams: Pr
     fromId: o.created_by, firm: o.partner_name, firmId: o.partner_id, source: o.source, purpose: (o.purpose ?? "—") + (o.bank ? ` · ${o.bank}` : ""), bank: o.bank,
     bankRef: o.bank_ref, branch: o.bank_branch, reportType: o.report_type, fee: o.fee, contract: o.contract_number,
     bankLogo: fileSrc(o.bank_logo), reportId: o.report_id, reportNumber: o.report_number,
-    urgent: !!o.urgent, unread: !o.viewed_at, docs: o.doc_count, docsMissing: !!o.docs_missing, status: orderStatus(o),
-    today: day(o.created_at) === today, pending: o.status === "received",
+    urgent: !!o.urgent, unread: !o.viewed_at, docs: o.doc_count, docsMissing: !!o.docs_missing, status: crmOrderStatus(o),
+    today: day(o.created_at) === today, pending: crmOrderStatus(o)[2] === "pending",
   }));
   const inTab = (k: string) => rows.filter((r) => TAB_SOURCES[k].includes(r.source));
   // Accredited on framework contracts, without Comenzi on every order (agreeri): only the banks' orders.
@@ -57,7 +58,6 @@ export default async function CrmOrdersPage({ searchParams }: { searchParams: Pr
     ["today", "Noi astăzi", "var(--acc)", current.filter((r) => r.today).length,
       TABS.map(([, l, list]) => [l, list.filter((r) => r.today).length] as const).filter(([, n]) => n).map(([l, n]) => `${n} ${l.split(" ")[0].toLowerCase()}`).join(" · ") || "nicio comandă azi"],
     ["new", "Nedeschise", "var(--acc-ink)", unread(current), "nimeni nu le-a deschis"],
-    ["docs", "Documente lipsă", "var(--err)", current.filter((r) => r.docsMissing).length, "așteaptă documente"],
     ["urgent", "Urgente", "var(--err)", current.filter((r) => r.urgent && r.pending).length, "neprocesate, termen ~2 zile"],
   ];
   const NEW_WORK: Record<string, [string, string]> = {

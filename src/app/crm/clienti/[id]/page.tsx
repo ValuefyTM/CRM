@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { crmOrderStatus } from "@/lib/order-labels";
 import { inScope } from "@/lib/scope";
 import { notFound } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
@@ -70,7 +71,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
               <h2>Comenzi</h2>
               <ul className="people">
                 {orders.map((o) => {
-                  const [l, cls] = orderStatus(o);
+                  const [l, cls] = crmOrderStatus(o);
                   return (
                     <li key={o.id}>
                       <span className="who"><a className="rowLink" href={`${base}/comenzi/${o.id}`}>{orderCode(o)}</a><span className="muted">{orderWhat(o)} · {fmtDate(o.ordered_on ?? o.created_at)}{o.bank ? ` · ${o.bank}` : ""}</span></span>

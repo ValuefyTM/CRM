@@ -10,7 +10,7 @@ export type CrmOrderRow = {
   id: string; ref: string; created: string; type: string; address: string; client: string; clientPhone: string | null;
   from: string; fromId: string | null; firm: string | null; firmId: string | null; source: string; purpose: string; bank: string | null;
   bankRef: string | null; branch: string | null; reportType: string | null; fee: number | null; contract: string | null;
-  urgent: boolean; unread: boolean; docs: number; docsMissing: boolean; status: [string, string]; today: boolean; pending: boolean;
+  urgent: boolean; unread: boolean; docs: number; docsMissing: boolean; status: [string, string, string?]; today: boolean; pending: boolean;
   /** bank orders: the bank's logo and the order's report */
   bankLogo?: string | null; reportId?: string | null; reportNumber?: string | null;
 };
@@ -32,16 +32,15 @@ export const VIEWS: [string, string, (r: CrmOrderRow) => boolean][] = [
   ["pending", "Neprocesate", ORDER_FILTERS.pending],
   ["today", "Primite astăzi", ORDER_FILTERS.today],
   ["new", "Nedeschise", ORDER_FILTERS.new],
-  ["docs", "Documente lipsă", ORDER_FILTERS.docs],
   ["urgent", "Urgente", ORDER_FILTERS.urgent],
-  ["progress", "În lucru", (r) => r.status[0] === "În lucru" || r.status[0] === "Draft"],
-  ["done", "Finalizate", (r) => r.status[0] === "Finalizată"],
-  ["suspended", "Suspendate", (r) => r.status[0] === "Suspendată"],
-  ["cancelled", "Anulate", (r) => r.status[0] === "Anulată"],
+  ["progress", "În lucru", (r) => (r.status[2] ?? (r.status[0] === "În lucru" ? "progress" : "")) === "progress"],
+  ["done", "Livrate", (r) => r.status[2] === "done" || r.status[0] === "Finalizată"],
+  ["suspended", "Suspendate", (r) => r.status[2] === "suspended" || r.status[0] === "Suspendată"],
+  ["cancelled", "Anulate", (r) => r.status[2] === "cancelled" || r.status[0] === "Anulată"],
 ];
 /** Status tabs above the order lists ("" = all); the other views (today, unopened…) come from the cards above. */
-export const STATUS_TABS: [string, string][] = [["", "Toate"], ["pending", "Neprocesate"], ["progress", "În lucru"], ["done", "Finalizate"], ["suspended", "Suspendate"], ["cancelled", "Anulate"]];
-const CARD_VIEWS = new Set(["today", "new", "docs", "urgent"]);
+export const STATUS_TABS: [string, string][] = [["", "Toate"], ["pending", "Neprocesate"], ["progress", "În lucru"], ["done", "Livrate"], ["suspended", "Suspendate"], ["cancelled", "Anulate"]];
+const CARD_VIEWS = new Set(["today", "new", "urgent"]);
 
 /** Status as tabs (with counts), plus a removable chip when a card above filtered the list. */
 export function StatusTabs({ rows, value, onChange, pre }: { rows: CrmOrderRow[]; value: string; onChange: (v: string) => void; pre: (r: CrmOrderRow) => boolean }) {
@@ -94,7 +93,7 @@ export function OrdersTable({ rows, base, initial }: { rows: CrmOrderRow[]; base
             <thead><tr><th>Comandă</th><th>Proprietate</th><th>Client</th><th>Trimisă de</th><th>Scop</th><th>Documente</th><th>Status</th></tr></thead>
             <tbody>
               {shown.slice(0, limit).map((r) => (
-                <ClickRow key={r.id} href={`${base}/comenzi/${r.id}`} className={r.unread ? "unread" : undefined}>
+                <ClickRow key={r.id} href={`${base}/comenzi/${r.id}`} className={[r.unread && "unread", r.pending && "unproc"].filter(Boolean).join(" ") || undefined}>
                   <td><a className="ref rowLink" href={`${base}/comenzi/${r.id}`}>{r.ref}</a><div className="muted">{r.created}</div></td>
                   <td><a className="rowLink" href={`${base}/comenzi/${r.id}`}>{r.type}</a><div className="muted">{r.address}</div></td>
                   <td><b>{niceName(r.client)}</b><div className="muted" style={{ whiteSpace: "nowrap" }}>{r.clientPhone}</div></td>

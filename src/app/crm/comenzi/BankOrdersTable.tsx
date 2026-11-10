@@ -57,7 +57,7 @@ export function BankOrdersTable({ rows, base, initial = "all" }: { rows: CrmOrde
             <thead><tr><th>Comandă</th><th>Bancă · agenție</th><th>Client</th><th>Tip raport</th><th style={{ textAlign: "right" }}>Tarif</th><th>Status</th></tr></thead>
             <tbody>
               {shown.slice(0, limit).map((r) => (
-                <ClickRow key={r.id} href={`${base}/comenzi/${r.id}`} className={r.unread ? "unread" : undefined}>
+                <ClickRow key={r.id} href={`${base}/comenzi/${r.id}`} className={[r.unread && "unread", r.pending && "unproc"].filter(Boolean).join(" ") || undefined}>
                   <td><a className="ref rowLink" href={`${base}/comenzi/${r.id}`}>{r.bankRef ?? r.ref}</a><div className="muted">{r.created}</div></td>
                   <td>
                     <span className="bankCell">

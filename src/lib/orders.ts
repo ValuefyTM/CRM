@@ -45,7 +45,7 @@ export type Order = Nullable<Pick<PortalFields, "property_type" | "city" | "addr
   creator_avatar_at?: string | null; referral_avatar_at?: string | null;
   collab_firm: string | null; contract_number: string | null; contract_kind: string | null;
   /** the bank's logo (bank orders) and the order's latest report */
-  bank_logo: string | null; report_id: string | null; report_number: string | null;
+  bank_logo: string | null; report_id: string | null; report_number: string | null; report_phase?: string | null;
 };
 
 export type OrderDocument = {
@@ -58,8 +58,15 @@ const SELECT = `SELECT o.*, u.name AS creator_name, u.email AS creator_email, u.
   (SELECT e.name FROM collaborations c JOIN entities e ON e.id = c.firm_id WHERE c.id = o.collaboration_id) AS collab_firm,
   k.number AS contract_number, k.kind AS contract_kind, (SELECT x.lead_id FROM order_leads x WHERE x.order_id = o.id) AS lead_id,
   (SELECT b.logo_url FROM entities b WHERE b.id = o.bank_id) AS bank_logo,
-  (SELECT r.id FROM reports r WHERE r.order_id = o.id ORDER BY r.created_at DESC LIMIT 1) AS report_id,
-  (SELECT r.number FROM reports r WHERE r.order_id = o.id ORDER BY r.created_at DESC LIMIT 1) AS report_number
+  (SELECT r.id FROM reports r WHERE r.order_id = COALESCE(o.linked_order_id, o.id) ORDER BY r.created_at DESC LIMIT 1) AS report_id,
+  (SELECT r.number FROM reports r WHERE r.order_id = COALESCE(o.linked_order_id, o.id) ORDER BY r.created_at DESC LIMIT 1) AS report_number,
+  -- where the work is (for the CRM's status): the report's phase, from its stage and inspections
+  (SELECT CASE WHEN r.delivered_at IS NOT NULL OR r.status = 'done' THEN 'delivered' WHEN r.status = 'suspended' THEN 'suspended' WHEN r.status = 'cancelled' THEN 'cancelled'
+      WHEN r.stage = 'review' THEN 'review'
+      WHEN r.stage = 'drafting' OR (EXISTS (SELECT 1 FROM inspections i WHERE i.report_id = r.id AND i.status = 'done')
+        AND NOT EXISTS (SELECT 1 FROM inspections i WHERE i.report_id = r.id AND i.status IN ('to_schedule', 'scheduled'))) THEN 'drafting'
+      WHEN EXISTS (SELECT 1 FROM inspections i WHERE i.report_id = r.id AND i.status = 'scheduled') THEN 'scheduled' ELSE 'processed' END
+    FROM reports r WHERE r.order_id = COALESCE(o.linked_order_id, o.id) ORDER BY r.created_at DESC LIMIT 1) AS report_phase
   FROM orders o LEFT JOIN users u ON u.id = o.created_by LEFT JOIN partners p ON p.id = o.partner_id LEFT JOIN contracts k ON k.id = o.contract_id`;
 
 // ---------- validation ----------

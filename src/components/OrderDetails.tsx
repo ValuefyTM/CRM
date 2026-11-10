@@ -1,6 +1,7 @@
 // Order content shared by the portal and the CRM: status, details and documents.
 import { fmtDate } from "@/lib/guard";
-import { DOCS, docLabel, fmtSize, missingDocs, orderCode, orderPlace, orderStatus, orderWhat, STAGES, type Order, type OrderDocument } from "@/lib/orders";
+import { crmOrderStatus } from "@/lib/order-labels";
+import { DOCS, docLabel, fmtSize, missingDocs, orderCode, orderPlace, orderWhat, STAGES, type Order, type OrderDocument } from "@/lib/orders";
 import { DocUpload } from "./DocUpload";
 import { CancelDocRequest } from "./DocRequests";
 import type { DocRequest } from "@/lib/order-chat";
@@ -8,7 +9,7 @@ import type { DocRequest } from "@/lib/order-chat";
 export type OrderProgress = { steps: { label: string; at: string | null }[]; reached: number; due?: string | null };
 
 export function OrderStatusCard({ o, docs, progress }: { o: Order; docs: OrderDocument[]; progress?: OrderProgress }) {
-  const [label, cls] = orderStatus(o);
+  const [label, cls] = crmOrderStatus(o);
   const missing = missingDocs(o.property_type, docs);
   return (
     <section className="card">
