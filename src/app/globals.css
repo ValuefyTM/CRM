@@ -4600,3 +4600,13 @@ tr.unproc td:first-child { box-shadow: inset 4px 0 0 var(--acc); }
 .pxTip { position: absolute; z-index: 600; pointer-events: none; background: rgba(20,20,20,.88); color: #fff; font-size: 12.5px; font-weight: 600; padding: 5px 9px; border-radius: 8px; white-space: nowrap; }
 .pxGrad { display: block; width: 200px; height: 12px; border-radius: 4px; }
 .pxGradLbl { display: flex; justify-content: space-between; width: 200px; font-variant-numeric: tabular-nums; }
+/* ---------- Setări › Rapoarte ca Markdown ---------- */
+.mdCtl { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.mdCtl .okMsg, .mdCtl .error { flex-basis: 100%; margin: 4px 0 0; }
+.mdN { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.mdN .input { width: 90px; }
+.mdKpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 14px 0; }
+.mdView { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 1000px) { .mdView { grid-template-columns: 1fr; } }
+.mdPre { white-space: pre-wrap; word-break: break-word; font: 13px/1.55 "IBM Plex Mono", ui-monospace, monospace; background: #fbf8f2; border: 1px solid var(--line); border-radius: 10px; padding: 14px; max-height: 75vh; overflow: auto; margin: 0; }
+.mdPre.small { font-size: 12px; }

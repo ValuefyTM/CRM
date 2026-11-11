@@ -1,15 +1,15 @@
 "use client";
 // The map of prices: the valuations of the last 12 months as a cloud over Timișoara — each valuation spread as a soft
 // spot (a Gaussian of `spread` metres), the colour at each place the weighted average €/m² of the valuations around it
-// (one hue, light → dark), its strength how many there are (where there are none, the cloud fades out). By type of
+// (green, the cheapest → red, the most expensive), its strength how many there are (where there are none, the cloud fades out). By type of
 // property. A click lists the valuations around that place; the dots show each one; the table holds every value.
 import "leaflet/dist/leaflet.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type * as Leaflet from "leaflet";
 import type { PricePoint, PriceType } from "@/lib/price-map";
 
-// the sequential ramp (one hue, light → dark)
-const RAMP = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#104281"];
+// green (the cheapest) → yellow → red (the most expensive), as asked; the dots and the table carry the numbers
+const RAMP = ["#1a9850", "#66bd63", "#c2e478", "#fee08b", "#f88d52", "#d73027"];
 const RGB = RAMP.map((h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)));
 const CENTRE: [number, number] = [45.7537, 21.2257];
 const BASES = {
