@@ -52,6 +52,13 @@ export function AssetLocation({ pins: initial, query, height = 90 }: { pins: Ass
     const missing = (k: PinKind) => !has(pins.find((p) => p.kind === k)!);
     if (missing("uvalo") && (query.cad_building || query.cad_land || query.cf_number))
       ask("uvalo", { city: query.city, county: query.county, cad_building: query.cad_building, cad_land: query.cad_land, cf_number: query.cf_number }, (s) => s === "cadastru");
+    // an inspection made in UVALO, imported before its place was kept: read from UVALO
+    if (missing("inspectie") && query.uvalo) {
+      setAsking((a) => [...a, "inspectie"]);
+      fetch("/api/crm/geo/inspection", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ asset: query.asset }) })
+        .then((r) => r.json() as Promise<{ pin?: AssetPin | null }>).catch(() => null)
+        .then((d) => { setAsking((a) => a.filter((k) => k !== "inspectie")); if (d?.pin) setPins((ps) => ps.map((p) => p.kind === "inspectie" ? d.pin! : p)); });
+    }
     // the address is always asked again (a point saved earlier from the address may be off); it replaces the saved one
     const adr = pins.find((p) => p.kind === "adresa")!;
     const fromAddress = !has(adr) || /după adresă|aproximativ/.test(adr.note);

@@ -312,7 +312,11 @@ type UInsp = {
   sheet: { no: string | null; template: { name?: string; version?: number }; answers: Record<string, string | string[]>; rooms: { n: string; a: number | null; floor?: string; walls?: string; ceiling?: string; state?: string }[];
     findings: { diff?: string; defects?: string; notes?: string }; signed_name: string | null; signed_at: string | null; cover_file_id: string | null };
   contact: { name: string | null; phone: string | null; role: string | null }; files: UFile[];
+  /** where it was made: the phone's GPS ("gps", accuracy in metres) or the pin moved by the valuer ("manual") */
+  location?: ULocation | null;
 };
+type ULocation = { lat: number; lng: number; accuracy_m: number | null; at: string | null; source: string };
+const okLoc = (l: ULocation | null | undefined): l is ULocation => !!l && Number.isFinite(Number(l.lat)) && Number.isFinite(Number(l.lng));
 
 const category = (room: string | null) => {
   const r = (room ?? "").toLowerCase();
@@ -369,7 +373,8 @@ export async function importSheet(db: D1Database, id: string, u?: UInsp) {
     const answers = toCrmAnswers(form, x);
     const sid = sheetId(id), t = now();
     const doneAt = x.finished_at ?? t;
-    const details = JSON.stringify({ v: FORM_VERSION, answers, form, source: "uvalo", uvalo: { id: x.id, code: x.code, sheet_no: x.sheet.no, template: x.sheet.template?.name ?? null } });
+    const loc = okLoc(x.location) ? x.location : null;
+    const details = JSON.stringify({ v: FORM_VERSION, answers, form, source: "uvalo", uvalo: { id: x.id, code: x.code, sheet_no: x.sheet.no, template: x.sheet.template?.name ?? null, location: loc } });
     const cols = featureColumns(type, answers, form);
     const first = ins.status !== "done";
     // 1. the sheet and the inspection done: at once
@@ -381,6 +386,8 @@ export async function importSheet(db: D1Database, id: string, u?: UInsp) {
           submitted_at = ?12, done_at = ?12, updated_at = ?13`)
         .bind(sid, id, ins.asset_id, ins.inspector_id, type, FORM_VERSION, details, typeof answers.notes === "string" ? answers.notes.slice(0, 4000) : null,
           x.sheet.signed_name, x.sheet.signed_at, x.started_at ?? doneAt, doneAt, t),
+      // the place of the inspection (the inspection pin of the asset's map)
+      db.prepare("UPDATE inspection_sheets SET lat = ?, lng = ? WHERE id = ?").bind(loc ? Number(loc.lat) : null, loc ? Number(loc.lng) : null, sid),
       db.prepare("DELETE FROM property_features WHERE sheet_id = ?").bind(sid),
       db.prepare(`INSERT INTO property_features (id, sheet_id, inspection_id, property_id, sheet_type, observed_at, ${FEATURE_COLUMNS.join(", ")})
         VALUES (?, ?, ?, ?, ?, ?, ${FEATURE_COLUMNS.map(() => "?").join(", ")})`).bind(`pf-${id}`, sid, id, ins.property_id, type, doneAt, ...FEATURE_COLUMNS.map((n) => cols[n] ?? null)),
@@ -530,4 +537,24 @@ export async function resendPending(db: D1Database) {
   const r = await db.prepare("DELETE FROM settings WHERE key = 'uvalo_resend_pending'").run().catch(() => null);
   if (!r?.meta.changes) return 0;
   return resyncUvalo(db, { all: true });
+}
+
+/**
+ * The place of the inspections done in UVALO and imported before the CRM kept it (the asset's map asks when it opens):
+ * read again from UVALO and written on the sheet. Returns how many got a point.
+ */
+export async function uvaloLocations(db: D1Database, assetId: string) {
+  if (!(await uvaloConfigured())) return 0;
+  const { results } = await db.prepare(`SELECT i.id, s.id AS sid, s.details FROM inspections i JOIN inspection_sheets s ON s.inspection_id = i.id
+      WHERE i.asset_id = ? AND i.uvalo_id IS NOT NULL AND i.status = 'done' AND s.lat IS NULL LIMIT 5`).bind(assetId).all<{ id: string; sid: string; details: string | null }>();
+  let n = 0;
+  for (const r of results) {
+    const x = await call<{ inspection: UInsp }>(`/inspections/${encodeURIComponent(r.id)}`).then((d) => d.inspection).catch(() => null);
+    if (!okLoc(x?.location)) continue;
+    const d = parseJson<Record<string, unknown>>(r.details ?? "", {});
+    const details = JSON.stringify({ ...d, uvalo: { ...((d.uvalo as object) ?? {}), location: x.location } });
+    await db.prepare("UPDATE inspection_sheets SET lat = ?, lng = ?, details = ? WHERE id = ?").bind(Number(x.location.lat), Number(x.location.lng), details, r.sid).run();
+    n++;
+  }
+  return n;
 }

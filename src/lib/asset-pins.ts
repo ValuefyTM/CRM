@@ -6,7 +6,7 @@ import type { Parcel } from "./site-shared";
 export type PinKind = "uvalo" | "adresa" | "inspectie";
 export type AssetPin = { kind: PinKind; lat: number | null; lng: number | null; note: string };
 /** What the client still needs to ask for a missing pin (no point saved yet): the cadastral numbers or the address. */
-export type PinQuery = { property: string | null; city: string | null; county: string | null; cad_building: string | null; cad_land: string | null; cf_number: string | null; address: string | null };
+export type PinQuery = { asset: string; uvalo: boolean; property: string | null; city: string | null; county: string | null; cad_building: string | null; cad_land: string | null; cf_number: string | null; address: string | null };
 
 const r6 = (x: number) => Math.round(x * 1e6) / 1e6;
 const parse = <T,>(s: string | null | undefined): T | null => { try { return s ? (JSON.parse(s) as T) : null; } catch { return null; } };
@@ -17,7 +17,7 @@ export async function assetPins(db: D1Database, assetId: string): Promise<{ pins
       FROM assets a JOIN crm_properties p ON p.id = a.property_id LEFT JOIN asset_site s ON s.asset_id = a.id WHERE a.id = ?`).bind(assetId)
     .first<{ id: string; geo: string | null; geo_source: string | null; geo_note: string | null; city: string | null; county: string | null; full_address: string | null;
       cad_building: string | null; cad_land: string | null; cf_number: string | null; site_source: string | null; parcel: string | null }>().catch(() => null);
-  const query: PinQuery = { property: p?.id ?? null, city: p?.city ?? null, county: p?.county ?? null, cad_building: p?.cad_building ?? null, cad_land: p?.cad_land ?? null, cf_number: p?.cf_number ?? null, address: p?.full_address ?? null };
+  const query: PinQuery = { asset: assetId, uvalo: false, property: p?.id ?? null, city: p?.city ?? null, county: p?.county ?? null, cad_building: p?.cad_building ?? null, cad_land: p?.cad_land ?? null, cf_number: p?.cf_number ?? null, address: p?.full_address ?? null };
   const geo = parseGeo(p?.geo ?? null);
   const pin = (kind: PinKind, ll: [number, number] | null, note: string): AssetPin => ({ kind, lat: ll ? r6(ll[0]) : null, lng: ll ? r6(ll[1]) : null, note });
 
@@ -33,10 +33,15 @@ export async function assetPins(db: D1Database, assetId: string): Promise<{ pins
     : other ? pin("adresa", geo, p?.geo_source === "manual" ? "punctul pus de mână la proprietate" : "punctul salvat la proprietate (din Glide)")
     : pin("adresa", null, "");
   // 3. the inspection: where the sheet was signed, else the photos' GPS (the middle of them)
-  const sheet = await db.prepare(`SELECT s.lat, s.lng, COALESCE(i.done_at, s.updated_at) AS at FROM inspection_sheets s JOIN inspections i ON i.id = s.inspection_id
+  const sheet = await db.prepare(`SELECT s.lat, s.lng, COALESCE(i.done_at, s.updated_at) AS at, i.uvalo_id,
+        json_extract(s.details, '$.uvalo.location.source') AS src, json_extract(s.details, '$.uvalo.location.accuracy_m') AS acc
+      FROM inspection_sheets s JOIN inspections i ON i.id = s.inspection_id
       WHERE i.asset_id = ? AND s.lat IS NOT NULL AND s.lng IS NOT NULL ORDER BY COALESCE(i.done_at, s.updated_at) DESC LIMIT 1`).bind(assetId)
-    .first<{ lat: number; lng: number; at: string | null }>().catch(() => null);
-  let insp = sheet ? pin("inspectie", [sheet.lat, sheet.lng], `GPS la semnarea fișei${sheet.at ? ` · ${sheet.at.slice(0, 10).split("-").reverse().join(".")}` : ""}`) : null;
+    .first<{ lat: number; lng: number; at: string | null; uvalo_id: string | null; src: string | null; acc: number | null }>().catch(() => null);
+  const when = sheet?.at ? ` · ${sheet.at.slice(0, 10).split("-").reverse().join(".")}` : "";
+  let insp = !sheet ? null
+    : sheet.uvalo_id ? pin("inspectie", [sheet.lat, sheet.lng], sheet.src === "manual" ? `UVALO · pin pus de evaluator pe hartă${when}` : `UVALO · GPS-ul telefonului${sheet.acc ? ` (±${Math.round(sheet.acc)} m)` : ""}${when}`)
+    : pin("inspectie", [sheet.lat, sheet.lng], `GPS la semnarea fișei${when}`);
   if (!insp) {
     const { results } = await db.prepare(`SELECT f.lat, f.lng FROM inspection_photos f JOIN inspections i ON i.id = f.inspection_id
         WHERE i.asset_id = ? AND f.deleted_at IS NULL AND f.lat IS NOT NULL AND f.lng IS NOT NULL LIMIT 200`).bind(assetId)
@@ -46,5 +51,7 @@ export async function assetPins(db: D1Database, assetId: string): Promise<{ pins
       insp = pin("inspectie", [mid(results.map((r) => r.lat)), mid(results.map((r) => r.lng))], `GPS din ${results.length} ${results.length === 1 ? "fotografie" : "fotografii"} de la inspecție`);
     } else if (geo && p?.geo_source === "gps") insp = pin("inspectie", geo, p.geo_note || "GPS de la inspecție");
   }
+  if (!sheet) query.uvalo = !!(await db.prepare("SELECT 1 AS x FROM inspections i JOIN inspection_sheets s ON s.inspection_id = i.id WHERE i.asset_id = ? AND i.uvalo_id IS NOT NULL AND i.status = 'done' AND s.lat IS NULL LIMIT 1")
+    .bind(assetId).first().catch(() => null));
   return { pins: [uvalo, adresa, insp ?? pin("inspectie", null, "")], query };
 }
