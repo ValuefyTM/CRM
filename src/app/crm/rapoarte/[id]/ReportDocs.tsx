@@ -1,6 +1,7 @@
 "use client";
 // The documents of a report as folders, like the folders of Windows: the report's folder holds one folder per asset
-// (with „Acte” and „Poze inspecție”), „Livrabile” and the folders the team makes. Large icons by default, or details;
+// (with „Acte” and „Poze inspecție”), „Dosar de lucru” (where the signed PDF, the working grid and the report in Word are
+// uploaded and marked as such) and the folders the team makes. Large icons by default, or details;
 // files dragged from the computer onto the window or onto a folder are uploaded there; files and folders dragged onto a
 // folder are moved; right click, F2, Del, Enter, Backspace, Ctrl+A as in Windows. A file uploaded with the name of one
 // in the same folder replaces it, the earlier versions kept.
@@ -8,15 +9,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PdfThumb } from "@/components/PdfThumb";
 import { DOC_KINDS, DOC_KIND_KEYS, docKindLabel, guessDocKind } from "@/lib/doc-kinds";
-import { UploadButton } from "./ReportActions";
 
 export type DocItem = {
   id: string; name: string; kind: string | null; asset_id: string | null; status: "uploaded" | "missing"; origin: "report" | "order" | "glide";
   href: string | null; size: number | null; at: string | null; by: string | null; note?: string;
   /** The inspector sees it (ticked; by default the CF extract and the floor survey). Undefined: not a document for the inspector. */
   insp?: boolean;
-  /** The final report (PDF signed), in „Livrabile”, in red. */
+  /** The final report (PDF signed, delivered): marked so in „Dosar de lucru”, in red. */
   final?: boolean;
+  /** Marked as the working grid or the report in Word. */
+  role?: "grid" | "word" | null;
   /** What the legal check read from it: the name of the act, its number, date and issuer. */
   read?: { title: string; number: string | null; date: string | null; issuer: string | null };
   /** The folder it sits in (a folder key: root, livrabile, a:<asset>[:acte|:poze], f:<id>). */
@@ -40,6 +42,10 @@ const OK = /\.(pdf|jpe?g|png|heic|heif|webp|docx?|xlsx?|zip)$/i;
 const IMG = /\.(jpe?g|png|webp|gif)$/i;
 const ACCEPT = ".pdf,.jpg,.jpeg,.png,.heic,.heif,.webp,.doc,.docx,.xls,.xlsx,.zip";
 const DRAG = "application/x-vf-docs";
+/** what a file of „Dosar de lucru” can be marked as (one of each per report) */
+const MARKS: [string, string][] = [["final", "Raport PDF final (semnat, livrat)"], ["grid", "Grilă de lucru"], ["word", "Raport Word"]];
+const MARK_OK: Record<string, RegExp> = { final: /\.pdf$/i, grid: /\.(xlsx?|xlsm|ods|csv)$/i, word: /\.(docx?|odt|rtf)$/i };
+const MARK_WHY: Record<string, string> = { final: "Doar un fișier PDF", grid: "Doar un fișier Excel", word: "Doar un fișier Word" };
 const ext = (name: string) => (name.match(/\.(\w{2,4})$/)?.[1] ?? "doc").toUpperCase();
 const size = (n: number | null | undefined) => (n == null ? "" : n > 1048576 ? `${(n / 1048576).toFixed(1).replace(".", ",")} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 const when = (iso: string | null | undefined) => (iso ? new Date(iso.length <= 10 ? `${iso}T12:00:00` : iso).toLocaleString("ro-RO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Bucharest" }).replace(",", "") : "");
@@ -98,7 +104,7 @@ export function ReportDocs({ report, title, start = "root", assets, items, folde
       out.push({ key: `a:${a.id}:acte`, name: "Acte", parent: `a:${a.id}`, fixed: true, asset: a.id });
       out.push({ key: `a:${a.id}:poze`, name: "Poze inspecție", parent: `a:${a.id}`, fixed: true, asset: a.id });
     });
-    out.push({ key: "livrabile", name: "Livrabile", parent: "root", fixed: true });
+    out.push({ key: "livrabile", name: "Dosar de lucru", parent: "root", fixed: true });
     // the folders made by the team, each under a folder shown here (the ones under an asset not shown are left out)
     const left = [...folders];
     for (let pass = 0; pass < 30 && left.length; pass++) {
@@ -254,6 +260,12 @@ export function ReportDocs({ report, title, start = "root", assets, items, folde
     setSel(new Set());
     router.refresh();
   };
+  const mark = async (d: DocItem, role: string | null) => {
+    if (await call(`/api/crm/reports/${report}/documents`, "PATCH", { mark: d.id, role })) {
+      setToast({ text: role ? `„${d.name}” e marcat ca ${MARKS.find(([k]) => k === role)![1]}` : `„${d.name}” nu mai e marcat` });
+      router.refresh();
+    }
+  };
   const setType = async (d: DocItem, t: string) => { if (await call(`/api/crm/reports/${report}/documents`, "PATCH", { doc: d.id, doc_type: t })) router.refresh(); };
 
   // ---------- the inspector's ticks (sent all at once, „Actualizează la inspector”) ----------
@@ -357,7 +369,9 @@ export function ReportDocs({ report, title, start = "root", assets, items, folde
       onBlur={(e) => rename(en, e.target.value)} />
   );
   const tag = (en: Entry) => en.type === "doc" ? (
-    en.doc.final ? <em className="fxTag red">FINAL</em>
+    en.doc.final ? <em className="fxTag red">RAPORT FINAL</em>
+      : en.doc.role === "grid" ? <em className="fxTag green">GRILĂ</em>
+      : en.doc.role === "word" ? <em className="fxTag blue">RAPORT WORD</em>
       : en.doc.status === "missing" ? <em className="fxTag red">lipsă</em>
       : (en.doc.version ?? 1) > 1 ? <em className="fxTag blue">v{en.doc.version}</em>
       : en.doc.origin === "order" ? <em className="fxTag">din comandă</em>
@@ -429,12 +443,28 @@ export function ReportDocs({ report, title, start = "root", assets, items, folde
         </div>
       </div>
       {msg && <p className="adMsg pad" role="alert">{msg}</p>}
-      {cwd === "livrabile" && edit && !items.some((d) => d.final) && (
-        <div className="fxFinal"><span><b>Raportul semnat</b> nu e încărcat încă.</span><UploadButton id={report} kind="final" label="Încarcă raportul semnat (PDF)" className="btn btnSm" /></div>
-      )}
-      {cwd === "livrabile" && edit && items.some((d) => d.final) && (
-        <div className="fxFinal ok"><span><b>Raportul semnat</b> e încărcat (roșu). Încărcarea altuia îl înlocuiește, cel vechi rămâne ca versiune.</span><UploadButton id={report} kind="final" label="Înlocuiește raportul semnat" className="linkBtn" /></div>
-      )}
+      {cwd === "livrabile" && (() => {
+        const d = one?.type === "doc" && one.doc.origin === "report" && one.doc.status === "uploaded" ? one.doc : null;
+        const roleOf = (x: DocItem) => (x.final ? "final" : x.role ?? null);
+        const has = (r: string) => items.find((x) => roleOf(x) === r);
+        if (!d) return (
+          <div className="fxMark hint">
+            <span>{edit ? "Dă click pe un fișier ca să-l marchezi:" : "Marcate:"}</span>
+            {MARKS.map(([k, l]) => <span key={k} className={`fxMarkState${has(k) ? " ok" : ""}`}>{has(k) ? "✓" : "○"} {l}{has(k) ? <small> · {has(k)!.name}</small> : null}</span>)}
+          </div>
+        );
+        return (
+          <div className="fxMark">
+            <span className="fxMarkWhat">Marchează <b>{d.name}</b> ca:</span>
+            <span className="fxMarkBtns" role="group" aria-label="Ce este fișierul">
+              {MARKS.map(([k, l]) => (
+                <button key={k} type="button" aria-pressed={roleOf(d) === k} disabled={!edit || !MARK_OK[k].test(d.name)} title={MARK_OK[k].test(d.name) ? (has(k) && roleOf(d) !== k ? `Înlocuiește marcajul de pe „${has(k)!.name}”` : undefined) : MARK_WHY[k]}
+                  onClick={() => mark(d, roleOf(d) === k ? null : k)}>{roleOf(d) === k ? "✓ " : ""}{l}</button>
+              ))}
+            </span>
+          </div>
+        );
+      })()}
 
       <div ref={box} className={`fxBody ${view}`} tabIndex={0} onKeyDown={onKey} onClick={() => { setSel(new Set()); setMenu(null); }} onContextMenu={(e) => onMenu(e, null)} {...dropOn(cwd)}>
         {shown.length === 0 && !creating ? (
@@ -514,6 +544,10 @@ export function ReportDocs({ report, title, start = "root", assets, items, folde
               {one && canRename(one) && <button type="button" role="menuitem" onClick={() => { setMenu(null); setRenaming(one.key); }}><span className="fxMIc">✎</span><span>Redenumește</span><small>F2</small></button>}
               {edit && picked.some(movable) && <button type="button" role="menuitem" onClick={() => setMenu({ ...menu, mode: "move" })}><span className="fxMIc">→</span><span>Mută în</span><small>›</small></button>}
               {one?.type === "doc" && one.doc.origin === "report" && !one.doc.final && one.doc.status === "uploaded" && edit && <button type="button" role="menuitem" onClick={() => setMenu({ ...menu, mode: "type" })}><span className="fxMIc">▤</span><span>Tip document · {docKindLabel(kindOf(one.doc))}</span><small>›</small></button>}
+              {one?.type === "doc" && one.doc.origin === "report" && one.doc.status === "uploaded" && edit && MARKS.filter(([k]) => MARK_OK[k].test(one.name)).map(([k, l]) => {
+                const on = (one.doc.final ? "final" : one.doc.role) === k;
+                return <button key={k} type="button" role="menuitemcheckbox" aria-checked={on} onClick={() => { setMenu(null); mark((one as { doc: DocItem }).doc, on ? null : k); }}><span className="fxMIc">{on ? "✓" : "★"}</span><span>{on ? `Marcat: ${l}` : `Marchează ca ${l}`}</span></button>;
+              })}
               {one?.type === "doc" && canTick(one.doc) && <button type="button" role="menuitemcheckbox" aria-checked={tickOf(one.doc)} onClick={() => { setMenu(null); setSentMsg(""); setTicks((t) => ({ ...t, [keyOfDoc((one as { doc: DocItem }).doc)]: !tickOf((one as { doc: DocItem }).doc) })); }}><span className="fxMIc">{tickOf(one.doc) ? "✓" : ""}</span><span>Vizibil la inspector</span></button>}
               {one?.type === "doc" && one.doc.origin === "report" && (one.doc.version ?? 1) > 1 && <button type="button" role="menuitem" onClick={() => { setMenu(null); showVersions((one as { doc: DocItem }).doc); }}><span className="fxMIc">⟲</span><span>Versiuni ({one.doc.version})</span></button>}
               {picked.some(canDelete) && <><i className="fxMSep" /><button type="button" role="menuitem" className="danger" onClick={() => { setMenu(null); del(picked); }}><span className="fxMIc">✕</span><span>{one?.type === "doc" && one.doc.status === "missing" ? "Anulează cererea" : "Șterge"}</span><small>Del</small></button></>}

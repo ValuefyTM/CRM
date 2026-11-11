@@ -276,6 +276,8 @@ export type ReportDocument = {
   doc_type: string | null; asset_id: string | null;
   /** Its folder (null: the default one) and the version of the file it holds. */
   folder: string | null; version: number | null;
+  /** What it is, marked in „Dosar de lucru”: the working grid, the report in Word (the signed PDF is kind = 'final'). */
+  role: string | null;
   /** Ticked for the inspector (null: the default, CF and RLV yes). */
   insp_visible: number | null;
 };

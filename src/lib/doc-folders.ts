@@ -57,11 +57,11 @@ export async function isInside(db: D1Database, reportId: string, key: string, an
 
 type Cur = { id: string; filename: string; content_type: string | null; size_bytes: number | null; r2_key: string | null; uploaded_by: string | null; created_at: string; version: number };
 
-/** The current document of the report with this name in this folder (an uploaded one), if any. */
-export async function sameName(db: D1Database, reportId: string, folder: string, filename: string, kind: "source" | "final" = "source") {
+/** The current document of the report with this name in this folder (an uploaded one, the signed report too), if any. */
+export async function sameName(db: D1Database, reportId: string, folder: string, filename: string) {
   return db.prepare(`SELECT d.id, d.filename, d.content_type, d.size_bytes, d.r2_key, d.uploaded_by, d.created_at, d.version FROM report_documents d
-      WHERE d.report_id = ? AND d.kind = ? AND d.status = 'uploaded' AND lower(d.filename) = lower(?) AND ${FOLDER_SQL("d")} = ? ORDER BY d.created_at DESC LIMIT 1`)
-    .bind(reportId, kind, filename, folder).first<Cur>();
+      WHERE d.report_id = ? AND d.status = 'uploaded' AND lower(d.filename) = lower(?) AND ${FOLDER_SQL("d")} = ? ORDER BY d.created_at DESC LIMIT 1`)
+    .bind(reportId, filename, folder).first<Cur>();
 }
 
 /**
@@ -103,4 +103,20 @@ export async function restoreVersion(db: D1Database, reportId: string, docId: st
 export async function versionKeys(db: D1Database, docId: string) {
   const { results } = await db.prepare("SELECT DISTINCT r2_key FROM report_document_versions WHERE doc_id = ?").bind(docId).all<{ r2_key: string }>();
   return results.map((r) => r.r2_key).filter(Boolean);
+}
+
+/**
+ * Whether the report's working grid and its report in Word must be marked in „Dosar de lucru” before it is delivered:
+ * yes, except for BCR and BRD, whose reports are made in the bank's own application.
+ */
+export const needsWorkFiles = (bankCode: string | null | undefined, bankName: string | null | undefined) =>
+  !/\b(BCR|BRD)\b|Banca Comercial[aă] Rom[aâ]n[aă]|Groupe Soci[eé]t[eé] G[eé]n[eé]rale/i.test(`${bankCode ?? ""} ${bankName ?? ""}`);
+
+/** What is still to mark before delivery (empty: ready). */
+export async function workFilesMissing(db: D1Database, reportId: string) {
+  const r = await db.prepare(`SELECT b.code, b.name, (SELECT COUNT(*) FROM report_documents d WHERE d.report_id = r.id AND d.status = 'uploaded' AND d.role = 'grid') AS grid,
+      (SELECT COUNT(*) FROM report_documents d WHERE d.report_id = r.id AND d.status = 'uploaded' AND d.role = 'word') AS word
+      FROM reports r LEFT JOIN entities b ON b.id = r.recipient_id WHERE r.id = ?`).bind(reportId).first<{ code: string | null; name: string | null; grid: number; word: number }>();
+  if (!r || !needsWorkFiles(r.code, r.name)) return [];
+  return [!r.grid && "grila de lucru", !r.word && "raportul în format Word"].filter((x): x is string => !!x);
 }

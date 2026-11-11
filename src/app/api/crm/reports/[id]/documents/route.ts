@@ -177,12 +177,40 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (ext && !name.toLowerCase().endsWith(ext.toLowerCase())) name += ext;
     if (!name || name === ext) return err("Scrie un nume.");
     if (name !== d.filename) {
-      const taken = await sameName(a.db, id, d.folder, name, d.kind === "final" ? "final" : "source");
+      const taken = await sameName(a.db, id, d.folder, name);
       if (taken && taken.id !== d.id) return err(`În folder există deja „${name}”.`, 409);
       await a.db.prepare("UPDATE report_documents SET filename = ? WHERE id = ?").bind(name, d.id).run();
       await audit(a.db, actor, "report.document_rename", "report", id, `${d.filename} → ${name}`);
     }
     return Response.json({ ok: true, name });
+  }
+  // Marked in „Dosar de lucru”: `{ mark: <doc id>, role: "final" | "grid" | "word" | null }`. „final” = the signed PDF
+  // delivered (the row becomes kind 'final'; the one marked before goes back to an ordinary file, in its folder); the
+  // working grid and the report in Word: one of each per report.
+  if (typeof b.mark === "string") {
+    const d = await a.db.prepare(`SELECT d.id, d.filename, d.kind, d.role, ${FOLDER_SQL("d")} AS folder FROM report_documents d WHERE d.id = ? AND d.report_id = ? AND d.status = 'uploaded'`)
+      .bind(b.mark, id).first<{ id: string; filename: string; kind: string; role: string | null; folder: string }>();
+    if (!d) return err("Documentul nu există.", 404);
+    const role = b.role === "final" || b.role === "grid" || b.role === "word" ? b.role : null;
+    if (role === "final" && !/\.pdf$/i.test(d.filename)) return err("Raportul final livrat se marchează pe fișierul PDF semnat.");
+    if (role === "grid" && !/\.(xlsx?|xlsm|ods|csv)$/i.test(d.filename)) return err("Grila de lucru se marchează pe un fișier Excel (.xlsx, .xls).");
+    if (role === "word" && !/\.(docx?|odt|rtf)$/i.test(d.filename)) return err("Raportul în format Word se marchează pe un fișier .docx / .doc.");
+    const keep = (x: string) => a.db.prepare(`UPDATE report_documents SET folder = ${FOLDER_SQL("report_documents").replace(/report_documents\./g, "")} WHERE ${x}`);
+    const steps: D1PreparedStatement[] = [];
+    if (role === "final") {
+      // the one marked before: an ordinary file again, where it is
+      steps.push(keep("report_id = ? AND kind = 'final' AND id <> ?").bind(id, d.id), a.db.prepare("UPDATE report_documents SET kind = 'source' WHERE report_id = ? AND kind = 'final' AND id <> ?").bind(id, d.id));
+      steps.push(keep("id = ?").bind(d.id), a.db.prepare("UPDATE report_documents SET kind = 'final', role = NULL WHERE id = ?").bind(d.id));
+      steps.push(a.db.prepare("UPDATE reports SET uploaded_on = ?, updated_at = ? WHERE id = ?").bind(now().slice(0, 10), now(), id));
+    } else {
+      if (d.kind === "final") steps.push(keep("id = ?").bind(d.id), a.db.prepare("UPDATE report_documents SET kind = 'source' WHERE id = ?").bind(d.id));
+      if (role) steps.push(a.db.prepare("UPDATE report_documents SET role = NULL WHERE report_id = ? AND role = ? AND id <> ?").bind(id, role, d.id));
+      steps.push(a.db.prepare("UPDATE report_documents SET role = ? WHERE id = ?").bind(role, d.id));
+    }
+    await a.db.batch(steps);
+    const label = role === "final" ? "raport PDF final (livrat)" : role === "grid" ? "grilă de lucru" : role === "word" ? "raport Word" : "nemarcat";
+    await audit(a.db, actor, role === "final" ? "report.final" : "report.document_role", "report", id, `${d.filename}: ${label}`);
+    return Response.json({ ok: true });
   }
   // An earlier version made current: `{ restore: <doc id>, version: <version id> }`.
   if (typeof b.restore === "string") {

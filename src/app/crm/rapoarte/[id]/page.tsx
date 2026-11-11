@@ -19,7 +19,7 @@ import { InspSheet } from "./InspSheet";
 import { inspectionSheetDoc } from "@/lib/insp-sheet-doc";
 import { getFirm } from "@/lib/settings";
 import { ReportDocs, type DocItem, type DocPhoto } from "./ReportDocs";
-import { customFolders } from "@/lib/doc-folders";
+import { customFolders, needsWorkFiles } from "@/lib/doc-folders";
 import { PHOTO_CATEGORIES } from "@/lib/insp-forms";
 import { ReferralEdit } from "@/components/ReferralPick";
 import { FramingEdit, type Party } from "./FramingEdit";
@@ -44,7 +44,7 @@ import { Avatar, PersonLine } from "@/components/Avatar";
 import { photoUrl } from "@/lib/presence";
 import { Messages } from "@/components/Messages";
 import { reportOrders, reportThread } from "@/lib/messages";
-import { AddMember, CollectedToggle, DeliverButton, ReportNumberEdit, FinalDrop, MissingDoc, NotesEditor, RemoveMember, SafeImg, StageActions, StatusActions, UploadButton, VerifyActions } from "./ReportActions";
+import { AddMember, CollectedToggle, DeliverButton, ReportNumberEdit, MissingDoc, NotesEditor, RemoveMember, SafeImg, StageActions, StatusActions, VerifyActions } from "./ReportActions";
 import { dueOf, STAGE_LABEL, stageOf } from "@/lib/dossier";
 import { hasValues, nextReportNumber, noticeTarget } from "@/lib/delivery";
 import { inspVisible, typeOfOrderDoc, typeOfReportDoc } from "@/lib/insp-docs";
@@ -198,13 +198,22 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const recipients: Recipient[] = [];
   if (r.recipient_id) recipients.push({ id: r.recipient_id, name: niceName(r.bank_name) || "—", kind: r.recipient_kind, role: "Finanțator / utilizator desemnat", contact: [r.recipient_email, r.recipient_phone, r.recipient_code && `cod ${r.recipient_code}`].filter(Boolean).join(" · "), logo: fileSrc(r.bank_logo) });
   if (r.client_id) recipients.push({ id: r.client_id, name: niceName(r.client_name) || "—", kind: r.client_kind, role: r.recipient_id ? "Client / proprietar" : "Client / utilizator desemnat", contact: [r.client_phone, r.client_email].filter(Boolean).join(" · "), link: true, logo: fileSrc(r.client_logo) });
+  const gridDoc = sources.find((d) => d.role === "grid" && d.status === "uploaded");
+  const wordDoc = sources.find((d) => d.role === "word" && d.status === "uploaded");
+  // the grid and the report in Word are marked before delivery, except for BCR and BRD (made in the bank's application)
+  const needWork = needsWorkFiles(r.bank_code, r.bank_name);
+  const workMissing = needWork ? [!gridDoc && "grila de lucru", !wordDoc && "raportul Word"].filter(Boolean).join(" și ") : "";
   const checks: [state: "ok" | "miss" | "todo", text: string, note?: string][] = [
     main?.no_inspection ? ["ok", "Bun principal fără inspecție", main.no_inspection] : [main?.sheet_photo || main?.inspection_status === "done" ? "ok" : "todo", "Fișă inspecție bun principal atașată"],
     [assets.length > 0 && assets.every((a) => a.value != null) ? "ok" : "todo", "Valori completate pe toate bunurile", assets.length ? `${assets.filter((a) => a.value != null).length} din ${assets.length}` : "niciun bun"],
     ...missing.map((d): ["miss", string, string] => ["miss", `${d.filename} lipsă`, "blochează predarea"]),
     [evaluator ? "ok" : "todo", "Evaluator alocat", evaluator?.name],
     [verifier ? "ok" : "todo", `Verificare finală${verifier ? ` (${verifier.name})` : ""}`, verifier ? undefined : "verificator nealocat"],
-    [final ? "ok" : "todo", "PDF semnat încărcat"],
+    [final ? "ok" : "todo", "Raport PDF final (semnat) marcat", final ? final.filename : "în Dosar de lucru"],
+    ...(needWork ? [
+      [gridDoc ? "ok" : "todo", "Grilă de lucru marcată", gridDoc?.filename ?? "în Dosar de lucru"],
+      [wordDoc ? "ok" : "todo", "Raport Word marcat", wordDoc?.filename ?? "în Dosar de lucru"],
+    ] as [state: "ok" | "todo", text: string, note?: string][] : []),
   ];
   const href = (t: Tab) => `${base}/rapoarte/${id}${t === "general" ? "" : `?tab=${t}`}`;
   const counts: Partial<Record<Tab, number>> = { bunuri: assets.length, documente: docCount, mesaje: messages.length };
@@ -273,7 +282,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
       size: final.size_bytes, at: final.created_at, by: final.uploaded_by_name, final: true, folder: final.folder ?? "livrabile", version: final.version ?? 1 } satisfies DocItem] : []),
     ...sources.map((x): DocItem => ({ id: x.id, name: x.filename, kind: x.doc_type ?? guessDocKind(x.filename), asset_id: x.asset_id, status: x.status === "missing" ? "missing" : "uploaded", origin: "report",
       href: x.status === "missing" ? null : `/api/crm/reports/${r.id}/documents/${x.id}`, size: x.size_bytes, at: x.status === "missing" ? x.requested_at : x.created_at, by: x.uploaded_by_name,
-      folder: x.folder ?? (x.asset_id ? `a:${x.asset_id}:acte` : "root"), version: x.version ?? 1,
+      folder: x.folder ?? (x.asset_id ? `a:${x.asset_id}:acte` : "root"), version: x.version ?? 1, role: x.role === "grid" || x.role === "word" ? x.role : null,
       insp: x.kind === "source" && x.status !== "missing" ? inspVisible(x.insp_visible, typeOfReportDoc(x.doc_type, x.filename)) : undefined })),
     ...orderDocs.map((x): DocItem => ({ id: x.id, name: x.filename, kind: guessDocKind(x.filename), asset_id: null, status: "uploaded", origin: "order", href: `/api/crm/orders/${r.order_id}/documents/${x.id}`, size: x.size_bytes, at: x.created_at, by: null, folder: "root",
       insp: inspVisible(x.insp_visible, typeOfOrderDoc(x.kind, x.filename)) })),
@@ -362,7 +371,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             {user.role === "owner" && assets.length > 0 && r.status !== "cancelled" && <a className="stBtn draft" href={`${base}/rapoarte/${r.id}/redactare`}>Redactare raport</a>}
             {/* the status as what can be done next; "Finalizează" goes through the delivery (date, values per asset, euro, approach) */}
             {c.status && <StatusActions id={r.id} status={r.status} reason={r.suspend_reason} locked={acc.locked} canCancel={isAdmin(user)} pausedDays={d.pausedTotal}
-              finish={r.delivered_at ? null : !c.deliver ? "Raportul îl finalizează evaluatorul principal, din „Predă raportul”." : final ? `${href("documente")}&predare=1` : "Încarcă întâi raportul final (PDF semnat) în „Acte & livrare”; apoi îl predai cu valorile."} />}
+              finish={r.delivered_at ? null : !c.deliver ? "Raportul îl finalizează evaluatorul principal, din „Predă raportul”." : final && !workMissing ? `${href("documente")}&predare=1` : final ? `Marchează în „Acte & livrare” › „Dosar de lucru” și ${workMissing}; apoi predai raportul.` : "Încarcă PDF-ul semnat în „Acte & livrare” › „Dosar de lucru” și marchează-l ca „Raport PDF final”; apoi îl predai cu valorile."} />}
             {c.status && !acc.locked && !r.glide_id && r.status !== "cancelled" && r.status !== "suspended" && <StageActions id={r.id} stage={stage} hasVerifier={!!verifier} />}
           </div>
         </div>
@@ -680,8 +689,11 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                     <a className="link" href={`/api/crm/reports/${r.id}/documents/${final.id}`} target="_blank" rel="noopener">Deschide</a>
                   </li>
                 </ul>
-              ) : c.docs ? <FinalDrop id={r.id} /> : <p className="hint">Raportul final nu a fost încărcat încă.</p>}
-              {final && c.docs && <UploadButton id={r.id} kind="final" label="Înlocuiește raportul final" className="linkBtn" />}
+              ) : <p className="hint">Raportul PDF final nu e marcat încă: încarcă PDF-ul semnat în <b>Dosar de lucru</b>, dă click pe el și marchează-l ca <b>Raport PDF final</b>.</p>}
+              {needWork ? <ul className="dDelSheets">
+                <li>{gridDoc ? <a className="link" href={`/api/crm/reports/${r.id}/documents/${gridDoc.id}`} target="_blank" rel="noopener">Grila de lucru · {gridDoc.filename}</a> : <span className="muted">Grila de lucru · nemarcată</span>}<small>Excel</small></li>
+                <li>{wordDoc ? <a className="link" href={`/api/crm/reports/${r.id}/documents/${wordDoc.id}`} target="_blank" rel="noopener">Raportul Word · {wordDoc.filename}</a> : <span className="muted">Raportul Word · nemarcat</span>}<small>Word</small></li>
+              </ul> : <p className="hint">Grila și raportul Word nu se cer: rapoartele {r.bank_code ?? "băncii"} se fac în aplicația băncii.</p>}
               {sheets.length > 0 && (
                 <ul className="dDelSheets">
                   {sheets.map((a) => <li key={a.id}><a className="link" href={`${base}/rapoarte/${r.id}/fisa/${a.id}`}>Fișa de inspecție · {assetShort(a)}</a><small>PDF</small></li>)}
@@ -702,7 +714,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                 {r.delivered_at && (r.result_eur || r.result_value) ? <Row k="Rezultat evaluare">{result(r.result_eur, r.result_value)}{r.result_eur && r.result_value && r.eur_rate ? <small className="muted"> · curs BNR {r.eur_rate.toLocaleString("ro-RO", { maximumFractionDigits: 4 })} la {fmtDate(r.report_date)}</small> : null}</Row> : null}
               </dl>
               {r.client_notified_at && <p className="hint">Clientul a fost anunțat pe email la {fmtDate(r.client_notified_at, true)}.</p>}
-              {c.deliver && !r.delivered_at && <DeliverButton id={r.id} ready={!!final} number={r.number} suggested={suggested} notifyTo={notifyTo} values={hasValues(r.report_type)} auto={ownIssuer} autoOpen={predare === "1"}
+              {c.deliver && !r.delivered_at && <DeliverButton id={r.id} ready={!!final && !workMissing} number={r.number} suggested={suggested} notifyTo={notifyTo} values={hasValues(r.report_type)} auto={ownIssuer} autoOpen={predare === "1"}
                 assets={assets.map((a) => ({ id: a.id, label: assetShort(a), sub: a.full_address ?? a.city, value: a.value_eur, approach: a.approach }))} />}
             </section>
           } />

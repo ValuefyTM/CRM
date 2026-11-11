@@ -1,5 +1,6 @@
 // Server-only: progress of an order (timeline for the client and the team) and the delivery of the report:
 // number and date, "done" on the report and the order, and the client's notice with the download link.
+import { workFilesMissing } from "./doc-folders";
 import { now } from "./db";
 import { eurRate } from "./bnr";
 import { audit } from "./auth";
@@ -94,7 +95,10 @@ export async function deliverReport(db: D1Database, user: { id: string }, report
     .first<{ id: string; number: string | null; report_date: string | null; order_id: string | null; delivered_at: string | null; report_type: string | null; issuer_id: string | null; issuer_name: string | null }>();
   if (!r) return { ok: false as const, error: "Raportul nu există." };
   const final = await db.prepare("SELECT id FROM report_documents WHERE report_id = ? AND kind = 'final' AND status = 'uploaded' LIMIT 1").bind(reportId).first();
-  if (!final) return { ok: false as const, error: "Încarcă întâi fișierul final al raportului (PDF semnat)." };
+  if (!final) return { ok: false as const, error: "Marchează întâi în „Dosar de lucru” PDF-ul semnat ca „Raport PDF final” (Acte & livrare)." };
+  // the working grid and the report in Word, marked too (not for BCR and BRD: made in the bank's application)
+  const work = await workFilesMissing(db, reportId);
+  if (work.length) return { ok: false as const, error: `Marchează în „Dosar de lucru” și ${work.join(" și ")} (Acte & livrare).` };
   // VALUEFY's reports: the number of the series, automatic (never typed). A collaborating firm's: the firm's number.
   const own = isOwnIssuer(r.issuer_name);
   let number = own ? "" : typeof b.number === "string" ? b.number.trim().slice(0, 30) : "";

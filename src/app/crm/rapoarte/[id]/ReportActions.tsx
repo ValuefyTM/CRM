@@ -284,7 +284,7 @@ export function DeliverButton({ id, ready, number, suggested, notifyTo, assets, 
   };
   return (
     <>
-      <button type="button" className="btn btnGold btnSm" style={{ alignSelf: "flex-start" }} disabled={!ready} title={ready ? undefined : "Încarcă întâi PDF-ul semnat"} onClick={() => setOpen(true)}>Predă raportul</button>
+      <button type="button" className="btn btnGold btnSm" style={{ alignSelf: "flex-start" }} disabled={!ready} title={ready ? undefined : "Marchează întâi în Dosar de lucru PDF-ul semnat (Raport PDF final) și, unde se cer, grila și raportul Word"} onClick={() => setOpen(true)}>Predă raportul</button>
       {open && createPortal(
         <div className="vfModal" role="dialog" aria-modal="true" aria-labelledby="delTitle" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
           <form className={`vfModalBox${values && assets.length > 1 ? " wide" : ""}`} onSubmit={submit} noValidate>

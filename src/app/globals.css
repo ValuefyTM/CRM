@@ -4540,3 +4540,12 @@ tr.unproc td:first-child { box-shadow: inset 4px 0 0 var(--acc); }
 .fxVerList li.cur > b { background: #1a7f55; color: #fff; }
 .fxVerList li em { font-style: normal; font-size: 11px; font-weight: 800; color: #1a7f55; }
 @media (max-width: 640px) { .fxGrid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); } .fxFolder { transform: scale(.85); } .fxSearch { flex-basis: 100%; } }
+.fxTag.green { color: #1a7f55; background: #e6f5ec; font-weight: 800; }
+.fxMark { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 12px 0; padding: 10px 12px; border-radius: 10px; background: #fff8ea; border: 1px solid #f1dcae; font-size: 13px; }
+.fxMark.hint { background: #fbf8f2; border-color: var(--line); color: var(--muted); }
+.fxMarkWhat b { word-break: break-all; }
+.fxMarkBtns { display: flex; gap: 6px; flex-wrap: wrap; }
+.fxMarkBtns button { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; color: var(--ink); }
+.fxMarkBtns button[aria-pressed="true"] { background: #141414; color: #fff; border-color: #141414; }
+.fxMarkBtns button:disabled { opacity: .45; cursor: not-allowed; }
+.fxMarkState { font-weight: 600; } .fxMarkState.ok { color: #1a7f55; } .fxMarkState small { color: var(--muted); font-weight: 500; }
