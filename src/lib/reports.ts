@@ -1,4 +1,5 @@
 // Server-only: valuation reports (imported from Glide, later produced in the CRM).
+import { resultEurSql } from "./eur";
 import { photoUrl, withPresence } from "./presence";
 
 
@@ -38,7 +39,7 @@ export const rowMembers = (r: Pick<ReportRow, "members">): RowMember[] =>
     return { id, name, role, photo: photoUrl(id, avatarAt || null) };
   });
 
-const ROW = `SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.result_value, r.result_eur, r.collected, r.collected_at, r.report_type, r.purpose, r.value_type,
+const ROW = `SELECT r.id, r.number, r.label, r.report_date, r.status, r.fee, r.result_value, r.result_eur, ${resultEurSql()} AS value_eur_any, r.collected, r.collected_at, r.report_type, r.purpose, r.value_type,
   r.stage, r.delivered_at, r.verified_at, r.received_on, r.created_at, r.term_days, r.suspended_at, r.paused_days, o.created_at AS ordered_at, i.color AS issuer_color,
   EXISTS (SELECT 1 FROM invoices v, json_each(v.report_ids) j WHERE j.value = r.id AND v.kind = 'invoice' AND v.status <> 'cancelled') AS invoiced,
   c.name AS client_name, COALESCE(b.code, b.name) AS bank_code, b.name AS bank_name, b.logo_url AS bank_logo, i.name AS issuer_name, COALESCE(NULLIF(i.code, ''), i.name) AS issuer_short, i.logo_url AS issuer_logo,

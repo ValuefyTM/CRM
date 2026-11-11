@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: "Proprietate | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
 
 const cap = (s: string | null) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : "");
-const lei = (v: number | null) => (v ? `${Math.round(v).toLocaleString("ro-RO")} lei` : "—");
+const eur = (v: number | null) => (v ? `${Math.round(v).toLocaleString("ro-RO")} €` : "—");
 const APPROACH: Record<string, string> = { market: "Piață", income: "Venit", cost: "Cost" };
 
 /** A valuation row: opens the asset page when the user may see the report. */
@@ -59,8 +59,8 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
           {ll && <a className="rgHeroLink" href={`https://www.google.com/maps?q=${ll[0]},${ll[1]}`} target="_blank" rel="noopener">Deschide în Google Maps ↗</a>}
         </div>
         <div className="rgHeroNums">
-          <span><em>Ultima valoare cunoscută</em><b>{lei(p.value)}</b></span>
-          <span><em>Lei / m²</em><b>{p.sqm ? Math.round(p.sqm).toLocaleString("ro-RO") : "—"}</b></span>
+          <span><em>Ultima valoare cunoscută</em><b>{eur(p.value)}</b></span>
+          <span><em>€ / m²</em><b>{p.sqm ? Math.round(p.sqm).toLocaleString("ro-RO") : "—"}</b></span>
           <span><em>Evaluări</em><b>{p.valuations ?? 0}</b></span>
           {change != null && <span><em>Evoluție valoare</em><b className={change >= 0 ? "up" : "down"}>{change >= 0 ? "+" : ""}{change}%</b></span>}
         </div>
@@ -99,7 +99,7 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
         <div className="cardHead"><h2>Istoric evaluări</h2><span className="muted">{vals.length} {vals.length === 1 ? "evaluare" : "evaluări"}</span></div>
         <div className="tableWrap">
           <table className="table">
-            <thead><tr><th>Raport</th><th>Data</th><th>Client</th><th>Bancă / utilizator</th><th>Evaluator</th><th>Abordare</th><th className="r">Valoare</th><th className="r">Lei / m²</th><th>Status</th></tr></thead>
+            <thead><tr><th>Raport</th><th>Data</th><th>Client</th><th>Bancă / utilizator</th><th>Evaluator</th><th>Abordare</th><th className="r">Valoare</th><th className="r">€ / m²</th><th>Status</th></tr></thead>
             <tbody>
               {vals.map((v) => {
                 const [label, cls] = REPORT_STATUS[v.status ?? ""] ?? [v.status ?? "—", ""];
@@ -111,7 +111,7 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
                     <td>{v.open ? niceName(v.bank) || "—" : <span className="muted">—</span>}</td>
                     <td><WithFace id={v.evaluator_id} name={v.evaluator} /></td>
                     <td>{v.approach ? APPROACH[v.approach] ?? v.approach : "—"}</td>
-                    <td className="r">{lei(v.val)}</td>
+                    <td className="r">{eur(v.val)}</td>
                     <td className="r">{v.val && p.usable_area ? Math.round(v.val / p.usable_area).toLocaleString("ro-RO") : "—"}</td>
                     <td>{v.status ? <span className={`pill ${cls}`}><i />{label}</span> : "—"}</td>
                   </Row2>

@@ -44,7 +44,7 @@ export function SimilarReports({ report, base, count, bank }: { report: string; 
   const rows = data?.rows ?? [];
   const sqm = rows.map((r) => r.sqm).filter((x): x is number => x != null && x > 0).sort((a, b) => a - b);
   const median = sqm.length ? sqm[Math.floor((sqm.length - 1) / 2)] : null;
-  const cur = rows.find((r) => r.currency)?.currency === "EUR" ? "EUR" : "lei";
+  const cur = "€"; // the values are in euro (similar-reports.ts)
 
   return (
     <>
@@ -80,7 +80,7 @@ export function SimilarReports({ report, base, count, bank }: { report: string; 
                     {rows.map((r) => {
                       const k = `${r.report_id}:${r.asset_id}`;
                       const on = row === k;
-                      const c = r.currency === "EUR" ? "EUR" : "lei";
+                      const c = "€";
                       return [
                         <tr key={k} className={`simRow${on ? " on" : ""}`} onClick={() => setRow(on ? null : k)} aria-expanded={on}>
                           <td className="mono">{date(r.date)}</td>

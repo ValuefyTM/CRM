@@ -35,7 +35,7 @@ function Range({ label, unit, min, max, onChange }: { label: string; unit: strin
 type Facet = [string, string, number?][];
 
 const cap = (s: string | null) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : "");
-const lei = (v: number | null) => (v ? `${Math.round(v).toLocaleString("ro-RO")} lei` : "—");
+const eur = (v: number | null) => (v ? `${Math.round(v).toLocaleString("ro-RO")} €` : "—");
 const date = (d: string | null) => (d ? d.split("-").reverse().join(".") : "—");
 
 /** Photo of the property (Glide or inspection), or a house in the colour of its category when there is none / it fails. */
@@ -210,7 +210,7 @@ export function RegistryView(p: {
               </td>
               <td className="r">{r.usable_area ? `${r.usable_area.toLocaleString("ro-RO")} m²` : "—"}</td>
               <td>{r.report_id ? (r.can_open === 0 ? <span className="ref muted" title="Raportul îl vede doar echipa lui">{r.report_number ?? "raport"}</span> : <a className="ref" href={`${p.base}/rapoarte/${r.report_id}`}>{r.report_number ?? "raport"}</a>) : null}<div className="muted">{date(r.last_date)}</div></td>
-              <td className="r">{lei(r.value)}</td>
+              <td className="r">{eur(r.value)}</td>
               <td className="r">{r.sqm ? Math.round(r.sqm).toLocaleString("ro-RO") : "—"}</td>
               <td className="r"><span className="dbNum">{r.valuations ?? 0}</span></td>
             </tr>
@@ -236,8 +236,8 @@ export function RegistryView(p: {
             </span>
           </span>
           <span className="rgRight">
-            <b>{r.value ? `${Math.round(r.value).toLocaleString("ro-RO")} lei` : "—"}</b>
-            <small>{r.sqm ? `${Math.round(r.sqm).toLocaleString("ro-RO")} lei/m²` : ""}</small>
+            <b>{r.value ? `${Math.round(r.value).toLocaleString("ro-RO")} €` : "—"}</b>
+            <small>{r.sqm ? `${Math.round(r.sqm).toLocaleString("ro-RO")} €/m²` : ""}</small>
           </span>
         </a>
       ))}

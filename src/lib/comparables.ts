@@ -70,7 +70,7 @@ export async function nearby(db: D1Database, ll: [number, number] | null, subjec
   }
   rows.sort((x, y) => x.km - y.km);
   const list = rows.slice(0, 80);
-  const s = list.map((r) => r.sqm).filter((x): x is number => x != null && x > 30 && x < 100000).sort((x, y) => x - y);
+  const s = list.map((r) => r.sqm).filter((x): x is number => x != null && x > 5 && x < 20000).sort((x, y) => x - y);
   const median = quantile(s, 0.5);
   const stats = s.length ? {
     n: list.length, withSqm: s.length, median, p25: quantile(s, 0.25), p75: quantile(s, 0.75), min: s[0], max: s[s.length - 1],

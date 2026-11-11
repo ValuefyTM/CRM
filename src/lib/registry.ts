@@ -1,3 +1,4 @@
+import { eurSql, resultEurSql } from "./eur";
 import { fileSrc } from "./files";
 import { plain } from "./places";
 import { reportVisibleSql, type PropertyScope } from "./perms-db";
@@ -40,7 +41,8 @@ export const REGISTRY_PAGE = 50;
 export const BASE = `WITH v0 AS (
     SELECT a.property_id, a.report_id, r.number,
       COALESCE(r.report_date, substr(r.created_at, 1, 10)) AS d,
-      COALESCE(a.value, CASE WHEN (SELECT COUNT(*) FROM assets x WHERE x.report_id = a.report_id) = 1 THEN r.result_value END) AS val
+      -- in euro (the values of the old CRM are in euro; the ones in lei at the report's rate)
+      COALESCE(${eurSql()}, CASE WHEN (SELECT COUNT(*) FROM assets x WHERE x.report_id = a.report_id) = 1 THEN ${resultEurSql()} END) AS val
     FROM assets a LEFT JOIN reports r ON r.id = a.report_id
   ),
   v AS (
@@ -122,7 +124,7 @@ export async function registry(db: D1Database, f: RegistryFilters, viewer?: Regi
     db.prepare(`${BASE} SELECT p.*, ${PHOTO} AS photo, ${open} AS can_open FROM p ${sql} ORDER BY ${(REGISTRY_SORTS[f.sort ?? ""] ?? REGISTRY_SORTS[""])[1]}, p.id LIMIT ${REGISTRY_PAGE} OFFSET ?`)
       .bind(...openArgs, ...args, (page - 1) * REGISTRY_PAGE).all<RegistryRow>(),
     db.prepare(`${BASE} SELECT COUNT(*) AS n, SUM(p.valuations) AS valuations, SUM(${HAS_GEO}) AS geo, SUM(p.last_date >= ?) AS recent,
-        AVG(CASE WHEN p.sqm BETWEEN 50 AND 100000 THEN p.sqm END) AS sqm, AVG(CASE WHEN p.value > 0 THEN p.value END) AS value,
+        AVG(CASE WHEN p.sqm BETWEEN 5 AND 20000 THEN p.sqm END) AS sqm, AVG(CASE WHEN p.value > 0 THEN p.value END) AS value,
         AVG(CASE WHEN p.usable_area > 0 AND p.usable_area < 100000 THEN p.usable_area END) AS area
       FROM p ${sql}`).bind(since, ...args)
       .first<{ n: number; valuations: number | null; geo: number | null; recent: number | null; sqm: number | null; value: number | null; area: number | null }>(),
@@ -161,7 +163,7 @@ export async function registryProperty(db: D1Database, id: string) {
   const p = await db.prepare(`${BASE} SELECT p.*, x.description, x.zone, x.cf_file, x.plan_file, x.geo_source, x.geo_note, x.geo_checked_at FROM p JOIN crm_properties x ON x.id = p.id WHERE p.id = ?`).bind(id)
     .first<RegistryRow & { construction: string | null; description: string | null; zone: string | null; cad_land: string | null; cf_file: string | null; plan_file: string | null; geo_source: string | null; geo_note: string | null; geo_checked_at: string | null }>();
   if (!p) return null;
-  const valuations = (await db.prepare(`SELECT a.id, a.value, a.is_main, a.approach, r.id AS report_id, r.number, r.status, r.delivered_at, r.result_value, r.currency, r.purpose,
+  const valuations = (await db.prepare(`SELECT a.id, ${eurSql()} AS value, ${resultEurSql()} AS result_value, a.is_main, a.approach, r.id AS report_id, r.number, r.status, r.delivered_at, r.currency, r.purpose,
       COALESCE(r.report_date, substr(r.created_at, 1, 10)) AS date, c.name AS client, b.name AS bank,
       (SELECT COUNT(*) FROM assets x WHERE x.report_id = a.report_id) AS assets,
       (SELECT COALESCE(NULLIF(u.name, ''), u.email) FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = r.id AND m.role = 'evaluator' LIMIT 1) AS evaluator,

@@ -1,3 +1,4 @@
+import { eurSql, resultEurSql, toEur } from "@/lib/eur";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { fmtDate, staffPage } from "@/lib/guard";
@@ -97,7 +98,8 @@ export default async function AssetPage({ params, searchParams }: {
   const assets = await reportAssets(db, id);
   const a = assets.find((x) => x.id === asset);
   if (!a) notFound();
-  const cur = r.currency === "EUR" ? "EUR" : "lei";
+  // the values in euro, whatever the report's currency (the old CRM's are in euro; the ones in lei at the BNR rate)
+  const cur = "EUR";
   // Opened from another valuation of the same property ("din" = that report . asset): the page shows the asset as it was
   // in this valuation, with the way back.
   const [fromReport, fromAsset] = (din ?? "").split(".");
@@ -148,16 +150,16 @@ export default async function AssetPage({ params, searchParams }: {
 
   // Every valuation of the same property (this one included): picked to see the asset as it was then.
   const { results: vals } = await db.prepare(
-    `SELECT a.id AS asset_id, a.value, a.approach, r.id, r.number, r.label, r.status, r.delivered_at, r.report_date, r.valuation_date, r.created_at, r.currency, r.purpose,
+    `SELECT a.id AS asset_id, ${eurSql()} AS value, a.approach, r.id, r.number, r.label, r.status, r.delivered_at, r.report_date, r.valuation_date, r.created_at, r.currency, r.purpose,
         c.name AS client, (SELECT COALESCE(NULLIF(u.name, ''), u.email) FROM report_members m JOIN users u ON u.id = m.user_id WHERE m.report_id = r.id AND m.role = 'evaluator' LIMIT 1) AS evaluator,
         (SELECT m.user_id FROM report_members m WHERE m.report_id = r.id AND m.role = 'evaluator' LIMIT 1) AS evaluator_id,
-        (SELECT COUNT(*) FROM assets x WHERE x.report_id = r.id) AS n_assets, r.result_value
+        (SELECT COUNT(*) FROM assets x WHERE x.report_id = r.id) AS n_assets, ${resultEurSql()} AS result_value
       FROM assets a JOIN reports r ON r.id = a.report_id LEFT JOIN entities c ON c.id = r.client_id WHERE a.property_id = ?`,
   ).bind(a.property_id).all<{ asset_id: string; value: number | null; approach: string | null; id: string; number: string | null; label: string | null; status: string; delivered_at: string | null;
     report_date: string | null; valuation_date: string | null; created_at: string; currency: string | null; purpose: string | null; client: string | null; evaluator: string | null; evaluator_id: string | null;
     n_assets: number; result_value: number | null }>();
   const history = (await Promise.all(vals.map(async (v) => ({
-    ...v, date: dateOf(v), val: v.value ?? (v.n_assets === 1 ? v.result_value : null), cur: v.currency === "EUR" ? "EUR" : "lei",
+    ...v, date: dateOf(v), val: v.value ?? (v.n_assets === 1 ? v.result_value : null), cur: "EUR",
     open: v.id === id || (await reportAccess(db, user, { id: v.id, status: v.status, delivered_at: v.delivered_at })).view,
   })))).sort((x, y) => x.date.localeCompare(y.date));
 
@@ -171,7 +173,7 @@ export default async function AssetPage({ params, searchParams }: {
   const yearly = change != null && years >= 0.5 ? (Math.pow(last.val! / first.val!, 1 / years) - 1) * 100 : null;
   const avg = analytics ? series.reduce((s, v) => s + v.val!, 0) / series.length : null;
   const prevOf = (vId: string) => { const i = series.findIndex((x) => x.id === vId); return i > 0 ? series[i - 1] : null; };
-  const mineVal = history.find((v) => v.id === id)?.val ?? a.value;
+  const mineVal = history.find((v) => v.id === id)?.val ?? toEur(a.value, { value_eur: a.value_eur, glide_id: r.glide_id, currency: r.currency, eur_rate: r.eur_rate });
   const prevMine = prevOf(id);
 
   // The documents: the asset's own and the ones of the whole report (or order), as on the report.
@@ -322,7 +324,7 @@ export default async function AssetPage({ params, searchParams }: {
   const area0 = area && mineVal ? Math.round(mineVal / area) : null;
   // Similar reports nearby: for the main asset (the report's subject).
   const similar = a.is_main || assets.length === 1 ? await similarReports(db, user, id, { radius: "1" }).catch(() => null) : null;
-  const zone = similar && cur === "lei" ? similar.rows.map((x) => x.sqm).filter((x): x is number => !!x).sort((x, y) => x - y) : [];
+  const zone = similar ? similar.rows.map((x) => x.sqm).filter((x): x is number => !!x).sort((x, y) => x - y) : [];
   const [legal] = (await latestChecks(db, id)).filter((c) => c.asset_id === a.id);
   const openIssues = legal ? legal.result.issues.filter((x) => isProblem(x) && !legal.resolved[x.key]).length : 0;
   const others = assets.filter((x) => x.id !== a.id);

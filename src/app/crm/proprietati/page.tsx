@@ -46,8 +46,8 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
         </div>
         <div className="dbKpi static">
           <span className="dbKpiLabel"><i style={{ background: "var(--acc)" }} />Valoare medie / m²</span>
-          <b>{num(s.sqm)} <small>lei</small></b>
-          <span className="dbKpiFoot"><span className="dbDelta flat">valoare medie {num(s.value)} lei · {num(s.area)} m²</span></span>
+          <b>{num(s.sqm)} <small>€</small></b>
+          <span className="dbKpiFoot"><span className="dbDelta flat">valoare medie {num(s.value)} € · {num(s.area)} m²</span></span>
         </div>
         <a className="dbKpi" href={`${base}/proprietati?${new URLSearchParams({ ...Object.fromEntries(Object.entries(sp).filter(([k, v]) => v && k !== "page" && k !== "vezi")), geo: "1", vezi: "harta" })}`}>
           <span className="dbKpiLabel"><i style={{ background: "var(--acc-text)" }} />Cu localizare pe hartă</span>

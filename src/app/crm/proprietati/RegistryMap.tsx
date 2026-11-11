@@ -13,7 +13,7 @@ const TILES = {
 };
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const cap = (s: string) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : "");
-const lei = (v: number) => `${Math.round(v).toLocaleString("ro-RO")} lei`;
+const eur = (v: number) => `${Math.round(v).toLocaleString("ro-RO")} €`;
 
 /** A point drawn with its own colour, card and label (inspections), instead of the property defaults. */
 export type MapPoint = RegistryPoint & { color?: string; popup?: string; tip?: string };
@@ -71,12 +71,12 @@ export function RegistryMap({ points, base, hover, onPick, onHover, height = "10
       c.bindPopup(p.popup ??
         `<div class="rgPop"><span class="rgPopCat" style="--c:${CAT_COLOR[p.cat] ?? "#7a7a7a"}">${esc(CAT_LABEL[p.cat] ?? "Proprietate")}</span>
           <b>${esc(cap(p.label))}</b><small>${esc(p.address)}</small>
-          ${p.value ? `<span class="rgPopVal">${lei(p.value)}${p.date ? ` · ${esc(p.date.split("-").reverse().join("."))}` : ""}</span>` : ""}
+          ${p.value ? `<span class="rgPopVal">${eur(p.value)}${p.date ? ` · ${esc(p.date.split("-").reverse().join("."))}` : ""}</span>` : ""}
           <a href="${base}/proprietati/${encodeURIComponent(p.id)}">Deschide fișa →</a></div>`,
         { closeButton: false, offset: [0, -4] },
       );
       // Short label on hover (the card opens on click).
-      c.bindTooltip(p.tip ?? `<b>${esc(cap(p.label))}</b>${p.value ? ` · ${lei(p.value)}` : ""}<br><small>${esc(p.address)}</small>`,
+      c.bindTooltip(p.tip ?? `<b>${esc(cap(p.label))}</b>${p.value ? ` · ${eur(p.value)}` : ""}<br><small>${esc(p.address)}</small>`,
         { direction: "top", offset: [0, -8], className: "rgTip", opacity: 1 });
       c.on("mouseover", () => hoverCb.current?.(p.id));
       c.on("mouseout", () => hoverCb.current?.(null));

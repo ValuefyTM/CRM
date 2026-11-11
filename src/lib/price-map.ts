@@ -2,6 +2,8 @@
 // around Timișoara, as euro per square metre (usable area; the land's area for land), by type of property. Only the
 // assets whose value is written in the report (not the report's total spread over its assets).
 
+import { toEur } from "./eur";
+
 export type PriceType = "apartament" | "casa" | "teren" | "comercial" | "birouri" | "industrial" | "altele";
 export const PRICE_TYPES: [PriceType, string][] = [
   ["apartament", "Apartamente"], ["casa", "Case și vile"], ["teren", "Terenuri"], ["comercial", "Spații comerciale"],
@@ -39,8 +41,6 @@ export function priceType(type: string | null, category: string | null): PriceTy
 const SANE: Record<PriceType, [number, number]> = {
   apartament: [250, 8000], casa: [150, 8000], teren: [2, 1500], comercial: [100, 12000], birouri: [100, 10000], industrial: [20, 4000], altele: [5, 12000],
 };
-/** The euro rate when the report has none recorded (BNR, roughly, for the last year). */
-const EUR_FALLBACK = 4.97;
 
 export async function pricePoints(db: D1Database, months = 12): Promise<PricePoint[]> {
   const since = new Date(); since.setMonth(since.getMonth() - months);
@@ -64,7 +64,7 @@ export async function pricePoints(db: D1Database, months = 12): Promise<PricePoi
     if (!(area > 0)) continue;
     // the value in euro: as given at delivery; the values imported from the old CRM (Glide) are in euro already;
     // else the value in lei at the report's BNR rate
-    const eur = x.value_eur && x.value_eur > 0 ? x.value_eur : x.glide_id || x.currency === "EUR" ? x.value! : x.value! / (x.eur_rate && x.eur_rate > 3 ? x.eur_rate : EUR_FALLBACK);
+    const eur = toEur(x.value, x) ?? 0;
     const sqm = eur / area;
     if (!(sqm >= SANE[t][0] && sqm <= SANE[t][1])) continue;
     out.push({

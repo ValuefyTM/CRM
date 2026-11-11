@@ -10,7 +10,7 @@ import { toolsFor, type Ctx } from "@/lib/mcp-tools";
 const VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 const SERVER = { name: "valuefy-crm", title: "CRM VALUEFY", version: "1.0.0" };
 const INSTRUCTIONS = `CRM-ul VALUEFY (firmă de evaluări imobiliare autorizată ANEVAR): comenzi, rapoarte de evaluare, clienți, inspecții, proprietăți evaluate, facturi.
-Răspunde utilizatorului în română. Datele sunt doar pentru citire, cu o excepție: „adauga_oferta” notează o ofertă făcută unui client (modulul Oferte). Sumele sunt în lei. Când dai un rezultat concret, include linkul către pagina din CRM.
+Răspunde utilizatorului în română. Datele sunt doar pentru citire, cu o excepție: „adauga_oferta” notează o ofertă făcută unui client (modulul Oferte). Onorariile și facturile sunt în lei; valorile proprietăților (rezultatele evaluărilor, comparabilele, €/m²) sunt în euro. Când dai un rezultat concret, include linkul către pagina din CRM.
 Pentru o persoană, o adresă sau un număr pe care nu-l știi sigur, începe cu „cauta”, apoi folosește id-ul găsit în celelalte acțiuni.`;
 
 type Rpc = { jsonrpc?: string; id?: string | number | null; method?: string; params?: Record<string, unknown> };

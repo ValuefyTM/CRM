@@ -70,7 +70,7 @@ export default async function ComparablesPage({ params, searchParams }: { params
               <span className="dbKpiFoot"><span className="dbDelta flat">pe o rază de {String(st.radius).replace(".", ",")} km{stats && stats.n >= 80 ? " · cele mai apropiate 80" : ""}</span></span>
             </div>
             <div className="dbKpi static">
-              <span className="dbKpiLabel"><i style={{ background: "var(--acc)" }} />Mediană lei / m²</span>
+              <span className="dbKpiLabel"><i style={{ background: "var(--acc)" }} />Mediană € / m²</span>
               <b>{n0(stats?.median)}</b>
               <span className="dbKpiFoot"><span className="dbDelta flat">medie {n0(stats?.mean)} · min {n0(stats?.min)} · max {n0(stats?.max)}</span></span>
             </div>
@@ -81,7 +81,7 @@ export default async function ComparablesPage({ params, searchParams }: { params
             </div>
             <div className="dbKpi static">
               <span className="dbKpiLabel"><i style={{ background: "var(--acc-text)" }} />Valoare indicativă</span>
-              <b>{n0(stats?.estimate)} <small>lei</small></b>
+              <b>{n0(stats?.estimate)} <small>€</small></b>
               <span className="dbKpiFoot">
                 <span className="dbDelta flat">{s.usable_area ? `mediana × ${s.usable_area.toLocaleString("ro-RO")} m²` : "fără suprafață"}</span>
                 {own && stats?.median ? <span className={`dbDelta ${Math.abs(own - stats.median) / stats.median < 0.15 ? "up" : "down"}`} title="ultima evaluare a proprietății">propria evaluare {n0(own)} lei/m²</span> : null}

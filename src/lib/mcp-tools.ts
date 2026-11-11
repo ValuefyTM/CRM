@@ -1,6 +1,7 @@
 // Server-only: the actions Claude can use through the MCP connector — read-only (one exception: noting an offer),
 // at most 50 rows per answer.
 // Each one reuses the CRM's own queries where they exist, and returns compact JSON with links to the CRM pages.
+import { resultEurSql, toEur } from "./eur";
 import type { User } from "./users";
 import { isAdmin } from "./users";
 import { globalSearch } from "./search";
@@ -64,10 +65,10 @@ async function geocode(address: string): Promise<[number, number] | null> {
   } catch { return null; }
 }
 
-const reportRow = (c: Ctx, r: { id: string; number: string | null; label: string | null; report_date: string | null; status: string; fee: number | null; result_value: number | null; client_name: string | null; bank_code: string | null; evaluator: string | null; asset: string | null }, admin: boolean) => ({
+const reportRow = (c: Ctx, r: { id: string; number: string | null; label: string | null; report_date: string | null; status: string; fee: number | null; result_value: number | null; value_eur_any?: number | null; client_name: string | null; bank_code: string | null; evaluator: string | null; asset: string | null }, admin: boolean) => ({
   id: r.id, numar: r.number, denumire: r.label, data: r.report_date, status: REPORT_STATUS[r.status]?.[0] ?? r.status,
   client: r.client_name, banca: r.bank_code, evaluator: r.evaluator, bun: r.asset?.replace("|", " · ") ?? null,
-  valoare_lei: r.result_value, ...(admin ? { onorariu_lei: r.fee } : {}), link: c.link(`/rapoarte/${r.id}`),
+  valoare_eur: r.value_eur_any != null ? Math.round(r.value_eur_any) : null, ...(admin ? { onorariu_lei: r.fee } : {}), link: c.link(`/rapoarte/${r.id}`),
 });
 
 export const TOOLS: Tool[] = [
@@ -252,10 +253,11 @@ export const TOOLS: Tool[] = [
         id: r.id, numar: r.number, denumire: r.label, status: REPORT_STATUS[r.status]?.[0] ?? r.status, etapa: r.stage,
         data_raport: r.report_date, data_evaluare: r.valuation_date, primit: r.received_on, termen: r.due_on, livrat: r.delivered_at,
         client: { nume: r.client_name, telefon: r.client_phone, email: r.client_email, cui: r.client_cui },
-        banca: r.bank_name, sucursala: r.bank_branch, scop: r.purpose, tip_valoare: r.value_type, valoare_lei: r.result_value, moneda: r.currency,
+        banca: r.bank_name, sucursala: r.bank_branch, scop: r.purpose, tip_valoare: r.value_type, valoare: r.result_value, moneda: r.currency,
+        valoare_eur: (() => { const v = toEur(r.result_value, { value_eur: r.result_eur, glide_id: r.glide_id, currency: r.currency, eur_rate: r.eur_rate }); return v == null ? null : Math.round(v); })(),
         ...(admin ? { onorariu_lei: r.fee, onorariu_colaborator_lei: r.collab_fee } : {}),
         echipa: team.map((m) => ({ rol: m.role, nume: m.name, telefon: m.phone })),
-        bunuri: assets.map((x) => ({ tip: x.type, categorie: x.category, adresa: x.full_address ?? x.city, cf: x.cf_number, valoare_lei: x.value, principal: !!x.is_main, abordare: x.approach })),
+        bunuri: assets.map((x) => ({ tip: x.type, categorie: x.category, adresa: x.full_address ?? x.city, cf: x.cf_number, valoare_eur: (() => { const v = toEur(x.value, { value_eur: x.value_eur, glide_id: r.glide_id, currency: r.currency, eur_rate: r.eur_rate }); return v == null ? null : Math.round(v); })(), principal: !!x.is_main, abordare: x.approach })),
         motiv_suspendare: r.suspend_reason, note: r.notes, link: c.link(`/rapoarte/${r.id}`),
       };
     },
@@ -315,7 +317,7 @@ export const TOOLS: Tool[] = [
       const admin = isAdmin(c.user);
       const [contacts, reports, stats] = await Promise.all([
         clientContacts(c.db, id),
-        c.db.prepare(`SELECT r.id, r.number, r.label, r.status, r.report_date, r.result_value, r.fee FROM reports r WHERE r.client_id = ?1 OR r.recipient_id = ?1
+        c.db.prepare(`SELECT r.id, r.number, r.label, r.status, r.report_date, ${resultEurSql()} AS result_value, r.fee FROM reports r WHERE r.client_id = ?1 OR r.recipient_id = ?1
           ORDER BY COALESCE(r.report_date, substr(r.created_at, 1, 10)) DESC LIMIT 15`).bind(id)
           .all<{ id: string; number: string | null; label: string | null; status: string; report_date: string | null; result_value: number | null; fee: number | null }>(),
         c.db.prepare("SELECT COUNT(*) AS n, SUM(fee) AS fees, MIN(report_date) AS first, MAX(report_date) AS last FROM reports WHERE client_id = ?1 OR recipient_id = ?1").bind(id)
@@ -325,7 +327,7 @@ export const TOOLS: Tool[] = [
         id: e.id, tip: kindName(e.kind), nume: e.name, cui: e.cui, nr_reg_com: e.reg_no, adresa: e.billing_address, telefon: e.phone, email: e.email, note: e.notes,
         contacte: contacts.map((x) => ({ nume: x.name, functie: x.role, telefon: x.phone, email: x.email })),
         rapoarte_total: stats?.n ?? 0, primul: stats?.first, ultimul: stats?.last, ...(admin ? { onorarii_total_lei: stats?.fees ?? 0 } : {}),
-        ultimele_rapoarte: reports.results.map((r) => ({ numar: r.number, denumire: r.label, data: r.report_date, status: REPORT_STATUS[r.status]?.[0] ?? r.status, valoare_lei: r.result_value, ...(admin ? { onorariu_lei: r.fee } : {}), link: c.link(`/rapoarte/${r.id}`) })),
+        ultimele_rapoarte: reports.results.map((r) => ({ numar: r.number, denumire: r.label, data: r.report_date, status: REPORT_STATUS[r.status]?.[0] ?? r.status, valoare_eur: r.result_value != null ? Math.round(r.result_value) : null, ...(admin ? { onorariu_lei: r.fee } : {}), link: c.link(`/rapoarte/${r.id}`) })),
         link: c.link(`/clienti/${e.id}`),
       };
     },
@@ -363,9 +365,9 @@ export const TOOLS: Tool[] = [
       const r = await nearby(c.db, ll, subject, { raza: str(a, "raza_km") || undefined, ani: str(a, "ani") || undefined, supr: str(a, "toleranta_suprafata") || undefined, potrivire: subject.type ? undefined : "categorie" });
       return {
         punct: ll, criterii: r.settings,
-        statistici_lei_mp: r.stats && Object.fromEntries(Object.entries(r.stats).map(([k, v]) => [k, typeof v === "number" ? Math.round(v) : v])),
+        statistici_eur_mp: r.stats && Object.fromEntries(Object.entries(r.stats).map(([k, v]) => [k, typeof v === "number" ? Math.round(v) : v])),
         proprietati: r.rows.slice(0, MAX).map((x) => ({ tip: x.type, adresa: x.full_address ?? x.city, suprafata_mp: x.usable_area, an_constructie: x.year_built,
-          valoare_lei: x.value, lei_mp: x.sqm ? Math.round(x.sqm) : null, data: x.last_date, distanta_km: x.km, raport: x.report_number,
+          valoare_eur: x.value != null ? Math.round(x.value) : null, eur_mp: x.sqm ? Math.round(x.sqm) : null, data: x.last_date, distanta_km: x.km, raport: x.report_number,
           link: x.report_id ? c.link(`/rapoarte/${x.report_id}`) : c.link(`/proprietati/${x.id}`) })),
       };
     },
@@ -421,7 +423,7 @@ export const TOOLS: Tool[] = [
         client: "COALESCE(c.name, '—')",
       };
       const g = key[str(a, "grupare")] ?? key.luna;
-      const { results } = await c.db.prepare(`SELECT ${g} AS grup, COUNT(*) AS n, SUM(r.fee) AS fees, AVG(r.fee) AS avg_fee, AVG(r.result_value) AS avg_value
+      const { results } = await c.db.prepare(`SELECT ${g} AS grup, COUNT(*) AS n, SUM(r.fee) AS fees, AVG(r.fee) AS avg_fee, AVG(${resultEurSql()}) AS avg_value
         FROM reports r LEFT JOIN entities b ON b.id = r.recipient_id LEFT JOIN entities c ON c.id = r.client_id
         WHERE r.status = 'done' AND ${done} BETWEEN ? AND ? GROUP BY grup ORDER BY ${str(a, "grupare") === "luna" ? "grup" : "n DESC"} LIMIT 100`).bind(from, to)
         .all<{ grup: string; n: number; fees: number | null; avg_fee: number | null; avg_value: number | null }>();
@@ -430,7 +432,7 @@ export const TOOLS: Tool[] = [
       return {
         perioada: { de_la: from, pana_la: to }, grupare: str(a, "grupare"),
         randuri: results.map((x) => ({ grup: str(a, "grupare") === "sursa" ? SOURCE_LABEL[x.grup] ?? x.grup : x.grup, rapoarte_livrate: x.n,
-          ...(admin ? { onorarii_lei: r0(x.fees), onorariu_mediu_lei: r0(x.avg_fee) } : {}), valoare_medie_lei: r0(x.avg_value) })),
+          ...(admin ? { onorarii_lei: r0(x.fees), onorariu_mediu_lei: r0(x.avg_fee) } : {}), valoare_medie_eur: r0(x.avg_value) })),
       };
     },
   },

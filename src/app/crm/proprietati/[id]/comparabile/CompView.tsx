@@ -17,7 +17,7 @@ export function CompView({ rows, subject, base, median, p25, p75 }: {
   const tone = (s: number | null) => (s == null || median == null ? "#7a7a7a" : p25 != null && s < p25 ? "#1fa971" : p75 != null && s > p75 ? "#b3261e" : "#e9a227");
   const points = useMemo<MapPoint[]>(() => rows.map((r) => ({
     id: r.id, lat: r.lat, lng: r.lng, cat: r.category ?? "", label: r.type ?? "", address: r.full_address ?? "", value: r.value, date: r.last_date, color: tone(r.sqm),
-    tip: `<b>${esc(cap(r.type))}</b> · ${n0(r.sqm)} lei/m²<br><small>${esc(r.full_address ?? "")} · ${dist(r.km)}</small>`,
+    tip: `<b>${esc(cap(r.type))}</b> · ${n0(r.sqm)} €/m²<br><small>${esc(r.full_address ?? "")} · ${dist(r.km)}</small>`,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   })), [rows]);
   const subj = useMemo(() => subject, [subject.lat, subject.lng, subject.radiusKm, subject.label]); // eslint-disable-line react-hooks/exhaustive-deps

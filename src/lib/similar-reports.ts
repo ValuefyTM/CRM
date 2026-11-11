@@ -1,6 +1,7 @@
 // Server-only: the reports that valued properties like the subject of a report, nearby — same type of property
 // (else same category), within a radius of its point — newest valuation first, each with a similarity score (distance,
 // area, year built, rooms, how recent the valuation is). Only reports the user may open.
+import { eurSql } from "./eur";
 import { parseGeo } from "./registry";
 import { myReportsSql } from "./perms-db";
 import { can, DEFAULT_CONFIG, type PermConfig, type WithPerms } from "./perms";
@@ -71,7 +72,7 @@ export async function similarReports(db: D1Database, user: WithPerms & { id: str
   if (!can(user, "reports.all")) { w.push(myReportsSql(user.team ?? DEFAULT_CONFIG.team)); a.push(user.id); }
   const { results } = await db.prepare(`SELECT r.id AS report_id, a.id AS asset_id, r.number, COALESCE(r.valuation_date, r.report_date, substr(r.created_at, 1, 10)) AS date,
       r.status, r.currency, b.name AS bank, r.recipient_id, p.type, p.category, p.full_address AS address, p.city, p.usable_area, p.land_area, p.year_built, p.rooms,
-      p.floor, p.cf_number AS cf, a.value, p.geo
+      p.floor, p.cf_number AS cf, ${eurSql()} AS value, p.geo
     FROM assets a JOIN reports r ON r.id = a.report_id JOIN crm_properties p ON p.id = a.property_id LEFT JOIN entities b ON b.id = r.recipient_id
     WHERE ${w.join(" AND ")} LIMIT 800`).bind(...a)
     .all<Omit<SimilarRow, "km" | "score" | "parts" | "sqm"> & { geo: string }>();
