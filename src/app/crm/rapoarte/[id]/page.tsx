@@ -1,3 +1,4 @@
+import { MapLink } from "@/components/AssetLocation";
 import { niceName } from "@/lib/labels";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
@@ -61,6 +62,8 @@ export const dynamic = "force-dynamic";
 const KIND: Record<string, string> = { person: "Persoană fizică", company: "Persoană juridică", bank: "Bancă", ifn: "IFN", uat: "Instituție publică", anaf: "ANAF", broker: "Broker" };
 const CONTACT: Record<string, string> = { client: "Clientul", owner: "Proprietarul", agent: "Agent imobiliar", other: "Altă persoană" };
 const APPROACH: Record<string, string> = { market: "Piață", income: "Venit", cost: "Cost" };
+/** a building or land (a place on the map), not a vehicle or equipment */
+const realEstateAsset = (a: { category: string | null; type: string | null }) => !/auto|vehicul|echipament|utilaj|mobil/i.test(`${a.category ?? ""} ${a.type ?? ""}`);
 const VAL_TYPE: Record<string, string> = { EPI: "EPI — proprietăți imobiliare", EBM: "EBM — bunuri mobile", EI: "EI — întreprinderi", EIF: "EIF — instrumente financiare" };
 const UVALO_STATUS: Record<string, string> = { prog: "de programat în UVALO", plan: "programată în UVALO", lucru: "în lucru pe telefon", gata: "finalizată în UVALO", pred: "finalizată în UVALO", deleted: "scoasă din UVALO" };
 const ROLE_NAME: Record<string, string> = { owner: "Proprietar", admin: "Administrator", evaluator: "Evaluator", operator: "Operator", inspector: "Inspector" };
@@ -438,6 +441,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                   <dl className="kv">
                     <Row k="Valoare rezultat">{result(r.result_eur || assetsEur, r.result_value || assetsTotal)}</Row>
                     <Row k="Abordare">{main.approach ? APPROACH[main.approach] : null}</Row>
+                    {realEstateAsset(main) && <Row k="Localizare"><MapLink asset={main.id} /></Row>}
                     {assets.length > 1 && <Row k="Alte bunuri"><a className="link" href={href("bunuri")}>{assets.length - 1} {assets.length === 2 ? "bun" : "bunuri"} →</a></Row>}
                   </dl>
                   {similar?.located && <SimilarReports report={r.id} base={base} count={similar.rows.length} bank={similar.subject?.bank ?? null} />}
@@ -554,7 +558,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                         {a.is_main ? <span className="tag">Principal</span> : null}
                         <small>{cap(a.category) || ""}</small>
                       </div>
-                      <p className="abAddr">{a.full_address ?? a.city ?? <span className="muted">fără adresă</span>}</p>
+                      <p className="abAddr">{a.full_address ?? a.city ?? <span className="muted">fără adresă</span>}{realEstateAsset(a) && <> · <MapLink asset={a.id} /></>}</p>
                       {f.length > 0 && <dl className="abFacts">{f.map(([k, v]) => <div key={k}><dt>{k}</dt><dd className={/CF|cad|VIN|înmatriculare/i.test(k) ? "mono" : ""}>{v}</dd></div>)}</dl>}
                     </div>
                     <div className="abSide">

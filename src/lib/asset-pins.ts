@@ -1,23 +1,28 @@
 // The points of an asset for the big map of „Localizare”, in this order of trust: the parcel from the geoportal plans
 // (UVALO locator), the point of the address, the GPS the inspector's phone took at the inspection.
 import { parseGeo } from "./registry";
-import type { Parcel } from "./site-shared";
+import type { LL, Parcel } from "./site-shared";
+import { cadastralRoot } from "./geolocate";
 
 export type PinKind = "uvalo" | "adresa" | "inspectie";
 export type AssetPin = { kind: PinKind; lat: number | null; lng: number | null; note: string };
 /** What the client still needs to ask for a missing pin (no point saved yet): the cadastral numbers or the address. */
-export type PinQuery = { asset: string; uvalo: boolean; property: string | null; city: string | null; county: string | null; cad_building: string | null; cad_land: string | null; cf_number: string | null; address: string | null };
+/** The land on the map: the parcel's contour and its buildings (geoportal plans, through UVALO). */
+export type PinParcel = { nr: string | null; uat: string | null; area: number | null; ring: LL[]; buildings: LL[][] };
+export const pinParcel = (p: Parcel | null | undefined): PinParcel | null => p?.ring?.length
+  ? { nr: p.nr, uat: p.uat, area: p.area_plan ?? p.area_calc ?? null, ring: p.ring, buildings: (p.buildings ?? []).map((b) => b.ring).filter((r) => r?.length) } : null;
+export type PinQuery = { nr: string | null; asset: string; uvalo: boolean; property: string | null; city: string | null; county: string | null; cad_building: string | null; cad_land: string | null; cf_number: string | null; address: string | null };
 
 const r6 = (x: number) => Math.round(x * 1e6) / 1e6;
 const parse = <T,>(s: string | null | undefined): T | null => { try { return s ? (JSON.parse(s) as T) : null; } catch { return null; } };
 
-export async function assetPins(db: D1Database, assetId: string): Promise<{ pins: AssetPin[]; query: PinQuery }> {
+export async function assetPins(db: D1Database, assetId: string): Promise<{ pins: AssetPin[]; query: PinQuery; parcel: PinParcel | null }> {
   const p = await db.prepare(`SELECT p.id, p.geo, p.geo_source, p.geo_note, p.city, p.county, p.full_address, p.cad_building, p.cad_land, p.cf_number,
       s.source AS site_source, s.parcel
       FROM assets a JOIN crm_properties p ON p.id = a.property_id LEFT JOIN asset_site s ON s.asset_id = a.id WHERE a.id = ?`).bind(assetId)
     .first<{ id: string; geo: string | null; geo_source: string | null; geo_note: string | null; city: string | null; county: string | null; full_address: string | null;
       cad_building: string | null; cad_land: string | null; cf_number: string | null; site_source: string | null; parcel: string | null }>().catch(() => null);
-  const query: PinQuery = { asset: assetId, uvalo: false, property: p?.id ?? null, city: p?.city ?? null, county: p?.county ?? null, cad_building: p?.cad_building ?? null, cad_land: p?.cad_land ?? null, cf_number: p?.cf_number ?? null, address: p?.full_address ?? null };
+  const query: PinQuery = { nr: cadastralRoot(p?.cad_land) ?? cadastralRoot(p?.cad_building) ?? cadastralRoot(p?.cf_number) ?? null, asset: assetId, uvalo: false, property: p?.id ?? null, city: p?.city ?? null, county: p?.county ?? null, cad_building: p?.cad_building ?? null, cad_land: p?.cad_land ?? null, cf_number: p?.cf_number ?? null, address: p?.full_address ?? null };
   const geo = parseGeo(p?.geo ?? null);
   const pin = (kind: PinKind, ll: [number, number] | null, note: string): AssetPin => ({ kind, lat: ll ? r6(ll[0]) : null, lng: ll ? r6(ll[1]) : null, note });
 
@@ -53,5 +58,5 @@ export async function assetPins(db: D1Database, assetId: string): Promise<{ pins
   }
   if (!sheet) query.uvalo = !!(await db.prepare("SELECT 1 AS x FROM inspections i JOIN inspection_sheets s ON s.inspection_id = i.id WHERE i.asset_id = ? AND i.uvalo_id IS NOT NULL AND i.status = 'done' AND s.lat IS NULL LIMIT 1")
     .bind(assetId).first().catch(() => null));
-  return { pins: [uvalo, adresa, insp ?? pin("inspectie", null, "")], query };
+  return { pins: [uvalo, adresa, insp ?? pin("inspectie", null, "")], query, parcel: pinParcel(parcel) };
 }

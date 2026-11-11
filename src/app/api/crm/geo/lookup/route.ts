@@ -19,8 +19,12 @@ export async function POST(req: Request) {
   if (cad) return Response.json({ hit: cad });
   const addr = s(b.address);
   if (!addr && !p.city) return Response.json({ hit: null });
-  const hit = await geocodeAddress({ address: addr, city: p.city, county: p.county });
+  // with `property`: its own address, as saved (the point found is written on it)
   const prop = s(b.property, 80);
+  const saved = prop ? await a.db.prepare("SELECT full_address, city, county FROM crm_properties WHERE id = ?").bind(prop)
+    .first<{ full_address: string | null; city: string | null; county: string | null }>() : null;
+  if (prop && !saved) return Response.json({ hit: null });
+  const hit = await geocodeAddress(saved ? { address: saved.full_address, city: saved.city, county: saved.county } : { address: addr, city: p.city, county: p.county });
   if (hit && prop) await a.db.prepare(`UPDATE crm_properties SET geo = ?, geo_source = ?, geo_note = ?, geo_checked_at = ?
       WHERE id = ? AND (geo IS NULL OR geo = '' OR geo_source IN ('adresa', 'localitate'))`).bind(`${hit.lat}, ${hit.lng}`, hit.source, hit.note, now(), prop).run().catch(() => null);
   return Response.json({ hit, cadastreTried: !!(p.cad_building || p.cad_land || p.cf_number) });

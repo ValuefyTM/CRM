@@ -362,7 +362,7 @@ export default async function AssetPage({ params, searchParams }: {
             {prevMine?.val && mineVal ? <span><small>Față de {new Date(prevMine.date).getFullYear()}</small><b className={`mono ${mineVal >= prevMine.val ? "up" : "down"}`}>{pct(((mineVal - prevMine.val) / prevMine.val) * 100)}</b><small>{lei(prevMine.val, cur)}{prevMine.number ? ` · nr. ${prevMine.number}` : ""}</small></span>
               : <span><small>Inspecție</small><b>{lastDone ? `✓ ${fmtDate(lastDone.done_at ?? lastDone.created_at)}` : a.no_inspection ? "fără" : insp[0] ? (INSP_STATUS[insp[0].status]?.[0] ?? insp[0].status) : "nealocată"}</b><small>{lastDone?.inspector ?? ""}</small></span>}
           </div>
-          {ll || locPins.pins.some((p) => p.lat != null) ? <div className="bpMap"><AssetLocation pins={locPins.pins} query={locPins.query} height={90} /></div>
+          {ll || locPins.pins.some((p) => p.lat != null) ? <div className="bpMap"><AssetLocation data={locPins} height={150} /></div>
             : <p className="hint">Bunul nu are coordonate: se completează din adresă sau din cadastru, la proprietate.</p>}
         </div>
       </section>
