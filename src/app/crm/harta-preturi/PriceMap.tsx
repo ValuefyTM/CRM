@@ -12,6 +12,8 @@ import type { PricePoint, PriceType } from "@/lib/price-map";
 const RAMP = ["#1a9850", "#66bd63", "#c2e478", "#fee08b", "#f88d52", "#d73027"];
 const RGB = RAMP.map((h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)));
 const CENTRE: [number, number] = [45.7537, 21.2257];
+/** the radius of the pointer's statistics and of the click's list, in metres */
+const RADIUS = 750;
 const BASES = {
   harta: { label: "Hartă", url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", attr: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' },
   satelit: { label: "Satelit", url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attr: "&copy; Esri" },
@@ -55,7 +57,7 @@ export function PriceMap({ points, types, base }: { points: PricePoint[]; types:
   const layer = useRef<Leaflet.LayerGroup | null>(null);
   const tiles = useRef<Leaflet.TileLayer | null>(null);
   const [ready, setReady] = useState(false);
-  const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
+  const [tip, setTip] = useState<{ x: number; y: number; n: number; min: number; med: number; max: number } | null>(null);
   useEffect(() => {
     let off = false;
     import("leaflet").then((mod) => {
@@ -146,30 +148,32 @@ export function PriceMap({ points, types, base }: { points: PricePoint[]; types:
     layer.current?.remove();
     const g = l.layerGroup().addTo(m);
     layer.current = g;
-    if (around) l.circle([around.lat, around.lng], { radius: spread, color: "#141414", weight: 2, dashArray: "5 5", fill: false, interactive: false }).addTo(g);
+    if (around) l.circle([around.lat, around.lng], { radius: RADIUS, color: "#141414", weight: 2, dashArray: "5 5", fill: false, interactive: false }).addTo(g);
     if (dots) for (const p of shown) {
       l.circleMarker([p.lat, p.lng], { radius: 5, color: "#fff", weight: 1.5, fillColor: "#141414", fillOpacity: 0.85 })
         .bindPopup(`<b>${eur(p.sqm)}/m²</b> · ${eur(p.eur)}<br>${esc(p.typeLabel)} · ${p.area.toLocaleString("ro-RO")} m²<br><small>${esc(p.address)}</small><br><a href="${base}/rapoarte/${p.report}">Raport ${esc(p.number ?? "")} · ${day(p.date)} →</a>`)
         .addTo(g);
     }
-  }, [dots, around, ready, shown, base, spread]);
+  }, [dots, around, ready, shown, base]);
 
-  // hover: the estimate at the pointer and how many valuations are around; click: list them
-  const near = (ll: { lat: number; lng: number }) => shown.filter((p) => metres(ll, p) <= spread * 1.5);
+  // hover: the valuations within 750 m of the pointer (a ring follows it) — how many, the lowest, the median and the
+  // highest €/m²; click: the table lists them
+  const near = (ll: { lat: number; lng: number }) => shown.filter((p) => metres(ll, p) <= RADIUS);
+  const ring = useRef<Leaflet.Circle | null>(null);
   useEffect(() => {
-    const m = map.current;
-    if (!ready || !m) return;
+    const l = L.current, m = map.current;
+    if (!ready || !l || !m) return;
     const move = (e: Leaflet.LeafletMouseEvent) => {
-      let n = 0, d = 0;
-      for (const p of shown) { const r = metres(e.latlng, p); const k = Math.exp(-(r * r) / (2 * spread * spread)); if (k > 0.01) { n += k * p.sqm; d += k; } }
-      const cnt = near(e.latlng).length;
-      setTip(d < 0.02 ? null : { x: e.containerPoint.x, y: e.containerPoint.y, text: `~${eur(n / d)}/m² · ${cnt} ${cnt === 1 ? "evaluare" : "evaluări"} în ${(spread * 1.5).toLocaleString("ro-RO")} m` });
+      if (!ring.current) ring.current = l.circle(e.latlng, { radius: RADIUS, color: "#141414", weight: 1.5, opacity: 0.55, dashArray: "4 6", fill: true, fillOpacity: 0.04, interactive: false }).addTo(m);
+      else ring.current.setLatLng(e.latlng);
+      const v = near(e.latlng).map((p) => p.sqm);
+      setTip({ x: e.containerPoint.x, y: e.containerPoint.y, n: v.length, min: v.length ? Math.min(...v) : 0, med: v.length ? median(v) : 0, max: v.length ? Math.max(...v) : 0 });
     };
-    const out = () => setTip(null);
-    const click = (e: Leaflet.LeafletMouseEvent) => { if ((e.originalEvent.target as HTMLElement).closest?.(".leaflet-marker-icon, .leaflet-popup, path.leaflet-interactive")) return; setAround(near(e.latlng).length ? { lat: e.latlng.lat, lng: e.latlng.lng } : null); };
+    const out = () => { setTip(null); ring.current?.remove(); ring.current = null; };
+    const click = (e: Leaflet.LeafletMouseEvent) => { if ((e.originalEvent.target as HTMLElement).closest?.(".leaflet-marker-icon, .leaflet-popup")) return; setAround(near(e.latlng).length ? { lat: e.latlng.lat, lng: e.latlng.lng } : null); };
     m.on("mousemove", move); m.on("mouseout", out); m.on("click", click);
-    return () => { m.off("mousemove", move); m.off("mouseout", out); m.off("click", click); };
-  }, [ready, shown, spread]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { m.off("mousemove", move); m.off("mouseout", out); m.off("click", click); ring.current?.remove(); ring.current = null; };
+  }, [ready, shown]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (ready) map.current?.setView(CENTRE, zone === "oras" ? 13 : 11); }, [zone, ready]);
   useEffect(() => { setAround(null); }, [type, zone]);
 
@@ -206,7 +210,13 @@ export function PriceMap({ points, types, base }: { points: PricePoint[]; types:
         <div className="pxMapBox">
           <div ref={el} className="pxMap" role="img" aria-label={`Harta prețurilor: ${label}, €/m², ca nor peste Timișoara`} />
           <canvas ref={cv} className="pxCloud" aria-hidden="true" />
-          {tip && <div className="pxTip" style={{ left: tip.x + 14, top: tip.y + 14 }}>{tip.text}</div>}
+          {tip && (
+            <div className="pxTip" style={{ left: tip.x > (map.current?.getSize().x ?? 9999) - 220 ? tip.x - 206 : tip.x + 16, top: tip.y > (map.current?.getSize().y ?? 9999) - 130 ? tip.y - 116 : tip.y + 16 }}>
+              <b>Rază 750 m · {tip.n} {tip.n === 1 ? "raport" : "rapoarte"}</b>
+              {tip.n > 0 ? <dl><dt>Minim</dt><dd>{eur(tip.min)}/m²</dd><dt>Median</dt><dd>{eur(tip.med)}/m²</dd><dt>Maxim</dt><dd>{eur(tip.max)}/m²</dd></dl>
+                : <small>nicio evaluare în jur</small>}
+            </div>
+          )}
           <div className="pinBases" role="group" aria-label="Fundalul hărții">
             {(Object.keys(BASES) as (keyof typeof BASES)[]).map((k) => <button key={k} type="button" aria-pressed={bg === k} onClick={() => setBg(k)}>{BASES[k].label}</button>)}
           </div>
@@ -224,7 +234,7 @@ export function PriceMap({ points, types, base }: { points: PricePoint[]; types:
 
       <section className="card pxList">
         <div className="cardHead">
-          <h2>{around ? `Evaluările din jurul punctului ales · ${listed.length}` : `Toate evaluările · ${listed.length}`}</h2>
+          <h2>{around ? `Evaluările pe o rază de 750 m de punctul ales · ${listed.length}` : `Toate evaluările · ${listed.length}`}</h2>
           {around ? <button type="button" className="linkBtn" onClick={() => setAround(null)}>arată toate</button> : <small className="muted">click pe hartă: evaluările din jur</small>}
         </div>
         <div className="tableWrap">
