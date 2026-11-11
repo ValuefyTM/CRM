@@ -87,6 +87,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
           may("reports") && { key: "reports", label: allReports ? "Rapoarte" : "Rapoartele mele", href: `${b}/rapoarte`, badge: myOpen },
           may("inspections") && { key: "inspections", label: may("inspections.all") ? "Inspecții" : "Inspecțiile mele", href: `${b}/agenda-inspectii`, badge: inspN },
           may("properties") && { key: "properties", label: "Proprietăți", href: `${b}/proprietati` },
+          may("properties") && { key: "pricemap", label: "Hartă prețuri", href: `${b}/harta-preturi` },
           // The inspections app (phone: sheets, photos, signature), with the same sign-in: on phones only, and only
           // when the firm's inspections go through it (not through UVALO).
           may("inspections") && inspViaApp && { key: "inspapp", label: "Aplicația de inspecții", href: inspApp || "/", mobile: true },
