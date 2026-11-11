@@ -4391,3 +4391,6 @@ aside.poCol { flex: 1 1 360px; }
 .pill.pillUnproc i { background: var(--ink); }
 tr.unproc td { background: color-mix(in srgb, var(--acc-soft) 70%, #fff); }
 tr.unproc td:first-child { box-shadow: inset 4px 0 0 var(--acc); }
+.bankRefEdit { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin: 4px 0 8px; }
+.bankRefEdit .field { margin: 0; flex: 1 1 160px; }
+.bankRefEdit .actions { display: flex; gap: 8px; }

@@ -23,6 +23,7 @@ import { offerLink } from "@/lib/offer-emails";
 import { OfferEditor } from "./OfferEditor";
 import { DossierOpen } from "./DossierOpen";
 import { DeleteOrder } from "./DeleteOrder";
+import { BankRefEdit } from "./BankRefEdit";
 import { CancelReason } from "@/components/CancelReason";
 import { Messages } from "@/components/Messages";
 import { orderThread } from "@/lib/messages";
@@ -179,7 +180,8 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
             <section className="card">
               <h2>{o.source === "bank" ? "Comandă bancă · contract cadru" : `Colaborare · ${o.collab_firm ?? ""}`}</h2>
               <dl className="dl">
-                {o.bank_ref && <div><dt>Nr. comandă bancă</dt><dd className="mono">{o.bank_ref}</dd></div>}
+                {o.source === "bank" ? <BankRefEdit order={o.id} bankRef={o.bank_ref} orderedOn={(o.ordered_on ?? o.created_at).slice(0, 10)} canEdit={can(user, "orders.E")} />
+                  : o.bank_ref && <div><dt>Nr. comandă bancă</dt><dd className="mono">{o.bank_ref}</dd></div>}
                 <div><dt>Bancă</dt><dd>{o.bank ?? "—"}</dd></div>
                 {o.bank_branch && <div><dt>Agenție</dt><dd>{o.bank_branch}</dd></div>}
                 {o.contract_number && <div><dt>Contract</dt><dd>{o.contract_kind === "framework" ? "Cadru" : "Clasic"} nr. {o.contract_number}</dd></div>}
@@ -188,7 +190,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
                 {o.report_type && <div><dt>Tip raport</dt><dd>{o.report_type}</dd></div>}
                 <div><dt>Tarif</dt><dd>{lei(o.fee)}</dd></div>
                 {o.share != null && <div><dt>Cota VALUEFY</dt><dd>{Math.round(o.share * 100)}% · {lei(o.fee_net)}</dd></div>}
-                <div><dt>Data comenzii</dt><dd>{fmtDate(o.ordered_on ?? o.created_at)}</dd></div>
+                {o.source !== "bank" && <div><dt>Data comenzii</dt><dd>{fmtDate(o.ordered_on ?? o.created_at)}</dd></div>}
               </dl>
             </section>
           )}

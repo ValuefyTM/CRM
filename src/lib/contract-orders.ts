@@ -165,3 +165,24 @@ export async function createContractOrder(db: D1Database, actor: string, b: Reco
   await closeTasksForOrder(db, id, kind === "bank" ? str(b.bank_ref, 60) || null : null, str(b.mail_task, 80) || null, actor).catch((e) => console.error("mail task", e));
   return { ok: true as const, id, clientId };
 }
+
+/** Corrects the bank's order number and the order date of a bank order (the bank's own numbering, as it came on the request). */
+export async function editBankOrder(db: D1Database, actor: string, id: string, b: Record<string, unknown>) {
+  const o = await db.prepare("SELECT source, bank_id, bank_ref, ordered_on FROM orders WHERE id = ?").bind(id)
+    .first<{ source: string; bank_id: string | null; bank_ref: string | null; ordered_on: string | null }>();
+  if (!o) return { ok: false as const, error: "Nu există." };
+  if (o.source !== "bank") return { ok: false as const, error: "Doar comenzile de la bănci au număr de comandă al băncii." };
+  const ref = str(b.bank_ref, 60);
+  const day = str(b.ordered_on, 10);
+  if (!ref) return { ok: false as const, error: "Completează numărul comenzii." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(Date.parse(day))) return { ok: false as const, error: "Data comenzii nu e validă." };
+  if (day > now().slice(0, 10)) return { ok: false as const, error: "Data comenzii nu poate fi în viitor." };
+  const dup = await db.prepare("SELECT id FROM orders WHERE id <> ? AND upper(bank_ref) = upper(?) AND status <> 'cancelled' AND (bank_id IS ? OR bank_id IS NULL OR ? IS NULL) LIMIT 1")
+    .bind(id, ref, o.bank_id, o.bank_id).first<{ id: string }>();
+  if (dup) return { ok: false as const, error: `Există deja o comandă a băncii cu numărul ${ref}.`, dup: dup.id };
+  if (ref === o.bank_ref && day === o.ordered_on) return { ok: true as const };
+  await db.prepare("UPDATE orders SET bank_ref = ?, ordered_on = ?, updated_at = ? WHERE id = ?").bind(ref, day, now(), id).run();
+  const what = [ref !== o.bank_ref && `nr. ${o.bank_ref ?? "—"} → ${ref}`, day !== o.ordered_on && `data ${o.ordered_on ?? "—"} → ${day}`].filter(Boolean).join(", ");
+  await audit(db, actor, "order.bank_ref", "order", id, what);
+  return { ok: true as const };
+}

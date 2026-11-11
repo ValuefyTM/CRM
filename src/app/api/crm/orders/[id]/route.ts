@@ -1,6 +1,7 @@
 import { err, json, staffApi } from "@/lib/api";
 import { inScope } from "@/lib/scope";
 import { cancelOrder, deleteOrder } from "@/lib/orders";
+import { editBankOrder } from "@/lib/contract-orders";
 
 /** Deletes an order, and with `confirm` what was made from it (owners and administrators). */
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -20,6 +21,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params;
   if (!(await inScope(a.db, a.user, "orders", id))) return err("Nu există.", 404);
   const b = await json(req);
+  if (b.bank_ref !== undefined || b.ordered_on !== undefined) {
+    const r = await editBankOrder(a.db, `user:${a.user.id}`, id, b);
+    return r.ok ? Response.json({ ok: true }) : err(r.error, "dup" in r ? 409 : 400);
+  }
   if (b.status !== "cancelled" && b.status !== "reopen") return err("Acțiune necunoscută.");
   const r = await cancelOrder(a.db, `user:${a.user.id}`, id, b.status === "cancelled", String(b.reason ?? "").trim().slice(0, 500));
   return r.ok ? Response.json({ ok: true }) : err(r.error);
