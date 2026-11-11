@@ -44,14 +44,14 @@ const EUR_FALLBACK = 4.97;
 
 export async function pricePoints(db: D1Database, months = 12): Promise<PricePoint[]> {
   const since = new Date(); since.setMonth(since.getMonth() - months);
-  const { results } = await db.prepare(`SELECT a.id, a.value, a.value_eur, r.eur_rate, r.currency, r.id AS report, r.number,
+  const { results } = await db.prepare(`SELECT a.id, a.value, a.value_eur, r.eur_rate, r.currency, r.glide_id, r.id AS report, r.number,
         COALESCE(r.report_date, substr(r.delivered_at, 1, 10), substr(r.updated_at, 1, 10)) AS d,
         p.type, p.category, p.geo, p.usable_area, p.land_area, p.full_address, p.city
       FROM assets a JOIN reports r ON r.id = a.report_id JOIN crm_properties p ON p.id = a.property_id
       WHERE r.status = 'done' AND (a.value > 0 OR a.value_eur > 0) AND p.geo LIKE '%_,_%' AND p.category IS NOT 'BUN MOBIL'
         AND COALESCE(r.report_date, substr(r.delivered_at, 1, 10), substr(r.updated_at, 1, 10)) >= ?`)
     .bind(since.toISOString().slice(0, 10))
-    .all<{ id: string; value: number | null; value_eur: number | null; eur_rate: number | null; currency: string | null; report: string; number: string | null; d: string;
+    .all<{ id: string; value: number | null; value_eur: number | null; eur_rate: number | null; currency: string | null; glide_id: string | null; report: string; number: string | null; d: string;
       type: string | null; category: string | null; geo: string; usable_area: number | null; land_area: number | null; full_address: string | null; city: string | null }>();
   const out: PricePoint[] = [];
   for (const x of results) {
@@ -62,7 +62,9 @@ export async function pricePoints(db: D1Database, months = 12): Promise<PricePoi
     const t = priceType(x.type, x.category);
     const area = t === "teren" ? x.land_area ?? 0 : x.usable_area ?? 0;
     if (!(area > 0)) continue;
-    const eur = x.value_eur && x.value_eur > 0 ? x.value_eur : x.currency === "EUR" ? x.value! : x.value! / (x.eur_rate && x.eur_rate > 3 ? x.eur_rate : EUR_FALLBACK);
+    // the value in euro: as given at delivery; the values imported from the old CRM (Glide) are in euro already;
+    // else the value in lei at the report's BNR rate
+    const eur = x.value_eur && x.value_eur > 0 ? x.value_eur : x.glide_id || x.currency === "EUR" ? x.value! : x.value! / (x.eur_rate && x.eur_rate > 3 ? x.eur_rate : EUR_FALLBACK);
     const sqm = eur / area;
     if (!(sqm >= SANE[t][0] && sqm <= SANE[t][1])) continue;
     out.push({
