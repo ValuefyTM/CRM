@@ -8,6 +8,7 @@ import { MAX_FILE_MB } from "@/lib/order-labels";
 import { DOC_KIND_KEYS, docKindLabel, guessDocKind } from "@/lib/doc-kinds";
 import { resyncUvalo } from "@/lib/uvalo";
 import { isZip, unzipDocs } from "@/lib/unzip-docs";
+import { FOLDER_SQL, isInside, replaceDoc, resolveFolder, restoreVersion, sameName, versionKeys } from "@/lib/doc-folders";
 
 const OK = /\.(pdf|jpe?g|png|heic|heif|webp|docx?|xlsx?|zip)$/i;
 
@@ -43,6 +44,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (kind === "final" && !/\.pdf$/i.test(file.name)) return err("Raportul final se încarcă în format PDF.");
   const r2 = await bucket();
   if (!r2) return err("Stocarea fișierelor nu este disponibilă momentan.", 503);
+  // `folder`: the folder it is dropped in (the asset follows from it); a file with the name of one there replaces it
+  const place = kind === "source" && typeof form?.get("folder") === "string" ? await resolveFolder(a.db, id, String(form.get("folder"))) : null;
+  if (form?.get("folder") && kind === "source" && !place) return err("Folderul nu mai există.", 404);
 
   // A ZIP of documents: opened, each file kept as its own document (on the same asset / type, when given)
   if (kind === "source" && isZip(file.name)) {
@@ -50,9 +54,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!z.ok) return err(z.error);
     // each file its own kind, by its name (CF extract, survey…): the archive's own name says nothing about them
     const kindOf = (name: string) => { const g = guessDocKind(name); return DOC_KIND_KEYS.includes(g) ? g : null; };
-    const assetId = form?.get("asset")
+    const assetId = place ? place.asset : form?.get("asset")
       ? (await a.db.prepare("SELECT id FROM assets WHERE id = ? AND report_id = ?").bind(String(form.get("asset")), id).first<{ id: string }>())?.id ?? null
       : null;
+    const folderOf = place?.key ?? (assetId ? `a:${assetId}:acte` : "root");
+    const replaced: string[] = [];
     const requested = typeof form?.get("doc") === "string" ? (form.get("doc") as string) : "";
     const missing = requested
       ? await a.db.prepare("SELECT id, filename FROM report_documents WHERE id = ? AND report_id = ? AND status = 'missing'").bind(requested, id).first<{ id: string; filename: string }>()
@@ -70,15 +76,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         await a.db.prepare("UPDATE report_documents SET filename = ?, content_type = ?, size_bytes = ?, r2_key = ?, status = 'uploaded', uploaded_by = ?, created_at = ?, doc_type = COALESCE(?, doc_type), asset_id = COALESCE(?, asset_id) WHERE id = ?")
           .bind(named, type, f.data.byteLength, key, a.user.id, now(), kindOf(f.name), assetId, did).run();
       } else {
-        await a.db.prepare("INSERT INTO report_documents (id, report_id, kind, filename, content_type, size_bytes, r2_key, uploaded_by, doc_type, asset_id) VALUES (?, ?, 'source', ?, ?, ?, ?, ?, ?, ?)")
-          .bind(did, id, safe, type, f.data.byteLength, key, a.user.id, kindOf(f.name), assetId).run();
+        const cur = await sameName(a.db, id, folderOf, safe);
+        if (cur) { await replaceDoc(a.db, id, cur, { filename: safe, content_type: type, size_bytes: f.data.byteLength, r2_key: key }, a.user.id); replaced.push(safe); ids.push(cur.id); continue; }
+        await a.db.prepare("INSERT INTO report_documents (id, report_id, kind, filename, content_type, size_bytes, r2_key, uploaded_by, doc_type, asset_id, folder) VALUES (?, ?, 'source', ?, ?, ?, ?, ?, ?, ?, ?)")
+          .bind(did, id, safe, type, f.data.byteLength, key, a.user.id, kindOf(f.name), assetId, place?.key ?? null).run();
       }
       ids.push(did);
     }
     await a.db.prepare("UPDATE reports SET updated_at = ? WHERE id = ?").bind(now(), id).run();
     await audit(a.db, actor, "report.document", "report", id, `${file.name}: ${z.files.length} ${z.files.length === 1 ? "fișier dezarhivat" : "fișiere dezarhivate"}${z.skipped.length ? ` · sărite: ${z.skipped.slice(0, 10).join(", ")}` : ""}`);
     await resyncUvalo(a.db, { reportId: id });
-    return Response.json({ ok: true, id: ids[0], ids, unzipped: z.files.length, skipped: z.skipped });
+    return Response.json({ ok: true, id: ids[0], ids, unzipped: z.files.length, skipped: z.skipped, replaced });
   }
 
   const docId = uuid();
@@ -89,35 +97,38 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const requested = typeof form?.get("doc") === "string" ? (form.get("doc") as string) : "";
   const docType = kind === "source" && DOC_KIND_KEYS.includes(String(form?.get("doc_type") ?? "")) ? String(form?.get("doc_type")) : null;
-  const assetId = kind === "source" && form?.get("asset")
+  const assetId = place ? place.asset : kind === "source" && form?.get("asset")
     ? (await a.db.prepare("SELECT id FROM assets WHERE id = ? AND report_id = ?").bind(String(form.get("asset")), id).first<{ id: string }>())?.id ?? null
     : null;
-  if (kind === "final") {
-    // One final file per report: the new one replaces the previous.
-    const old = await a.db.prepare("SELECT id, r2_key FROM report_documents WHERE report_id = ? AND kind = 'final'").bind(id).all<{ id: string; r2_key: string | null }>();
-    for (const o of old.results) {
-      if (o.r2_key) await r2.delete(o.r2_key);
-      await a.db.prepare("DELETE FROM report_documents WHERE id = ?").bind(o.id).run();
-    }
-  }
+  // One final file per report: the new one replaces the previous, which is kept as an earlier version.
+  const oldFinal = kind === "final"
+    ? await a.db.prepare("SELECT id, filename, content_type, size_bytes, r2_key, uploaded_by, created_at, version FROM report_documents WHERE report_id = ? AND kind = 'final' AND status = 'uploaded' ORDER BY created_at DESC LIMIT 1")
+      .bind(id).first<{ id: string; filename: string; content_type: string | null; size_bytes: number | null; r2_key: string | null; uploaded_by: string | null; created_at: string; version: number }>()
+    : null;
+  // A file with the name of one in the same folder replaces it (the earlier one kept as a version).
+  const same = kind === "source" && !requested ? await sameName(a.db, id, place?.key ?? (assetId ? `a:${assetId}:acte` : "root"), safe) : null;
+  const prev = oldFinal ?? same;
   const missing = requested
     ? await a.db.prepare("SELECT id, filename FROM report_documents WHERE id = ? AND report_id = ? AND status = 'missing'").bind(requested, id).first<{ id: string; filename: string }>()
     : null;
-  if (missing) {
+  let version: number | null = null;
+  if (prev) {
+    version = await replaceDoc(a.db, id, prev, { filename: safe, content_type: file.type || null, size_bytes: file.size, r2_key: key }, a.user.id);
+  } else if (missing) {
     // Keeps the name the document was asked for ("Extras CF garaj.pdf").
     const named = `${missing.filename.replace(/[^\w.\-() ăâîșțĂÂÎȘȚ]/g, "_")}${safe.match(/\.\w{2,4}$/)?.[0] ?? ""}`;
     await a.db.prepare("UPDATE report_documents SET filename = ?, content_type = ?, size_bytes = ?, r2_key = ?, status = 'uploaded', uploaded_by = ?, created_at = ?, doc_type = COALESCE(?, doc_type), asset_id = COALESCE(?, asset_id) WHERE id = ?")
       .bind(named, file.type || null, file.size, key, a.user.id, now(), docType, assetId, missing.id).run();
   } else {
-    await a.db.prepare("INSERT INTO report_documents (id, report_id, kind, filename, content_type, size_bytes, r2_key, uploaded_by, doc_type, asset_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(docId, id, kind, safe, file.type || null, file.size, key, a.user.id, docType, assetId).run();
+    await a.db.prepare("INSERT INTO report_documents (id, report_id, kind, filename, content_type, size_bytes, r2_key, uploaded_by, doc_type, asset_id, folder) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(docId, id, kind, safe, file.type || null, file.size, key, a.user.id, docType, assetId, place?.key ?? null).run();
   }
-  const savedId = missing?.id ?? docId;
+  const savedId = prev?.id ?? missing?.id ?? docId;
   await a.db.prepare("UPDATE reports SET updated_at = ?, uploaded_on = CASE WHEN ? = 'final' THEN ? ELSE uploaded_on END WHERE id = ?").bind(now(), kind, now().slice(0, 10), id).run();
-  await audit(a.db, actor, kind === "final" ? "report.final" : "report.document", "report", id, safe);
+  await audit(a.db, actor, kind === "final" ? "report.final" : "report.document", "report", id, version ? `${safe} · versiunea ${version}` : safe);
   // A document uploaded after the inspection was sent: it reaches the inspector in UVALO too (when it is to be seen).
   if (kind === "source") await resyncUvalo(a.db, { reportId: id });
-  return Response.json({ ok: true, id: savedId });
+  return Response.json({ ok: true, id: savedId, version, replaced: !!prev });
 }
 
 /**
@@ -129,6 +140,57 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const a = await reportApi(id, "docs", true);
   if ("res" in a) return a.res;
   const b = await json(req);
+  const actor = `user:${a.user.id}`;
+  // Moved to a folder (dragged, „Mută în…”): `{ to: <folder key>, docs: [<id>], folders: [<id>] }`. The documents take the
+  // asset of the folder (an asset's „Acte” is what its inspector may get); the signed report stays in „Livrabile”.
+  if (typeof b.to === "string") {
+    const to = await resolveFolder(a.db, id, b.to);
+    if (!to) return err("Folderul nu mai există.", 404);
+    const docs = (Array.isArray(b.docs) ? b.docs : []).map(String).slice(0, 500);
+    const folders = (Array.isArray(b.folders) ? b.folders : []).map(String).slice(0, 100);
+    let moved = 0;
+    for (const f of folders) {
+      if (await isInside(a.db, id, to.key, `f:${f}`)) return err("Un folder nu se poate muta în el însuși.");
+      const r = await a.db.prepare("UPDATE report_folders SET parent = ? WHERE id = ? AND report_id = ?").bind(to.key, f, id).run();
+      moved += r.meta.changes ?? 0;
+      // what is inside follows the asset of the new place
+      await a.db.prepare(`UPDATE report_documents SET asset_id = ? WHERE report_id = ? AND kind = 'source' AND folder IN (
+          WITH RECURSIVE t(k) AS (SELECT 'f:' || ? UNION SELECT 'f:' || x.id FROM report_folders x JOIN t ON x.parent = t.k WHERE x.report_id = ?) SELECT k FROM t)`)
+        .bind(to.asset, id, f, id).run();
+    }
+    for (const d of docs) {
+      const r = await a.db.prepare("UPDATE report_documents SET folder = ?, asset_id = ? WHERE id = ? AND report_id = ? AND kind = 'source'").bind(to.key, to.asset, d, id).run();
+      moved += r.meta.changes ?? 0;
+    }
+    if (!moved) return err("Nimic de mutat (raportul semnat și actele din comandă rămân la locul lor).");
+    await audit(a.db, actor, "report.document_move", "report", id, `${moved} ${moved === 1 ? "element mutat" : "elemente mutate"} în ${to.key}`);
+    if (docs.length) await resyncUvalo(a.db, { reportId: id });
+    return Response.json({ ok: true, moved });
+  }
+  // Renamed (F2): `{ rename: <doc id>, name }` — the extension stays; not to a name taken in the same folder.
+  if (typeof b.rename === "string") {
+    const d = await a.db.prepare(`SELECT d.id, d.filename, ${FOLDER_SQL("d")} AS folder, d.kind FROM report_documents d WHERE d.id = ? AND d.report_id = ? AND d.status = 'uploaded'`)
+      .bind(b.rename, id).first<{ id: string; filename: string; folder: string; kind: string }>();
+    if (!d) return err("Documentul nu există.", 404);
+    const ext = d.filename.match(/\.\w{2,5}$/)?.[0] ?? "";
+    let name = String(b.name ?? "").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "").trim().slice(0, 140);
+    if (ext && !name.toLowerCase().endsWith(ext.toLowerCase())) name += ext;
+    if (!name || name === ext) return err("Scrie un nume.");
+    if (name !== d.filename) {
+      const taken = await sameName(a.db, id, d.folder, name, d.kind === "final" ? "final" : "source");
+      if (taken && taken.id !== d.id) return err(`În folder există deja „${name}”.`, 409);
+      await a.db.prepare("UPDATE report_documents SET filename = ? WHERE id = ?").bind(name, d.id).run();
+      await audit(a.db, actor, "report.document_rename", "report", id, `${d.filename} → ${name}`);
+    }
+    return Response.json({ ok: true, name });
+  }
+  // An earlier version made current: `{ restore: <doc id>, version: <version id> }`.
+  if (typeof b.restore === "string") {
+    const v = await restoreVersion(a.db, id, b.restore, String(b.version ?? ""), a.user.id);
+    if (!v) return err("Versiunea nu mai există.", 404);
+    await audit(a.db, actor, "report.document_restore", "report", id, `versiunea restaurată devine ${v}`);
+    return Response.json({ ok: true, version: v });
+  }
   // The ticks for the inspector, all at once ("Actualizează la inspector"): `{ insp: [{ doc, origin, on }] }`.
   if (Array.isArray(b.insp)) {
     const open = await a.db.prepare(`SELECT 1 AS x FROM inspections WHERE report_id = ? AND status IN ('to_schedule', 'scheduled') AND glide_id IS NULL AND inspector_id IS NOT NULL LIMIT 1`).bind(id).first();
@@ -191,8 +253,9 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   if ("res" in a) return a.res;
   const d = await a.db.prepare("SELECT id, filename, r2_key, status FROM report_documents WHERE id = ? AND report_id = ?").bind(docId, id).first<{ id: string; filename: string; r2_key: string | null; status: string }>();
   if (!d) return err("Documentul nu există.", 404);
-  if (d.r2_key) await (await bucket())?.delete(d.r2_key);
-  await a.db.prepare("DELETE FROM report_documents WHERE id = ?").bind(d.id).run();
+  const store = await bucket();
+  for (const k of new Set([d.r2_key, ...(await versionKeys(a.db, d.id))])) if (k) await store?.delete(k);
+  await a.db.batch([a.db.prepare("DELETE FROM report_document_versions WHERE doc_id = ?").bind(d.id), a.db.prepare("DELETE FROM report_documents WHERE id = ?").bind(d.id)]);
   await audit(a.db, `user:${a.user.id}`, d.status === "missing" ? "report.document_unrequest" : "report.document_remove", "report", id, d.status === "missing" ? `${d.filename}: nu mai e cerut` : d.filename);
   return Response.json({ ok: true });
 }

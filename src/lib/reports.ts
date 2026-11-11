@@ -274,6 +274,8 @@ export type ReportDocument = {
   id: string; report_id: string; kind: "source" | "final"; filename: string; content_type: string | null; size_bytes: number | null; r2_key: string | null;
   status: "uploaded" | "missing"; requested_at: string | null; uploaded_by_name: string | null; created_at: string;
   doc_type: string | null; asset_id: string | null;
+  /** Its folder (null: the default one) and the version of the file it holds. */
+  folder: string | null; version: number | null;
   /** Ticked for the inspector (null: the default, CF and RLV yes). */
   insp_visible: number | null;
 };

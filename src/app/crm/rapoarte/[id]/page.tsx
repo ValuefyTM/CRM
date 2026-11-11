@@ -18,7 +18,9 @@ import { AssetBoard } from "./AssetBoard";
 import { InspSheet } from "./InspSheet";
 import { inspectionSheetDoc } from "@/lib/insp-sheet-doc";
 import { getFirm } from "@/lib/settings";
-import { ReportDocs, type DocItem } from "./ReportDocs";
+import { ReportDocs, type DocItem, type DocPhoto } from "./ReportDocs";
+import { customFolders } from "@/lib/doc-folders";
+import { PHOTO_CATEGORIES } from "@/lib/insp-forms";
 import { ReferralEdit } from "@/components/ReferralPick";
 import { FramingEdit, type Party } from "./FramingEdit";
 import { PURPOSES } from "@/lib/order-labels";
@@ -268,22 +270,34 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const docItems: DocItem[] = [
     // the final report first, in red, among the report's own documents (not on an asset)
     ...(final ? [{ id: final.id, name: final.filename, kind: "final", asset_id: null, status: "uploaded", origin: "report", href: `/api/crm/reports/${r.id}/documents/${final.id}`,
-      size: final.size_bytes, at: final.created_at, by: final.uploaded_by_name, final: true } satisfies DocItem] : []),
+      size: final.size_bytes, at: final.created_at, by: final.uploaded_by_name, final: true, folder: final.folder ?? "livrabile", version: final.version ?? 1 } satisfies DocItem] : []),
     ...sources.map((x): DocItem => ({ id: x.id, name: x.filename, kind: x.doc_type ?? guessDocKind(x.filename), asset_id: x.asset_id, status: x.status === "missing" ? "missing" : "uploaded", origin: "report",
       href: x.status === "missing" ? null : `/api/crm/reports/${r.id}/documents/${x.id}`, size: x.size_bytes, at: x.status === "missing" ? x.requested_at : x.created_at, by: x.uploaded_by_name,
+      folder: x.folder ?? (x.asset_id ? `a:${x.asset_id}:acte` : "root"), version: x.version ?? 1,
       insp: x.kind === "source" && x.status !== "missing" ? inspVisible(x.insp_visible, typeOfReportDoc(x.doc_type, x.filename)) : undefined })),
-    ...orderDocs.map((x): DocItem => ({ id: x.id, name: x.filename, kind: guessDocKind(x.filename), asset_id: null, status: "uploaded", origin: "order", href: `/api/crm/orders/${r.order_id}/documents/${x.id}`, size: x.size_bytes, at: x.created_at, by: null,
+    ...orderDocs.map((x): DocItem => ({ id: x.id, name: x.filename, kind: guessDocKind(x.filename), asset_id: null, status: "uploaded", origin: "order", href: `/api/crm/orders/${r.order_id}/documents/${x.id}`, size: x.size_bytes, at: x.created_at, by: null, folder: "root",
       insp: inspVisible(x.insp_visible, typeOfOrderDoc(x.kind, x.filename)) })),
     ...assets.flatMap((a) => [
       a.cf_file ? { name: `Extras CF ${a.cf_number ?? ""}`.trim(), path: a.cf_file, kind: "cf" } : null,
       a.plan_file ? { name: `Releveu ${cap(a.type)}`.trim(), path: a.plan_file, kind: "rlv" } : null,
-    ].filter((x): x is { name: string; path: string; kind: string } => !!x).map((f): DocItem => ({ id: f.path, name: f.name, kind: f.kind, asset_id: a.id, status: "uploaded", origin: "glide", href: null, size: null, at: null, by: null, insp: true }))),
+    ].filter((x): x is { name: string; path: string; kind: string } => !!x).map((f): DocItem => ({ id: f.path, name: f.name, kind: f.kind, asset_id: a.id, status: "uploaded", origin: "glide", href: null, size: null, at: null, by: null, insp: true, folder: `a:${a.id}:acte` }))),
   ];
   // what the legal check read from the documents (name of the act, number, date, issuer), and its newest results
   const [readings, legal] = tab === "documente"
     ? await Promise.all([docReadings(db, docItems.filter((d) => d.origin !== "glide").map((d) => `${d.origin === "order" ? "o" : "r"}:${d.id}`)), latestChecks(db, r.id)])
     : [{}, []] as [Awaited<ReturnType<typeof docReadings>>, Awaited<ReturnType<typeof latestChecks>>];
   for (const d of docItems) { const x = readings[`${d.origin === "order" ? "o" : "r"}:${d.id}`]; if (x) d.read = x; }
+  // the folders: the ones made by the team, and the inspection photos of each asset („Poze inspecție”)
+  const [docFolders, docPhotos] = tab === "documente" ? await Promise.all([
+    customFolders(db, r.id),
+    db.prepare(`SELECT f.id, f.r2_key, f.caption, f.category, f.album, f.taken_at, f.size_bytes, i.asset_id FROM inspection_photos f JOIN inspections i ON i.id = f.inspection_id
+        WHERE i.report_id = ? AND f.deleted_at IS NULL ORDER BY i.asset_id, f.sort, f.taken_at LIMIT 600`).bind(r.id)
+      .all<{ id: string; r2_key: string; caption: string | null; category: string | null; album: string | null; taken_at: string | null; size_bytes: number | null; asset_id: string }>()
+      .then((x) => x.results).catch(() => []),
+  ]) : [[], []];
+  const photoLabel = (c: string | null) => PHOTO_CATEGORIES.find((x) => x.k === c)?.label ?? "Altele";
+  const photoItems: DocPhoto[] = docPhotos.map((p, i) => ({ id: p.id, asset: p.asset_id, src: fileSrc(`r2:${p.r2_key}`) ?? "", at: p.taken_at, size: p.size_bytes,
+    group: p.album || photoLabel(p.category), name: `${(p.album || p.caption || photoLabel(p.category)).slice(0, 40)} ${String(i + 1).padStart(2, "0")}.${(p.r2_key.match(/\.(\w{3,4})$/)?.[1] ?? "jpg").toLowerCase()}` }));
   const sheets = assets.filter((a) => a.sheet_type && (a.sheet_photo || a.sheet_person || a.inspection_status === "done"));
   // The list of assets: its title with the inspection button (allocate while some asset has none, else reallocate the open
   // ones), and "Adaugă bun" at its end.
@@ -650,7 +664,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
       )}
 
       {tab === "documente" && (
-        <ReportDocs tools={assets.some((a) => a.category !== "BUN MOBIL") ? <LegalCheck report={r.id} canRun={c.docs} enabled={legalEnabled()} checks={legal}
+        <ReportDocs title={r.number ? `Raport ${r.number}` : "Raportul"} folders={docFolders} photos={photoItems}
+          sheets={sheets.map((a) => ({ asset: a.id, href: `${base}/rapoarte/${r.id}/fisa/${a.id}` }))} tools={assets.some((a) => a.category !== "BUN MOBIL") ? <LegalCheck report={r.id} canRun={c.docs} enabled={legalEnabled()} checks={legal}
             assets={assets.filter((a) => a.category !== "BUN MOBIL").map((a) => ({ id: a.id, label: assetShort(a), hasDocs: docItems.some((d) => !d.final && d.status === "uploaded" && d.origin !== "glide" && (!d.asset_id || d.asset_id === a.id)) }))} /> : null}
           inspOpen={assets.some(isActive)} inspSent={inspSent} report={r.id} assets={assets.map((a) => ({ id: a.id, label: assetShort(a), sub: a.full_address ?? a.city }))} items={docItems} edit={c.docs} remove={c.docsDelete}
           missing={c.docs ? <><span className="muted">Lipsește un act de la client?</span><MissingDoc id={r.id} /></> : null}

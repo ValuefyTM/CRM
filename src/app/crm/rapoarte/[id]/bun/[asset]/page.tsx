@@ -18,7 +18,8 @@ import { Face, WithFace } from "@/components/Avatar";
 import { InspSheet } from "../../InspSheet";
 import { RevisionAsk } from "../../../RevisionAsk";
 import { canAssign } from "@/lib/insp-assign";
-import { ReportDocs, type DocItem } from "../../ReportDocs";
+import { ReportDocs, type DocItem, type DocPhoto } from "../../ReportDocs";
+import { customFolders } from "@/lib/doc-folders";
 import { SafeImg } from "../../ReportActions";
 import { AssetPhotos, type Photo } from "./AssetPhotos";
 import { SimilarReports } from "../../SimilarReports";
@@ -178,11 +179,11 @@ export default async function AssetPage({ params, searchParams }: {
   const docItems: DocItem[] = [
     ...docs.filter((x) => x.kind === "source" && (!x.asset_id || x.asset_id === a.id)).map((x): DocItem => ({ id: x.id, name: x.filename, kind: x.doc_type ?? guessDocKind(x.filename), asset_id: x.asset_id,
       status: x.status === "missing" ? "missing" : "uploaded", origin: "report", href: x.status === "missing" ? null : `/api/crm/reports/${r.id}/documents/${x.id}`, size: x.size_bytes,
-      at: x.status === "missing" ? x.requested_at : x.created_at, by: x.uploaded_by_name })),
-    ...orderDocs.map((x): DocItem => ({ id: x.id, name: x.filename, kind: guessDocKind(x.filename), asset_id: null, status: "uploaded", origin: "order", href: `/api/crm/orders/${r.order_id}/documents/${x.id}`, size: x.size_bytes, at: x.created_at, by: null })),
+      at: x.status === "missing" ? x.requested_at : x.created_at, by: x.uploaded_by_name, folder: x.folder ?? (x.asset_id ? `a:${x.asset_id}:acte` : "root"), version: x.version ?? 1 })),
+    ...orderDocs.map((x): DocItem => ({ id: x.id, name: x.filename, kind: guessDocKind(x.filename), asset_id: null, status: "uploaded", origin: "order", href: `/api/crm/orders/${r.order_id}/documents/${x.id}`, size: x.size_bytes, at: x.created_at, by: null, folder: "root" })),
     ...[a.cf_file ? { name: `Extras CF ${a.cf_number ?? ""}`.trim(), path: a.cf_file, kind: "cf" } : null, a.plan_file ? { name: `Releveu ${cap(a.type)}`.trim(), path: a.plan_file, kind: "rlv" } : null]
       .filter((x): x is { name: string; path: string; kind: string } => !!x)
-      .map((f): DocItem => ({ id: f.path, name: f.name, kind: f.kind, asset_id: a.id, status: "uploaded", origin: "glide", href: null, size: null, at: null, by: null })),
+      .map((f): DocItem => ({ id: f.path, name: f.name, kind: f.kind, asset_id: a.id, status: "uploaded", origin: "glide", href: null, size: null, at: null, by: null, folder: `a:${a.id}:acte` })),
   ];
 
   // The details this type of asset has.
@@ -205,6 +206,18 @@ export default async function AssetPage({ params, searchParams }: {
     ...(analytics ? [["analiza", "Istoric valoare", series.length] as [Tab, string, number]] : []),
   ];
   const tab: Tab = nav.find(([k]) => k === asked)?.[0] ?? "prezentare";
+  // the folders made by the team and the inspection photos of the asset (its „Poze inspecție”), for the documents tab
+  const [actFolders, actPhotos] = tab === "acte" ? await Promise.all([
+    customFolders(db, id),
+    db.prepare(`SELECT f.id, f.r2_key, f.caption, f.category, f.album, f.taken_at, f.size_bytes FROM inspection_photos f JOIN inspections i ON i.id = f.inspection_id
+        WHERE i.asset_id = ? AND f.deleted_at IS NULL ORDER BY f.sort, f.taken_at LIMIT 400`).bind(a.id)
+      .all<{ id: string; r2_key: string; caption: string | null; category: string | null; album: string | null; taken_at: string | null; size_bytes: number | null }>()
+      .then((x) => x.results.map((p, i): DocPhoto => {
+        const g = p.album || PHOTO_CATEGORIES.find((c) => c.k === p.category)?.label || "Altele";
+        return { id: p.id, asset: a.id, src: fileSrc(`r2:${p.r2_key}`) ?? "", at: p.taken_at, size: p.size_bytes, group: g, name: `${(p.album || p.caption || g).slice(0, 40)} ${String(i + 1).padStart(2, "0")}.jpg` };
+      })).catch(() => [] as DocPhoto[]),
+  ]) : [[], [] as DocPhoto[]];
+
   // the site analysis, only for real estate (not vehicles or equipment)
   const realEstate = !/auto|vehicul|echipament|utilaj|mobil/i.test(`${a.category ?? ""} ${a.type ?? ""}`);
   const [site, siteDocList, siteEval] = tab === "amplasament" ? await Promise.all([siteOf(db, a.id), siteDocs(db, id, a.id, a.cf_file),
@@ -498,7 +511,8 @@ export default async function AssetPage({ params, searchParams }: {
         <div className="axEntry"><div><b>Anexă documente</b><span>Pui actele (PDF, imagini) în ordine, alegi, rotești sau scoți pagini, cu titlu pe fiecare document, apoi descarci PDF sau Word.</span></div>
           <a className="btn btnGold btnSm" href={`${base}/rapoarte/${id}/bun/${a.id}/anexa?mod=acte`}>Fă anexa documente →</a></div>
       )}
-      {tab === "acte" && <ReportDocs report={id} assets={[{ id: a.id, label: cap(a.type) || "Bunul", sub: address }]} items={docItems} edit={acc.can.docs} remove={acc.can.docsDelete} />}
+      {tab === "acte" && <ReportDocs report={id} title={r.number ? `Raport ${r.number}` : "Raportul"} start={`a:${a.id}`} assets={[{ id: a.id, label: cap(a.type) || "Bunul", sub: address }]} items={docItems}
+        folders={actFolders} photos={actPhotos} sheets={[]} edit={acc.can.docs} remove={acc.can.docsDelete} />}
 
       {tab === "amplasament" && (
         <SiteAnalysis report={id} asset={a.id} initial={site} docs={siteDocList.map((d) => ({ ref: d.ref, name: d.name, kind: d.kind }))}
