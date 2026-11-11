@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PdfThumb } from "@/components/PdfThumb";
+import { PdfPages } from "@/components/PdfPages";
 import { DOC_KINDS, DOC_KIND_KEYS, docKindLabel, guessDocKind } from "@/lib/doc-kinds";
 
 export type DocItem = {
@@ -17,8 +18,8 @@ export type DocItem = {
   insp?: boolean;
   /** The final report (PDF signed, delivered): marked so in „Dosar de lucru”, in red. */
   final?: boolean;
-  /** Marked as the working grid or the report in Word. */
-  role?: "grid" | "word" | null;
+  /** Marked as the working grid or the report in Word; or an annex generated here (annex_foto / annex_acte, and its Word: …_word). */
+  role?: string | null;
   /** What the legal check read from it: the name of the act, its number, date and issuer. */
   read?: { title: string; number: string | null; date: string | null; issuer: string | null };
   /** The folder it sits in (a folder key: root, livrabile, a:<asset>[:acte|:poze], f:<id>). */
@@ -116,7 +117,8 @@ export function ReportDocs({ report, title, start = "root", assets, items, folde
     return out;
   }, [assets, folders, title]);
   const nodeOf = useCallback((k: string) => nodes.find((n) => n.key === k) ?? nodes[0], [nodes]);
-  const docsIn = useCallback((k: string) => items.filter((d) => (nodes.some((n) => n.key === d.folder) ? d.folder : "root") === k), [items, nodes]);
+  // (the Word of an annex is not a file of its own here: it is downloaded from the annex's preview)
+  const docsIn = useCallback((k: string) => items.filter((d) => !d.role?.endsWith("_word") && (nodes.some((n) => n.key === d.folder) ? d.folder : "root") === k), [items, nodes]);
   const entriesIn = useCallback((k: string): Entry[] => {
     const subs = nodes.filter((n) => n.parent === k).map((n): Entry => ({ key: n.key, type: "folder", name: n.name, node: n }));
     const docs = docsIn(k).map((d): Entry => ({ key: keyOfDoc(d), type: "doc", name: d.name, doc: d }));
@@ -175,6 +177,7 @@ export function ReportDocs({ report, title, start = "root", assets, items, folde
   const open = (en: Entry) => {
     if (en.type === "folder") return go(en.key);
     if (en.type === "doc" && en.doc.status === "missing") { if (edit) pickFor(en.doc); return; }
+    if (en.type === "doc" && en.doc.role?.startsWith("annex_")) { setPreview(en.doc); return; }
     const href = en.type === "doc" ? en.doc.href : en.type === "photo" ? en.photo.src : en.href;
     if (href) window.open(href, "_blank", "noopener");
   };
@@ -297,6 +300,16 @@ export function ReportDocs({ report, title, start = "root", assets, items, folde
     if (v && (await call(`/api/crm/reports/${report}/documents`, "PATCH", { restore: docId, version: v.id }))) { setToast({ text: "Înlocuirea a fost anulată: fișierul de dinainte e din nou cel curent." }); router.refresh(); }
   };
 
+  // ---------- an annex: its preview, with the PDF and the Word to download ----------
+  const [preview, setPreview] = useState<DocItem | null>(null);
+  const wordOf = (d: DocItem) => items.find((x) => x.role === `${d.role}_word` && x.status === "uploaded");
+  useEffect(() => {
+    if (!preview) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setPreview(null); };
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [preview]);
+
   // ---------- context menu ----------
   const [menu, setMenu] = useState<{ x: number; y: number; mode: "main" | "move" | "type" } | null>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -370,6 +383,8 @@ export function ReportDocs({ report, title, start = "root", assets, items, folde
   );
   const tag = (en: Entry) => en.type === "doc" ? (
     en.doc.final ? <em className="fxTag red">RAPORT FINAL</em>
+      : en.doc.role === "annex_foto" ? <em className="fxTag teal">ANEXĂ FOTO</em>
+      : en.doc.role === "annex_acte" ? <em className="fxTag teal">ANEXĂ ACTE</em>
       : en.doc.role === "grid" ? <em className="fxTag green">GRILĂ</em>
       : en.doc.role === "word" ? <em className="fxTag blue">RAPORT WORD</em>
       : en.doc.status === "missing" ? <em className="fxTag red">lipsă</em>
@@ -444,7 +459,7 @@ export function ReportDocs({ report, title, start = "root", assets, items, folde
       </div>
       {msg && <p className="adMsg pad" role="alert">{msg}</p>}
       {cwd === "livrabile" && (() => {
-        const d = one?.type === "doc" && one.doc.origin === "report" && one.doc.status === "uploaded" ? one.doc : null;
+        const d = one?.type === "doc" && one.doc.origin === "report" && one.doc.status === "uploaded" && !one.doc.role?.startsWith("annex_") ? one.doc : null;
         const roleOf = (x: DocItem) => (x.final ? "final" : x.role ?? null);
         const has = (r: string) => items.find((x) => roleOf(x) === r);
         if (!d) return (
@@ -544,7 +559,7 @@ export function ReportDocs({ report, title, start = "root", assets, items, folde
               {one && canRename(one) && <button type="button" role="menuitem" onClick={() => { setMenu(null); setRenaming(one.key); }}><span className="fxMIc">✎</span><span>Redenumește</span><small>F2</small></button>}
               {edit && picked.some(movable) && <button type="button" role="menuitem" onClick={() => setMenu({ ...menu, mode: "move" })}><span className="fxMIc">→</span><span>Mută în</span><small>›</small></button>}
               {one?.type === "doc" && one.doc.origin === "report" && !one.doc.final && one.doc.status === "uploaded" && edit && <button type="button" role="menuitem" onClick={() => setMenu({ ...menu, mode: "type" })}><span className="fxMIc">▤</span><span>Tip document · {docKindLabel(kindOf(one.doc))}</span><small>›</small></button>}
-              {one?.type === "doc" && one.doc.origin === "report" && one.doc.status === "uploaded" && edit && MARKS.filter(([k]) => MARK_OK[k].test(one.name)).map(([k, l]) => {
+              {one?.type === "doc" && one.doc.origin === "report" && one.doc.status === "uploaded" && !one.doc.role?.startsWith("annex_") && edit && MARKS.filter(([k]) => MARK_OK[k].test(one.name)).map(([k, l]) => {
                 const on = (one.doc.final ? "final" : one.doc.role) === k;
                 return <button key={k} type="button" role="menuitemcheckbox" aria-checked={on} onClick={() => { setMenu(null); mark((one as { doc: DocItem }).doc, on ? null : k); }}><span className="fxMIc">{on ? "✓" : "★"}</span><span>{on ? `Marcat: ${l}` : `Marchează ca ${l}`}</span></button>;
               })}
@@ -586,6 +601,24 @@ export function ReportDocs({ report, title, start = "root", assets, items, folde
             <button type="button" className="linkBtn" onClick={() => { const d = toast.doc!; setToast(null); undoReplace(d); }}>Anulează</button>
           </>}
           <button type="button" className="fxToastX" aria-label="Închide" onClick={() => setToast(null)}>×</button>
+        </div>
+      )}
+
+      {preview && (
+        <div className="vfModal" role="dialog" aria-modal="true" aria-label={preview.name} onClick={(e) => { if (e.target === e.currentTarget) setPreview(null); }}>
+          <div className="vfModalBox fxPreview">
+            <div className="cardHead">
+              <h2>{preview.role === "annex_foto" ? "Anexa foto" : "Anexa acte"} <small className="muted">· {when(preview.at)}{preview.by ? ` · ${preview.by}` : ""}</small></h2>
+              <span className="actions">
+                {preview.href && <a className="btn btnGold btnSm" href={preview.href} download={preview.name}>Descarcă PDF</a>}
+                {wordOf(preview)?.href ? <a className="btn btnGhost btnSm" href={wordOf(preview)!.href!} download={wordOf(preview)!.name}>Descarcă Word</a>
+                  : <span className="muted" title="Generează din nou anexa ca să aibă și varianta Word">fără Word</span>}
+                {preview.href && <a className="btn btnGhost btnSm" href={preview.href} target="_blank" rel="noopener">Filă nouă ↗</a>}
+                <button type="button" className="btn btnGhost btnSm" aria-label="Închide" onClick={() => setPreview(null)}>×</button>
+              </span>
+            </div>
+            {preview.href && <div className="fxPreviewFrame"><PdfPages url={`${preview.href}?t=${encodeURIComponent(preview.at ?? "")}`} /></div>}
+          </div>
         </div>
       )}
 

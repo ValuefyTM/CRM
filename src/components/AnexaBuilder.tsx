@@ -1,7 +1,7 @@
 "use client";
 // Anexă foto / Anexă documente, as UVALO's Word add-in: the photos (or the pages of the documents) of an asset, ticked,
 // ordered, rotated, described, then laid out (so many per page, captions, titles, page and margins) and exported as a
-// PDF or a Word document — or saved as a PDF among the report's documents. The list (order, ticks, descriptions,
+// PDF or a Word document — or generated (both) into the report's folder, from „Acte & livrare”. The list (order, ticks, descriptions,
 // rotations, document titles) and the settings are kept in this browser.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULTS, DPI, GRIDS, RATIOS, SHEETS, docTitleFrom, layout, settingsOf, turned, type Item, type Mode, type Page, type Settings } from "@/lib/anexa-layout";
@@ -20,8 +20,10 @@ const read = <T,>(k: string): T | null => { try { const v = localStorage.getItem
 const write = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* full or blocked */ } };
 const cmpName = (a: El, b: El) => a.name.localeCompare(b.name, "ro", { numeric: true });
 
-export function AnexaBuilder({ mode, scope, photos, inspections, docs: srcDocs, fileBase, report, asset, canSave }: {
-  mode: Mode; scope: string; photos: SrcPhoto[]; inspections: { id: string; label: string }[]; docs: SrcDoc[]; fileBase: string; report: string; asset: string; canSave: boolean;
+export function AnexaBuilder({ mode, scope, photos, inspections, docs: srcDocs, fileBase, onGenerate }: {
+  mode: Mode; scope: string; photos: SrcPhoto[]; inspections: { id: string; label: string }[]; docs: SrcDoc[]; fileBase: string;
+  /** „Generează anexa”: the PDF and the Word made, handed over (saved in the report's folder). */
+  onGenerate?: (pdf: Blob, docx: Blob, pages: number) => Promise<void>;
 }) {
   const KEY = `anexa:${scope}`, SKEY = `anexa-settings:${mode}`;
   const [tab, setTab] = useState<"lista" | "aranjare" | "previzualizare">("lista");
@@ -195,6 +197,22 @@ export function AnexaBuilder({ mode, scope, photos, inspections, docs: srcDocs, 
   // ---- export
   const srcOf = (id: string): Source | null => { const e = els.find((x) => x.id === id); return e ? (e.kind === "pdf" ? { kind: "pdf", url: e.url, page: e.page } : { kind: "img", url: e.url }) : null; };
   const run = async (what: "pdf" | "docx" | "save") => {
+    if (what === "save" && onGenerate) {
+      if (!ticked.length) return setMsg({ ok: false, t: "Bifează cel puțin un element." });
+      setMsg(null);
+      try {
+        const prog = (done: number, total: number, w: string) => setBusy({ done, total, what: w });
+        setBusy({ done: 0, total: ticked.length, what: "PDF" });
+        const pdf = await exportPdf(s, lay.pages, srcOf, (d, t, w) => prog(d, t, `PDF · ${w}`));
+        setBusy({ done: 0, total: ticked.length, what: "Word" });
+        const docx = await exportDocx(s, lay.pages, srcOf, (d, t, w) => prog(d, t, `Word · ${w}`));
+        setBusy({ done: ticked.length, total: ticked.length, what: "Salvez în folderul raportului…" });
+        await onGenerate(pdf, docx, lay.pages.length);
+      } catch (e) {
+        setMsg({ ok: false, t: (e as Error).message || "Anexa nu s-a putut genera." });
+      } finally { setBusy(null); }
+      return;
+    }
     if (!ticked.length) return setMsg({ ok: false, t: "Bifează cel puțin un element." });
     setMsg(null);
     const prog = (done: number, total: number, w: string) => setBusy({ done, total, what: w });
@@ -202,15 +220,7 @@ export function AnexaBuilder({ mode, scope, photos, inspections, docs: srcDocs, 
       setBusy({ done: 0, total: ticked.length, what: "" });
       const blob = what === "docx" ? await exportDocx(s, lay.pages, srcOf, prog) : await exportPdf(s, lay.pages, srcOf, prog);
       const name = `${fileBase}.${what === "docx" ? "docx" : "pdf"}`;
-      if (what === "save") {
-        setBusy({ done: ticked.length, total: ticked.length, what: "Salvez în actele raportului…" });
-        const fd = new FormData();
-        fd.append("file", new File([blob], name, { type: "application/pdf" })); fd.append("kind", "source"); fd.append("asset", asset);
-        const r = await fetch(`/api/crm/reports/${report}/documents`, { method: "POST", body: fd }).catch(() => null);
-        const d = (await r?.json().catch(() => ({}))) as { error?: string };
-        if (!r?.ok) throw new Error(d?.error ?? "Nu s-a putut salva.");
-        setMsg({ ok: true, t: `Salvat în actele raportului: ${name} (${lay.pages.length} ${lay.pages.length === 1 ? "pagină" : "pagini"}).` });
-      } else {
+      {
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(a.href), 30000);
@@ -272,7 +282,7 @@ export function AnexaBuilder({ mode, scope, photos, inspections, docs: srcDocs, 
         <span className="axGo">
           <button type="button" className="btn btnGhost btnSm" disabled={!!busy || !ticked.length} onClick={() => run("docx")}>Descarcă Word</button>
           <button type="button" className="btn btnGold btnSm" disabled={!!busy || !ticked.length} onClick={() => run("pdf")}>Descarcă PDF · {lay.pages.length} {lay.pages.length === 1 ? "pagină" : "pagini"}</button>
-          {canSave && <button type="button" className="btn btnNavy btnSm" disabled={!!busy || !ticked.length} onClick={() => run("save")}>Salvează în actele raportului</button>}
+          {onGenerate && <button type="button" className="btn btnNavy btnSm" disabled={!!busy || !ticked.length} onClick={() => run("save")}>Generează anexa (PDF + Word)</button>}
         </span>
       </nav>
       {busy && <div className="axBusy" role="status"><span style={{ width: `${busy.total ? (busy.done / busy.total) * 100 : 0}%` }} /><b>{busy.what ? `${busy.done} / ${busy.total} · ${busy.what}` : "Se pregătește…"}</b></div>}

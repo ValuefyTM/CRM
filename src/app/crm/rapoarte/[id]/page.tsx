@@ -20,6 +20,8 @@ import { inspectionSheetDoc } from "@/lib/insp-sheet-doc";
 import { getFirm } from "@/lib/settings";
 import { ReportDocs, type DocItem, type DocPhoto } from "./ReportDocs";
 import { customFolders, needsWorkFiles } from "@/lib/doc-folders";
+import { annexName } from "@/lib/annex-sources";
+import { AnnexTools } from "./AnnexTools";
 import { PHOTO_CATEGORIES } from "@/lib/insp-forms";
 import { ReferralEdit } from "@/components/ReferralPick";
 import { FramingEdit, type Party } from "./FramingEdit";
@@ -102,10 +104,10 @@ function Row({ k, children }: { k: string; children?: React.ReactNode }) {
   return <div><dt>{k}</dt><dd>{children ?? "—"}</dd></div>;
 }
 
-export default async function ReportPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; alocare?: string; bun?: string; predare?: string }> }) {
+export default async function ReportPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; alocare?: string; bun?: string; predare?: string; anexa?: string }> }) {
   const { db, user, base } = await staffPage();
   const { id } = await params;
-  const { tab: asked, alocare, bun, predare } = await searchParams;
+  const { tab: asked, alocare, bun, predare, anexa } = await searchParams;
   const wanted = asked && OLD_TABS[asked] ? OLD_TABS[asked] : asked;
   const tab: Tab = TABS.find(([k]) => k === wanted)?.[0] ?? "general";
   const r = await getReport(db, id);
@@ -198,6 +200,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const recipients: Recipient[] = [];
   if (r.recipient_id) recipients.push({ id: r.recipient_id, name: niceName(r.bank_name) || "—", kind: r.recipient_kind, role: "Finanțator / utilizator desemnat", contact: [r.recipient_email, r.recipient_phone, r.recipient_code && `cod ${r.recipient_code}`].filter(Boolean).join(" · "), logo: fileSrc(r.bank_logo) });
   if (r.client_id) recipients.push({ id: r.client_id, name: niceName(r.client_name) || "—", kind: r.client_kind, role: r.recipient_id ? "Client / proprietar" : "Client / utilizator desemnat", contact: [r.client_phone, r.client_email].filter(Boolean).join(" · "), link: true, logo: fileSrc(r.client_logo) });
+  // the annexes generated in „Acte & livrare” (their PDF; the Word beside it)
+  const annexDone = (role: string) => { const d = sources.find((x) => x.role === role && x.status === "uploaded"); return d ? { id: d.id, at: d.created_at, href: `/api/crm/reports/${r.id}/documents/${d.id}` } : null; };
   const gridDoc = sources.find((d) => d.role === "grid" && d.status === "uploaded");
   const wordDoc = sources.find((d) => d.role === "word" && d.status === "uploaded");
   // the grid and the report in Word are marked before delivery, except for BCR and BRD (made in the bank's application)
@@ -282,7 +286,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
       size: final.size_bytes, at: final.created_at, by: final.uploaded_by_name, final: true, folder: final.folder ?? "livrabile", version: final.version ?? 1 } satisfies DocItem] : []),
     ...sources.map((x): DocItem => ({ id: x.id, name: x.filename, kind: x.doc_type ?? guessDocKind(x.filename), asset_id: x.asset_id, status: x.status === "missing" ? "missing" : "uploaded", origin: "report",
       href: x.status === "missing" ? null : `/api/crm/reports/${r.id}/documents/${x.id}`, size: x.size_bytes, at: x.status === "missing" ? x.requested_at : x.created_at, by: x.uploaded_by_name,
-      folder: x.folder ?? (x.asset_id ? `a:${x.asset_id}:acte` : "root"), version: x.version ?? 1, role: x.role === "grid" || x.role === "word" ? x.role : null,
+      folder: x.folder ?? (x.asset_id ? `a:${x.asset_id}:acte` : "root"), version: x.version ?? 1, role: x.role,
       insp: x.kind === "source" && x.status !== "missing" ? inspVisible(x.insp_visible, typeOfReportDoc(x.doc_type, x.filename)) : undefined })),
     ...orderDocs.map((x): DocItem => ({ id: x.id, name: x.filename, kind: guessDocKind(x.filename), asset_id: null, status: "uploaded", origin: "order", href: `/api/crm/orders/${r.order_id}/documents/${x.id}`, size: x.size_bytes, at: x.created_at, by: null, folder: "root",
       insp: inspVisible(x.insp_visible, typeOfOrderDoc(x.kind, x.filename)) })),
@@ -674,8 +678,12 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
 
       {tab === "documente" && (
         <ReportDocs title={r.number ? `Raport ${r.number}` : "Raportul"} folders={docFolders} photos={photoItems}
-          sheets={sheets.map((a) => ({ asset: a.id, href: `${base}/rapoarte/${r.id}/fisa/${a.id}` }))} tools={assets.some((a) => a.category !== "BUN MOBIL") ? <LegalCheck report={r.id} canRun={c.docs} enabled={legalEnabled()} checks={legal}
+          sheets={sheets.map((a) => ({ asset: a.id, href: `${base}/rapoarte/${r.id}/fisa/${a.id}` }))} tools={<>{assets.some((a) => a.category !== "BUN MOBIL") ? <LegalCheck report={r.id} canRun={c.docs} enabled={legalEnabled()} checks={legal}
             assets={assets.filter((a) => a.category !== "BUN MOBIL").map((a) => ({ id: a.id, label: assetShort(a), hasDocs: docItems.some((d) => !d.final && d.status === "uploaded" && d.origin !== "glide" && (!d.asset_id || d.asset_id === a.id)) }))} /> : null}
+            <AnnexTools report={r.id} edit={c.docs && !acc.locked} autoOpen={anexa === "foto" || anexa === "acte" ? anexa : null}
+              assets={assets.filter((a) => a.category !== "BUN MOBIL").map((a) => ({ id: a.id, label: assetShort(a), sub: a.full_address ?? a.city }))}
+              names={{ foto: annexName("foto", r.number), acte: annexName("acte", r.number) }}
+              done={{ foto: annexDone("annex_foto"), acte: annexDone("annex_acte") }} /></>}
           inspOpen={assets.some(isActive)} inspSent={inspSent} report={r.id} assets={assets.map((a) => ({ id: a.id, label: assetShort(a), sub: a.full_address ?? a.city }))} items={docItems} edit={c.docs} remove={c.docsDelete}
           missing={c.docs ? <><span className="muted">Lipsește un act de la client?</span><MissingDoc id={r.id} /></> : null}
           deliver={

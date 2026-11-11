@@ -499,18 +499,10 @@ export default async function AssetPage({ params, searchParams }: {
       )}
 
       {tab === "fotografii" && (
-        <div className="axEntry"><div><b>Anexă foto</b><span>Alegi pozele și ordinea, câte pe pagină, legendele și titlul, apoi descarci PDF sau Word (ca în add-in-ul UVALO din Word).</span></div>
-          <a className="btn btnGold btnSm" href={`${base}/rapoarte/${id}/bun/${a.id}/anexa?mod=foto`}>Fă anexa foto →</a></div>
-      )}
-      {tab === "fotografii" && (
         <AssetPhotos report={id} name={zipName} photos={photos} covers={covers} edit={acc.can.assets}
           inspections={insp.filter((i) => photos.some((x) => x.inspection === i.id)).map((i) => ({ id: i.id, label: `Inspecția din ${fmtDate(i.done_at ?? i.scheduled_at ?? i.created_at)}${i.inspector ? ` · ${i.inspector}` : ""}` }))} />
       )}
 
-      {tab === "acte" && (
-        <div className="axEntry"><div><b>Anexă documente</b><span>Pui actele (PDF, imagini) în ordine, alegi, rotești sau scoți pagini, cu titlu pe fiecare document, apoi descarci PDF sau Word.</span></div>
-          <a className="btn btnGold btnSm" href={`${base}/rapoarte/${id}/bun/${a.id}/anexa?mod=acte`}>Fă anexa documente →</a></div>
-      )}
       {tab === "acte" && <ReportDocs report={id} title={r.number ? `Raport ${r.number}` : "Raportul"} start={`a:${a.id}`} assets={[{ id: a.id, label: cap(a.type) || "Bunul", sub: address }]} items={docItems}
         folders={actFolders} photos={actPhotos} sheets={[]} edit={acc.can.docs} remove={acc.can.docsDelete} />}
 
@@ -519,7 +511,7 @@ export default async function AssetPage({ params, searchParams }: {
           nr={cadastralRoot(a.cad_land) ?? cadastralRoot(a.cad_building) ?? cadastralRoot(a.cf_number)} ll={ll} city={a.city} address={address}
           title={`${cap(a.type) || "Bun"}${address ? ` · ${address}` : ""}`}
           brand={{ company: firm.name, subtitle: firm.corp ? `Membru corporativ ANEVAR · autorizația nr. ${firm.corp}` : "", evaluator: siteEval?.name ?? "" }} edit={!from && (acc.can.edit || acc.can.assets)} ai={siteAiEnabled()} locator={locatorEnabled()}
-          draftHref={user.role === "owner" ? `${base}/rapoarte/${id}/redactare?bun=${a.id}` : null} annexHref={`${base}/rapoarte/${id}/bun/${a.id}/anexa?mod=foto`} />
+          draftHref={user.role === "owner" ? `${base}/rapoarte/${id}/redactare?bun=${a.id}` : null} annexHref={`${base}/rapoarte/${id}?tab=documente&anexa=foto`} />
       )}
 
       {tab === "analiza" && valueCard(true)}

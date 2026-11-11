@@ -11,6 +11,8 @@ import { isZip, unzipDocs } from "@/lib/unzip-docs";
 import { FOLDER_SQL, isInside, replaceDoc, resolveFolder, restoreVersion, sameName, versionKeys } from "@/lib/doc-folders";
 
 const OK = /\.(pdf|jpe?g|png|heic|heif|webp|docx?|xlsx?|zip)$/i;
+/** the annexes generated from „Acte & livrare” (PDF, and the same as Word) */
+const ANNEX_ROLES = ["annex_foto", "annex_foto_word", "annex_acte", "annex_acte_word"];
 
 /**
  * Report documents. Multipart `file` (+ `kind` = source | final, `doc` = id of a requested document it fulfils, `doc_type` = cf | rlv
@@ -124,6 +126,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       .bind(docId, id, kind, safe, file.type || null, file.size, key, a.user.id, docType, assetId, place?.key ?? null).run();
   }
   const savedId = prev?.id ?? missing?.id ?? docId;
+  // the report's annexes (generated in „Acte & livrare”): the PDF and its Word, one of each per report
+  const role = kind === "source" ? String(form?.get("role") ?? "") : "";
+  if (ANNEX_ROLES.includes(role)) {
+    await a.db.batch([
+      a.db.prepare("UPDATE report_documents SET role = NULL WHERE report_id = ? AND role = ? AND id <> ?").bind(id, role, savedId),
+      a.db.prepare("UPDATE report_documents SET role = ? WHERE id = ?").bind(role, savedId),
+    ]);
+  }
   await a.db.prepare("UPDATE reports SET updated_at = ?, uploaded_on = CASE WHEN ? = 'final' THEN ? ELSE uploaded_on END WHERE id = ?").bind(now(), kind, now().slice(0, 10), id).run();
   await audit(a.db, actor, kind === "final" ? "report.final" : "report.document", "report", id, version ? `${safe} · versiunea ${version}` : safe);
   // A document uploaded after the inspection was sent: it reaches the inspector in UVALO too (when it is to be seen).
