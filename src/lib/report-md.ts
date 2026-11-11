@@ -19,20 +19,33 @@ export const costOf = (input: number, output: number) => {
   return ((input * p.in + output * p.out) / 1e6) * 0.5;
 };
 
-const str = { type: ["string", "null"] } as const;
-const num = { type: ["number", "null"] } as const;
+// No nullable / union fields (the API allows at most 16): everything is a string, "" where the report does not say;
+// numbers come as digits and are converted below.
+const str = { type: "string" } as const;
 const obj = (properties: Record<string, unknown>) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
-/** What comes back: the Markdown and the facts (null where the report does not say). */
+/** What comes back: the Markdown and the facts. */
 const SCHEMA = obj({
-  markdown: { type: "string" },
+  markdown: str,
   facts: obj({
     numar_raport: str, data_raport: str, data_evaluarii: str, scop: str, tip_valoare: str, banca: str, client_tip: str,
-    moneda: str, curs_eur: num, valoare_finala: num, valoare_finala_eur: num, abordare_principala: str, evaluator: str,
-    bunuri: { type: "array", items: obj({ tip: str, adresa: str, localitate: str, judet: str, cf: str, nr_cadastral: str, suprafata_utila: num, suprafata_teren: num, an_constructie: num, valoare: num, abordare: str }) },
-    comparabile: { type: "array", items: obj({ tip: str, adresa: str, suprafata: num, pret: num, moneda: str, pret_mp: num, sursa: str, data: str }) },
-    ipoteze_speciale: { type: "array", items: { type: "string" } },
+    moneda: str, curs_eur: str, valoare_finala: str, valoare_finala_eur: str, abordare_principala: str, evaluator: str,
+    bunuri: { type: "array", items: obj({ tip: str, adresa: str, localitate: str, judet: str, cf: str, nr_cadastral: str, suprafata_utila: str, suprafata_teren: str, an_constructie: str, valoare: str, abordare: str }) },
+    comparabile: { type: "array", items: obj({ tip: str, adresa: str, suprafata: str, pret: str, moneda: str, pret_mp: str, sursa: str, data: str }) },
+    ipoteze_speciale: { type: "array", items: str },
   }),
 });
+const NUMERIC = new Set(["curs_eur", "valoare_finala", "valoare_finala_eur", "suprafata_utila", "suprafata_teren", "an_constructie", "valoare", "suprafata", "pret", "pret_mp"]);
+/** The facts as kept: "" → null, the numeric fields as numbers ("95.000,00" → 95000). */
+function tidy(v: unknown, key = ""): unknown {
+  if (Array.isArray(v)) return v.map((x) => tidy(x));
+  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([k, x]) => [k, tidy(x, k)]));
+  if (typeof v !== "string") return v;
+  const t = v.trim();
+  if (!t) return null;
+  if (!NUMERIC.has(key)) return t;
+  const n = Number(t.replace(/[^\d.,-]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", "."));
+  return Number.isFinite(n) ? n : t;
+}
 
 const PROMPT = `Documentul atașat este un raport de evaluare imobiliară (ANEVAR), PDF-ul final semnat.
 
@@ -42,7 +55,7 @@ const PROMPT = `Documentul atașat este un raport de evaluare imobiliară (ANEVA
    - fără antetele și subsolurile repetate pe fiecare pagină, fără numerotarea paginilor;
    - fotografiile și anexele foto doar pomenite: „[Anexă foto: N pagini]”; schițele, hărțile, extrasele CF scanate: un rând cu ce sunt;
    - date personale scoase: CNP, seria și numărul actului de identitate, telefon, e-mail → „[anonimizat]”; numele persoanelor fizice → inițiale (ex. „P. A.”); firmele, băncile, evaluatorii și adresele proprietăților rămân.
-2. „facts”: datele cheie, doar cum scrie în raport (null unde nu scrie): data raportului și a evaluării ca AAAA-LL-ZZ, moneda (RON sau EUR), valoarea finală și echivalentul în euro, abordarea principală, fiecare bun evaluat cu suprafețele și valoarea lui, comparabilele folosite (cu preț, preț/m² și sursa), ipotezele speciale. client_tip: „persoană fizică” sau „persoană juridică”.`;
+2. „facts”: datele cheie, doar cum scrie în raport (text gol „” unde nu scrie; cifrele scrise doar cu cifre, ex. „95000” sau „69.4”): data raportului și a evaluării ca AAAA-LL-ZZ, moneda (RON sau EUR), valoarea finală și echivalentul în euro, abordarea principală, fiecare bun evaluat cu suprafețele și valoarea lui, comparabilele folosite (cu preț, preț/m² și sursa), ipotezele speciale. client_tip: „persoană fizică” sau „persoană juridică”.`;
 
 async function pdfOf(key: string) {
   const obj = await (await bucket())?.get(key);
@@ -124,7 +137,7 @@ export async function syncReadings(db: D1Database) {
       try { parsed = JSON.parse(text) as { markdown?: string; facts?: unknown }; } catch { /* below */ }
       const error = msg.stop_reason === "refusal" ? "Modelul a refuzat citirea." : msg.stop_reason === "max_tokens" ? "Raportul e prea lung pentru o singură citire (limita de răspuns)." : !parsed?.markdown ? "Răspunsul nu a putut fi citit." : null;
       await db.prepare(`UPDATE report_markdown SET status = ?, markdown = ?, facts = ?, input_tokens = ?, output_tokens = ?, cost_usd = ?, error = ?, updated_at = ? WHERE report_id = ? AND batch_id = ?`)
-        .bind(error ? "error" : "done", parsed?.markdown ?? null, parsed?.facts ? JSON.stringify(parsed.facts) : null, input, output, Math.round(costOf(input, output) * 10000) / 10000, error, t, res.custom_id, batch_id).run();
+        .bind(error ? "error" : "done", parsed?.markdown ?? null, parsed?.facts ? JSON.stringify(tidy(parsed.facts)) : null, input, output, Math.round(costOf(input, output) * 10000) / 10000, error, t, res.custom_id, batch_id).run();
       done++;
     }
   }
