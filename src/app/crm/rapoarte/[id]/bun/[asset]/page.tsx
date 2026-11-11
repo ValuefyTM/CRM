@@ -12,7 +12,8 @@ import { getFirm } from "@/lib/settings";
 import { parseGeo } from "@/lib/registry";
 import { niceName } from "@/lib/labels";
 import { CrmShell } from "@/components/CrmShell";
-import { MapZoom } from "@/components/MapZoom";
+import { AssetLocation } from "@/components/AssetLocation";
+import { assetPins } from "@/lib/asset-pins";
 import { Face, WithFace } from "@/components/Avatar";
 import { InspSheet } from "../../InspSheet";
 import { RevisionAsk } from "../../../RevisionAsk";
@@ -193,6 +194,7 @@ export default async function AssetPage({ params, searchParams }: {
     mileage: num(a.mileage, " km"), cf_number: a.cf_number, cad_building: a.cad_building !== a.cf_number ? a.cad_building : null, cad_land: a.cad_land,
   };
   const ll = parseGeo(a.geo);
+  const locPins = await assetPins(db, a.id);
   const title = `${cap(a.type) || "Bun"}${a.construction === "under_construction" ? " · în construcție" : ""}`;
   const address = a.full_address && a.city && !a.full_address.toLowerCase().includes(a.city.toLowerCase()) ? `${a.full_address}, ${a.city}` : a.full_address ?? a.city;
   const [rs, rc] = REPORT_STATUS[r.status] ?? [r.status, ""];
@@ -360,7 +362,7 @@ export default async function AssetPage({ params, searchParams }: {
             {prevMine?.val && mineVal ? <span><small>Față de {new Date(prevMine.date).getFullYear()}</small><b className={`mono ${mineVal >= prevMine.val ? "up" : "down"}`}>{pct(((mineVal - prevMine.val) / prevMine.val) * 100)}</b><small>{lei(prevMine.val, cur)}{prevMine.number ? ` · nr. ${prevMine.number}` : ""}</small></span>
               : <span><small>Inspecție</small><b>{lastDone ? `✓ ${fmtDate(lastDone.done_at ?? lastDone.created_at)}` : a.no_inspection ? "fără" : insp[0] ? (INSP_STATUS[insp[0].status]?.[0] ?? insp[0].status) : "nealocată"}</b><small>{lastDone?.inspector ?? ""}</small></span>}
           </div>
-          {ll ? <div className="bpMap"><MapZoom point={{ lat: ll[0], lng: ll[1], source: "adresa" }} height={90} link={`https://www.google.com/maps?q=${ll[0]},${ll[1]}`} /></div>
+          {ll || locPins.pins.some((p) => p.lat != null) ? <div className="bpMap"><AssetLocation pins={locPins.pins} query={locPins.query} height={90} /></div>
             : <p className="hint">Bunul nu are coordonate: se completează din adresă sau din cadastru, la proprietate.</p>}
         </div>
       </section>
