@@ -5,7 +5,7 @@
   "scripts": {
     "predev": "node scripts/ocr-assets.mjs",
     "dev": "next dev -p 3200",
-    "prebuild": "node scripts/ocr-assets.mjs",
+    "prebuild": "node -e \"require('fs').rmSync('.next/cache/turbopack',{recursive:true,force:true})\" && node scripts/ocr-assets.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "tsc --noEmit",

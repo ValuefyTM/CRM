@@ -11,6 +11,9 @@ const first = ":first((?!(?:api|_next|crm|portal|inspectii|\\.well-known)(?:/|$)
 
 const nextConfig: NextConfig = {
   images: { unoptimized: true },
+  // Turbopack's build cache off: Cloudflare's build restores .next/cache only in part, and a broken cache made the
+  // build crash (turbo-persistence panic). A clean build each time is a little slower and always the same.
+  experimental: { turbopackFileSystemCacheForBuild: false },
   async rewrites() {
     return {
       beforeFiles: [
