@@ -4576,23 +4576,27 @@ tr.unproc td:first-child { box-shadow: inset 4px 0 0 var(--acc); }
 .pdfPagesList canvas { display: block; background: #fff; box-shadow: 0 4px 18px rgba(20,20,20,.12); border-radius: 2px; }
 
 /* ---------- Hartă prețuri ---------- */
-.pmWrap { display: flex; flex-direction: column; gap: 14px; }
-.pmFilters { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
-.pmField { margin: 0; min-width: 260px; }
-.pmCheck { padding-bottom: 8px; }
-.pmTiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-.pmTile { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 3px; }
-.pmTile small { font-size: 12px; color: var(--muted); font-weight: 600; }
-.pmTile b { font-size: 22px; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
-.pmTile span { font-size: 12px; color: var(--muted); }
-.pmCard { overflow: hidden; }
-.pmMapBox { position: relative; }
-.pmMap { height: min(70vh, 640px); width: 100%; background: var(--cream); }
-.pmLegend { position: absolute; left: 12px; bottom: 12px; z-index: 500; background: #fff; border-radius: 12px; padding: 10px 12px; box-shadow: 0 4px 16px rgba(0,0,0,.15); font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
-.pmLegend ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
-.pmLegend li { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
-.pmLegend i { width: 22px; height: 12px; border-radius: 3px; display: block; }
-.pmLegend small { color: var(--muted); }
-.pmEmpty { position: absolute; inset: 0; display: grid; place-items: center; z-index: 400; pointer-events: none; font-weight: 700; color: var(--muted); background: rgba(255,255,255,.5); }
-.pmList .num { text-align: right; } .pmList .nowrap { white-space: nowrap; }
-@media (max-width: 640px) { .pmLegend { left: 8px; bottom: 8px; padding: 8px; } .pmMap { height: 60vh; } }
+.pxWrap { display: flex; flex-direction: column; gap: 14px; }
+.pxFilters { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.pxField { margin: 0; min-width: 260px; }
+.pxCheck { padding-bottom: 8px; }
+.pxTiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.pxTile { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 3px; }
+.pxTile small { font-size: 12px; color: var(--muted); font-weight: 600; }
+.pxTile b { font-size: 22px; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.pxTile span { font-size: 12px; color: var(--muted); }
+.pxCard { overflow: hidden; }
+.pxMapBox { position: relative; }
+.pxMap { height: min(70vh, 640px); width: 100%; background: var(--cream); }
+.pxLegend { position: absolute; left: 12px; bottom: 12px; z-index: 500; background: #fff; border-radius: 12px; padding: 10px 12px; box-shadow: 0 4px 16px rgba(0,0,0,.15); font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
+
+
+
+.pxLegend small { color: var(--muted); }
+.pxEmpty { position: absolute; inset: 0; display: grid; place-items: center; z-index: 400; pointer-events: none; font-weight: 700; color: var(--muted); background: rgba(255,255,255,.5); }
+.pxList .num { text-align: right; } .pxList .nowrap { white-space: nowrap; }
+@media (max-width: 640px) { .pxLegend { left: 8px; bottom: 8px; padding: 8px; } .pxMap { height: 60vh; } }
+.pxCloud { position: absolute; left: 0; top: 0; z-index: 450; pointer-events: none; }
+.pxTip { position: absolute; z-index: 600; pointer-events: none; background: rgba(20,20,20,.88); color: #fff; font-size: 12.5px; font-weight: 600; padding: 5px 9px; border-radius: 8px; white-space: nowrap; }
+.pxGrad { display: block; width: 200px; height: 12px; border-radius: 4px; }
+.pxGradLbl { display: flex; justify-content: space-between; width: 200px; font-variant-numeric: tabular-nums; }
