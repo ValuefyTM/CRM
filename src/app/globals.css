@@ -4410,3 +4410,6 @@ tr.unproc td:first-child { box-shadow: inset 4px 0 0 var(--acc); }
 .pinActs { display: flex; align-items: center; gap: 10px; }
 .pinTip { font-weight: 700; font-size: 11.5px; }
 @media (max-width: 720px) { .pinRow { grid-template-columns: 12px minmax(0, 1fr); } .pinRow > code, .pinRow > .muted, .pinActs { grid-column: 2; } }
+.pinHead { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pinHead h2 { margin: 0; }
+.pinHead span { color: var(--muted); font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

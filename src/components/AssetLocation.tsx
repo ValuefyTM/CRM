@@ -12,6 +12,7 @@ const META: Record<PinKind, { label: string; short: string; color: string; none:
   adresa: { label: "După adresă", short: "Adresă", color: "#3b6fd8", none: "Adresa nu a fost găsită pe hartă." },
   inspectie: { label: "Pin inspecție", short: "Inspecție", color: "#8a4fd8", none: "Nu s-a colectat GPS la inspecție." },
 };
+const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 const fmt = (p: { lat: number | null; lng: number | null }) => `${p.lat!.toFixed(6)}, ${p.lng!.toFixed(6)}`;
 const has = (p: AssetPin) => p.lat != null && p.lng != null;
 /** metres between two points */
@@ -51,8 +52,11 @@ export function AssetLocation({ pins: initial, query, height = 90 }: { pins: Ass
     const missing = (k: PinKind) => !has(pins.find((p) => p.kind === k)!);
     if (missing("uvalo") && (query.cad_building || query.cad_land || query.cf_number))
       ask("uvalo", { city: query.city, county: query.county, cad_building: query.cad_building, cad_land: query.cad_land, cf_number: query.cf_number }, (s) => s === "cadastru");
-    if (missing("adresa") && (query.address || query.city))
-      ask("adresa", { address: query.address, city: query.city, county: query.county }, (s) => s === "adresa" || s === "localitate");
+    // the address is always asked again (a point saved earlier from the address may be off); it replaces the saved one
+    const adr = pins.find((p) => p.kind === "adresa")!;
+    const fromAddress = !has(adr) || /după adresă|aproximativ/.test(adr.note);
+    if (fromAddress && (query.address || query.city))
+      ask("adresa", { address: query.address, city: query.city, county: query.county, property: query.property }, (s) => s === "adresa" || s === "localitate");
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const copy = async (key: string, text: string) => {
@@ -64,6 +68,7 @@ export function AssetLocation({ pins: initial, query, height = 90 }: { pins: Ass
 
   const shown: MapPin[] = pins.filter(has).map((p) => ({ key: p.kind, lat: p.lat!, lng: p.lng!, color: META[p.kind].color, label: META[p.kind].short }));
   const uvalo = pins.find((p) => p.kind === "uvalo")!;
+  const place = [query.address, query.city && !fold(query.address ?? "").includes(fold(query.city)) ? query.city : null, query.county ? `jud. ${query.county}` : null].filter(Boolean).join(", ");
 
   return (
     <>
@@ -75,7 +80,7 @@ export function AssetLocation({ pins: initial, query, height = 90 }: { pins: Ass
       {open && createPortal(
         <div className="vfModal" role="dialog" aria-modal="true" aria-label="Localizare" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
           <div className="vfModalBox mapZoomBox">
-            <div className="cardHead"><h2>Localizare</h2>
+            <div className="cardHead"><div className="pinHead"><h2>Localizare</h2>{place && <span title={place}>{place}</span>}</div>
               <button type="button" className="btn btnGhost btnSm" onClick={() => setOpen(false)} aria-label="Închide">×</button></div>
             <div className="pinTabs" role="tablist" aria-label="Punctele bunului">
               {pins.map((p) => (

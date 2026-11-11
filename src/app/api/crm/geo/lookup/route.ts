@@ -1,12 +1,14 @@
 import { json, staffApi } from "@/lib/api";
 import { lookupCadastre } from "@/lib/geolocate";
 import { geocodeAddress } from "@/lib/geocode";
+import { now } from "@/lib/db";
 
 const s = (v: unknown, max = 300) => (typeof v === "string" ? v.trim().slice(0, max) || null : null);
 
 /**
  * Where an asset being filled in is (the small map of the form): the geoportal plans by its cadastral / CF number
- * first, else its address. Nothing is saved here.
+ * first, else its address. Nothing is saved here, except: with `property`, a point of that property found from its
+ * address replaces the one it had from its address (never a point from the plans, the inspection or set by hand).
  */
 export async function POST(req: Request) {
   const a = await staffApi("any");
@@ -18,5 +20,8 @@ export async function POST(req: Request) {
   const addr = s(b.address);
   if (!addr && !p.city) return Response.json({ hit: null });
   const hit = await geocodeAddress({ address: addr, city: p.city, county: p.county });
+  const prop = s(b.property, 80);
+  if (hit && prop) await a.db.prepare(`UPDATE crm_properties SET geo = ?, geo_source = ?, geo_note = ?, geo_checked_at = ?
+      WHERE id = ? AND (geo IS NULL OR geo = '' OR geo_source IN ('adresa', 'localitate'))`).bind(`${hit.lat}, ${hit.lng}`, hit.source, hit.note, now(), prop).run().catch(() => null);
   return Response.json({ hit, cadastreTried: !!(p.cad_building || p.cad_land || p.cf_number) });
 }

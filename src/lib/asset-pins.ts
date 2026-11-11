@@ -6,18 +6,18 @@ import type { Parcel } from "./site-shared";
 export type PinKind = "uvalo" | "adresa" | "inspectie";
 export type AssetPin = { kind: PinKind; lat: number | null; lng: number | null; note: string };
 /** What the client still needs to ask for a missing pin (no point saved yet): the cadastral numbers or the address. */
-export type PinQuery = { city: string | null; county: string | null; cad_building: string | null; cad_land: string | null; cf_number: string | null; address: string | null };
+export type PinQuery = { property: string | null; city: string | null; county: string | null; cad_building: string | null; cad_land: string | null; cf_number: string | null; address: string | null };
 
 const r6 = (x: number) => Math.round(x * 1e6) / 1e6;
 const parse = <T,>(s: string | null | undefined): T | null => { try { return s ? (JSON.parse(s) as T) : null; } catch { return null; } };
 
 export async function assetPins(db: D1Database, assetId: string): Promise<{ pins: AssetPin[]; query: PinQuery }> {
-  const p = await db.prepare(`SELECT p.geo, p.geo_source, p.geo_note, p.city, p.county, p.full_address, p.cad_building, p.cad_land, p.cf_number,
+  const p = await db.prepare(`SELECT p.id, p.geo, p.geo_source, p.geo_note, p.city, p.county, p.full_address, p.cad_building, p.cad_land, p.cf_number,
       s.source AS site_source, s.parcel
       FROM assets a JOIN crm_properties p ON p.id = a.property_id LEFT JOIN asset_site s ON s.asset_id = a.id WHERE a.id = ?`).bind(assetId)
-    .first<{ geo: string | null; geo_source: string | null; geo_note: string | null; city: string | null; county: string | null; full_address: string | null;
+    .first<{ id: string; geo: string | null; geo_source: string | null; geo_note: string | null; city: string | null; county: string | null; full_address: string | null;
       cad_building: string | null; cad_land: string | null; cf_number: string | null; site_source: string | null; parcel: string | null }>().catch(() => null);
-  const query: PinQuery = { city: p?.city ?? null, county: p?.county ?? null, cad_building: p?.cad_building ?? null, cad_land: p?.cad_land ?? null, cf_number: p?.cf_number ?? null, address: p?.full_address ?? null };
+  const query: PinQuery = { property: p?.id ?? null, city: p?.city ?? null, county: p?.county ?? null, cad_building: p?.cad_building ?? null, cad_land: p?.cad_land ?? null, cf_number: p?.cf_number ?? null, address: p?.full_address ?? null };
   const geo = parseGeo(p?.geo ?? null);
   const pin = (kind: PinKind, ll: [number, number] | null, note: string): AssetPin => ({ kind, lat: ll ? r6(ll[0]) : null, lng: ll ? r6(ll[1]) : null, note });
 
