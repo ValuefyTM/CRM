@@ -24,6 +24,9 @@ import { customFolders } from "@/lib/doc-folders";
 import { SafeImg } from "../../ReportActions";
 import { AssetPhotos, type Photo } from "./AssetPhotos";
 import { SimilarReports } from "../../SimilarReports";
+import { SimilarListings } from "../../SimilarListings";
+import { marketCount } from "@/lib/market/report";
+import { can } from "@/lib/perms";
 import { similarReports } from "@/lib/similar-reports";
 import { latestChecks } from "@/lib/legal-check";
 import { isProblem } from "@/lib/legal-groups";
@@ -325,6 +328,8 @@ export default async function AssetPage({ params, searchParams }: {
   // Similar reports nearby: for the main asset (the report's subject).
   const similar = a.is_main || assets.length === 1 ? await similarReports(db, user, id, { radius: "1" }).catch(() => null) : null;
   const zone = similar ? similar.rows.map((x) => x.sqm).filter((x): x is number => !!x).sort((x, y) => x - y) : [];
+  // market listings around this asset (Anunțuri de piață)
+  const market = can(user, "market") ? await marketCount(db, id, a.id).catch(() => null) : null;
   const [legal] = (await latestChecks(db, id)).filter((c) => c.asset_id === a.id);
   const openIssues = legal ? legal.result.issues.filter((x) => isProblem(x) && !legal.resolved[x.key]).length : 0;
   const others = assets.filter((x) => x.id !== a.id);
@@ -476,14 +481,16 @@ export default async function AssetPage({ params, searchParams }: {
               ) : <p className="hint">Analiza juridică nu a fost rulată. <a className="link" href={`${base}/rapoarte/${id}?tab=documente`}>Acte & livrare →</a></p>}
             </section>
 
-            {similar?.located && (
+            {(similar?.located || market) && (
               <section className="card">
-                <div className="cardHead"><h2>În zonă</h2><span className="muted">1 km</span></div>
+                <div className="cardHead"><h2>În zonă</h2></div>
                 <dl className="kv">
-                  <div><dt>Rapoarte similare</dt><dd>{similar.rows.length}</dd></div>
+                  {similar?.located && <div><dt>Rapoarte similare · 1 km</dt><dd>{similar.rows.length}</dd></div>}
                   {zone.length > 0 && <div><dt>Median {cur}/mp</dt><dd className="mono">{Math.round(zone[Math.floor(zone.length / 2)]).toLocaleString("ro-RO")}</dd></div>}
+                  {market && <div><dt>Anunțuri de vânzare · {String(market.radius).replace(".", ",")} km</dt><dd>{market.n}</dd></div>}
                 </dl>
-                {similar.rows.length > 0 && <SimilarReports report={id} base={base} count={similar.rows.length} bank={similar.subject?.bank ?? null} />}
+                {similar && similar.rows.length > 0 && <SimilarReports report={id} base={base} count={similar.rows.length} bank={similar.subject?.bank ?? null} />}
+                {market && <SimilarListings report={id} asset={a.id} base={base} count={market.n} radius={market.radius} />}
               </section>
             )}
           </div>

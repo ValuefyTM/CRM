@@ -2,7 +2,7 @@
 import { fmtDate } from "@/lib/guard";
 import { CAT_LABEL } from "@/lib/registry-labels";
 import { marketFile, type getMarketListing, type listingContext } from "@/lib/market/search";
-import { Description, Gallery, ListingMap, MarketAround, type GalleryPhoto, type MapPin, type NearCard } from "./ListingView";
+import { Description, Gallery, ListingMap, type GalleryPhoto } from "@/components/MarketViews";
 
 const n0 = (v: unknown, d = 0) => (typeof v === "number" ? v.toLocaleString("ro-RO", { maximumFractionDigits: d }) : "—");
 const cur = (c: unknown) => (c === "EUR" ? "€" : c === "RON" ? "lei" : String(c ?? ""));
@@ -46,10 +46,6 @@ const I = {
 };
 
 const pct = (x: number) => `${Math.abs(x * 100).toLocaleString("ro-RO", { maximumFractionDigits: 1 })}%`;
-/** 108500 → „108,5k”, 2400 → „2,4k”, 550 → „550” (the price pins). */
-const short = (v: number | null) => (v == null ? "?" : v >= 1000 ? `${(v / 1000).toLocaleString("ro-RO", { maximumFractionDigits: v >= 100_000 ? 0 : 1 })}k` : String(Math.round(v)));
-const esc = (x: string) => x.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-const dist = (k: number | undefined) => (k == null ? "" : k < 1 ? `~${Math.round((k * 1000) / 10) * 10} m` : `~${k.toLocaleString("ro-RO", { maximumFractionDigits: 1 })} km`);
 
 export function ListingDetail({ d, ctx, base }: { d: NonNullable<Awaited<ReturnType<typeof getMarketListing>>>; ctx: Awaited<ReturnType<typeof listingContext>> | null; base: string }) {
   const l = d.listing;
@@ -71,22 +67,6 @@ export function ListingDetail({ d, ctx, base }: { d: NonNullable<Awaited<ReturnT
     [I.sqm, `Preț / m²${rent ? " / lună" : ""}`, l.price_sqm != null ? `${n0(l.price_sqm, 2)} ${cur(l.currency)}` : null],
     [I.cal, "Pe site din", day(l.src_created_at)],
   ];
-
-  const near = ctx?.nearby ?? [];
-  const pins: MapPin[] = near.filter((x) => x.lat != null && x.lng != null).map((x) => ({
-    id: x.id, lat: x.lat!, lng: x.lng!, label: short(x.price), href: `${base}/piata/${x.id}`, inactive: x.status !== "activ",
-    tip: `<b>${esc(x.title ?? "Anunț")}</b><br><small>${x.price != null ? `${n0(x.price)} ${cur(x.currency)}` : "la cerere"}${x.area ? ` · ${n0(x.area)} m²` : ""} · ${dist(x.km)}</small>`,
-  }));
-  const cards: NearCard[] = near.slice(0, 12).map((x) => {
-    const vs = ctx?.median && x.price_sqm ? (x.price_sqm - ctx.median) / ctx.median : null;
-    return {
-      id: x.id, href: `${base}/piata/${x.id}`, photo: marketFile(x.cover_key),
-      head: `${x.source} · ${x.status}`, title: [x.zone, x.city].filter(Boolean).filter((v, k, a) => a.indexOf(v) === k).join(", ") || x.title || "Anunț",
-      specs: [x.area ? `${n0(x.area)} m²` : null, x.km != null ? `${dist(x.km)} de acest anunț` : null].filter(Boolean).join(" · "),
-      price: x.price != null ? `${n0(x.price)} ${cur(x.currency)}` : "la cerere", sqm: x.price_sqm != null ? `${n0(x.price_sqm, 2)} ${cur(x.currency)}/m²` : "",
-      tag: vs == null ? null : Math.abs(vs) < 0.005 ? "la mediană" : `${vs < 0 ? "sub" : "peste"} mediană ${pct(vs)}`, tone: vs == null ? "" : vs <= 0 ? "ok" : "err",
-    };
-  });
 
   return (
       <div className="ldPage">
@@ -135,18 +115,12 @@ export function ListingDetail({ d, ctx, base }: { d: NonNullable<Awaited<ReturnT
             )}
 
             <section className="ldSection">
-              <div className="ldSecHead"><h2>{near.length ? "Localizare și piața din jur" : "Localizare"}</h2>{l.geo_precision ? <span className="muted">{String(l.geo_precision)}</span> : null}</div>
-              {near.length > 0 && ctx && (
-                <p className="ldAroundSum">{near.length} {near.length === 1 ? "anunț similar" : "anunțuri similare"} · {CAT_LABEL[l.category ?? ""]?.toLowerCase() ?? "aceeași categorie"}, {rent ? "închiriere" : "vânzare"} · suprafață ±50% · rază 2 km · duplicatele unite
-                  {ctx.median != null && <> · mediana <b>{n0(ctx.median, 2)} {cur(l.currency)} / m²{rent ? " / lună" : ""}</b></>}</p>
-              )}
+              <div className="ldSecHead"><h2>Localizare</h2>{l.geo_precision ? <span className="muted">{String(l.geo_precision)}</span> : null}</div>
               {l.lat != null && l.lng != null ? (
                 <>
-                  {near.length ? <MarketAround lat={Number(l.lat)} lng={Number(l.lng)} radiusM={radiusOf(l.geo_precision as string | null)} label="Acest anunț" pins={pins} cards={cards} />
-                    : <ListingMap lat={Number(l.lat)} lng={Number(l.lng)} radiusM={radiusOf(l.geo_precision as string | null)} label="Acest anunț" />}
+                  <ListingMap lat={Number(l.lat)} lng={Number(l.lng)} radiusM={radiusOf(l.geo_precision as string | null)} label="Anunțul" />
                   <p className="ldMapFoot">
                     <span className="mono">{Number(l.lat).toFixed(6)}, {Number(l.lng).toFixed(6)}</span>
-                    {near.length > 0 && <span>Cercuri: 500 m · 1 km · contur punctat = anunț dispărut</span>}
                     <a href={`https://www.google.com/maps?q=${l.lat},${l.lng}`} target="_blank" rel="noreferrer">Google Maps ↗</a>
                     <a href={`https://www.openstreetmap.org/?mlat=${l.lat}&mlon=${l.lng}#map=17/${l.lat}/${l.lng}`} target="_blank" rel="noreferrer">OpenStreetMap ↗</a>
                   </p>

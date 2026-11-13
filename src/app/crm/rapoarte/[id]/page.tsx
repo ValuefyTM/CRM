@@ -36,6 +36,8 @@ import { assetProfile, emptyAsset, FIELD_LABELS, type AssetForm, type ProfileFie
 import { canAssign, inspectorChoices } from "@/lib/insp-assign";
 import { RevisionAsk } from "../RevisionAsk";
 import { SimilarReports } from "./SimilarReports";
+import { SimilarListings } from "./SimilarListings";
+import { marketCount } from "@/lib/market/report";
 import { LegalCheck } from "./LegalCheck";
 import { docReadings, latestChecks, legalEnabled } from "@/lib/legal-check";
 import { similarReports } from "@/lib/similar-reports";
@@ -141,6 +143,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const main = assets.find((a) => a.is_main) ?? assets[0];
   // reports of the same type of property within 1 km (the general tab shows how many; the list opens on click)
   const similar = tab === "general" && main ? await similarReports(db, user, id, { radius: "1" }).catch(() => null) : null;
+  // market listings around the subject (Anunțuri de piață): how many; the list and the map open on click
+  const market = tab === "general" && main && can(user, "market") ? await marketCount(db, id).catch(() => null) : null;
   const [mayAssign, inspectors, inspDocs, sheetList] = await Promise.all([canAssign(db, user, id), inspectorChoices(db, user.id), docsByAsset(db, id, assets.map((a) => a.id)), templateList(db)]);
   // The sheets an inspection of an asset can be given with: the firm's sheets meant for its type of asset, and the standard one
   // (UVALO's of the type; the VALUEFY model in the CRM app).
@@ -472,6 +476,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                     {assets.length > 1 && <Row k="Alte bunuri"><a className="link" href={href("bunuri")}>{assets.length - 1} {assets.length === 2 ? "bun" : "bunuri"} →</a></Row>}
                   </dl>
                   {similar?.located && <SimilarReports report={r.id} base={base} count={similar.rows.length} bank={similar.subject?.bank ?? null} />}
+                  {market && <SimilarListings report={r.id} base={base} count={market.n} radius={market.radius} />}
                 </>
               )}
             </section>

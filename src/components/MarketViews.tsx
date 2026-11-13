@@ -1,6 +1,6 @@
 "use client";
-// The listing page (Anunțuri de piață): the photo gallery with a full-screen viewer, the map with the point and its
-// precision, the description that unfolds.
+// Market listings (Anunțuri de piață): the photo gallery with a full-screen viewer, the map with a point, its precision
+// and price pins around it, the description that unfolds. Used by the listing page and the report's similar listings.
 import "leaflet/dist/leaflet.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type * as Leaflet from "leaflet";
@@ -71,11 +71,14 @@ export function Gallery({ photos, title }: { photos: GalleryPhoto[]; title: stri
   );
 }
 
-export type MapPin = { id: string; lat: number; lng: number; label: string; tip: string; href: string; inactive?: boolean };
+export type MapPin = { id: string; lat: number; lng: number; label: string; tip: string; href?: string; inactive?: boolean };
 
 /** The listing on the map (its precision circle when approximate), the 500 m and 1 km rings around it and the similar
  * listings nearby as price pins; hovering a card of the list lights its pin. */
-export function ListingMap({ lat, lng, radiusM, label, pins = [], hover = null }: { lat: number; lng: number; radiusM: number | null; label: string; pins?: MapPin[]; hover?: string | null }) {
+export function ListingMap({ lat, lng, radiusM, label, pins = [], hover = null, onPick, rings = [500, 1000], className = "" }: { lat: number; lng: number; radiusM: number | null; label: string; pins?: MapPin[];
+  hover?: string | null; onPick?: (id: string) => void; rings?: number[]; className?: string }) {
+  const pick = useRef(onPick);
+  pick.current = onPick;
   const el = useRef<HTMLDivElement>(null);
   const marks = useRef<Map<string, Leaflet.Marker>>(new Map());
   useEffect(() => {
@@ -90,11 +93,11 @@ export function ListingMap({ lat, lng, radiusM, label, pins = [], hover = null }
       const centre = l.latLng(lat, lng);
       const bounds = l.latLngBounds([centre, centre]);
       const ring = (r: number) => { l.circle(centre, { radius: r, color: "#9a5f00", weight: 1.5, dashArray: "6 6", fill: false, opacity: 0.7 }).addTo(map!); bounds.extend(centre.toBounds(r * 2)); };
-      if (pins.length) { ring(500); ring(1000); }
+      if (pins.length) rings.forEach(ring);
       if (radiusM) { l.circle(centre, { radius: radiusM, color: "#f2a93b", weight: 0, fillColor: "#f2a93b", fillOpacity: 0.16 }).addTo(map); bounds.extend(centre.toBounds(radiusM * 2)); }
       for (const p of pins) {
         const m = l.marker([p.lat, p.lng], { icon: l.divIcon({ className: "", html: `<span class="ldPin${p.inactive ? " off" : ""}">${p.label}</span>`, iconSize: [0, 0] }) })
-          .addTo(map).bindTooltip(p.tip, { direction: "top", offset: [0, -12] }).on("click", () => { window.location.href = p.href; });
+          .addTo(map).bindTooltip(p.tip, { direction: "top", offset: [0, -12] }).on("click", () => { if (pick.current) pick.current(p.id); else if (p.href) window.location.href = p.href; });
         marks.current.set(p.id, m);
         bounds.extend([p.lat, p.lng]);
       }
@@ -102,11 +105,11 @@ export function ListingMap({ lat, lng, radiusM, label, pins = [], hover = null }
       if (pins.length || radiusM) map.fitBounds(bounds, { padding: [30, 30], maxZoom: 16 }); else map.setView([lat, lng], 16);
     });
     return () => { off = true; marks.current.clear(); map?.remove(); };
-  }, [lat, lng, radiusM, label, pins]);
+  }, [lat, lng, radiusM, label, pins, rings.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     marks.current.forEach((m, id) => { const e = m.getElement()?.querySelector(".ldPin"); e?.classList.toggle("hl", id === hover); if (id === hover) m.setZIndexOffset(900); else m.setZIndexOffset(0); });
   }, [hover]);
-  return <div ref={el} className="ldMap" />;
+  return <div ref={el} className={`ldMap ${className}`} />;
 }
 
 export type NearCard = { id: string; href: string; photo: string | null; head: string; title: string; specs: string; price: string; sqm: string; tag: string | null; tone: "ok" | "err" | "" };

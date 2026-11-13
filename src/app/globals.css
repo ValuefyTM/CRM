@@ -4768,3 +4768,45 @@ tr.unproc td:first-child { box-shadow: inset 4px 0 0 var(--acc); }
 .ldPin.off { color: var(--muted-2); border: 1px dashed var(--err); }
 .ldPin.hl { background: var(--ink); color: #fff; border: 2px solid var(--acc); }
 .ldPin.me { background: var(--acc); color: var(--ink); border: 0; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; padding: 6px 9px; cursor: default; }
+
+/* ---------- Raport: anunțuri similare (modal listă + hartă, fereastra compactă a unui anunț) ---------- */
+.vfModalBox.mkBox { width: min(1280px, 100%); height: min(860px, calc(100dvh - 32px)); max-height: none; overflow: hidden; }
+.simRadii + .simRadii { margin-left: 4px; }
+.mkSubjectVs { margin: 0; font-size: 13px; color: var(--muted); }
+.mkSubjectVs b { color: var(--ink); }
+.mkSubjectVs .ok { color: var(--ok-text); font-weight: 700; } .mkSubjectVs .warn { color: var(--acc-text); font-weight: 700; }
+.mkSplit { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 12px; }
+.mkList { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px; min-height: 0; }
+.mkMap { min-height: 0; display: flex; }
+.mkMapBox { flex: 1; height: auto !important; min-height: 360px; }
+button.ldNear { font: inherit; text-align: left; width: 100%; cursor: pointer; }
+.ldNear.gone { background: var(--cream); }
+.ldNear.gone small { color: var(--err); }
+.mkTags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mkTags .simScore { min-width: 120px; }
+@media (max-width: 899px) {
+  .vfModalBox.mkBox { height: calc(100dvh - 16px); overflow-y: auto; }
+  .mkSplit { grid-template-columns: 1fr; grid-template-rows: 320px auto; }
+  .mkMap { order: -1; }
+  .mkList { overflow: visible; }
+}
+.vfModal.mkPrev { position: fixed; z-index: 120; background: rgba(17, 17, 48, 0.45); }
+.vfModalBox.mkPrevBox { width: min(680px, 100%); gap: 12px; }
+.mkPrevBox .ldMain { aspect-ratio: 16 / 9; border-radius: 14px; box-shadow: none; }
+.mkPrevBox .ldThumbs button { width: 72px; height: 50px; border-radius: 8px; }
+.mkPrevHead { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.mkPrevHead h3 { margin: 0; font-size: 18px; line-height: 1.3; }
+.mkPrevHead p { margin: 4px 0 0; font-size: 13px; }
+.mkPrevPrice { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; }
+.mkPrevPrice b { font-size: 22px; font-weight: 800; white-space: nowrap; }
+.mkPrevPrice b small { font-size: 13px; color: var(--muted); font-weight: 600; }
+.mkPrevPrice span { font-size: 12.5px; font-weight: 700; color: var(--acc-text); background: var(--acc-soft); padding: 3px 8px; border-radius: 8px; margin-top: 4px; }
+.mkPrevFacts { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; }
+.mkPrevFacts div { background: var(--cream); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.mkPrevFacts small { font-size: 11px; color: var(--muted-2); font-weight: 600; }
+.mkPrevFacts b { font-size: 14px; }
+.mkPrevBox .ldDesc.cut { max-height: 150px; }
+.mkPrevActs { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-top: 1px solid var(--divider); padding-top: 12px; }
+.mkPrevActs small { margin-left: auto; }
+.mkBox .mkSplit { padding: 12px 18px; }
+.mkBox .mkSubjectVs { padding: 10px 18px 0; }
