@@ -23,6 +23,8 @@ export async function POST(req: Request) {
     const r = await a.db.prepare("UPDATE market_searches SET name = ?, source = ?, url = ?, category = ?, type = ?, deal = ?, enabled = ?, max_pages = ?, updated_at = ? WHERE id = ?")
       .bind(...vals, now(), id).run();
     if (!r.meta.changes) return err("Căutarea nu există.", 404);
+    // the listings it found follow its category and type (the filters of Analize de piață)
+    await a.db.prepare("UPDATE market_listings SET category = ?, type = ? WHERE search_id = ?").bind(vals[3], vals[4], id).run();
   } else {
     await a.db.prepare("INSERT INTO market_searches (id, name, source, url, category, type, deal, enabled, max_pages) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
       .bind(uuid(), ...vals).run();

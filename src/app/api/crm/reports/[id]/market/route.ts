@@ -9,7 +9,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { id } = await params;
   const a = await reportApi(id, "view");
   if ("res" in a) return a.res;
-  if (!can(a.user, "market")) return Response.json({ error: "Nu ai acces la Anunțuri de piață." }, { status: 403 });
+  if (!can(a.user, "market")) return Response.json({ error: "Nu ai acces la Analize de piață." }, { status: 403 });
   const q = new URL(req.url).searchParams;
   const r = await marketForReport(a.db, id, { assetId: q.get("bun"), radius: q.get("raza"), tr: q.get("tr"), tol: q.get("tol"), all: q.get("toate") === "1" });
   const verif = await verificationsOf(a.db, id).catch(() => ({}));

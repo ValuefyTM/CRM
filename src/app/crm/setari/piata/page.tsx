@@ -7,8 +7,11 @@ import { marketStatus } from "@/lib/market/search";
 import { getMarketSettings } from "@/lib/market/settings";
 import { SettingsTabs } from "../SettingsTabs";
 import { ControlPanel, MarketSettingsForm } from "./ControlPanel";
+import { Searches } from "../../piata/MarketClient";
+import { CAT_LABEL } from "@/lib/registry-labels";
+import { SOURCES } from "@/lib/market/sites";
 
-export const metadata: Metadata = { title: "Setări · Anunțuri de piață | CRM VALUEFY" };
+export const metadata: Metadata = { title: "Setări · Analize de piață | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
 
 const RUN_STATUS: Record<string, string> = { running: "în desfășurare", done: "încheiată", stopped: "oprită" };
@@ -18,12 +21,17 @@ export default async function MarketSettingsPage() {
   const { db, user, base } = await staffPage("market:searches");
   const [progress, status, settings] = await Promise.all([runProgress(db), marketStatus(db), getMarketSettings(db)]);
   return (
-    <CrmShell user={user} base={base} active="settings" title="Setări · Anunțuri de piață" subtitle="Panoul de comandă al rulărilor: pornire la cerere, progres, oprire">
+    <CrmShell user={user} base={base} active="settings" title="Setări · Analize de piață" subtitle="Căutările pe portaluri și rulările: pornire la cerere, progres, oprire">
       <SettingsTabs base={base} active="piata" user={user} />
       {!apifyConfigured() && <div className="note">Lipsește secretul <b>APIFY_TOKEN</b> (Cloudflare → Workers → crm → Settings → Variables and Secrets): rulările nu pot porni.</div>}
       <div className="cols">
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
           <ControlPanel searches={status.searches} initial={progress} base={base} />
+          <section className="card">
+            <h2>Căutări</h2>
+            <p className="hint">Fiecare căutare e o pagină de rezultate de pe un site, copiată din browser cu filtrele dorite (zonă, tip, preț), plus categoria din CRM și tranzacția. Paginile se parcurg automat până la ultima; anunțurile apar în <a className="link" href={`${base}/piata`}>Analize de piață</a>.</p>
+            <Searches rows={status.searches} sources={SOURCES} categories={Object.entries(CAT_LABEL)} edit />
+          </section>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
           <section className="card">
@@ -42,10 +50,6 @@ export default async function MarketSettingsPage() {
                 ))}
               </dl>
             )}
-          </section>
-          <section className="card">
-            <h2>Căutări</h2>
-            <p className="hint">Căutările (site, pagina de rezultate, categoria) se adaugă și se modifică în <a className="link" href={`${base}/piata`}>Anunțuri de piață</a>.</p>
           </section>
         </div>
       </div>

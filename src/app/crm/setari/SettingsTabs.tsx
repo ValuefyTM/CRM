@@ -10,7 +10,7 @@ const tabsOf = (user: WithPerms): [string, string, string, boolean][] => [
   ["facturare", "Facturare · Oblio", "/facturare", can(user, "billing.E")],
   ["alerte", "Alerte", "/alerte", can(user, "settings")],
   ["claude", "Conexiuni Claude", "/claude", can(user, "settings")],
-  ["piata", "Anunțuri de piață", "/piata", can(user, "market:searches")],
+  ["piata", "Analize de piață", "/piata", can(user, "market:searches")],
   ["emailuri", "Emailuri primite", "/emailuri", user.role === "owner"],
   ["import", "Import istoric", "/import", user.role === "owner"],
   ["markdown", "Rapoarte ca Markdown", "/markdown", user.role === "owner"],

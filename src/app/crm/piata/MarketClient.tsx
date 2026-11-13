@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ASSET_CATEGORIES } from "@/lib/asset-labels";
 
 type Search = { id: string; name: string; source: string; url: string; category: string | null; type: string | null; transaction: string; enabled: number; max_pages: number };
 
@@ -61,7 +62,7 @@ export function Searches({ rows, sources, categories, edit }: { rows: (Search & 
           <li key={s.id} className={s.enabled ? "" : "muted"}>
             <div><b>{s.name}</b> <span className="pill">{s.source}</span> {!s.enabled && <span className="pill">oprită</span>}</div>
             <small className="muted">
-              {[categories.find(([k]) => k === s.category)?.[1] ?? s.category, s.transaction === "inchiriere" ? "închiriere" : "vânzare", `${s.active} active`,
+              {[categories.find(([k]) => k === s.category)?.[1] ?? s.category, s.type ? s.type.charAt(0) + s.type.slice(1).toLowerCase() : null, s.transaction === "inchiriere" ? "închiriere" : "vânzare", `${s.active} active`,
                 s.last_run_at ? `ultima rulare: ${s.last_count ?? 0} anunțuri${s.last_complete === 1 ? ", toate paginile" : s.last_complete === 0 ? ", incompletă" : ""}` : "nerulată"].filter(Boolean).join(" · ")}
             </small>
             {s.last_error && <small style={{ color: "var(--err)", display: "block" }}>{s.last_error}</small>}
@@ -86,6 +87,12 @@ export function Searches({ rows, sources, categories, edit }: { rows: (Search & 
           <label className="field">Pagina de rezultate <small>(copiată din browser, cu filtrele dorite: zonă, tip, preț)</small><input className="input" value={form.url} onChange={(e) => set("url", e.target.value)} placeholder="https://www.imobiliare.ro/vanzare-apartamente/timisoara" required /></label>
           <label className="field">Categoria (din CRM) <small>(după ea se caută comparabilele unei proprietăți)</small>
             <select className="input" value={form.category} onChange={(e) => set("category", e.target.value)}><option value="">—</option>{categories.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+          </label>
+          <label className="field">Tipul proprietății (din CRM) <small>(opțional; filtrul „Tip proprietate” din Analize de piață)</small>
+            <select className="input" value={form.type} onChange={(e) => set("type", e.target.value)}>
+              <option value="">— oricare —</option>
+              {(ASSET_CATEGORIES.find(([k]) => k === form.category)?.[2] ?? ASSET_CATEGORIES.flatMap(([, , t]) => t)).map((t) => <option key={t} value={t}>{t.charAt(0) + t.slice(1).toLowerCase()}</option>)}
+            </select>
           </label>
           <label className="field">Tranzacția
             <select className="input" value={form.transaction} onChange={(e) => set("transaction", e.target.value)}><option value="vanzare">Vânzare</option><option value="inchiriere">Închiriere</option></select>

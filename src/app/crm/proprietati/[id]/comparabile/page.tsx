@@ -114,7 +114,7 @@ export default async function ComparablesPage({ params, searchParams }: { params
                 Prețuri cerute în anunțuri ({s.category ? s.category.toLowerCase() : "orice categorie"}, rază {Math.max(st.radius, 2).toString().replace(".", ",")} km{s.usable_area && st.tol ? `, suprafață ±${st.tol}%` : ""}), câte unul din fiecare grup de duplicate.
                 {market.stats.median != null && <> Mediană {n0(market.stats.median)} € / m²{tr === "inchiriere" ? " / lună" : ""} (P25 {n0(market.stats.p25)} – P75 {n0(market.stats.p75)}).</>}
               </p>
-              {market.rows.length === 0 ? <p className="hint">Niciun anunț în zonă pentru criteriile alese. <a href={`${base}/piata`}>Anunțuri de piață</a></p> : (
+              {market.rows.length === 0 ? <p className="hint">Niciun anunț în zonă pentru criteriile alese. <a href={`${base}/piata`}>Analize de piață</a></p> : (
                 <div className="tableWrap">
                   <table className="table">
                     <thead><tr><th>Anunț</th><th className="r">Distanță</th><th className="r">Suprafață</th><th className="r">Preț</th><th className="r">€ / m²</th></tr></thead>

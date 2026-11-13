@@ -393,7 +393,7 @@ export const TOOLS: Tool[] = [
       },
     },
     run: async (c, a) => {
-      if (!can(c.user, "market")) return { eroare: "Nu ai acces la Anunțuri de piață." };
+      if (!can(c.user, "market")) return { eroare: "Nu ai acces la Analize de piață." };
       let ll: [number, number] | null = null;
       let category = str(a, "categorie") || null, area = num(a, "suprafata_mp") ?? null;
       if (str(a, "proprietate_id")) {

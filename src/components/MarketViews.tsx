@@ -147,3 +147,51 @@ export function Description({ text }: { text: string }) {
     </div>
   );
 }
+
+export type ExplorerPoint = { id: string; lat: number; lng: number; label: string; tip: string; inactive?: boolean };
+
+/** All the filtered listings as price pins; the map fits them; hovering / picking talks to the list. */
+export function MarketMap({ points, hover = null, onPick, onHover }: { points: ExplorerPoint[]; hover?: string | null; onPick?: (id: string) => void; onHover?: (id: string | null) => void }) {
+  const el = useRef<HTMLDivElement>(null);
+  const map = useRef<Leaflet.Map | null>(null);
+  const L = useRef<typeof Leaflet | null>(null);
+  const layer = useRef<Leaflet.LayerGroup | null>(null);
+  const marks = useRef<Map<string, Leaflet.Marker>>(new Map());
+  const cb = useRef({ onPick, onHover });
+  cb.current = { onPick, onHover };
+  useEffect(() => {
+    let off = false;
+    import("leaflet").then((mod) => {
+      if (off || !el.current || map.current) return;
+      const l = (mod as unknown as { default?: typeof Leaflet }).default ?? (mod as unknown as typeof Leaflet);
+      L.current = l;
+      const m = l.map(el.current, { zoomControl: false });
+      l.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', referrerPolicy: "strict-origin-when-cross-origin" }).addTo(m);
+      l.control.zoom({ position: "bottomright" }).addTo(m);
+      m.setView([45.7489, 21.2087], 11);
+      layer.current = l.layerGroup().addTo(m);
+      map.current = m;
+      draw();
+    });
+    const re = () => map.current?.invalidateSize();
+    window.addEventListener("resize", re);
+    return () => { off = true; window.removeEventListener("resize", re); map.current?.remove(); map.current = null; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const draw = () => {
+    const l = L.current, m = map.current, g = layer.current;
+    if (!l || !m || !g) return;
+    g.clearLayers(); marks.current.clear();
+    for (const p of points) {
+      const mk = l.marker([p.lat, p.lng], { icon: l.divIcon({ className: "", html: `<span class="ldPin${p.inactive ? " off" : ""}">${p.label}</span>`, iconSize: [0, 0] }) })
+        .bindTooltip(p.tip, { direction: "top", offset: [0, -12] })
+        .on("click", () => cb.current.onPick?.(p.id)).on("mouseover", () => cb.current.onHover?.(p.id)).on("mouseout", () => cb.current.onHover?.(null));
+      mk.addTo(g); marks.current.set(p.id, mk);
+    }
+    if (points.length) m.fitBounds(l.latLngBounds(points.map((p) => [p.lat, p.lng] as [number, number])), { padding: [30, 30], maxZoom: 15 });
+  };
+  useEffect(draw, [points]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    marks.current.forEach((m, id) => { m.getElement()?.querySelector(".ldPin")?.classList.toggle("hl", id === hover); m.setZIndexOffset(id === hover ? 900 : 0); });
+  }, [hover]);
+  return <div ref={el} className="mkExMap" />;
+}

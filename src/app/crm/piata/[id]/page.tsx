@@ -18,7 +18,7 @@ export default async function MarketListingPage({ params }: { params: Promise<{ 
     price_sqm: l.price_sqm, dup_group: l.dup_group, status: l.status, src_created_at: (l.src_created_at as string | null) ?? null, first_seen_at: l.first_seen_at,
     last_seen_at: l.last_seen_at as string, source: l.source }, d.duplicates.map((x) => x.source), d.history).catch(() => null);
   return (
-    <CrmShell back={{ href: `${base}/piata`, label: "Anunțuri de piață" }} user={user} base={base} active="market" title="Anunț de piață" subtitle={`${d.listing.source} · ID ${d.listing.ext_id}`}>
+    <CrmShell back={{ href: `${base}/piata`, label: "Analize de piață" }} user={user} base={base} active="market" title="Anunț de piață" subtitle={`${d.listing.source} · ID ${d.listing.ext_id}`}>
       <ListingDetail d={d} ctx={ctx} base={base} />
     </CrmShell>
   );

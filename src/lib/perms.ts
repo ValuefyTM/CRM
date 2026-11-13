@@ -30,7 +30,7 @@ export const MODULES = [
     sp: [["process", "Procesează comanda"], ["offer", "Trimite oferta"]], hint: "Comenzile, cererile de pe site, ofertele." },
   { k: "tenders", l: "Licitații SEAP", group: "CRM", rights: ["E"], sp: [["rules", "Schimbă criteriile"]] },
   { k: "listings", l: "Anunțuri imobiliare", group: "CRM", rights: ["A", "E", "D"] },
-  { k: "market", l: "Anunțuri de piață", group: "Operațional", rights: [], sp: [["searches", "Schimbă căutările și pornește rularea"]],
+  { k: "market", l: "Analize de piață", group: "Operațional", rights: [], sp: [["searches", "Schimbă căutările și pornește rularea"]],
     hint: "Comparabile de pe imobiliare.ro, storia.ro, olx.ro, publi24.ro și homezz.ro, aduse în fiecare noapte (Apify), cu imaginile și sursa paginii." },
   { k: "reports", l: "Rapoarte", group: "Operațional", rights: ["A", "E", "D"], scope: [["all", "Toate"], ["own", "Din echipa lui"], LEAD],
     sp: [["status", "Schimbă statusul"], ["deliver", "Predă raportul"], ["team", "Alocă echipa"]],

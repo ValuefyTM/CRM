@@ -1,7 +1,7 @@
 // Server-only: reading the market listings (Piață page, a listing's page, comparables of a property, Claude).
 import { parseJson } from "../db";
 
-export type MarketFilters = { q?: string; cat?: string; tr?: string; src?: string; st?: string; dup?: string; min?: string; max?: string; loc?: string; p?: string };
+export type MarketFilters = { q?: string; cat?: string; tip?: string; tr?: string; src?: string; st?: string; dup?: string; min?: string; max?: string; loc?: string; p?: string; vezi?: string };
 export type MarketRow = {
   id: string; source: string; url: string; title: string | null; category: string | null; type: string | null; transaction: string | null;
   price: number | null; currency: string | null; price_sqm: number | null; area: number | null; county: string | null; city: string | null; zone: string | null;
@@ -21,11 +21,12 @@ const COLS = `l.id, l.source, l.url, l.title, l.category, l.type, l.deal AS "tra
 /** FTS5 query from free text: each word as a prefix, all required. */
 const ftsQuery = (q: string) => q.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/["*()^:{}\-+]/g, " ").split(/\s+/).filter((w) => w.length > 1).map((w) => `"${w}"*`).join(" ");
 
-export async function listMarket(db: D1Database, f: MarketFilters) {
+function whereOf(f: MarketFilters) {
   const w: string[] = [], a: (string | number)[] = [];
   const st = STATUSES.some(([k]) => k === f.st) ? f.st! : "activ";
   if (st !== "all") { w.push("l.status = ?"); a.push(st); }
   if (f.cat) { w.push("l.category = ?"); a.push(f.cat); }
+  if (f.tip) { w.push("l.type = ?"); a.push(f.tip); }
   if (f.tr) { w.push("l.deal = ?"); a.push(f.tr); }
   if (f.src) { w.push("l.source = ?"); a.push(f.src); }
   if (f.loc) { w.push("(l.city LIKE ? OR l.zone LIKE ? OR l.address LIKE ?)"); a.push(`%${f.loc}%`, `%${f.loc}%`, `%${f.loc}%`); }
@@ -36,13 +37,35 @@ export async function listMarket(db: D1Database, f: MarketFilters) {
   if (f.dup !== "1") w.push("(l.dup_group IS NULL OR l.dup_group = l.id OR NOT EXISTS (SELECT 1 FROM market_listings m WHERE m.id = l.dup_group AND m.status = l.status))");
   const q = f.q?.trim() ? ftsQuery(f.q) : "";
   if (q) { w.push("l.id IN (SELECT listing_id FROM market_listings_fts WHERE market_listings_fts MATCH ?)"); a.push(q); }
-  const where = w.length ? `WHERE ${w.join(" AND ")}` : "";
+  return { where: w.length ? `WHERE ${w.join(" AND ")}` : "", binds: a };
+}
+
+export async function listMarket(db: D1Database, f: MarketFilters) {
+  const { where, binds: a } = whereOf(f);
   const page = Math.max(1, Number(f.p) || 1);
   const [rows, total] = await Promise.all([
     db.prepare(`SELECT ${COLS} FROM market_listings l ${where} ORDER BY COALESCE(l.changed_at, l.first_seen_at) DESC LIMIT ${PAGE} OFFSET ${(page - 1) * PAGE}`).bind(...a).all<MarketRow>(),
     db.prepare(`SELECT COUNT(*) AS n FROM market_listings l ${where}`).bind(...a).first<{ n: number }>(),
   ]);
   return { rows: rows.results, total: total?.n ?? 0, page };
+}
+
+export type MarketPoint = { id: string; lat: number; lng: number; price: number | null; currency: string | null; title: string | null; status: string; area: number | null; source: string };
+
+/** Every filtered listing that has a point (the map shows them all, not only the page of the list). */
+export async function marketPoints(db: D1Database, f: MarketFilters, limit = 1500) {
+  const { where, binds } = whereOf(f);
+  const w = where ? `${where} AND l.lat IS NOT NULL AND l.lng IS NOT NULL` : "WHERE l.lat IS NOT NULL AND l.lng IS NOT NULL";
+  const { results } = await db.prepare(`SELECT l.id, l.lat, l.lng, l.price, l.currency, l.title, l.status, ${AREA} AS area, l.source FROM market_listings l ${w}
+    ORDER BY COALESCE(l.changed_at, l.first_seen_at) DESC LIMIT ${limit}`).bind(...binds).all<MarketPoint>();
+  return results;
+}
+
+/** The values the filters offer (categories, types, sites), with how many listings each. */
+export async function marketFacets(db: D1Database) {
+  const q = (col: string) => db.prepare(`SELECT ${col} AS k, COUNT(*) AS n FROM market_listings WHERE ${col} IS NOT NULL AND ${col} <> '' GROUP BY ${col} ORDER BY n DESC`).all<{ k: string; n: number }>().then((r) => r.results);
+  const [cats, types, sources] = await Promise.all([q("category"), q("type"), q("source")]);
+  return { cats, types, sources };
 }
 
 export async function getMarketListing(db: D1Database, id: string) {
