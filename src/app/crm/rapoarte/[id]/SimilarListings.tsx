@@ -5,7 +5,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Description, Gallery, ListingMap, type MapPin } from "@/components/MarketViews";
+import { ListingMap, type MapPin } from "@/components/MarketViews";
+import { ComparableModal, SimGauge, type Verif } from "./ComparableModal";
 
 const RADII: [string, string][] = [["0.5", "500 m"], ["1", "1 km"], ["2", "2 km"], ["5", "5 km"], ["10", "10 km"]];
 const TOLS: [string, string][] = [["25", "±25%"], ["50", "±50%"], ["0", "oricare"]];
@@ -25,24 +26,18 @@ type Row = {
   dup_group: string | null; photo: string | null; km: number; score: number; parts: { k: string; v: number }[]; vsMedian: number | null; first_seen_at: string;
 };
 type Data = {
-  radius: number; tr: string; tol: number; median: number | null; n: number; rows: Row[];
+  radius: number; tr: string; tol: number; median: number | null; n: number; rows: Row[]; verif: Record<string, Verif>;
   subject: { type: string | null; category: string | null; address: string | null; city: string | null; usable_area: number | null; land_area: number | null; sqm: number | null; ll: [number, number] | null } | null;
 };
-type Listing = {
-  id: string; source: string; ext_id: string; url: string; title: string | null; transaction: string | null; status: string; price: number | null; currency: string | null;
-  price_sqm: number | null; usable_area: number | null; built_area: number | null; land_area: number | null; county: string | null; city: string | null; zone: string | null;
-  address: string | null; geo_precision: string | null; seller_kind: string | null; seller_name: string | null; description: string | null; src_created_at: string | null;
-  first_seen_at: string; dup_reason: string | null; duplicates: { id: string; source: string; url: string; price: number | null; currency: string | null }[];
-  photos: { src: string; saved: boolean }[]; history: { at: string; event: string; price: number | null; currency: string | null }[];
-};
 
-export function SimilarListings({ report, asset, base, count, radius }: { report: string; asset?: string; base: string; count: number; radius: number }) {
+export function SimilarListings({ report, asset, base, count, radius, canEdit = true }: { report: string; asset?: string; base: string; count: number; radius: number; canEdit?: boolean }) {
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ raza: String(radius), tr: "vanzare", tol: "50", toate: false });
   const [data, setData] = useState<Data | null>(null);
   const [busy, setBusy] = useState(false);
   const [hover, setHover] = useState<string | null>(null);
   const [pick, setPick] = useState<string | null>(null);
+  const [verif, setVerif] = useState<Record<string, Verif>>({});
 
   useEffect(() => {
     if (!open) return;
@@ -50,7 +45,7 @@ export function SimilarListings({ report, asset, base, count, radius }: { report
     setBusy(true);
     const q = new URLSearchParams({ raza: f.raza, tr: f.tr, tol: f.tol, ...(f.toate ? { toate: "1" } : {}), ...(asset ? { bun: asset } : {}) });
     fetch(`/api/crm/reports/${encodeURIComponent(report)}/market?${q}`, { cache: "no-store" })
-      .then((r) => (r.ok ? (r.json() as Promise<Data>) : null)).then((d) => { if (!off) { setData(d); setBusy(false); } })
+      .then((r) => (r.ok ? (r.json() as Promise<Data>) : null)).then((d) => { if (!off) { setData(d); setVerif(d?.verif ?? {}); setBusy(false); } })
       .catch(() => { if (!off) setBusy(false); });
     return () => { off = true; };
   }, [open, f, report, asset]);
@@ -111,7 +106,7 @@ export function SimilarListings({ report, asset, base, count, radius }: { report
                 <div className="mkList">
                   {rows.map((r) => (
                     <button type="button" key={r.id} className={`ldNear${hover === r.id ? " hl" : ""}${r.status !== "activ" ? " gone" : ""}`} onMouseEnter={() => setHover(r.id)} onMouseLeave={() => setHover(null)} onClick={() => setPick(r.id)}>
-                      {r.photo ? <img src={r.photo} alt="" loading="lazy" /> : <span className="ldNearNo">FOTO</span>}
+                      <span className="mkThumbBox">{r.photo ? <img src={r.photo} alt="" loading="lazy" /> : <span className="ldNearNo">FOTO</span>}<SimGauge v={r.score} size={38} /></span>
                       <span className="ldNearBody">
                         <span className="ldNearTop">
                           <span><small>{r.source} · {r.status}{r.dup_group ? " · pe mai multe site-uri" : ""}</small>
@@ -120,7 +115,7 @@ export function SimilarListings({ report, asset, base, count, radius }: { report
                           <span className="ldNearPrice"><b>{r.price != null ? `${num(r.price)} ${cur(r.currency)}` : "la cerere"}</b><em>{r.price_sqm != null ? `${num(r.price_sqm, rent ? 2 : 0)} ${cur(r.currency)}/m²` : ""}</em></span>
                         </span>
                         <span className="mkTags">
-                          <span className={`simScore ${tone(r.score)}`}><span className="simTrack"><i style={{ width: `${r.score}%` }} /></span><b>{r.score}%</b></span>
+                          {verif[r.id]?.done && <span className="mkVer">✓ verificat {verif[r.id].day?.split("-").reverse().join(".")}</span>}
                           {r.vsMedian != null && <span className={`ldNearTag ${r.vsMedian <= 0 ? "ok" : "err"}`}>{Math.abs(r.vsMedian) < 0.005 ? "la mediană" : `${r.vsMedian < 0 ? "sub" : "peste"} mediană ${pct(r.vsMedian)}`}</span>}
                         </span>
                       </span>
@@ -135,80 +130,16 @@ export function SimilarListings({ report, asset, base, count, radius }: { report
             )}
             <p className="hint simFoot">Similaritatea ține cont de distanță (40%), suprafață (40%) și cât de recent e anunțul (20%), doar unde datele există la ambele. Prețurile sunt cele cerute în anunțuri; un grup de duplicate apare o singură dată.</p>
           </div>
-          {pick && <ListingPreview id={pick} base={base} row={rows.find((r) => r.id === pick) ?? null} onClose={() => setPick(null)} />}
+          {pick && (() => {
+            const k = rows.findIndex((r) => r.id === pick);
+            const r = rows[k];
+            return r ? <ComparableModal c={r} index={k + 1} report={report} base={base} canEdit={canEdit}
+              subject={s?.ll ? { ll: s.ll, label: [cap(s.type) || cap(s.category), s.address ?? s.city].filter(Boolean).join(" · ") } : null}
+              verif={verif[r.id] ?? null} onVerif={(v) => setVerif((x) => ({ ...x, [r.id]: v }))} onClose={() => setPick(null)} /> : null;
+          })()}
         </div>,
         document.body,
       )}
     </>
-  );
-}
-
-/** One listing, in a compact window on top of the list: photos, price, key data, description, links. */
-function ListingPreview({ id, base, row, onClose }: { id: string; base: string; row: Row | null; onClose: () => void }) {
-  const [l, setL] = useState<Listing | null>(null);
-  const [err, setErr] = useState(false);
-  useEffect(() => {
-    let off = false;
-    setL(null); setErr(false);
-    fetch(`/api/crm/market/listing/${encodeURIComponent(id)}`, { cache: "no-store" })
-      .then((r) => (r.ok ? (r.json() as Promise<Listing>) : Promise.reject())).then((d) => { if (!off) setL(d); }).catch(() => { if (!off) setErr(true); });
-    return () => { off = true; };
-  }, [id]);
-  const rent = l?.transaction === "inchiriere";
-  const where = l ? [l.address, [l.zone, l.city].filter(Boolean).filter((v, k, a) => a.indexOf(v) === k).join(", ")].filter(Boolean).join(" · ") : "";
-  const facts: [string, string | null][] = l ? [
-    ["Utilă", l.usable_area != null ? `${num(l.usable_area)} m²` : null], ["Construită", l.built_area != null ? `${num(l.built_area)} m²` : null],
-    ["Teren", l.land_area != null ? `${num(l.land_area)} m²` : null], ["Distanță", row ? dist(row.km) : null],
-    ["Pe piață", days(l.src_created_at ?? l.first_seen_at) != null ? `${days(l.src_created_at ?? l.first_seen_at)} zile` : null],
-  ] : [];
-  const priced = l ? l.history.filter((h) => h.price != null).sort((a, b) => a.at.localeCompare(b.at)) : [];
-  const change = l?.price && priced.length > 1 && priced[0].price ? (l.price - priced[0].price) / priced[0].price : null;
-  return (
-    <div className="vfModal mkPrev" role="dialog" aria-modal="true" aria-label="Anunț" onClick={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }}>
-      <div className="vfModalBox mkPrevBox">
-        <div className="simHead">
-          <div className="ldTags">
-            {l && <><span className="ldTag dark">{rent ? "De închiriat" : "De vânzare"}</span><span className="ldTag">{l.source}</span>
-              <span className={`pill ${l.status === "activ" ? "pillOk" : "pillWarn"}`}><i />{l.status}</span></>}
-          </div>
-          <button type="button" className="btn btnGhost btnSm" onClick={onClose} aria-label="Închide">✕</button>
-        </div>
-        {err && <p className="hint">Anunțul nu a putut fi încărcat.</p>}
-        {!l && !err && <p className="hint">Se încarcă…</p>}
-        {l && (
-          <>
-            <Gallery photos={l.photos.map((p) => ({ src: p.src, original: p.src, saved: p.saved }))} title={l.title ?? "Anunț"} />
-            <div className="mkPrevHead">
-              <div>
-                <h3>{l.title ?? "Anunț"}</h3>
-                {where && <p className="muted">{where}</p>}
-              </div>
-              <div className="mkPrevPrice">
-                <b>{l.price != null ? `${num(l.price)} ${cur(l.currency)}` : "La cerere"}{rent && l.price != null ? <small> / lună</small> : null}</b>
-                {l.price_sqm != null && <span>{num(l.price_sqm, 2)} {cur(l.currency)} / m²{rent ? " / lună" : ""}</span>}
-              </div>
-            </div>
-            <div className="mkPrevFacts">
-              {facts.filter(([, v]) => v).map(([k, v]) => <div key={k}><small>{k}</small><b>{v}</b></div>)}
-              {row && <div><small>Similaritate</small><b>{row.score}%</b></div>}
-            </div>
-            {(row || change != null) && (
-              <div className="ldSignals">
-                {row?.parts.map((p) => <span key={p.k} className={`simPart ${tone(p.v)}`}>{p.k} <b>{p.v}%</b></span>)}
-                {row?.vsMedian != null && <span className={`ldSig ${row.vsMedian <= 0 ? "ok" : "err"}`}>{Math.abs(row.vsMedian) < 0.005 ? "la mediană" : `${row.vsMedian < 0 ? "sub" : "peste"} mediană ${pct(row.vsMedian)}`}</span>}
-                {change != null && Math.abs(change) >= 0.001 && <span className={`ldSig ${change < 0 ? "warn" : ""}`}>{change < 0 ? "−" : "+"}{pct(change)} de la listare</span>}
-                {l.duplicates.length > 0 && <span className="ldSig">și pe {l.duplicates.map((d) => d.source).join(", ")}</span>}
-              </div>
-            )}
-            {l.description ? <Description text={l.description} /> : <p className="hint">Fără descriere (pagina anunțului nu a fost încă descărcată).</p>}
-            <div className="mkPrevActs">
-              <a className="btn btnGold btnSm" href={l.url} target="_blank" rel="noreferrer">Anunțul pe {l.source} ↗</a>
-              <a className="btn btnGhost btnSm" href={`${base}/piata/${l.id}`} target="_blank" rel="noreferrer">Fișa completă în CRM ↗</a>
-              <small className="muted">{[l.seller_kind === "proprietar" ? "Proprietar" : l.seller_kind ? "Agenție" : null, l.seller_name].filter(Boolean).join(" · ")}</small>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
   );
 }
