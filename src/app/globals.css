@@ -4633,3 +4633,7 @@ tr.unproc td:first-child { box-shadow: inset 4px 0 0 var(--acc); }
 .mkGallery img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .mkDesc { white-space: pre-wrap; font-size: 13.5px; line-height: 1.6; margin: 0; }
 .mkRun { font-size: 12.5px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+.mkFeed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.mkFeed li { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--divider); font-size: 13px; }
+.mkFeed li:last-child { border-bottom: 0; }
+.mkFeed a { color: var(--ink); font-weight: 600; }

@@ -1,7 +1,7 @@
 import { err, json, staffApi } from "@/lib/api";
 import { audit } from "@/lib/auth";
 import { apifyConfigured } from "@/lib/market/apify";
-import { startRun, tick } from "@/lib/market/crawler";
+import { cancelRun, startRun, tick } from "@/lib/market/crawler";
 import { background, marketBucket } from "@/lib/market/env";
 import { marketStatus } from "@/lib/market/search";
 
@@ -25,4 +25,14 @@ export async function POST(req: Request) {
   // the first pass now (the cron continues every 5 minutes)
   await background(tick(a.db, await marketBucket(), 60_000).catch((e) => console.error("market tick", e)));
   return Response.json(r);
+}
+
+/** Stops the run in progress (control panel). */
+export async function DELETE() {
+  const a = await staffApi("market:searches", true);
+  if ("res" in a) return a.res;
+  const id = await cancelRun(a.db, a.user.name || a.user.email);
+  if (!id) return err("Nicio rulare în desfășurare.", 404);
+  await audit(a.db, `user:${a.user.id}`, "market.stop", "market_runs", id);
+  return Response.json({ ok: true });
 }

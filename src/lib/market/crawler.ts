@@ -8,7 +8,8 @@
 //
 // A listing whose card (price, area, title) did not change since the last run is not downloaded again.
 import { now, uuid } from "../db";
-import { datasetItem, runStatus, startFetch, type FetchItem } from "./apify";
+import { abortRun, datasetItem, runStatus, startFetch, type FetchItem } from "./apify";
+import { getMarketSettings } from "./settings";
 import { SITES, type Card, type Detail } from "./sites";
 import { cleanMd, hex, norm, sha1, uniq } from "./util";
 
@@ -21,7 +22,6 @@ const MISSING_LIMIT = 3;          // runs in a row missing from a complete searc
 const MAX_PHOTOS = 40;
 const MAX_ATTEMPTS = 3;
 const DUP = { meters: 250, area: 0.03, price: 0.05 };
-const concurrency = () => Math.max(1, Math.min(10, Number(process.env.MARKET_CONCURRENCY) || 2));
 
 const cardFp = (c: Card) => sha1(c.price ?? null, c.currency ?? null, c.usable_area ?? null, norm(c.title));
 const mainArea = (r: { usable_area?: unknown; built_area?: unknown; land_area?: unknown }) =>
@@ -67,14 +67,15 @@ export async function tick(db: D1Database, bucket: R2Bucket | null, budgetMs = 2
   const left = () => budgetMs - (Date.now() - t0);
   let processed = 0, started = 0;
   const active = await db.prepare("SELECT id FROM market_runs WHERE status = 'running' LIMIT 1").first<{ id: string }>();
-  if (!active) return { processed, started, idle: true, photos: await retryPhotos(db, bucket, 20_000) };
+  if (!active) return { processed, started, idle: true, photos: budgetMs > 60_000 ? await retryPhotos(db, bucket, 20_000) : 0 };
+  const { concurrency } = await getMarketSettings(db);
 
-  while (left() > 20_000) {
+  while (left() > Math.min(20_000, budgetMs / 3)) {
     // 1. collect what finished
     const { results: running } = await db.prepare("SELECT * FROM market_jobs WHERE status = 'running' ORDER BY updated_at LIMIT 20").all<Job>();
     let collected = 0;
     for (const j of running) {
-      if (left() < 15_000) break;
+      if (left() < Math.min(15_000, budgetMs / 4)) break;
       let st: string;
       try { st = await runStatus(j.apify_run_id!); } catch { continue; }
       if (st === "READY" || st === "RUNNING") continue;
@@ -95,11 +96,11 @@ export async function tick(db: D1Database, bucket: R2Bucket | null, budgetMs = 2
     }
     // 2. start new runs, up to the parallel limit
     const busy = (await db.prepare("SELECT COUNT(*) AS n FROM market_jobs WHERE status IN ('running', 'processing')").first<{ n: number }>())?.n ?? 0;
-    const free = concurrency() - busy;
+    const free = concurrency - busy;
     if (free > 0) {
       // the results pages first (they decide what else to download), then the listings, alternating the sites
       const { results: pending } = await db.prepare(`SELECT j.* FROM market_jobs j WHERE j.status = 'pending'
-        ORDER BY j.kind = 'list' DESC, j.attempts, (SELECT COUNT(*) FROM market_jobs k WHERE k.status = 'pending' AND k.search_id = j.search_id AND k.created_at < j.created_at), j.created_at LIMIT ?`).bind(free).all<Job>();
+        ORDER BY j.kind = 'list' DESC, j.attempts, (SELECT COUNT(*) FROM market_jobs k WHERE k.run_id = j.run_id AND k.search_id = j.search_id AND k.kind = j.kind AND k.rowid < j.rowid), j.rowid LIMIT ?`).bind(free).all<Job>();
       for (const j of pending) {
         const search = await db.prepare("SELECT source FROM market_searches WHERE id = ?").bind(j.search_id).first<{ source: string }>();
         const site = search && SITES[search.source];
@@ -122,7 +123,9 @@ export async function tick(db: D1Database, bucket: R2Bucket | null, budgetMs = 2
     // wait a little for the runs in progress (Apify answers as soon as one finishes)
     if (!collected) {
       const oldest = await db.prepare("SELECT apify_run_id FROM market_jobs WHERE status = 'running' ORDER BY updated_at LIMIT 1").first<{ apify_run_id: string }>();
-      if (oldest) await runStatus(oldest.apify_run_id, Math.min(30, Math.floor((left() - 15_000) / 1000))).catch(() => null);
+      const wait = Math.min(30, Math.floor((left() - Math.min(15_000, budgetMs / 4)) / 1000));
+      if (oldest && wait > 0) await runStatus(oldest.apify_run_id, wait).catch(() => null);
+      else if (wait <= 0) break;
       else await new Promise((r) => setTimeout(r, 3000));
     }
   }
@@ -314,6 +317,62 @@ async function retryPhotos(db: D1Database, bucket: R2Bucket | null, budgetMs: nu
   return results.length;
 }
 
+// ---------------------------------------------------------------- cancel / progress
+
+/** Stops the run in progress (control panel): the queue is emptied, the Apify runs in progress are aborted. Nothing is
+ * marked as missing (the searches were not read to the end); what was already downloaded stays. */
+export async function cancelRun(db: D1Database, userName: string) {
+  const run = await db.prepare("SELECT id, started_at FROM market_runs WHERE status = 'running' LIMIT 1").first<{ id: string; started_at: string }>();
+  if (!run) return null;
+  const { results: live } = await db.prepare("SELECT apify_run_id FROM market_jobs WHERE run_id = ? AND status = 'running' AND apify_run_id IS NOT NULL").bind(run.id).all<{ apify_run_id: string }>();
+  await Promise.all(live.map((j) => abortRun(j.apify_run_id)));
+  await db.batch([
+    db.prepare("UPDATE market_jobs SET status = 'error', error = 'oprită', updated_at = ? WHERE run_id = ? AND status IN ('pending', 'running', 'processing')").bind(now(), run.id),
+    db.prepare("UPDATE market_searches SET last_complete = 0, last_error = COALESCE(last_error, 'rulare oprită') WHERE last_run_at = ? AND COALESCE(last_complete, 0) = 0").bind(run.started_at),
+    db.prepare("UPDATE market_runs SET status = 'stopped', finished_at = ?, stats = json_set(stats, '$.oprita_de', ?) WHERE id = ?").bind(now(), userName, run.id),
+  ]);
+  await dedupe(db);
+  return run.id;
+}
+
+export type RunProgress = {
+  run: { id: string; trigger: string; status: string; started_at: string; finished_at: string | null; stats: Record<string, number | string> } | null;
+  searches: { id: string; name: string; source: string; pages_done: number; pages_open: number; pages_err: number; det_done: number; det_open: number; det_err: number; listings: number; complete: number | null; error: string | null }[];
+  totals: { pages_done: number; pages_open: number; det_done: number; det_open: number; det_err: number; running: number };
+  recent: { at: string; title: string | null; source: string; listing_id: string | null; kind: string; status: string; error: string | null }[];
+  eta_min: number | null;
+};
+
+/** What the control panel shows: the current (or last) run, per search, the latest jobs, an estimate of the time left. */
+export async function runProgress(db: D1Database): Promise<RunProgress> {
+  const run = await db.prepare("SELECT id, trigger, status, started_at, finished_at, stats FROM market_runs ORDER BY status = 'running' DESC, started_at DESC LIMIT 1")
+    .first<{ id: string; trigger: string; status: string; started_at: string; finished_at: string | null; stats: string }>();
+  if (!run) return { run: null, searches: [], totals: { pages_done: 0, pages_open: 0, det_done: 0, det_open: 0, det_err: 0, running: 0 }, recent: [], eta_min: null };
+  const OPEN = "('pending', 'running', 'processing')";
+  const [per, recent] = await Promise.all([
+    db.prepare(`SELECT s.id, s.name, s.source, s.last_count AS listings, s.last_complete AS complete, s.last_error AS error,
+        COALESCE(SUM(j.kind = 'list' AND j.status = 'done'), 0) AS pages_done, COALESCE(SUM(j.kind = 'list' AND j.status IN ${OPEN}), 0) AS pages_open,
+        COALESCE(SUM(j.kind = 'list' AND j.status = 'error' AND COALESCE(j.error, '') <> 'oprită'), 0) AS pages_err, COALESCE(SUM(j.kind = 'detail' AND j.status = 'done'), 0) AS det_done,
+        COALESCE(SUM(j.kind = 'detail' AND j.status IN ${OPEN}), 0) AS det_open, COALESCE(SUM(j.kind = 'detail' AND j.status = 'error' AND COALESCE(j.error, '') <> 'oprită'), 0) AS det_err,
+        COALESCE(SUM(j.status = 'running'), 0) AS running
+      FROM market_searches s JOIN market_jobs j ON j.search_id = s.id AND j.run_id = ? GROUP BY s.id ORDER BY s.name, s.source`).bind(run.id)
+      .all<RunProgress["searches"][number] & { running: number }>(),
+    db.prepare(`SELECT j.updated_at AS at, l.title, s.source, j.listing_id, j.kind, j.status, j.error FROM market_jobs j
+        JOIN market_searches s ON s.id = j.search_id LEFT JOIN market_listings l ON l.id = j.listing_id
+      WHERE j.run_id = ? AND j.status IN ('done', 'error', 'running') AND COALESCE(j.error, '') <> 'oprită' ORDER BY j.updated_at DESC LIMIT 15`).bind(run.id).all<RunProgress["recent"][number]>(),
+  ]);
+  const sum = (k: "pages_done" | "pages_open" | "det_done" | "det_open" | "det_err" | "running") => per.results.reduce((t, x) => t + Number(x[k] ?? 0), 0);
+  const totals = { pages_done: sum("pages_done"), pages_open: sum("pages_open"), det_done: sum("det_done"), det_open: sum("det_open"), det_err: sum("det_err"), running: sum("running") };
+  // the pace so far: jobs finished per minute since the start
+  const mins = (Date.now() - Date.parse(run.started_at)) / 60_000;
+  const done = totals.pages_done + totals.det_done + totals.det_err;
+  const open = totals.pages_open + totals.det_open;
+  const eta_min = run.status === "running" && done >= 3 && mins > 0.5 ? Math.ceil(open / (done / mins)) : null;
+  let stats: Record<string, number | string> = {};
+  try { stats = JSON.parse(run.stats); } catch { /* empty */ }
+  return { run: { ...run, stats }, searches: per.results, totals, recent: recent.results, eta_min };
+}
+
 // ---------------------------------------------------------------- end of a run
 
 async function finishRun(db: D1Database, bucket: R2Bucket | null, runId: string) {
@@ -337,7 +396,7 @@ async function finishRun(db: D1Database, bucket: R2Bucket | null, runId: string)
   const groups = await dedupe(db);
   await db.prepare("UPDATE market_runs SET status = 'done', finished_at = ?, stats = json_set(stats, '$.grupuri_duplicate', ?) WHERE id = ?").bind(now(), groups, runId).run();
   // the finished jobs are no longer needed (the errors stay one more run, for the page)
-  await db.prepare("DELETE FROM market_jobs WHERE run_id <> ? AND run_id IN (SELECT id FROM market_runs WHERE status = 'done')").bind(runId).run();
+  await db.prepare("DELETE FROM market_jobs WHERE run_id <> ? AND run_id IN (SELECT id FROM market_runs WHERE status IN ('done', 'stopped'))").bind(runId).run();
   await retryPhotos(db, bucket, 20_000);
 }
 

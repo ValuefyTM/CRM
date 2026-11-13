@@ -35,3 +35,8 @@ export async function datasetItem(datasetId: string): Promise<FetchItem | null> 
 }
 
 export const apifyConfigured = () => !!process.env.APIFY_TOKEN;
+
+/** Stops a run (cancelled from the control panel); errors are ignored. */
+export async function abortRun(runId: string) {
+  await fetch(`${API}/actor-runs/${runId}/abort`, { method: "POST", headers: H() }).catch(() => null);
+}

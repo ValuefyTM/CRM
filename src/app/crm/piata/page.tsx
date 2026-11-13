@@ -120,7 +120,7 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
 
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
           <section className="card">
-            <div className="cardHead"><h2>Rulare</h2>{edit && !running && <RunNow />}</div>
+            <div className="cardHead"><h2>Rulare</h2><span className="actions">{edit && !running && <RunNow />}{edit && <a className="btn btnGhost btnSm" href={`${base}/setari/piata`}>Panoul de comandă →</a>}</span></div>
             {running ? (
               <div className="mkRun">
                 <b>În desfășurare din {fmtDate(running.started_at, true)}</b>

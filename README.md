@@ -91,7 +91,7 @@ Comparabile de pe **imobiliare.ro, storia.ro, olx.ro, publi24.ro și homezz.ro**
 - **Căutări** (`market_searches`, editabile în pagină): o pagină de rezultate de pe un site, copiată din browser cu filtrele
   dorite, plus categoria din CRM (REZIDENTIAL, COMERCIAL, INDUSTRIAL, TEREN…) și tranzacția. Paginarea e automată.
 - **Rulare**: cronul `7 23 * * *` (01:07 în România) pornește rularea, iar `*/5 * * * *` avansează coada (`market_jobs`):
-  fiecare pas ~4 minute pornește rulări Apify (maximum `MARKET_CONCURRENCY`, implicit 2) și le colectează pe cele terminate.
+  fiecare pas ~4 minute pornește rulări Apify (maximum cât e setat în panou, implicit 2) și le colectează pe cele terminate.
   „Rulează acum” pornește una imediat.
 - **Fără descărcări inutile**: fiecare anunț are o amprentă din pagina de rezultate (preț, suprafață, titlu); dacă nu s-a
   schimbat, pagina lui nu se mai descarcă. Modificările reale (preț, descriere, imagini…) intră în `market_listing_history`.
@@ -104,6 +104,11 @@ Comparabile de pe **imobiliare.ro, storia.ro, olx.ro, publi24.ro și homezz.ro**
 - **Comparabile**: pe pagina Comparabile a unei proprietăți apar și anunțurile de piață din zonă (aceeași categorie, rază,
   suprafață), cu mediana € / m². Claude: instrumentul MCP `anunturi_piata`.
 - Permisiunea **Anunțuri de piață** (Setări → Permisiuni): vede; „Schimbă căutările și pornește rularea”.
+- **Panoul de comandă** (Setări → Anunțuri de piață, `/crm/setari/piata`): pornire la cerere (toate căutările sau doar cele
+  bifate), progres în timp real pe căutări (pagini, anunțuri descărcate / în coadă / eșuate, timp estimat), ultimele
+  anunțuri procesate, oprirea rulării, rularea de noapte pornită / oprită și câte rulări Apify în paralel (setarea `market`
+  din `settings`). Cât panoul e deschis, pagina avansează singură coada la câteva secunde (`POST /api/crm/market/progress`),
+  fără să aștepte cronul.
 
 Configurare: secretul **`APIFY_TOKEN`** (Settings → Variables and Secrets; https://console.apify.com/settings/integrations)
 și, opțional, `MARKET_CONCURRENCY`. Bucketul `valuefy-market` îl creează comanda de deploy. Codul: `src/lib/market/`
