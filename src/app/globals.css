@@ -4614,3 +4614,22 @@ tr.unproc td:first-child { box-shadow: inset 4px 0 0 var(--acc); }
 @media (max-width: 1000px) { .mdView { grid-template-columns: 1fr; } }
 .mdPre { white-space: pre-wrap; word-break: break-word; font: 13px/1.55 "IBM Plex Mono", ui-monospace, monospace; background: #fbf8f2; border: 1px solid var(--line); border-radius: 10px; padding: 14px; max-height: 75vh; overflow: auto; margin: 0; }
 .mdPre.small { font-size: 12px; }
+
+/* ---------- Anunțuri de piață (Piață) ---------- */
+.mkSearches { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.mkSearches li { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; background: #fff; min-width: 0; }
+.mkSearches li.muted { opacity: 0.65; }
+.mkForm { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; border-top: 1px solid var(--divider); padding-top: 12px; }
+.mkThumb { width: 64px; height: 48px; border-radius: 8px; object-fit: cover; background: var(--cream); display: block; flex-shrink: 0; }
+.mkThumb.none { display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--muted-2); }
+.mkName { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.mkName > span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.mkName a { font-weight: 700; color: var(--ink); text-decoration: none; }
+.mkName a:hover { text-decoration: underline; text-decoration-color: var(--acc); text-decoration-thickness: 2px; }
+.mkSrc { font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; color: var(--muted-2); text-transform: uppercase; }
+.mkDup { font-size: 11px; color: var(--acc-text); }
+.mkGallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.mkGallery a { display: block; aspect-ratio: 4 / 3; border-radius: 10px; overflow: hidden; background: var(--cream); }
+.mkGallery img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mkDesc { white-space: pre-wrap; font-size: 13.5px; line-height: 1.6; margin: 0; }
+.mkRun { font-size: 12.5px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }

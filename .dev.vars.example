@@ -2,3 +2,5 @@ CRM_OWNER_EMAILS=office@valuefy.ro
 # RESEND_API_KEY=
 # CRM_EMAIL_FROM=VALUEFY <cont@valuefy.ro>
 ORDERS_NOTIFY_EMAIL=
+# APIFY_TOKEN=            # anunțuri de piață (Piață): https://console.apify.com/settings/integrations
+# MARKET_CONCURRENCY=2    # câte rulări Apify în paralel permite planul

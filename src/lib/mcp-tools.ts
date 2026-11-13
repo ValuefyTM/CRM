@@ -18,6 +18,8 @@ import { listLeads, leadStatus } from "./leads";
 import { listInquiries } from "./listings";
 import { createQuote, guessType, isExpired, listQuotes, quoteCode, QUOTE_STATUS, quoteWhat } from "./quotes";
 import { PURPOSES } from "./order-labels";
+import { can } from "./perms";
+import { listMarket, nearbyMarket } from "./market/search";
 
 export type Ctx = { db: D1Database; user: User; link: (path: string) => string };
 type Args = Record<string, unknown>;
@@ -370,6 +372,52 @@ export const TOOLS: Tool[] = [
           valoare_eur: x.value != null ? Math.round(x.value) : null, eur_mp: x.sqm ? Math.round(x.sqm) : null, data: x.last_date, distanta_km: x.km, raport: x.report_number,
           link: x.report_id ? c.link(`/rapoarte/${x.report_id}`) : c.link(`/proprietati/${x.id}`) })),
       };
+    },
+  },
+  {
+    name: "anunturi_piata",
+    title: "Anunțuri de piață (comparabile de pe portaluri)",
+    description: "Anunțurile de vânzare / închiriere aduse în fiecare noapte de pe imobiliare.ro, storia.ro, olx.ro, publi24.ro și homezz.ro: preț cerut, suprafață, € / m², localizare, link. În jurul unei adrese / coordonate / proprietăți din CRM (ordonate după distanță) sau după text și filtre. Categoriile sunt cele din CRM: REZIDENTIAL, COMERCIAL, INDUSTRIAL, TEREN. Prețurile sunt cerute, nu de tranzacție.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        adresa: S("Adresa în jurul căreia cauți."), lat: N("Latitudine."), lng: N("Longitudine."), proprietate_id: S("Id-ul unei proprietăți din CRM."),
+        raza_km: N("Raza în km (implicit 3)."),
+        categorie: S("Categoria din CRM.", { enum: ["REZIDENTIAL", "COMERCIAL", "INDUSTRIAL", "TEREN", "PROPRIETATE AGRICOLA", "MIXT"] }),
+        tranzactie: S("Vânzare sau închiriere.", { enum: ["vanzare", "inchiriere"] }),
+        suprafata_mp: N("Suprafața de comparat (filtrează ±toleranță)."), toleranta_procente: N("Toleranța pe suprafață, în procente (implicit 50)."),
+        text: S("Cuvinte căutate în titlu, descriere și pagina anunțului (ex. „pod rulant”)."),
+        localitate: S("Localitate / zonă (fără punct pe hartă)."),
+        status: S("activ (implicit), inactiv, expirat sau all.", { enum: ["activ", "inactiv", "expirat", "all"] }),
+        limita: LIMIT,
+      },
+    },
+    run: async (c, a) => {
+      if (!can(c.user, "market")) return { eroare: "Nu ai acces la Anunțuri de piață." };
+      let ll: [number, number] | null = null;
+      let category = str(a, "categorie") || null, area = num(a, "suprafata_mp") ?? null;
+      if (str(a, "proprietate_id")) {
+        const p = await c.db.prepare("SELECT id, category, geo, usable_area FROM crm_properties WHERE id = ?").bind(str(a, "proprietate_id"))
+          .first<{ id: string; category: string | null; geo: string | null; usable_area: number | null }>();
+        if (!p) return { eroare: "Proprietatea nu a fost găsită." };
+        ll = parseGeo(p.geo); category = category ?? p.category; area = area ?? p.usable_area;
+      } else if (num(a, "lat") !== undefined && num(a, "lng") !== undefined) ll = [num(a, "lat")!, num(a, "lng")!];
+      else if (str(a, "adresa")) ll = await geocode(str(a, "adresa"));
+      const row = (x: { id: string; source: string; url: string; title: string | null; transaction: string | null; price: number | null; currency: string | null; price_sqm: number | null; area: number | null; city: string | null; zone: string | null; geo_precision: string | null; status: string; dup_group: string | null; km?: number }) => ({
+        titlu: x.title, sursa: x.source, tranzactie: x.transaction, pret: x.price, moneda: x.currency, pret_mp: x.price_sqm, suprafata_mp: x.area,
+        localitate: [x.zone, x.city].filter(Boolean).join(", "), precizie_locatie: x.geo_precision, distanta_km: x.km, status: x.status,
+        duplicat: !!x.dup_group, anunt: x.url, link: c.link(`/piata/${x.id}`),
+      });
+      if (ll) {
+        const r = await nearbyMarket(c.db, ll, { category, transaction: str(a, "tranzactie") || null, area, tol: num(a, "toleranta_procente") ?? 50,
+          radiusKm: num(a, "raza_km") ?? 3, status: str(a, "status") || "activ", limit: limit(a) });
+        return { punct: ll, statistici_pret_mp: r.stats, anunturi: r.rows.map(row) };
+      }
+      if (str(a, "adresa")) return { eroare: "Nu am putut localiza adresa. Dă o adresă mai exactă sau coordonatele." };
+      const sa = num(a, "suprafata_mp"), tol = (num(a, "toleranta_procente") ?? 50) / 100;
+      const r = await listMarket(c.db, { q: str(a, "text") || undefined, cat: category ?? undefined, tr: str(a, "tranzactie") || undefined, loc: str(a, "localitate") || undefined,
+        st: str(a, "status") || undefined, min: sa ? String(Math.floor(sa * (1 - tol))) : undefined, max: sa ? String(Math.ceil(sa * (1 + tol))) : undefined });
+      return { total: r.total, anunturi: r.rows.slice(0, limit(a)).map(row) };
     },
   },
   {

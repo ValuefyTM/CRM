@@ -81,3 +81,32 @@ unități individuale („259154-C1-U20”) se folosește rădăcina (primele 6 
 
 Variabile: `LOCATOR_API_TOKEN` (secret, aceeași valoare și în workerul Tools) și opțional `LOCATOR_API_URL`
 (implicit `https://tools.valuefy.ro`). Coordonatele găsite se marchează cu `geo_source = 'cadastru'`.
+
+## Anunțuri de piață (Piață → `/crm/piata`)
+
+Comparabile de pe **imobiliare.ro, storia.ro, olx.ro, publi24.ro și homezz.ro**, aduse în fiecare noapte prin Apify
+(actorul `apify/web-fetch`), salvate în D1 (`market_*`, migrația `1092`) și în bucketul R2 separat **`valuefy-market`**
+(binding `MARKET`): sursa completă a fiecărei pagini (`surse/<site>/<id>/<data>.json.gz`) și imaginile (`imagini/<site>/<id>/…`).
+
+- **Căutări** (`market_searches`, editabile în pagină): o pagină de rezultate de pe un site, copiată din browser cu filtrele
+  dorite, plus categoria din CRM (REZIDENTIAL, COMERCIAL, INDUSTRIAL, TEREN…) și tranzacția. Paginarea e automată.
+- **Rulare**: cronul `7 23 * * *` (01:07 în România) pornește rularea, iar `*/5 * * * *` avansează coada (`market_jobs`):
+  fiecare pas ~4 minute pornește rulări Apify (maximum `MARKET_CONCURRENCY`, implicit 2) și le colectează pe cele terminate.
+  „Rulează acum” pornește una imediat.
+- **Fără descărcări inutile**: fiecare anunț are o amprentă din pagina de rezultate (preț, suprafață, titlu); dacă nu s-a
+  schimbat, pagina lui nu se mai descarcă. Modificările reale (preț, descriere, imagini…) intră în `market_listing_history`.
+- **Identificare**: `source` + `ext_id` (ID-ul de pe site) e unic. Duplicatele între site-uri (`dup_group`): aceeași imagine
+  (sha1) sau la < 250 m cu suprafață ±3% și preț ±5% (fără coordonate: aceeași localitate). OLX: anunțurile preluate de
+  pe Storia se ignoră.
+- **Dispărute**: un anunț care lipsește 3 rulări la rând dintr-o căutare citită complet devine `inactiv`; pagina 404 /
+  redirecționată → `expirat`.
+- **Căutare text**: FTS5 (`market_listings_fts`, fără diacritice) pe titlu, descriere și toată pagina (markdown).
+- **Comparabile**: pe pagina Comparabile a unei proprietăți apar și anunțurile de piață din zonă (aceeași categorie, rază,
+  suprafață), cu mediana € / m². Claude: instrumentul MCP `anunturi_piata`.
+- Permisiunea **Anunțuri de piață** (Setări → Permisiuni): vede; „Schimbă căutările și pornește rularea”.
+
+Configurare: secretul **`APIFY_TOKEN`** (Settings → Variables and Secrets; https://console.apify.com/settings/integrations)
+și, opțional, `MARKET_CONCURRENCY`. Bucketul `valuefy-market` îl creează comanda de deploy. Codul: `src/lib/market/`
+(un parser per site în `sites/`; dacă un site își schimbă paginile și o căutare aduce brusc 0 anunțuri, acolo se repară).
+Prețurile sunt cele cerute în anunțuri; termenii portalurilor restricționează de obicei extragerea automată: date pentru uz
+intern (documentarea evaluărilor), fără republicare și fără datele de contact ale persoanelor.

@@ -30,6 +30,8 @@ export const MODULES = [
     sp: [["process", "Procesează comanda"], ["offer", "Trimite oferta"]], hint: "Comenzile, cererile de pe site, ofertele." },
   { k: "tenders", l: "Licitații SEAP", group: "CRM", rights: ["E"], sp: [["rules", "Schimbă criteriile"]] },
   { k: "listings", l: "Anunțuri imobiliare", group: "CRM", rights: ["A", "E", "D"] },
+  { k: "market", l: "Anunțuri de piață", group: "Operațional", rights: [], sp: [["searches", "Schimbă căutările și pornește rularea"]],
+    hint: "Comparabile de pe imobiliare.ro, storia.ro, olx.ro, publi24.ro și homezz.ro, aduse în fiecare noapte (Apify), cu imaginile și sursa paginii." },
   { k: "reports", l: "Rapoarte", group: "Operațional", rights: ["A", "E", "D"], scope: [["all", "Toate"], ["own", "Din echipa lui"], LEAD],
     sp: [["status", "Schimbă statusul"], ["deliver", "Predă raportul"], ["team", "Alocă echipa"]],
     hint: "„Din echipa lui”: drepturile din echipa raportului (mai jos). „Unde e evaluator / verificator”: drepturile de aici, pe rapoartele unde e evaluator principal sau verificator; rapoartele unde e doar inspector nu le vede (are inspecțiile, în Inspecții)." },
@@ -94,11 +96,11 @@ export const DEFAULT_CONFIG: PermConfig = {
     { id: "operator", name: "Secretariat", cells: {
       clients: cell(["A", "E"]), partners: cell(["A", "E"]), contracts: cell(["A", "E"], { sp: ["sign"] }),
       orders: cell(["A", "E"], { sp: ["process", "offer"] }), tenders: cell(), listings: cell(["A", "E"]),
-      reports: cell(["A", "E"], { sp: ["team"] }), inspections: cell(["E"], { sp: ["assign"] }), properties: cell(),
+      reports: cell(["A", "E"], { sp: ["team"] }), inspections: cell(["E"], { sp: ["assign"] }), properties: cell(), market: cell(),
       fees: cell([], { scope: "each" }), dashboard: cell(), settings: cell(),
     } },
     { id: "evaluator", name: "Evaluator", cells: {
-      tenders: cell(), reports: cell([], { scope: "own" }), inspections: cell(["E"], { scope: "own" }), properties: cell(),
+      tenders: cell(), reports: cell([], { scope: "own" }), inspections: cell(["E"], { scope: "own" }), properties: cell(), market: cell(),
       fees: cell([], { scope: "own" }), dashboard: cell([], { scope: "own" }),
       // their own reports to invoice and the invoices they issued; the billing settings stay with "E" (owner, administrators)
       billing: cell([], { scope: "own", sp: ["issue"] }),

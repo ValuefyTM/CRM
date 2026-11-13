@@ -7,6 +7,7 @@ import { mySql, propertyInScope, propertyScope } from "@/lib/perms-db";
 import { CrmShell } from "@/components/CrmShell";
 import { LocateOne } from "../../LocateActions";
 import { CompView } from "./CompView";
+import { marketFile, nearbyMarket } from "@/lib/market/search";
 
 export const metadata: Metadata = { title: "Comparabile | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
 const cap = (s: string | null) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : "");
 const n0 = (v: number | null | undefined) => (v == null ? "—" : Math.round(v).toLocaleString("ro-RO"));
 
-export default async function ComparablesPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<CompFilters & { raport?: string }> }) {
+export default async function ComparablesPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<CompFilters & { raport?: string; piata?: string }> }) {
   const { db, user, base } = await staffPage("properties");
   const { id } = await params;
   const sp = await searchParams;
@@ -33,7 +34,7 @@ export default async function ComparablesPage({ params, searchParams }: { params
     d.rows.forEach((r) => { r.open = !r.report_id || ok.has(r.report_id); });
   }
   const { subject: s, settings: st, stats } = d;
-  const link = (change: Partial<CompFilters>) => {
+  const link = (change: Partial<CompFilters> & { piata?: string }) => {
     const next: Record<string, string | undefined> = { ...sp, ...change };
     const qs = Object.entries(next).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v!)}`).join("&");
     return `${base}/proprietati/${id}/comparabile${qs ? `?${qs}` : ""}`;
@@ -45,6 +46,11 @@ export default async function ComparablesPage({ params, searchParams }: { params
   );
   const own = s.usable_area && s.value ? s.value / s.usable_area : null;
   const back = sp.raport ? `${base}/rapoarte/${sp.raport}?tab=bunuri` : `${base}/proprietati/${id}`;
+  // Market listings around it (Anunțuri de piață): same category, same radius and area filter, sale or rent.
+  const tr = sp.piata === "inchiriere" ? "inchiriere" : "vanzare";
+  const market = can(user, "market") && d.ll
+    ? await nearbyMarket(db, d.ll, { category: s.category, transaction: tr, area: s.usable_area, tol: st.tol, radiusKm: Math.max(st.radius, 2), limit: 40 }).catch(() => null)
+    : null;
 
   return (
     <CrmShell back={{ href: back, label: sp.raport ? "Raport" : "Fișa proprietății" }} user={user} base={base} active="properties" title={`Comparabile · ${cap(s.type) || "Proprietate"}`} subtitle={s.full_address ?? s.city ?? ""}>
@@ -95,6 +101,42 @@ export default async function ComparablesPage({ params, searchParams }: { params
                 subject={{ lat: d.ll[0], lng: d.ll[1], radiusKm: st.radius, label: `${cap(s.type) || "Proprietatea"} evaluată` }} />
             )}
           </section>
+          {market && (
+            <section className="card">
+              <div className="cardHead">
+                <h2>Anunțuri de piață în zonă</h2>
+                <span className="segment">
+                  <a href={link({ piata: undefined })} aria-pressed={tr === "vanzare"}>Vânzare</a>
+                  <a href={link({ piata: "inchiriere" })} aria-pressed={tr === "inchiriere"}>Închiriere</a>
+                </span>
+              </div>
+              <p className="hint">
+                Prețuri cerute în anunțuri ({s.category ? s.category.toLowerCase() : "orice categorie"}, rază {Math.max(st.radius, 2).toString().replace(".", ",")} km{s.usable_area && st.tol ? `, suprafață ±${st.tol}%` : ""}), câte unul din fiecare grup de duplicate.
+                {market.stats.median != null && <> Mediană {n0(market.stats.median)} € / m²{tr === "inchiriere" ? " / lună" : ""} (P25 {n0(market.stats.p25)} – P75 {n0(market.stats.p75)}).</>}
+              </p>
+              {market.rows.length === 0 ? <p className="hint">Niciun anunț în zonă pentru criteriile alese. <a href={`${base}/piata`}>Anunțuri de piață</a></p> : (
+                <div className="tableWrap">
+                  <table className="table">
+                    <thead><tr><th>Anunț</th><th className="r">Distanță</th><th className="r">Suprafață</th><th className="r">Preț</th><th className="r">€ / m²</th></tr></thead>
+                    <tbody>
+                      {market.rows.map((r) => (
+                        <tr key={r.id}>
+                          <td><span className="mkName">
+                            {r.cover_key ? <img className="mkThumb" src={marketFile(r.cover_key)!} alt="" loading="lazy" /> : <span className="mkThumb none">fără foto</span>}
+                            <span><a href={`${base}/piata/${r.id}`}>{r.title ?? "Anunț"}</a><span className="mkSrc">{r.source} · {r.city ?? ""}{r.geo_precision ? ` · ${r.geo_precision}` : ""}</span></span>
+                          </span></td>
+                          <td className="r">{r.km != null ? `${r.km.toLocaleString("ro-RO", { maximumFractionDigits: 2 })} km` : "—"}</td>
+                          <td className="r">{r.area ? `${n0(r.area)} m²` : "—"}</td>
+                          <td className="r">{r.price != null ? `${n0(r.price)} ${r.currency === "EUR" ? "€" : r.currency ?? ""}` : "la cerere"}</td>
+                          <td className="r">{r.price_sqm != null ? r.price_sqm.toLocaleString("ro-RO", { maximumFractionDigits: 2 }) : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
         </>
       )}
     </CrmShell>
