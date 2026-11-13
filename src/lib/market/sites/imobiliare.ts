@@ -1,4 +1,4 @@
-import { between, cleanMd, ldJson, num, obj, arr, s, unescapeHtml, walk, withParam } from "../util";
+import { between, cleanMd, ldJson, num, obj, arr, s, uniq, unescapeHtml, walk, withParam } from "../util";
 import type { Card, Detail, Site } from "./types";
 
 export const imobiliare: Site = {
@@ -38,13 +38,15 @@ export const imobiliare: Site = {
     const graph: Record<string, unknown>[] = [];
     for (const b of ldJson(raw)) { const o = obj(b); graph.push(...(Array.isArray(o["@graph"]) ? (o["@graph"] as Record<string, unknown>[]) : [o])); }
     const byId = new Map(graph.map((g) => [s(g["@id"]), g]));
+    let crumbs: string[] = [];
     for (const g of graph) {
       const t = g["@type"], id = s(g["@id"]) ?? "";
       if (t === "Product") {
         r.title = unescapeHtml(s(g.name) ?? ""); r.description = s(g.description);
-        // the gallery at full resolution (og-image is cropped to 1200×630)
-        r.photos = arr(g.image).map((im) => s(obj(im)["@id"]) ?? s(obj(im).url) ?? s(im)).filter((u): u is string => !!u)
-          .map((u) => u.replace("/og-image-full-1200w-630h/", "/gallery-full-1200w-watermark/"));
+        // the gallery at full resolution, as the page has it (each size has its own signed path: they cannot be derived
+        // from one another); the 1200×630 previews of the structured data only when the page has no gallery
+        const gallery = uniq([...raw.matchAll(/https:\/\/i\.roamcdn\.net\/prop\/imo\/gallery-full-1200w-watermark\/[^"'\s&\\)]+/g)].map((m) => m[0]));
+        r.photos = gallery.length ? gallery : arr(g.image).map((im) => s(obj(im)["@id"]) ?? s(obj(im).url) ?? s(im)).filter((u): u is string => !!u);
       } else if (t === "Accommodation") {
         r.usable_area = num(g.floorSize); r.features!.categorie_sursa = g.accommodationCategory;
       } else if (t === "Offer" && id.includes("listing-")) {
@@ -54,12 +56,26 @@ export const imobiliare: Site = {
         const ag = byId.get(s(obj(g.offeredBy)["@id"]));
         if (ag) { r.seller_name = s(ag.name); r.seller_kind = "agentie"; }
       } else if (t === "PostalAddress" && id.includes("Address/listing-")) {
+        // in a city with zones: addressLocality = the zone ("Exterior Nord"), addressRegion = the city ("Timișoara")
         const street = (s(g.streetAddress) ?? "").trim().replace(/^[-\s]+|[-\s]+$/g, "");
-        r.city = unescapeHtml(s(g.addressLocality) ?? "") || null;
-        r.address = [street, r.city].filter(Boolean).join(", ") || null;
+        const loc = unescapeHtml(s(g.addressLocality) ?? "").trim(), reg = unescapeHtml(s(g.addressRegion) ?? "").trim();
+        if (reg && loc && reg !== loc && !/^jude/i.test(reg)) { r.city = reg; r.zone = loc; } else r.city = loc || reg || null;
+        r.address = [street, r.zone, r.city].filter(Boolean).join(", ") || null;
       } else if (t === "RealEstateListing") {
         r.src_created_at = s(g.dateCreated); r.src_updated_at = s(g.dateModified);
+        // the path of the page: … › Județul Timiș › Timișoara › Exterior Nord › <title>
+        const names = arr(obj(g.breadcrumb).itemListElement).map((e) => unescapeHtml(s(obj(e).name) ?? "").trim());
+        const j = names.findIndex((n) => /^Județul |^Municipiul București/.test(n));
+        if (j >= 0) {
+          crumbs = names.slice(j, -1);
+          if (/^Județul /.test(crumbs[0])) crumbs[0] = crumbs[0].replace(/^Județul /, ""); else crumbs.unshift("București");
+        }
       }
+    }
+    if (crumbs.length >= 2) {
+      r.county = crumbs[0]; r.city = crumbs[1]; r.zone = crumbs[2] ?? (r.zone && r.zone !== r.city ? r.zone : null);
+      const street = (r.address ?? "").split(",")[0];
+      r.address = [street && street !== r.zone && street !== r.city ? street : null, r.zone, r.city].filter(Boolean).join(", ") || null;
     }
     const c = /(?:&quot;|")center(?:&quot;|"):\[(-?\d+\.\d+),(-?\d+\.\d+)\]/.exec(raw);
     if (c) { r.lat = Number(c[1]); r.lng = Number(c[2]); }

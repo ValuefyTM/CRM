@@ -281,16 +281,30 @@ async function processDetail(db: D1Database, bucket: R2Bucket | null, j: Job, it
 
 const EXT: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/avif": "avif" };
 
+/** The image type from the first bytes (some CDNs answer with a generic content type). */
+function sniff(b: Uint8Array) {
+  if (b[0] === 0xff && b[1] === 0xd8) return "image/jpeg";
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return "image/png";
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return "image/gif";
+  if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return "image/webp";
+  if (b[4] === 0x66 && b[5] === 0x74 && b[6] === 0x79 && b[7] === 0x70) return "image/avif";
+  return null;
+}
+
 async function downloadPhotos(db: D1Database, bucket: R2Bucket, listingId: string, source: string, extId: string) {
+  const site = `https://${source.startsWith("www.") ? source : `www.${source}`}/`.replace("www.homezz.ro", "homezz.ro");
   const { results } = await db.prepare("SELECT id, position, url FROM market_listing_photos WHERE listing_id = ? AND r2_key IS NULL AND attempts < ? ORDER BY position")
     .bind(listingId, MAX_ATTEMPTS).all<{ id: string; position: number; url: string }>();
   for (let i = 0; i < results.length; i += 6) {
     await Promise.all(results.slice(i, i + 6).map(async (p) => {
       try {
-        const r = await fetch(p.url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; VALUEFY-CRM/1.0)" }, signal: AbortSignal.timeout(20_000) });
-        const type = (r.headers.get("content-type") ?? "").split(";")[0].trim();
-        if (!r.ok || !type.startsWith("image/")) throw new Error(`HTTP ${r.status} ${type}`);
+        const r = await fetch(p.url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+          Accept: "image/avif,image/webp,image/jpeg,image/*;q=0.8", Referer: site }, signal: AbortSignal.timeout(20_000) });
+        const declared = (r.headers.get("content-type") ?? "").split(";")[0].trim();
+        if (!r.ok) throw new Error(`HTTP ${r.status} ${declared}`);
         const buf = await r.arrayBuffer();
+        const type = sniff(new Uint8Array(buf, 0, Math.min(16, buf.byteLength))) ?? (declared.startsWith("image/") ? declared : null);
+        if (!type || buf.byteLength < 500) throw new Error(`nu e imagine (${declared || "fără tip"}, ${buf.byteLength} B)`);
         const h = hex(await crypto.subtle.digest("SHA-1", buf));
         const key = `imagini/${source}/${extId}/${String(p.position).padStart(3, "0")}-${h.slice(0, 10)}.${EXT[type] ?? "jpg"}`;
         await bucket.put(key, buf, { httpMetadata: { contentType: type, cacheControl: "private, max-age=31536000, immutable" }, customMetadata: { url: p.url } });
@@ -341,13 +355,19 @@ export type RunProgress = {
   totals: { pages_done: number; pages_open: number; det_done: number; det_open: number; det_err: number; running: number };
   recent: { at: string; title: string | null; source: string; listing_id: string | null; kind: string; status: string; error: string | null }[];
   eta_min: number | null;
+  photos: { saved: number; pending: number; failed: number; last_error: string | null };
 };
 
 /** What the control panel shows: the current (or last) run, per search, the latest jobs, an estimate of the time left. */
 export async function runProgress(db: D1Database): Promise<RunProgress> {
   const run = await db.prepare("SELECT id, trigger, status, started_at, finished_at, stats FROM market_runs ORDER BY status = 'running' DESC, started_at DESC LIMIT 1")
     .first<{ id: string; trigger: string; status: string; started_at: string; finished_at: string | null; stats: string }>();
-  if (!run) return { run: null, searches: [], totals: { pages_done: 0, pages_open: 0, det_done: 0, det_open: 0, det_err: 0, running: 0 }, recent: [], eta_min: null };
+  const ph = await db.prepare(`SELECT COALESCE(SUM(r2_key IS NOT NULL), 0) AS saved, COALESCE(SUM(r2_key IS NULL AND attempts < 3), 0) AS pending,
+      COALESCE(SUM(r2_key IS NULL AND attempts >= 3), 0) AS failed,
+      (SELECT error FROM market_listing_photos WHERE r2_key IS NULL AND error IS NOT NULL ORDER BY rowid DESC LIMIT 1) AS last_error FROM market_listing_photos`)
+    .first<RunProgress["photos"]>() ?? { saved: 0, pending: 0, failed: 0, last_error: null };
+  const photos = ph ?? { saved: 0, pending: 0, failed: 0, last_error: null };
+  if (!run) return { run: null, searches: [], totals: { pages_done: 0, pages_open: 0, det_done: 0, det_open: 0, det_err: 0, running: 0 }, recent: [], eta_min: null, photos };
   const OPEN = "('pending', 'running', 'processing')";
   const [per, recent] = await Promise.all([
     db.prepare(`SELECT s.id, s.name, s.source, s.last_count AS listings, s.last_complete AS complete, s.last_error AS error,
@@ -370,7 +390,7 @@ export async function runProgress(db: D1Database): Promise<RunProgress> {
   const eta_min = run.status === "running" && done >= 3 && mins > 0.5 ? Math.ceil(open / (done / mins)) : null;
   let stats: Record<string, number | string> = {};
   try { stats = JSON.parse(run.stats); } catch { /* empty */ }
-  return { run: { ...run, stats }, searches: per.results, totals, recent: recent.results, eta_min };
+  return { run: { ...run, stats }, searches: per.results, totals, recent: recent.results, eta_min, photos };
 }
 
 // ---------------------------------------------------------------- end of a run

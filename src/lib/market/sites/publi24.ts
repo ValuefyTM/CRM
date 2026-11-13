@@ -62,7 +62,8 @@ export const publi24: Site = {
     if (p) { r.price = num(p[1]); r.currency = p[2] === "EUR" ? "EUR" : "RON"; }
     const head = md.split("##### Descriere")[0];
     const loc = [...head.matchAll(/\[([^\]]+)\]\(https:\/\/www\.publi24\.ro\/anunturi\/[^)]+ "Anunțuri/g)].map((m) => m[1]);
-    if (loc.length) { r.county = loc[0]; r.city = loc.length > 1 ? loc[loc.length - 1] : null; }
+    // the path of the page: county › city › zone (Timis › Timisoara › Sagului)
+    if (loc.length) { r.county = loc[0]; r.city = loc[1] ?? null; r.zone = loc[2] ?? null; }
     // the gallery is in the source at the "extralarge" size; "large"/"top" are also thumbnails of other listings
     const xl = uniq([...raw.matchAll(/https:\/\/s3\.publi24\.ro\/[^"'\s\\)]+\/extralarge\/[^"'\s\\)]+/g)].map((m) => m[0]));
     const imgs = mdImages(head, /s3\.publi24\.ro/).filter((u) => !u.includes("/avatars/"));

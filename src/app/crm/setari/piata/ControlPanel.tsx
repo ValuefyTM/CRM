@@ -129,6 +129,16 @@ export function ControlPanel({ searches, initial, base }: { searches: SearchRow[
         )}
       </section>
 
+      <section className="card">
+        <h2>Imagini</h2>
+        <dl className="kv">
+          <div><dt>Salvate în R2</dt><dd><b>{p.photos.saved}</b></dd></div>
+          <div><dt>De descărcat</dt><dd>{p.photos.pending}</dd></div>
+          <div><dt>Eșuate (după 3 încercări)</dt><dd>{p.photos.failed}</dd></div>
+          {p.photos.last_error && <div><dt>Ultima eroare</dt><dd style={{ color: "var(--err)" }}>{p.photos.last_error}</dd></div>}
+        </dl>
+      </section>
+
       {p.recent.length > 0 && (
         <section className="card">
           <h2>Ultimele procesate</h2>
