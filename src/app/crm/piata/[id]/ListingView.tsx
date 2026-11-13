@@ -71,9 +71,13 @@ export function Gallery({ photos, title }: { photos: GalleryPhoto[]; title: stri
   );
 }
 
-/** The point on the map; an approximate location gets the circle of its precision. */
-export function ListingMap({ lat, lng, radiusM, label }: { lat: number; lng: number; radiusM: number | null; label: string }) {
+export type MapPin = { id: string; lat: number; lng: number; label: string; tip: string; href: string; inactive?: boolean };
+
+/** The listing on the map (its precision circle when approximate), the 500 m and 1 km rings around it and the similar
+ * listings nearby as price pins; hovering a card of the list lights its pin. */
+export function ListingMap({ lat, lng, radiusM, label, pins = [], hover = null }: { lat: number; lng: number; radiusM: number | null; label: string; pins?: MapPin[]; hover?: string | null }) {
   const el = useRef<HTMLDivElement>(null);
+  const marks = useRef<Map<string, Leaflet.Marker>>(new Map());
   useEffect(() => {
     let off = false, map: Leaflet.Map | null = null;
     import("leaflet").then((mod) => {
@@ -82,15 +86,51 @@ export function ListingMap({ lat, lng, radiusM, label }: { lat: number; lng: num
       map = l.map(el.current, { zoomControl: false, scrollWheelZoom: false });
       l.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', referrerPolicy: "strict-origin-when-cross-origin" }).addTo(map);
       l.control.zoom({ position: "bottomright" }).addTo(map);
-      if (radiusM) {
-        const c = l.circle([lat, lng], { radius: radiusM, color: "#e9a227", weight: 1.5, fillColor: "#e9a227", fillOpacity: 0.14 }).addTo(map);
-        map.fitBounds(c.getBounds(), { padding: [24, 24] });
-      } else map.setView([lat, lng], 16);
-      l.circleMarker([lat, lng], { radius: 9, color: "#fff", weight: 3, fillColor: "#111", fillOpacity: 1 }).addTo(map).bindTooltip(label, { direction: "top", offset: [0, -8] });
+      // the bounds from the centre and radius (a circle's own getBounds needs a map that already has a view)
+      const centre = l.latLng(lat, lng);
+      const bounds = l.latLngBounds([centre, centre]);
+      const ring = (r: number) => { l.circle(centre, { radius: r, color: "#9a5f00", weight: 1.5, dashArray: "6 6", fill: false, opacity: 0.7 }).addTo(map!); bounds.extend(centre.toBounds(r * 2)); };
+      if (pins.length) { ring(500); ring(1000); }
+      if (radiusM) { l.circle(centre, { radius: radiusM, color: "#f2a93b", weight: 0, fillColor: "#f2a93b", fillOpacity: 0.16 }).addTo(map); bounds.extend(centre.toBounds(radiusM * 2)); }
+      for (const p of pins) {
+        const m = l.marker([p.lat, p.lng], { icon: l.divIcon({ className: "", html: `<span class="ldPin${p.inactive ? " off" : ""}">${p.label}</span>`, iconSize: [0, 0] }) })
+          .addTo(map).bindTooltip(p.tip, { direction: "top", offset: [0, -12] }).on("click", () => { window.location.href = p.href; });
+        marks.current.set(p.id, m);
+        bounds.extend([p.lat, p.lng]);
+      }
+      l.marker([lat, lng], { icon: l.divIcon({ className: "", html: `<span class="ldPin me">${label}</span>`, iconSize: [0, 0] }), zIndexOffset: 1000 }).addTo(map);
+      if (pins.length || radiusM) map.fitBounds(bounds, { padding: [30, 30], maxZoom: 16 }); else map.setView([lat, lng], 16);
     });
-    return () => { off = true; map?.remove(); };
-  }, [lat, lng, radiusM, label]);
+    return () => { off = true; marks.current.clear(); map?.remove(); };
+  }, [lat, lng, radiusM, label, pins]);
+  useEffect(() => {
+    marks.current.forEach((m, id) => { const e = m.getElement()?.querySelector(".ldPin"); e?.classList.toggle("hl", id === hover); if (id === hover) m.setZIndexOffset(900); else m.setZIndexOffset(0); });
+  }, [hover]);
   return <div ref={el} className="ldMap" />;
+}
+
+export type NearCard = { id: string; href: string; photo: string | null; head: string; title: string; specs: string; price: string; sqm: string; tag: string | null; tone: "ok" | "err" | "" };
+
+/** „Piața din jur”: the map with the similar listings and their cards side by side (UVALO's comparables view). */
+export function MarketAround({ lat, lng, radiusM, label, pins, cards }: { lat: number; lng: number; radiusM: number | null; label: string; pins: MapPin[]; cards: NearCard[] }) {
+  const [hover, setHover] = useState<string | null>(null);
+  return (
+    <div className="ldAround">
+      <div className="ldAroundList">
+        {cards.map((c) => (
+          <a key={c.id} href={c.href} className={`ldNear${hover === c.id ? " hl" : ""}`} onMouseEnter={() => setHover(c.id)} onMouseLeave={() => setHover(null)}>
+            {c.photo ? <img src={c.photo} alt="" loading="lazy" /> : <span className="ldNearNo">FOTO</span>}
+            <span className="ldNearBody">
+              <span className="ldNearTop"><span><small>{c.head}</small><b>{c.title}</b><em>{c.specs}</em></span>
+                <span className="ldNearPrice"><b>{c.price}</b><em>{c.sqm}</em></span></span>
+              {c.tag && <span className={`ldNearTag ${c.tone}`}>{c.tag}</span>}
+            </span>
+          </a>
+        ))}
+      </div>
+      <div className="ldAroundMap"><ListingMap lat={lat} lng={lng} radiusM={radiusM} label={label} pins={pins} hover={hover} /></div>
+    </div>
+  );
 }
 
 /** The description: the first lines, „Citește tot” for the rest. */

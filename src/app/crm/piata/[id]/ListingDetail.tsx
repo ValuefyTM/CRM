@@ -1,8 +1,8 @@
 // The body of a market listing's page (gallery, data, map, history, price card), from the loaded data.
 import { fmtDate } from "@/lib/guard";
 import { CAT_LABEL } from "@/lib/registry-labels";
-import { marketFile, type getMarketListing } from "@/lib/market/search";
-import { Description, Gallery, ListingMap, type GalleryPhoto } from "./ListingView";
+import { marketFile, type getMarketListing, type listingContext } from "@/lib/market/search";
+import { Description, Gallery, ListingMap, MarketAround, type GalleryPhoto, type MapPin, type NearCard } from "./ListingView";
 
 const n0 = (v: unknown, d = 0) => (typeof v === "number" ? v.toLocaleString("ro-RO", { maximumFractionDigits: d }) : "—");
 const cur = (c: unknown) => (c === "EUR" ? "€" : c === "RON" ? "lei" : String(c ?? ""));
@@ -45,7 +45,13 @@ const I = {
   cal: "M4 5h16v16H4zM4 10h16M9 3v4M15 3v4",
 };
 
-export function ListingDetail({ d, base }: { d: NonNullable<Awaited<ReturnType<typeof getMarketListing>>>; base: string }) {
+const pct = (x: number) => `${Math.abs(x * 100).toLocaleString("ro-RO", { maximumFractionDigits: 1 })}%`;
+/** 108500 → „108,5k”, 2400 → „2,4k”, 550 → „550” (the price pins). */
+const short = (v: number | null) => (v == null ? "?" : v >= 1000 ? `${(v / 1000).toLocaleString("ro-RO", { maximumFractionDigits: v >= 100_000 ? 0 : 1 })}k` : String(Math.round(v)));
+const esc = (x: string) => x.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+const dist = (k: number | undefined) => (k == null ? "" : k < 1 ? `~${Math.round((k * 1000) / 10) * 10} m` : `~${k.toLocaleString("ro-RO", { maximumFractionDigits: 1 })} km`);
+
+export function ListingDetail({ d, ctx, base }: { d: NonNullable<Awaited<ReturnType<typeof getMarketListing>>>; ctx: Awaited<ReturnType<typeof listingContext>> | null; base: string }) {
   const l = d.listing;
   const rent = l.transaction === "inchiriere";
   const src = marketFile(l.source_key as string | null);
@@ -66,6 +72,22 @@ export function ListingDetail({ d, base }: { d: NonNullable<Awaited<ReturnType<t
     [I.cal, "Pe site din", day(l.src_created_at)],
   ];
 
+  const near = ctx?.nearby ?? [];
+  const pins: MapPin[] = near.filter((x) => x.lat != null && x.lng != null).map((x) => ({
+    id: x.id, lat: x.lat!, lng: x.lng!, label: short(x.price), href: `${base}/piata/${x.id}`, inactive: x.status !== "activ",
+    tip: `<b>${esc(x.title ?? "Anunț")}</b><br><small>${x.price != null ? `${n0(x.price)} ${cur(x.currency)}` : "la cerere"}${x.area ? ` · ${n0(x.area)} m²` : ""} · ${dist(x.km)}</small>`,
+  }));
+  const cards: NearCard[] = near.slice(0, 12).map((x) => {
+    const vs = ctx?.median && x.price_sqm ? (x.price_sqm - ctx.median) / ctx.median : null;
+    return {
+      id: x.id, href: `${base}/piata/${x.id}`, photo: marketFile(x.cover_key),
+      head: `${x.source} · ${x.status}`, title: [x.zone, x.city].filter(Boolean).filter((v, k, a) => a.indexOf(v) === k).join(", ") || x.title || "Anunț",
+      specs: [x.area ? `${n0(x.area)} m²` : null, x.km != null ? `${dist(x.km)} de acest anunț` : null].filter(Boolean).join(" · "),
+      price: x.price != null ? `${n0(x.price)} ${cur(x.currency)}` : "la cerere", sqm: x.price_sqm != null ? `${n0(x.price_sqm, 2)} ${cur(x.currency)}/m²` : "",
+      tag: vs == null ? null : Math.abs(vs) < 0.005 ? "la mediană" : `${vs < 0 ? "sub" : "peste"} mediană ${pct(vs)}`, tone: vs == null ? "" : vs <= 0 ? "ok" : "err",
+    };
+  });
+
   return (
       <div className="ldPage">
         <Gallery photos={photos} title={title} />
@@ -80,6 +102,15 @@ export function ListingDetail({ d, base }: { d: NonNullable<Awaited<ReturnType<t
           </div>
           <h1 className="ldTitle">{title}</h1>
           {where && <p className="ldWhere"><Icon d={I.pin} />{where}</p>}
+          {ctx && (
+            <div className="ldSignals">
+              {ctx.vsMedian != null && <span className={`ldSig ${ctx.vsMedian <= 0 ? "ok" : "err"}`} title={`față de mediana a ${ctx.n} anunțuri similare pe o rază de 2 km`}>
+                {Math.abs(ctx.vsMedian) < 0.005 ? "la mediana zonei" : `${ctx.vsMedian < 0 ? "sub" : "peste"} mediana zonei ${pct(ctx.vsMedian)}`}</span>}
+              {ctx.days != null && <span className="ldSig">{ctx.days} {ctx.days === 1 ? "zi" : "zile"} pe piață</span>}
+              <span className="ldSig">{ctx.portals} {ctx.portals === 1 ? "portal" : "portaluri"}</span>
+              {ctx.change != null && Math.abs(ctx.change) >= 0.001 && <span className={`ldSig ${ctx.change < 0 ? "warn" : ""}`}>{ctx.change < 0 ? "−" : "+"}{pct(ctx.change)} de la listare</span>}
+            </div>
+          )}
         </header>
 
         <div className="ldGrid">
@@ -104,12 +135,18 @@ export function ListingDetail({ d, base }: { d: NonNullable<Awaited<ReturnType<t
             )}
 
             <section className="ldSection">
-              <div className="ldSecHead"><h2>Localizare</h2>{l.geo_precision ? <span className="muted">{String(l.geo_precision)}</span> : null}</div>
+              <div className="ldSecHead"><h2>{near.length ? "Localizare și piața din jur" : "Localizare"}</h2>{l.geo_precision ? <span className="muted">{String(l.geo_precision)}</span> : null}</div>
+              {near.length > 0 && ctx && (
+                <p className="ldAroundSum">{near.length} {near.length === 1 ? "anunț similar" : "anunțuri similare"} · {CAT_LABEL[l.category ?? ""]?.toLowerCase() ?? "aceeași categorie"}, {rent ? "închiriere" : "vânzare"} · suprafață ±50% · rază 2 km · duplicatele unite
+                  {ctx.median != null && <> · mediana <b>{n0(ctx.median, 2)} {cur(l.currency)} / m²{rent ? " / lună" : ""}</b></>}</p>
+              )}
               {l.lat != null && l.lng != null ? (
                 <>
-                  <ListingMap lat={Number(l.lat)} lng={Number(l.lng)} radiusM={radiusOf(l.geo_precision as string | null)} label={place || title} />
+                  {near.length ? <MarketAround lat={Number(l.lat)} lng={Number(l.lng)} radiusM={radiusOf(l.geo_precision as string | null)} label="Acest anunț" pins={pins} cards={cards} />
+                    : <ListingMap lat={Number(l.lat)} lng={Number(l.lng)} radiusM={radiusOf(l.geo_precision as string | null)} label="Acest anunț" />}
                   <p className="ldMapFoot">
                     <span className="mono">{Number(l.lat).toFixed(6)}, {Number(l.lng).toFixed(6)}</span>
+                    {near.length > 0 && <span>Cercuri: 500 m · 1 km · contur punctat = anunț dispărut</span>}
                     <a href={`https://www.google.com/maps?q=${l.lat},${l.lng}`} target="_blank" rel="noreferrer">Google Maps ↗</a>
                     <a href={`https://www.openstreetmap.org/?mlat=${l.lat}&mlon=${l.lng}#map=17/${l.lat}/${l.lng}`} target="_blank" rel="noreferrer">OpenStreetMap ↗</a>
                   </p>

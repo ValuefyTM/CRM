@@ -103,3 +103,26 @@ export async function marketStatus(db: D1Database) {
     counts: Object.fromEntries(counts.results.map((c) => [c.status, c.n])) as Record<string, number>,
   };
 }
+
+/** What the analysis needs around one listing (like a comparable's card in UVALO's market analysis): the similar
+ * listings nearby (same category and transaction, area ±50%, 2 km, one per duplicate group), their median per m²,
+ * the listing against it, days on the market, on how many portals, the change since it was listed. */
+export async function listingContext(db: D1Database, l: { id: string; lat: number | null; lng: number | null; category: string | null; transaction: string | null;
+  area: number | null; price: number | null; price_sqm: number | null; dup_group: string | null; status: string; src_created_at: string | null; first_seen_at: string; last_seen_at: string; source: string },
+  dupSources: string[], history: { at: string; price: number | null }[]) {
+  const near = l.lat != null && l.lng != null
+    ? await nearbyMarket(db, [l.lat, l.lng], { category: l.category, transaction: l.transaction, area: l.area, tol: 50, radiusKm: 2, limit: 41, status: "all" })
+    : null;
+  const rows = (near?.rows ?? []).filter((r) => r.id !== l.id && (!l.dup_group || r.dup_group !== l.dup_group)).slice(0, 40);
+  // the median: the active listings only (the ones gone from the sites are shown, not counted)
+  const s = rows.filter((r) => r.status === "activ").map((r) => r.price_sqm).filter((x): x is number => x != null && x > 0).sort((a, b) => a - b);
+  const median = s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : null;
+  const vsMedian = median && l.price_sqm ? (l.price_sqm - median) / median : null;
+  const start = Date.parse(l.src_created_at ?? "") || Date.parse(l.first_seen_at);
+  const end = l.status === "activ" ? Date.now() : Date.parse(l.last_seen_at);
+  const days = Number.isFinite(start) ? Math.max(0, Math.round((end - start) / 864e5)) : null;
+  const priced = [...history].filter((h) => h.price != null).sort((a, b) => a.at.localeCompare(b.at));
+  const first = priced[0]?.price ?? null;
+  const change = first && l.price && priced.length > 1 ? (l.price - first) / first : null;
+  return { nearby: rows, median, n: s.length, vsMedian, days, portals: new Set([l.source, ...dupSources]).size, change };
+}
