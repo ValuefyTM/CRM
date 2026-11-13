@@ -50,13 +50,13 @@ export async function listMarket(db: D1Database, f: MarketFilters) {
   return { rows: rows.results, total: total?.n ?? 0, page };
 }
 
-export type MarketPoint = { id: string; lat: number; lng: number; price: number | null; currency: string | null; title: string | null; status: string; area: number | null; source: string };
+export type MarketPoint = { id: string; lat: number; lng: number; price: number | null; currency: string | null; price_sqm: number | null; title: string | null; status: string; area: number | null; source: string };
 
 /** Every filtered listing that has a point (the map shows them all, not only the page of the list). */
 export async function marketPoints(db: D1Database, f: MarketFilters, limit = 1500) {
   const { where, binds } = whereOf(f);
   const w = where ? `${where} AND l.lat IS NOT NULL AND l.lng IS NOT NULL` : "WHERE l.lat IS NOT NULL AND l.lng IS NOT NULL";
-  const { results } = await db.prepare(`SELECT l.id, l.lat, l.lng, l.price, l.currency, l.title, l.status, ${AREA} AS area, l.source FROM market_listings l ${w}
+  const { results } = await db.prepare(`SELECT l.id, l.lat, l.lng, l.price, l.currency, l.price_sqm, l.title, l.status, ${AREA} AS area, l.source FROM market_listings l ${w}
     ORDER BY COALESCE(l.changed_at, l.first_seen_at) DESC LIMIT ${limit}`).bind(...binds).all<MarketPoint>();
   return results;
 }

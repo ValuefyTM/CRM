@@ -3,13 +3,13 @@
 // separator between them), with filters that apply by themselves.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MarketMap, type ExplorerPoint } from "@/components/MarketViews";
+import { CLOUD_RAMP, cloudScale, MarketMap, type ExplorerPoint } from "@/components/MarketViews";
 import { ComparableModal } from "@/components/ComparableModal";
 
 type Row = { id: string; source: string; url: string; title: string | null; category: string | null; type: string | null; transaction: string | null; price: number | null; currency: string | null;
   price_sqm: number | null; area: number | null; city: string | null; zone: string | null; county: string | null; lat: number | null; lng: number | null; geo_precision: string | null;
   status: string; dup_group: string | null; dup_reason: string | null; cover: string | null; first_seen_at: string; changed_at: string | null };
-type Point = { id: string; lat: number; lng: number; price: number | null; currency: string | null; title: string | null; status: string; area: number | null; source: string };
+type Point = { id: string; lat: number; lng: number; price: number | null; currency: string | null; price_sqm: number | null; title: string | null; status: string; area: number | null; source: string };
 type Q = { q?: string; cat?: string; tip?: string; tr?: string; src?: string; st?: string; dup?: string; min?: string; max?: string; p?: string; vezi?: string };
 
 const num = (n: number | null | undefined, d = 0) => (n == null ? "—" : n.toLocaleString("ro-RO", { maximumFractionDigits: d }));
@@ -80,6 +80,37 @@ export function MarketExplorer({ base, current: c, rows, points, total, page, pa
     id: p.id, lat: p.lat, lng: p.lng, label: short(p.price), inactive: p.status !== "activ",
     tip: `<b>${esc(p.title ?? "Anunț")}</b><br><small>${p.price != null ? `${num(p.price)} ${cur(p.currency)}` : "la cerere"}${p.area ? ` · ${num(p.area)} m²` : ""} · ${esc(p.source)}</small>`,
   })), [points]);
+  // the price cloud (€/m² of the filtered listings), as on Hartă prețuri; remembered
+  const [heat, setHeat] = useState(false);
+  const [spread, setSpread] = useState(500);
+  useEffect(() => { try { setHeat(localStorage.getItem("vf-mk-heat") === "1"); const s = Number(localStorage.getItem("vf-mk-spread")); if ([300, 500, 800].includes(s)) setSpread(s); } catch { /* private window */ } }, []);
+  const setHeatKeep = (v: boolean) => { setHeat(v); try { localStorage.setItem("vf-mk-heat", v ? "1" : "0"); } catch { /* not kept */ } };
+  const setSpreadKeep = (v: number) => { setSpread(v); try { localStorage.setItem("vf-mk-spread", String(v)); } catch { /* not kept */ } };
+  const cloudPts = useMemo(() => points.filter((p) => p.price_sqm != null && p.price_sqm > 0 && p.status === (c.st && c.st !== "activ" ? p.status : "activ"))
+    .map((p) => ({ lat: p.lat, lng: p.lng, v: p.price_sqm! })), [points, c.st]);
+  const scale = useMemo(() => cloudScale(cloudPts.map((p) => p.v)), [cloudPts]);
+  const cloud = useMemo(() => (heat && scale ? { points: cloudPts, scale } : null), [heat, scale, cloudPts]);
+  // sale and rent per m² are not comparable: say so when both are in the cloud
+  const mixed = heat && !c.tr && rows.some((r) => r.transaction === "inchiriere") && rows.some((r) => r.transaction !== "inchiriere");
+  const unit = c.tr === "inchiriere" ? "€/m²/lună" : "€/m²";
+  const legendAt = (f: number) => (scale ? `${(scale.lo + (scale.hi - scale.lo) * f).toLocaleString("ro-RO", { maximumFractionDigits: c.tr === "inchiriere" ? 1 : 0 })}` : "");
+  const legend = cloud && scale && (
+    <div className="pxLegend mkLegend">
+      <b>Nor de prețuri · {unit}</b>
+      <i className="pxGrad" style={{ background: `linear-gradient(90deg, ${CLOUD_RAMP.join(", ")})` }} />
+      <span className="pxGradLbl"><span>{legendAt(0)}</span><span>{legendAt(0.5)}</span><span>{legendAt(1)}</span></span>
+      <small>{cloudPts.length} anunțuri cu preț / m² · intens = multe · estompat = puține</small>
+      {mixed && <small className="mkWarn">Vânzare și închiriere amestecate: alege tranzacția.</small>}
+    </div>
+  );
+  const heatCtl = (
+    <span className="mkHeatCtl">
+      <label className={`fsel toggle${heat ? " on" : ""}`} data-on={heat ? "" : undefined}><input type="checkbox" checked={heat} onChange={(e) => setHeatKeep(e.target.checked)} /> Nor de prețuri €/m²</label>
+      {heat && <span className="segment" role="group" aria-label="Cât se întinde fiecare anunț">
+        {([[300, "Detaliat"], [500, "Mediu"], [800, "Neted"]] as const).map(([v, t]) => <button key={v} type="button" aria-pressed={spread === v} title={`fiecare anunț acoperă ~${v} m`} onClick={() => setSpreadKeep(v)}>{t}</button>)}
+      </span>}
+    </span>
+  );
   const active = [c.q, c.cat, c.tip, c.tr, c.src, c.st && c.st !== "activ" ? c.st : null, c.min || c.max, c.dup].filter(Boolean).length;
 
   const sel = (label: string, k: keyof Q, opts: [string, string][], all = "Toate") => (
@@ -148,6 +179,7 @@ export function MarketExplorer({ base, current: c, rows, points, total, page, pa
             <input inputMode="numeric" value={max} onChange={(e) => setMax(e.target.value.replace(/\D/g, ""))} placeholder="până la" aria-label="Suprafața maximă" />
           </span>
           <label className={`fsel toggle${c.dup ? " on" : ""}`} data-on={c.dup ? "" : undefined}><input type="checkbox" checked={!!c.dup} onChange={(e) => go({ dup: e.target.checked ? "1" : undefined })} /> Și duplicatele</label>
+          {view !== "lista" && heatCtl}
           {active > 0 && <a className="resetLink" href={`${base}/piata${view !== "split" ? `?vezi=${view}` : ""}`}>✕ Resetează filtrele ({active})</a>}
         </span>
         <span className="segment rgViews" role="group" aria-label="Vizualizare">
@@ -156,12 +188,12 @@ export function MarketExplorer({ base, current: c, rows, points, total, page, pa
           ))}
         </span>
       </div>
-      {view === "lista" ? cards : view === "harta" ? <div className="mkExMapOnly"><MarketMap points={pts} onPick={openId} /></div> : (
+      {view === "lista" ? cards : view === "harta" ? <div className="mkExMapOnly mkMapRel"><MarketMap points={pts} onPick={openId} cloud={cloud} spread={spread} />{legend}</div> : (
         <div className="rgSplit mkExSplit" ref={split} style={{ ["--rg-left" as string]: `${left}%` }}>
           {cards}
           <div className={`rgGutter${drag ? " drag" : ""}`} role="separator" aria-orientation="vertical" aria-label="Lățimea listei" aria-valuenow={Math.round(left)} aria-valuemin={22} aria-valuemax={78}
             tabIndex={0} onPointerDown={startDrag} onDoubleClick={() => nudge(44 - left)} onKeyDown={(e) => { if (e.key === "ArrowLeft") nudge(-3); if (e.key === "ArrowRight") nudge(3); }} />
-          <div className="rgSplitMap"><MarketMap points={pts} hover={hover ?? picked} onPick={onPick} onHover={onMapHover} /></div>
+          <div className="rgSplitMap mkMapRel"><MarketMap points={pts} hover={hover ?? picked} onPick={onPick} onHover={onMapHover} cloud={cloud} spread={spread} />{legend}</div>
         </div>
       )}
       {open && <ComparableModal c={{ id: open.id, score: null, parts: [], km: null, vsMedian: null, lat: open.lat, lng: open.lng }} base={base} onClose={() => setOpen(null)} />}
