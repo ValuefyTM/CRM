@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MarketMap, type ExplorerPoint } from "@/components/MarketViews";
+import { ComparableModal } from "@/components/ComparableModal";
 
 type Row = { id: string; source: string; url: string; title: string | null; category: string | null; type: string | null; transaction: string | null; price: number | null; currency: string | null;
   price_sqm: number | null; area: number | null; city: string | null; zone: string | null; county: string | null; lat: number | null; lng: number | null; geo_precision: string | null;
@@ -61,6 +62,9 @@ export function MarketExplorer({ base, current: c, rows, points, total, page, pa
   const nudge = (d: number) => { const v = Math.min(78, Math.max(22, left + d)); setLeft(v); keep(v); };
 
   const [hover, setHover] = useState<string | null>(null);
+  // the listing opened in the window (the same as in a report, without a subject)
+  const [open, setOpen] = useState<{ id: string; lat: number | null; lng: number | null } | null>(null);
+  const openId = useCallback((id: string) => { const p = points.find((x) => x.id === id); const r = rows.find((x) => x.id === id); setOpen({ id, lat: r?.lat ?? p?.lat ?? null, lng: r?.lng ?? p?.lng ?? null }); }, [points, rows]);
   const [picked, setPicked] = useState<string | null>(null);
   const reveal = useCallback((id: string) => {
     const box = list.current, row = box?.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"]`);
@@ -69,7 +73,7 @@ export function MarketExplorer({ base, current: c, rows, points, total, page, pa
     if (top < box.scrollTop || top + row.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTo({ top: top - box.clientHeight / 2 + row.offsetHeight / 2, behavior: "smooth" });
     return true;
   }, []);
-  const onPick = useCallback((id: string) => { if (!reveal(id)) window.location.href = `${base}/piata/${id}`; else setPicked(id); }, [reveal, base]);
+  const onPick = useCallback((id: string) => { if (reveal(id)) setPicked(id); openId(id); }, [reveal, openId]);
   const onMapHover = useCallback((id: string | null) => { setHover(id); if (id) reveal(id); }, [reveal]);
 
   const pts = useMemo<ExplorerPoint[]>(() => points.map((p) => ({
@@ -90,7 +94,8 @@ export function MarketExplorer({ base, current: c, rows, points, total, page, pa
     <div className="mkExList" ref={list}>
       {rows.length === 0 ? <div className="empty">Niciun anunț pentru filtrele alese.</div> : rows.map((r) => (
         <a key={r.id} data-id={r.id} href={`${base}/piata/${r.id}`} className={`ldNear${hover === r.id || picked === r.id ? " hl" : ""}${r.status !== "activ" ? " gone" : ""}`}
-          onMouseEnter={() => setHover(r.id)} onMouseLeave={() => setHover(null)}>
+          onMouseEnter={() => setHover(r.id)} onMouseLeave={() => setHover(null)}
+          onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; e.preventDefault(); setPicked(r.id); openId(r.id); }}>
           {r.cover ? <img src={r.cover} alt="" loading="lazy" /> : <span className="ldNearNo">FOTO</span>}
           <span className="ldNearBody">
             <span className="ldNearTop">
@@ -151,7 +156,7 @@ export function MarketExplorer({ base, current: c, rows, points, total, page, pa
           ))}
         </span>
       </div>
-      {view === "lista" ? cards : view === "harta" ? <div className="mkExMapOnly"><MarketMap points={pts} onPick={(id) => { window.location.href = `${base}/piata/${id}`; }} /></div> : (
+      {view === "lista" ? cards : view === "harta" ? <div className="mkExMapOnly"><MarketMap points={pts} onPick={openId} /></div> : (
         <div className="rgSplit mkExSplit" ref={split} style={{ ["--rg-left" as string]: `${left}%` }}>
           {cards}
           <div className={`rgGutter${drag ? " drag" : ""}`} role="separator" aria-orientation="vertical" aria-label="Lățimea listei" aria-valuenow={Math.round(left)} aria-valuemin={22} aria-valuemax={78}
@@ -159,6 +164,7 @@ export function MarketExplorer({ base, current: c, rows, points, total, page, pa
           <div className="rgSplitMap"><MarketMap points={pts} hover={hover ?? picked} onPick={onPick} onHover={onMapHover} /></div>
         </div>
       )}
+      {open && <ComparableModal c={{ id: open.id, score: null, parts: [], km: null, vsMedian: null, lat: open.lat, lng: open.lng }} base={base} onClose={() => setOpen(null)} />}
     </section>
   );
 }

@@ -1,14 +1,16 @@
 "use client";
-// The comparable's window (fișa comparabilei), opened from the report's similar listings: similarity gauge, gallery,
-// technical data, price history, its position against the subject, the seller, the original title and text, the
-// phone check (kept on the report, its sentence ready for the report) and the sheet exported as PDF / Word / PNG.
+// The listing's window (fișa comparabilei): gallery, technical data, price history, the map, the seller, the original
+// title and text, the sheet exported as PDF / Word / PNG. Opened from a report's similar listings it also has the
+// similarity to the valued property, the position against it and the phone check (kept on the report); opened from
+// Analize de piață (no subject, no report) it shows the listing's own location instead.
 import "leaflet/dist/leaflet.css";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type * as Leaflet from "leaflet";
 import { printFiche, pngFiche, simColor, wordFiche, type FicheData } from "@/lib/market/fiche";
+import { ListingMap } from "@/components/MarketViews";
 
 export type Verif = { done: boolean; day: string | null; person: string | null; outcome: "confirmate" | "suplimentare" | "diferite" | "tranzactionat"; note: string | null };
-export type CompRow = { id: string; score: number; parts: { k: string; v: number }[]; km: number; vsMedian: number | null; lat: number | null; lng: number | null };
+export type CompRow = { id: string; score: number | null; parts: { k: string; v: number }[]; km: number | null; vsMedian: number | null; lat: number | null; lng: number | null };
 type Listing = {
   id: string; source: string; ext_id: string; url: string; title: string | null; transaction: string | null; status: string; price: number | null; currency: string | null;
   price_sqm: number | null; usable_area: number | null; built_area: number | null; land_area: number | null; county: string | null; city: string | null; zone: string | null;
@@ -23,6 +25,8 @@ const cur = (c: string | null | undefined) => (c === "EUR" ? "€" : c === "RON"
 const ro = (iso: string | null | undefined) => (iso ? iso.slice(0, 10).split("-").reverse().join(".") : "—");
 const dist = (km: number) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.toLocaleString("ro-RO", { maximumFractionDigits: 1 })} km`);
 const today = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
+/** The radius of an approximate location, in metres („aproximativă (rază 500 m)”, „… 3 km)”); null when exact. */
+const radiusOf = (p: string | null) => { if (!p || p.startsWith("exactă")) return null; const m = /rază ([\d.,]+) (m|km)/.exec(p); return m ? Number(m[1].replace(",", ".")) * (m[2] === "km" ? 1000 : 1) : p.startsWith("aproximativă") ? 300 : null; };
 const OUT: [Verif["outcome"], string][] = [["confirmate", "datele sunt reale / confirmate"], ["suplimentare", "informații suplimentare obținute"], ["diferite", "date diferite față de anunț"], ["tranzactionat", "proprietate tranzacționată — preț final"]];
 
 /** The similarity gauge (the same thresholds as the list and the exports: >80 green, 60–80 amber, <60 orange). */
@@ -72,8 +76,8 @@ function DistMap({ s, p, km }: { s: [number, number]; p: [number, number]; km: n
 }
 
 export function ComparableModal({ c, index, report, base, subject, verif, onVerif, onClose, canEdit }: {
-  c: CompRow; index?: number; report: string; base: string; subject: { ll: [number, number] | null; label: string } | null;
-  verif: Verif | null; onVerif: (v: Verif) => void; onClose: () => void; canEdit: boolean;
+  c: CompRow; index?: number; report?: string | null; base: string; subject?: { ll: [number, number] | null; label: string } | null;
+  verif?: Verif | null; onVerif?: (v: Verif) => void; onClose: () => void; canEdit?: boolean;
 }) {
   const [l, setL] = useState<Listing | null>(null);
   const [err, setErr] = useState(false);
@@ -95,6 +99,12 @@ export function ComparableModal({ c, index, report, base, subject, verif, onVeri
   const toast = (t: string) => { setMsg(t); setTimeout(() => setMsg(null), 2600); };
 
   const n = l?.photos.length ?? 0;
+  useEffect(() => {
+    if (zoom) return;
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", k);
+    return () => document.removeEventListener("keydown", k);
+  }, [zoom, onClose]);
   useEffect(() => {
     if (!zoom) return;
     const k = (e: KeyboardEvent) => { if (e.key === "ArrowRight") setI((x) => (x + 1) % n); else if (e.key === "ArrowLeft") setI((x) => (x - 1 + n) % n); else if (e.key === "Escape") { e.stopPropagation(); setZoom(false); } };
@@ -127,6 +137,7 @@ export function ComparableModal({ c, index, report, base, subject, verif, onVeri
   };
   const setV = (patch: Partial<Verif>) => {
     const next = { ...v, ...patch };
+    if (!report || !onVerif) return;
     onVerif(next);
     if (saveT.current) clearTimeout(saveT.current);
     saveT.current = setTimeout(() => {
@@ -140,7 +151,7 @@ export function ComparableModal({ c, index, report, base, subject, verif, onVeri
     index, title: street, source: l.source, ref: l.ext_id, url: l.url, status: l.status, place: place || "—", caption: l.title,
     price: l.price != null ? `${num(l.price)} ${cur(l.currency)}${rent ? " / lună" : ""}` : "preț la cerere", unit: l.price_sqm != null ? `${num(l.price_sqm, 2)} ${cur(l.currency)}/mp${rent ? " / lună" : ""}` : "—",
     details, floorYear, days: daysOn != null ? `${daysOn} zile pe piață` : "—", portals: `${portals} ${portals === 1 ? "portal" : "portaluri"} (după deduplicare)`,
-    history: priceHist + (drop != null && Math.abs(drop) >= 0.1 ? ` (${drop > 0 ? "+" : ""}${num(drop, 1)}%)` : ""), sim: c.score, distance: dist(c.km),
+    history: priceHist + (drop != null && Math.abs(drop) >= 0.1 ? ` (${drop > 0 ? "+" : ""}${num(drop, 1)}%)` : ""), sim: c.score, distance: c.km != null && subject?.ll ? dist(c.km) : "—",
     description: l.description, seller, snapshot: l.fetched_at ? `Snapshot arhivat la ${ro(l.fetched_at)} · HTML + fotografii + metadate` : null,
     verification: v.done ? verifText() : null, photos: l.photos.filter((p) => p.saved).map((p) => p.src),
     subject: subject?.ll ? { lat: subject.ll[0], lng: subject.ll[1], label: subject.label } : null, point: c.lat != null && c.lng != null ? { lat: c.lat, lng: c.lng } : null,
@@ -162,7 +173,7 @@ export function ComparableModal({ c, index, report, base, subject, verif, onVeri
     <div className="vfModal cmWrap" role="dialog" aria-modal="true" aria-label="Fișa comparabilei" onClick={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }}>
       <div className="cmBox">
         <header className="cmHead">
-          <SimGauge v={c.score} />
+          {c.score != null && <SimGauge v={c.score} />}
           <div className="cmHeadT">
             <b>{street}</b>
             <small>{l ? `${l.source} · ${l.ext_id} · ${l.status === "activ" ? "activ" : `${l.status} din ${ro(l.last_seen_at)}`}` : "Se încarcă…"}</small>
@@ -212,9 +223,15 @@ export function ComparableModal({ c, index, report, base, subject, verif, onVeri
 
               <div className="cmRight">
                 <section className="cmMapBox">
-                  <div className="cmMapHead"><b>Poziție față de subiect</b><span>~{dist(c.km)}</span></div>
-                  {subject?.ll && c.lat != null && c.lng != null ? <DistMap s={subject.ll} p={[c.lat, c.lng]} km={c.km} /> : <div className="cmNoPhoto">Fără coordonate</div>}
-                  <div className="cmLegend"><span className="s">◆ subiect</span><span className="c">● comparabilă</span><span>linie dreaptă{l.geo_precision ? ` · locație ${l.geo_precision}` : ""}</span></div>
+                  {subject?.ll && c.km != null ? <>
+                    <div className="cmMapHead"><b>Poziție față de subiect</b><span>~{dist(c.km)}</span></div>
+                    {c.lat != null && c.lng != null ? <DistMap s={subject.ll} p={[c.lat, c.lng]} km={c.km} /> : <div className="cmNoPhoto">Fără coordonate</div>}
+                    <div className="cmLegend"><span className="s">◆ subiect</span><span className="c">● comparabilă</span><span>linie dreaptă{l.geo_precision ? ` · locație ${l.geo_precision}` : ""}</span></div>
+                  </> : <>
+                    <div className="cmMapHead"><b>Localizare</b><span>{[l.zone, l.city].filter(Boolean).filter((x, k, a) => a.indexOf(x) === k).join(", ")}</span></div>
+                    {l.lat != null && l.lng != null ? <ListingMap lat={l.lat} lng={l.lng} radiusM={radiusOf(l.geo_precision)} label="Anunțul" className="cmMap" /> : <div className="cmNoPhoto">Fără coordonate (apar după descărcarea paginii anunțului)</div>}
+                    <div className="cmLegend"><span className="c">● anunțul</span><span>{l.geo_precision ? `locație ${l.geo_precision}` : "precizie nedeclarată"}</span></div>
+                  </>}
                 </section>
 
                 <section className="cmContact">
@@ -240,7 +257,7 @@ export function ComparableModal({ c, index, report, base, subject, verif, onVeri
                 {(l.description ?? "Fără descriere (pagina anunțului nu a fost încă descărcată).").split(/\n\s*\n/).map((p, k) => <p key={k}>{p}</p>)}</div>
             </div>
 
-            <section className={`cmVerif${v.done ? " done" : ""}`}>
+            {report && <section className={`cmVerif${v.done ? " done" : ""}`}>
               <div className="cmVerifHead" onClick={() => setVOpen((o) => !o)}>
                 <span className="cmCaret">{vOpen ? "▾" : "▸"}</span>
                 <b>Verificare telefonică</b>
@@ -264,7 +281,7 @@ export function ComparableModal({ c, index, report, base, subject, verif, onVeri
                   {!canEdit && <p className="hint cmWide">Doar echipa raportului poate completa verificarea.</p>}
                 </fieldset>
               )}
-            </section>
+            </section>}
 
             <footer className="cmFoot">
               <span className="cmSnap">{l.fetched_at ? <>✓ snapshot arhivat la {ro(l.fetched_at)}{l.source_file && <> · <a href={l.source_file}>sursa completă</a></>}</> : "pagina anunțului nu a fost încă arhivată"}</span>

@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ListingMap, type MapPin } from "@/components/MarketViews";
-import { ComparableModal, SimGauge, type Verif } from "./ComparableModal";
+import { ComparableModal, SimGauge, type Verif } from "@/components/ComparableModal";
 
 const RADII: [string, string][] = [["0.5", "500 m"], ["1", "1 km"], ["2", "2 km"], ["5", "5 km"], ["10", "10 km"]];
 const TOLS: [string, string][] = [["25", "±25%"], ["50", "±50%"], ["0", "oricare"]];

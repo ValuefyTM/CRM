@@ -64,8 +64,8 @@ async function svgToJpeg(svg: string, w: number, h: number) {
 
 const rows = (d: FicheData): [string, string][] => [
   ["Adresă / zonă", d.place], ["Suprafețe", d.details], ["Etaj / an", d.floorYear], ["Preț / unitar", `${d.price} · ${d.unit}`], ["Istoric preț", d.history],
-  ["Expunere", `${d.days} · ${d.portals}`], ["Sursă", `${d.source} · ref. ${d.ref}`], ["Vânzător", d.seller], ["Distanța față de subiect", d.distance],
-  ["Grad de similaritate", d.sim != null ? `${d.sim}%` : "—"],
+  ["Expunere", `${d.days} · ${d.portals}`], ["Sursă", `${d.source} · ref. ${d.ref}`], ["Vânzător", d.seller],
+  ...(d.subject ? [["Distanța față de subiect", d.distance], ["Grad de similaritate", d.sim != null ? `${d.sim}%` : "—"]] as [string, string][] : []),
 ];
 
 /** PDF: a print-ready sheet in a new window (2 pages), printed by the browser — „Salvează ca PDF”. */
@@ -92,7 +92,7 @@ export async function printFiche(d: FicheData) {
   <div class="bar"><span><b>${esc(no)}</b> &nbsp; ${esc(d.source)} · ref. ${esc(d.ref)}</span><a href="${esc(d.url)}">anunț original ↗</a></div>
   <div class="top">${photos[0] ? `<img src="${photos[0]}" alt="">` : "<div></div>"}<div>
     <h1>${esc(d.title)}</h1>${d.caption ? `<p class="cap">${esc(d.caption)}</p>` : ""}
-    <div class="tags">${d.sim != null ? `<span class="sim" style="background:${simColor(d.sim)}">SIM ${d.sim}%</span>` : ""}<span>~${esc(d.distance)}</span><span>${esc(d.status.toUpperCase())}</span></div>
+    <div class="tags">${d.sim != null ? `<span class="sim" style="background:${simColor(d.sim)}">SIM ${d.sim}%</span>` : ""}${d.subject ? `<span>~${esc(d.distance)}</span>` : ""}<span>${esc(d.status.toUpperCase())}</span></div>
     <div class="price">${esc(d.price)} <small>${esc(d.unit)}</small></div></div></div>
   <div class="sec"><i>01</i>Datele proprietății</div><table>${rows(d).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("")}</table>
   <div class="sec"><i>02</i>Descrierea din anunțul original</div><div class="desc">${esc(d.description ?? "—")}</div>
@@ -100,8 +100,8 @@ export async function printFiche(d: FicheData) {
   ${d.snapshot ? `<div class="snap">✓ ${esc(d.snapshot)}</div>` : ""}
   <div class="p2"><div class="bar"><span><b>${esc(no)}</b> — fotografii și amplasament</span><span>${esc(d.source)} · ref. ${esc(d.ref)}</span></div>
   <div class="sec"><i>04</i>Fotografii din anunțul original</div><div class="grid">${photos.slice(1, 7).map((p) => `<img src="${p}" alt="">`).join("") || "<p>Fără fotografii arhivate.</p>"}</div>
-  <div class="sec"><i>05</i>Amplasament față de proprietatea subiect</div>${plan ? `<div class="plan">${plan}</div>` : "<p>Fără coordonate.</p>"}
-  <p class="foot">Distanța față de proprietatea subiect: ~${esc(d.distance)} (linie dreaptă) · grad de similaritate: ${d.sim != null ? `${d.sim}%` : "—"}</p></div>
+  ${d.subject ? `<div class="sec"><i>05</i>Amplasament față de proprietatea subiect</div>${plan ? `<div class="plan">${plan}</div>` : "<p>Fără coordonate.</p>"}
+  <p class="foot">Distanța față de proprietatea subiect: ~${esc(d.distance)} (linie dreaptă) · grad de similaritate: ${d.sim != null ? `${d.sim}%` : "—"}</p>` : ""}</div>
   <script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`;
   w.document.open(); w.document.write(html); w.document.close();
 }
@@ -157,9 +157,9 @@ export async function wordFiche(d: FicheData) {
       rows: [new TableRow({ children: [0, 1, 2].map((k) => new TableCell({ borders: noB, margins: { top: 40, bottom: 40, left: 40, right: 40 },
         children: [new Paragraph({ children: photos[1 + r + k] ? [img(photos[1 + r + k], 150, 100)] : [] })] })) })] }))
       : [new Paragraph({ children: [new TextRun({ text: "Fără fotografii arhivate.", size: 18, color: "6B6B6B" })] })]),
-    SEC("05", "Amplasament față de proprietatea subiect"),
-    ...(planImg ? [new Paragraph({ children: [img(planImg, 470, 282)], spacing: { after: 120 } })] : []),
-    new Paragraph({ children: [new TextRun({ text: `Distanța față de proprietatea subiect: ~${d.distance} (linie dreaptă) · grad de similaritate: ${d.sim != null ? `${d.sim}%` : "—"}`, size: 18, color: "4A4A4A" })] }),
+    ...(d.subject ? [SEC("05", "Amplasament față de proprietatea subiect"),
+      ...(planImg ? [new Paragraph({ children: [img(planImg, 470, 282)], spacing: { after: 120 } })] : []),
+      new Paragraph({ children: [new TextRun({ text: `Distanța față de proprietatea subiect: ~${d.distance} (linie dreaptă) · grad de similaritate: ${d.sim != null ? `${d.sim}%` : "—"}`, size: 18, color: "4A4A4A" })] })] : []),
   ];
   const doc = new Document({ styles: { default: { document: { run: { font: "Arial" } } } }, sections: [{ properties: { page: { margin: { top: 900, bottom: 900, left: 900, right: 900 } } }, children: [...head, ...page2] }] });
   download(await Packer.toBlob(doc), `comparabila_${d.source}_${d.ref}.docx`);
@@ -175,7 +175,7 @@ export async function pngFiche(d: FicheData) {
     `<text x="24" y="76" font-family="Arial" font-size="20" font-weight="bold" fill="#141414">${esc(d.title.slice(0, 64))}</text><text x="24" y="97" font-family="Arial" font-size="11" fill="#6b6b6b">${esc(d.place.slice(0, 100))}</text>` +
     [0, 1, 2].map((i) => photos[i] ? `<image href="${photos[i]}" x="${24 + i * 232}" y="112" width="216" height="110" preserveAspectRatio="xMidYMid slice"/>` : `<rect x="${24 + i * 232}" y="112" width="216" height="110" fill="#f3eee3"/>`).join("") +
     ln(252, "Suprafețe", d.details) + ln(278, "Preț", `${d.price} · ${d.unit}`) + ln(304, "Istoric preț", d.history) + ln(330, "Pe piață", `${d.days} · ${d.status} · ${d.portals}`) +
-    ln(356, "Distanță subiect", `~${d.distance}`) + ln(382, "Vânzător", d.seller) +
+    ln(356, "Distanță subiect", d.subject ? `~${d.distance}` : "—") + ln(382, "Vânzător", d.seller) +
     `<rect x="24" y="410" width="672" height="64" rx="6" fill="${d.verification ? "#eef8f2" : "#fbf8f2"}" stroke="#e2d8c4"/>` +
     `<text x="36" y="434" font-family="Arial" font-size="11" font-weight="bold" fill="${d.verification ? "#157f55" : "#6b6b6b"}">${d.verification ? "✓ VERIFICATĂ TELEFONIC" : "NEVERIFICATĂ TELEFONIC"}</text>` +
     `<text x="36" y="456" font-family="Arial" font-size="10.5" fill="#157f55">${esc(d.snapshot ? `✓ ${d.snapshot}` : "")}</text></svg>`;
