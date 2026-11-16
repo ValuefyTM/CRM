@@ -7,6 +7,8 @@ export type MarketRow = {
   price: number | null; currency: string | null; price_sqm: number | null; area: number | null; county: string | null; city: string | null; zone: string | null;
   lat: number | null; lng: number | null; geo_precision: string | null; status: string; dup_group: string | null; dup_reason: string | null; photo_count: number;
   cover_key: string | null; first_seen_at: string; changed_at: string | null; fetched_at: string | null; seller_name: string | null; km?: number;
+  /** the merged group: its sites, how many listings, the lowest price among them */
+  dup_sources?: string | null; dup_n?: number | null; dup_min?: number | null;
 };
 
 export const PAGE = 50;
@@ -16,7 +18,10 @@ export const marketFile = (key: string | null | undefined) => (key ? `/api/crm/m
 
 const AREA = "COALESCE(l.usable_area, l.built_area, l.land_area)";
 const COLS = `l.id, l.source, l.url, l.title, l.category, l.type, l.deal AS "transaction", l.price, l.currency, l.price_sqm, ${AREA} AS area, l.county, l.city, l.zone,
-  l.lat, l.lng, l.geo_precision, l.status, l.dup_group, l.dup_reason, l.photo_count, l.cover_key, l.first_seen_at, l.changed_at, l.fetched_at, l.seller_name`;
+  l.lat, l.lng, l.geo_precision, l.status, l.dup_group, l.dup_reason, l.photo_count, l.cover_key, l.first_seen_at, l.changed_at, l.fetched_at, l.seller_name,
+  (SELECT group_concat(DISTINCT m.source) FROM market_listings m WHERE m.dup_group = l.dup_group AND m.status = 'activ') AS dup_sources,
+  (SELECT COUNT(*) FROM market_listings m WHERE m.dup_group = l.dup_group AND m.status = 'activ') AS dup_n,
+  (SELECT MIN(m.price) FROM market_listings m WHERE m.dup_group = l.dup_group AND m.status = 'activ' AND m.currency = l.currency) AS dup_min`;
 
 /** FTS5 query from free text: each word as a prefix, all required. */
 const ftsQuery = (q: string) => q.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/["*()^:{}\-+]/g, " ").split(/\s+/).filter((w) => w.length > 1).map((w) => `"${w}"*`).join(" ");

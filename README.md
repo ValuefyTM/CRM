@@ -104,6 +104,9 @@ Comparabile de pe **imobiliare.ro, storia.ro, olx.ro, publi24.ro și homezz.ro**
   (vechi → nou). Setări › Analize de piață arată starea pe surse, istoricul rulărilor și, pe fiecare rulare, anunțurile adăugate,
   modificate, expirate, dispărute, reapărute, erorile și rezumatul pe căutări (`market_runs.detail`, păstrat la închidere).
   Limitele unei rulări (rulări Apify, ore), încercările, pragul de „dispărut” și rezumatul pe e-mail sunt setări.
+- **Duplicate comasate** (fără AI, `dedupe` în `crawler.ts`): aceeași imagine, aceeași descriere, sau apropiate (250 m ori aceeași
+  localitate) cu aceeași suprafață și preț. Grupul poartă id-ul celui mai complet anunț (`dup_group`), singurul afișat în liste
+  și numărat în statistici. Rulează după fiecare trecere care a descărcat anunțuri și la închiderea rulării.
 - **Căutare text**: FTS5 (`market_listings_fts`, fără diacritice) pe titlu, descriere și toată pagina (markdown).
 - **Comparabile**: pe pagina Comparabile a unei proprietăți apar și anunțurile de piață din zonă (aceeași categorie, rază,
   suprafață), cu mediana € / m². Claude: instrumentul MCP `anunturi_piata`.

@@ -8,7 +8,7 @@ import { ComparableModal } from "@/components/ComparableModal";
 
 type Row = { id: string; source: string; url: string; title: string | null; category: string | null; type: string | null; transaction: string | null; price: number | null; currency: string | null;
   price_sqm: number | null; area: number | null; city: string | null; zone: string | null; county: string | null; lat: number | null; lng: number | null; geo_precision: string | null;
-  status: string; dup_group: string | null; dup_reason: string | null; cover: string | null; first_seen_at: string; changed_at: string | null };
+  status: string; dup_group: string | null; dup_reason: string | null; dup_sources?: string | null; dup_n?: number | null; dup_min?: number | null; cover: string | null; first_seen_at: string; changed_at: string | null };
 type Point = { id: string; lat: number; lng: number; price: number | null; currency: string | null; price_sqm: number | null; title: string | null; status: string; area: number | null; source: string };
 type Q = { q?: string; cat?: string; tip?: string; tr?: string; src?: string; st?: string; dup?: string; min?: string; max?: string; p?: string; vezi?: string };
 
@@ -137,7 +137,8 @@ export function MarketExplorer({ base, current: c, rows, points, total, page, pa
             </span>
             <span className="mkTags">
               {r.category && <span className="ldNearTag">{cap(r.category)}{r.type ? ` · ${cap(r.type)}` : ""}</span>}
-              {r.dup_group && <span className="ldNearTag">pe mai multe site-uri</span>}
+              {r.dup_group && (r.dup_n ?? 0) > 1 && <span className="ldNearTag mkMerged" title={r.dup_reason ? `Găsit după: ${r.dup_reason}` : undefined}>
+                {r.dup_n} anunțuri comasate · {(r.dup_sources ?? r.source).split(",").join(", ")}{r.dup_min != null && r.price != null && r.dup_min < r.price ? ` · de la ${num(r.dup_min)} ${cur(r.currency)}` : ""}</span>}
               {r.lat == null && <span className="ldNearTag">fără coordonate</span>}
               <small className="muted">{day(r.changed_at ?? r.first_seen_at)}</small>
             </span>

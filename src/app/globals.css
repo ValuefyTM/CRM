@@ -4965,3 +4965,4 @@ button.ldNear { font: inherit; text-align: left; width: 100%; cursor: pointer; }
 .mkTip [role="tooltip"] > span { display: flex; flex-direction: column; gap: 1px; }
 /* beside the label (the table clips what goes below it); on the last rows it grows upwards */
 tr:nth-last-child(-n+2):not(:first-child) .mkTip [role="tooltip"] { top: auto; bottom: -8px; }
+.mkMerged { background: var(--acc-soft); color: var(--acc-text); }

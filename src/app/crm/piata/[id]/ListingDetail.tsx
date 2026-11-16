@@ -79,7 +79,9 @@ export function ListingDetail({ d, ctx, base }: { d: NonNullable<Awaited<ReturnT
             {l.category && <span className="ldTag">{CAT_LABEL[l.category] ?? l.category}</span>}
             <span className="ldTag">{l.source}</span>
             <span className={`pill ${stCls}`}><i />{stLabel}</span>
-            {l.dup_group && <span className="pill pillWarn">Apare și în alte anunțuri</span>}
+            {l.dup_group && (l.dup_group === l.id
+              ? <span className="pill pillWarn">Anunț principal · comasat cu {d.duplicates.length} {d.duplicates.length === 1 ? "alt anunț" : "alte anunțuri"}</span>
+              : <a className="pill pillWarn" href={`${base}/piata/${l.dup_group}`}>Duplicat · vezi anunțul principal →</a>)}
           </div>
           <h1 className="ldTitle">{title}</h1>
           {where && <p className="ldWhere"><Icon d={I.pin} />{where}</p>}
@@ -132,7 +134,7 @@ export function ListingDetail({ d, ctx, base }: { d: NonNullable<Awaited<ReturnT
             {d.duplicates.length > 0 && (
               <section className="ldSection">
                 <h2>Același imobil în alte anunțuri</h2>
-                <p className="hint">Găsit după: {String(l.dup_reason ?? "")}. Verifică înainte de a le folosi ca comparabile separate.</p>
+                <p className="hint">Găsit după: {String(l.dup_reason ?? "")}. În liste și în statistici grupul apare o singură dată, prin anunțul principal.</p>
                 <div className="ldDups">
                   {d.duplicates.map((x) => {
                     const c = marketFile(x.cover_key);

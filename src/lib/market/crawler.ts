@@ -82,7 +82,7 @@ export async function startRun(db: D1Database, trigger: "cron" | "manual", searc
 export async function tick(db: D1Database, bucket: R2Bucket | null, budgetMs = 240_000) {
   const t0 = Date.now();
   const left = () => budgetMs - (Date.now() - t0);
-  let processed = 0, started = 0;
+  let processed = 0, started = 0, details = 0;
   const active = await db.prepare("SELECT id FROM market_runs WHERE status = 'running' LIMIT 1").first<{ id: string }>();
   if (!active) return { processed, started, idle: true, photos: budgetMs > 60_000 ? await retryPhotos(db, bucket, 20_000) : 0 };
   const cfg = await getMarketSettings(db);
@@ -110,7 +110,7 @@ export async function tick(db: D1Database, bucket: R2Bucket | null, budgetMs = 2
         const item = st === "SUCCEEDED" ? await datasetItem(j.dataset_id!) : null;
         const code = item?.fetch?.httpStatusCode ?? 0;
         if (!item || (code >= 400 && !(j.kind === "detail" && (code === 404 || code === 410)))) throw new Error(item ? `HTTP ${code}` : `Apify ${st}`);
-        if (j.kind === "list") await processList(db, j, item); else await processDetail(db, bucket, j, item);
+        if (j.kind === "list") await processList(db, j, item); else { await processDetail(db, bucket, j, item); details++; }
         await db.prepare("UPDATE market_jobs SET status = 'done', error = NULL, updated_at = ? WHERE id = ?").bind(now(), j.id).run();
         processed++;
       } catch (e) {
@@ -158,6 +158,8 @@ export async function tick(db: D1Database, bucket: R2Bucket | null, budgetMs = 2
       else await new Promise((r) => setTimeout(r, 3000));
     }
   }
+  // the listings downloaded in this pass are matched with the ones of the other sites right away (not only when the run ends)
+  if (details) await dedupe(db).catch((e) => console.warn("market: dedupe", String(e)));
   // processing jobs left by a pass that was cut off go back to the queue
   await db.prepare("UPDATE market_jobs SET status = 'running' WHERE status = 'processing' AND updated_at < ?").bind(new Date(Date.now() - 10 * 60_000).toISOString()).run();
   return { processed, started, idle: false };
@@ -520,11 +522,25 @@ async function finishRun(db: D1Database, bucket: R2Bucket | null, runId: string,
   await retryPhotos(db, bucket, 20_000);
 }
 
-/** Groups the same property listed on several sites (or twice on one): identical photo, or close + same area and price. */
+type DupRow = { id: string; source: string; category: string | null; transaction: string | null; price: number | null; currency: string | null; lat: number | null; lng: number | null;
+  city: string | null; usable_area: number | null; built_area: number | null; land_area: number | null; dup_group: string | null; dup_reason: string | null;
+  seller_name: string | null; d: string | null; geo_precision: string | null; photo_count: number | null; first_seen_at: string };
+
+/** How good a listing is as the face of its group: exact point, photos, area, price; then the oldest. */
+const mainScore = (r: DupRow) => (r.lat != null ? (/exact/i.test(r.geo_precision ?? "") ? 4 : 2) : 0) + ((r.photo_count ?? 0) > 0 ? 2 : 0) + (mainArea(r) ? 1 : 0) + (r.price ? 1 : 0);
+
+/**
+ * Merges the same property listed on several sites (or twice on one) into a group, by rules (no AI):
+ *  1. the same image file;
+ *  2. the same description (the agency's text copied across portals), close price;
+ *  3. within 250 m, same area (±3%) and price (±5%);
+ *  4. no point on one of them: same town, same area (±1%) and price (±5%).
+ * Rules 3 and 4 do not apply to two listings of one seller on one site (the similar units of a development).
+ * The group takes the id of its best listing (the one shown in lists; the others stay as its sources).
+ */
 export async function dedupe(db: D1Database) {
-  const { results: rows } = await db.prepare(`SELECT id, category, deal AS "transaction", price, currency, lat, lng, city, usable_area, built_area, land_area, dup_group, dup_reason
-    FROM market_listings WHERE status = 'activ'`).all<{ id: string; category: string | null; transaction: string | null; price: number | null; currency: string | null;
-      lat: number | null; lng: number | null; city: string | null; usable_area: number | null; built_area: number | null; land_area: number | null; dup_group: string | null; dup_reason: string | null }>();
+  const { results: rows } = await db.prepare(`SELECT id, source, category, deal AS "transaction", price, currency, lat, lng, city, usable_area, built_area, land_area, dup_group, dup_reason,
+    seller_name, substr(description, 1, 500) AS d, geo_precision, photo_count, first_seen_at FROM market_listings WHERE status = 'activ'`).all<DupRow>();
   const parent = new Map(rows.map((r) => [r.id, r.id]));
   const why = new Map<string, string>();
   const find = (x: string): string => { let p = parent.get(x)!; while (p !== parent.get(p)) p = parent.get(p)!; parent.set(x, p); return p; };
@@ -535,12 +551,26 @@ export async function dedupe(db: D1Database) {
     if (!why.has(a)) why.set(a, m);
     if (!why.has(b)) why.set(b, m);
   };
-  // the same image file (a photo shared by more than 4 listings is a logo or placeholder)
+  const near = (p1: number, p2: number, tol: number) => Math.abs(p1 - p2) <= tol * Math.max(p1, p2);
+  // 1. the same image file (a photo shared by more than 4 listings is a logo or placeholder)
   const { results: same } = await db.prepare(`SELECT group_concat(DISTINCT p.listing_id) AS ids FROM market_listing_photos p JOIN market_listings l ON l.id = p.listing_id
     WHERE p.sha1 IS NOT NULL AND l.status = 'activ' GROUP BY p.sha1 HAVING COUNT(DISTINCT p.listing_id) BETWEEN 2 AND 4`).all<{ ids: string }>();
-  for (const g of same) { const ids = g.ids.split(","); ids.slice(1).forEach((b) => union(ids[0], b, "imagine identică")); }
-  // close, same area and price
-  const by = new Map<string, { a: number; r: (typeof rows)[number] }[]>();
+  for (const g of same) { const ids = g.ids.split(",").filter((x) => parent.has(x)); ids.slice(1).forEach((b) => union(ids[0], b, "imagine identică")); }
+  // 2. the same description (long enough to mean something; a text shared by more than 6 listings is a template)
+  const texts = new Map<string, DupRow[]>();
+  for (const r of rows) {
+    const t = norm(r.d).replace(/[^a-z0-9 ]/g, "").slice(0, 300);
+    if (t.length < 150) continue;
+    const k = `${r.category}|${r.transaction}|${t}`;
+    if (!texts.has(k)) texts.set(k, []);
+    texts.get(k)!.push(r);
+  }
+  for (const g of texts.values()) {
+    if (g.length < 2 || g.length > 6) continue;
+    for (const b of g.slice(1)) if (!g[0].price || !b.price || (g[0].currency === b.currency && near(g[0].price, b.price, 0.1))) union(g[0].id, b.id, "aceeași descriere");
+  }
+  // 3 and 4. close (or the same town), same area and price
+  const by = new Map<string, { a: number; r: DupRow }[]>();
   for (const r of rows) {
     const a = mainArea(r);
     if (!a || !r.price) continue;
@@ -554,7 +584,8 @@ export async function dedupe(db: D1Database) {
       const { a: a1, r: r1 } = list[i];
       for (let k = i + 1; k < list.length && list[k].a <= a1 * (1 + DUP.area); k++) {
         const r2 = list[k].r;
-        if (r1.currency !== r2.currency || Math.abs(r1.price! - r2.price!) > DUP.price * Math.max(r1.price!, r2.price!)) continue;
+        if (r1.currency !== r2.currency || !near(r1.price!, r2.price!, DUP.price)) continue;
+        if (r1.source === r2.source && r1.seller_name && r1.seller_name === r2.seller_name) continue;
         if (r1.lat != null && r2.lat != null && r1.lng != null && r2.lng != null) {
           const dy = (r1.lat - r2.lat) * 111_320, dx = (r1.lng - r2.lng) * 111_320 * Math.cos((r1.lat * Math.PI) / 180);
           if (Math.hypot(dx, dy) <= DUP.meters) union(r1.id, r2.id, "locație + suprafață + preț");
@@ -562,15 +593,19 @@ export async function dedupe(db: D1Database) {
       }
     }
   }
-  const size = new Map<string, number>();
-  for (const id of parent.keys()) size.set(find(id), (size.get(find(id)) ?? 0) + 1);
+  // the groups, each named after its best listing
+  const groups = new Map<string, DupRow[]>();
+  for (const r of rows) { const root = find(r.id); if (!groups.has(root)) groups.set(root, []); groups.get(root)!.push(r); }
   const stmts: D1PreparedStatement[] = [];
-  for (const r of rows) {
-    const root = find(r.id);
-    const g = (size.get(root) ?? 1) > 1 ? root : null;
-    const m = g ? why.get(r.id) ?? null : null;
-    if (r.dup_group !== g || r.dup_reason !== m) stmts.push(db.prepare("UPDATE market_listings SET dup_group = ?, dup_reason = ? WHERE id = ?").bind(g, m, r.id));
+  let n = 0;
+  for (const g of groups.values()) {
+    const main = g.length > 1 ? [...g].sort((x, y) => mainScore(y) - mainScore(x) || x.first_seen_at.localeCompare(y.first_seen_at) || x.id.localeCompare(y.id))[0].id : null;
+    if (main) n++;
+    for (const r of g) {
+      const m = main ? why.get(r.id) ?? null : null;
+      if (r.dup_group !== main || r.dup_reason !== m) stmts.push(db.prepare("UPDATE market_listings SET dup_group = ?, dup_reason = ? WHERE id = ?").bind(main, m, r.id));
+    }
   }
   for (let i = 0; i < stmts.length; i += 80) await db.batch(stmts.slice(i, i + 80));
-  return [...size.values()].filter((n) => n > 1).length;
+  return n;
 }
