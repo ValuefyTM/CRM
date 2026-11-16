@@ -187,13 +187,17 @@ export function MarketSettingsForm({ initial }: { initial: MarketSettings }) {
     setBusy(true); setMsg(null);
     const r = await fetch("/api/crm/market/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(f) }).catch(() => null);
     setBusy(false);
-    if (r?.ok) setF(await r.json());
-    setMsg(r?.ok ? { ok: true, text: "Setările au fost salvate." } : { ok: false, text: "Nu s-au putut salva." });
+    const d = r?.ok ? ((await r.json()) as MarketSettings & { groups?: number | null }) : null;
+    if (d) setF(d);
+    setMsg(d ? { ok: true, text: `Setările au fost salvate.${d.groups != null ? ` Grupuri de duplicate după recalculare: ${d.groups}.` : ""}` } : { ok: false, text: "Nu s-au putut salva." });
     router.refresh();
   };
-  const num = (k: "max_apify" | "max_hours" | "missing_limit" | "max_attempts" | "concurrency", label: string, hint: string, min: number, max: number) => (
+  const num = (k: "max_apify" | "max_hours" | "missing_limit" | "max_attempts" | "concurrency" | "dup_meters" | "dup_area" | "dup_price" | "dup_text_price" | "dup_city_area", label: string, hint: string, min: number, max: number) => (
     <label className="field">{label} <small>({hint})</small>
-      <input className="input" type="number" min={min} max={max} value={f[k]} onChange={(e) => setF({ ...f, [k]: Number(e.target.value) })} /></label>
+      <input className="input" type="number" min={min} max={max} step={k.startsWith("dup_") && k !== "dup_meters" ? 0.5 : 1} value={f[k]} onChange={(e) => setF({ ...f, [k]: Number(e.target.value) })} /></label>
+  );
+  const rule = (k: "dup_image" | "dup_text" | "dup_geo" | "dup_city", label: string) => (
+    <label className="check"><input type="checkbox" checked={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.checked })} />{label}</label>
   );
   const setTime = (i: number, v: string) => setF({ ...f, times: f.times.map((t, k) => (k === i ? v : t)) });
   return (
@@ -229,6 +233,18 @@ export function MarketSettingsForm({ initial }: { initial: MarketSettings }) {
       {num("max_hours", "Durata maximă a unei rulări, ore", "0 = fără limită", 0, 48)}
       {num("max_attempts", "Încercări pentru o pagină", "după atâtea eșecuri pagina e abandonată în rularea curentă", 1, 5)}
       {num("missing_limit", "Rulări lipsă până la „dispărut”", "de câte ori la rând poate lipsi un anunț dintr-o căutare citită complet", 1, 10)}
+
+      <h3 className="mkSub">Comasarea duplicatelor</h3>
+      <p className="hint">Două anunțuri active sunt același imobil dacă îndeplinesc una dintre regulile bifate. La salvare grupurile se recalculează.</p>
+      {rule("dup_image", "Aceeași imagine (fișier identic)")}
+      {rule("dup_text", "Aceeași descriere")}
+      {f.dup_text && num("dup_text_price", "Aceeași descriere: diferența de preț, %", "cât pot diferi prețurile", 0, 50)}
+      {rule("dup_geo", "Apropiate pe hartă, cu aceeași suprafață și preț")}
+      {f.dup_geo && num("dup_meters", "Distanța maximă, metri", "între punctele celor două anunțuri", 10, 2000)}
+      {f.dup_geo && num("dup_area", "Diferența de suprafață, %", "regula cu harta", 0, 20)}
+      {rule("dup_city", "Fără punct pe hartă: aceeași localitate, suprafață și preț")}
+      {f.dup_city && num("dup_city_area", "Diferența de suprafață, %", "regula cu localitatea", 0, 10)}
+      {(f.dup_geo || f.dup_city) && num("dup_price", "Diferența de preț, %", "regulile cu harta și cu localitatea", 0, 30)}
 
       <h3 className="mkSub">Rezumat pe e-mail</h3>
       <label className="field">După rulările programate
