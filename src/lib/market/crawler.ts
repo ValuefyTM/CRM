@@ -11,6 +11,7 @@ import { now, uuid } from "../db";
 import { abortRun, datasetItem, runStatus, startFetch, type FetchItem } from "./apify";
 import { dueSlot, getMarketSettings, type MarketSettings } from "./settings";
 import { SITES, type Card, type Detail } from "./sites";
+import { contactOf } from "./contact";
 import { cleanMd, hex, norm, sha1, uniq } from "./util";
 import { esc, layout, sendEmail } from "../email";
 
@@ -83,7 +84,10 @@ export async function tick(db: D1Database, bucket: R2Bucket | null, budgetMs = 2
   const left = () => budgetMs - (Date.now() - t0);
   let processed = 0, started = 0, details = 0;
   const active = await db.prepare("SELECT id FROM market_runs WHERE status = 'running' LIMIT 1").first<{ id: string }>();
-  if (!active) return { processed, started, idle: true, photos: budgetMs > 60_000 ? await retryPhotos(db, bucket, 20_000) : 0 };
+  if (!active) {
+    const long = budgetMs > 60_000;
+    return { processed, started, idle: true, photos: long ? await retryPhotos(db, bucket, 20_000) : 0, contacts: long ? await backfillContacts(db, bucket, 25_000).catch(() => 0) : 0 };
+  }
   const cfg = await getMarketSettings(db);
   const { concurrency } = cfg;
   // the limits of a run (Setări): past them it stops by itself; what is left is downloaded by the next run
@@ -304,16 +308,18 @@ async function processDetail(db: D1Database, bucket: R2Bucket | null, j: Job, it
     norm(m.description as string), m.lat ?? null, m.lng ?? null, [...photos].sort());
   const first = !row.fp_detail, changed = first || row.fp_detail !== fp;
   const md = cleanMd(item.markdown);
+  const contact = contactOf(row.source, item);
   const stmts: D1PreparedStatement[] = [
     db.prepare(`UPDATE market_listings SET title = ?, price = ?, currency = ?, price_sqm = ?, usable_area = ?, built_area = ?, land_area = ?, county = ?, city = ?, zone = ?,
         address = ?, lat = ?, lng = ?, geo_precision = ?, seller_kind = ?, seller_name = ?, description = ?, content_md = ?, features = ?, src_created_at = ?,
-        src_updated_at = ?, deal = COALESCE(?, deal), fp_card = ?, fp_detail = ?, source_key = ?, status = 'activ', fetched_at = ?, error = NULL
+        src_updated_at = ?, deal = COALESCE(?, deal), fp_card = ?, fp_detail = ?, source_key = ?, status = 'activ', fetched_at = ?, error = NULL,
+        contact_name = COALESCE(?, contact_name), contact_phone = COALESCE(?, contact_phone), contact_email = COALESCE(?, contact_email), contact_at = ?
         ${changed ? ", changed_at = ?" : ""} WHERE id = ?`)
       .bind(m.title ?? null, m.price ?? null, m.currency ?? null, m.price && area ? Math.round(((m.price as number) / area) * 100) / 100 : null,
         m.usable_area ?? null, m.built_area ?? null, m.land_area ?? null, m.county ?? null, m.city ?? null, m.zone ?? null, m.address ?? null,
         m.lat ?? null, m.lng ?? null, m.geo_precision ?? null, m.seller_kind ?? null, m.seller_name ?? null, m.description ?? null, md,
         JSON.stringify(d.features ?? {}), m.src_created_at ?? null, m.src_updated_at ?? null, d.transaction ?? null, j.card_fp, fp, bucket ? key : null, at,
-        ...(changed ? [at] : []), row.id),
+        contact.name, contact.phone, contact.email, at, ...(changed ? [at] : []), row.id),
     db.prepare("DELETE FROM market_listings_fts WHERE listing_id = ?").bind(row.id),
     db.prepare("INSERT INTO market_listings_fts (listing_id, title, body) VALUES (?, ?, ?)").bind(row.id, (m.title as string) ?? "", `${m.description ?? ""}\n\n${md}`),
   ];
@@ -378,6 +384,26 @@ async function retryPhotos(db: D1Database, bucket: R2Bucket | null, budgetMs: nu
     await downloadPhotos(db, bucket, r.listing_id, r.source, r.ext_id);
   }
   return results.length;
+}
+
+/** The contacts of the listings downloaded before they were kept: read from the archived page (R2), between runs. */
+async function backfillContacts(db: D1Database, bucket: R2Bucket | null, budgetMs: number) {
+  if (!bucket) return 0;
+  const t0 = Date.now();
+  const { results } = await db.prepare("SELECT id, source, source_key FROM market_listings WHERE contact_at IS NULL AND source_key IS NOT NULL AND status <> 'expirat' ORDER BY status = 'activ' DESC, fetched_at DESC LIMIT 150")
+    .all<{ id: string; source: string; source_key: string }>();
+  let n = 0;
+  for (const r of results) {
+    if (Date.now() - t0 > budgetMs) break;
+    let c = { name: null as string | null, phone: null as string | null, email: null as string | null };
+    try {
+      const o = await bucket.get(r.source_key);
+      if (o) c = contactOf(r.source, (await new Response(o.body.pipeThrough(new DecompressionStream("gzip"))).json()) as FetchItem);
+    } catch { /* unreadable: marked as looked at */ }
+    await db.prepare("UPDATE market_listings SET contact_name = ?, contact_phone = ?, contact_email = ?, contact_at = ? WHERE id = ?").bind(c.name, c.phone, c.email, now(), r.id).run();
+    n++;
+  }
+  return n;
 }
 
 // ---------------------------------------------------------------- cancel / progress

@@ -187,6 +187,10 @@ export function ListingDetail({ d, ctx, base }: { d: NonNullable<Awaited<ReturnT
               {src && <a className="btn btnGhost btnSm" href={src}>Descarcă sursa completă (json.gz)</a>}
               <dl className="ldMeta">
                 <div><dt>Vânzător</dt><dd>{[l.seller_kind === "proprietar" ? "Proprietar" : l.seller_kind ? "Agenție" : null, l.seller_name].filter(Boolean).join(" · ") || "—"}</dd></div>
+                {l.contact_name || l.contact_phone || l.contact_email ? <div><dt>Contact</dt><dd>{l.contact_name ? <div>{String(l.contact_name)}</div> : null}
+                  {String(l.contact_phone ?? "").split(", ").filter(Boolean).map((p) => <div key={p}><a className="link" href={`tel:${p}`}>{p.replace(/^(\d{4})(\d{3})(\d{3})$/, "$1 $2 $3")}</a></div>)}
+                  {String(l.contact_email ?? "").split(", ").filter(Boolean).map((e) => <div key={e}><a className="link" href={`mailto:${e}`}>{e}</a></div>)}</dd></div>
+                  : l.contact_at ? <div><dt>Contact</dt><dd className="muted">nu apare în pagina descărcată; vezi anunțul pe site</dd></div> : null}
                 {d.search && <div><dt>Găsit de</dt><dd>{d.search.name}</dd></div>}
                 <div><dt>Văzut de noi</dt><dd>{day(l.first_seen_at)} – {day(l.last_seen_at)}</dd></div>
                 {l.src_updated_at ? <div><dt>Modificat pe site</dt><dd>{day(l.src_updated_at)}</dd></div> : null}

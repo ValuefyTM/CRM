@@ -14,7 +14,7 @@ export type CompRow = { id: string; score: number | null; parts: { k: string; v:
 type Listing = {
   id: string; source: string; ext_id: string; url: string; title: string | null; transaction: string | null; status: string; price: number | null; currency: string | null;
   price_sqm: number | null; usable_area: number | null; built_area: number | null; land_area: number | null; county: string | null; city: string | null; zone: string | null;
-  address: string | null; lat: number | null; lng: number | null; geo_precision: string | null; seller_kind: string | null; seller_name: string | null; description: string | null;
+  address: string | null; lat: number | null; lng: number | null; geo_precision: string | null; seller_kind: string | null; seller_name: string | null; contact_name?: string | null; contact_phone?: string | null; contact_email?: string | null; description: string | null;
   src_created_at: string | null; first_seen_at: string; last_seen_at: string; fetched_at: string | null; source_file: string | null; year: string | null; floor: string | null; rooms: string | null;
   duplicates: { id: string; source: string; url: string; price: number | null; currency: string | null }[];
   photos: { src: string; saved: boolean }[]; history: { at: string; event: string; price: number | null; currency: string | null }[];
@@ -238,7 +238,9 @@ export function ComparableModal({ c, index, report, base, subject, verif, onVeri
                   <span className="cmLbl">Vânzător</span>
                   <b>{l.seller_name || (l.seller_kind === "proprietar" ? "Proprietar" : "—")}</b>
                   <small>{l.seller_kind === "proprietar" ? "proprietar · persoană fizică" : l.seller_kind ? "agenție imobiliară" : "nespecificat"}</small>
-                  <p className="hint">Telefonul nu se preia din anunț (date personale); îl găsești pe pagina anunțului.</p>
+                  {l.contact_name || l.contact_phone || l.contact_email
+                    ? <p className="hint">{[l.contact_name, l.contact_phone, l.contact_email].filter(Boolean).join(" · ")}</p>
+                    : <p className="hint">Telefonul nu apare în pagina descărcată; îl găsești pe pagina anunțului.</p>}
                   <div className="cmActs">
                     <button type="button" className="btn btnGhost btnSm" onClick={() => copy(l.url, "Linkul anunțului copiat")}>⧉ Copiază linkul</button>
                     {l.status === "activ" ? <a className="btn btnNavy btnSm" href={l.url} target="_blank" rel="noreferrer">Anunț pe {l.source} ↗</a>
