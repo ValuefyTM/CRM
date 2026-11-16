@@ -10,7 +10,7 @@ type Row = { id: string; source: string; url: string; title: string | null; cate
   price_sqm: number | null; area: number | null; city: string | null; zone: string | null; county: string | null; lat: number | null; lng: number | null; geo_precision: string | null;
   status: string; rooms?: number | null; dup_group: string | null; dup_reason: string | null; dup_sources?: string | null; dup_n?: number | null; dup_min?: number | null; cover: string | null; first_seen_at: string; changed_at: string | null };
 type Point = { id: string; lat: number; lng: number; price: number | null; currency: string | null; price_sqm: number | null; title: string | null; status: string; area: number | null; source: string };
-type Q = { q?: string; cat?: string; tip?: string; tr?: string; src?: string; st?: string; dup?: string; min?: string; max?: string; p?: string; vezi?: string };
+type Q = { q?: string; cat?: string; tip?: string; tr?: string; src?: string; st?: string; dup?: string; min?: string; max?: string; p?: string; vezi?: string; cam?: string; jud?: string; oras?: string; zona?: string };
 
 const num = (n: number | null | undefined, d = 0) => (n == null ? "—" : n.toLocaleString("ro-RO", { maximumFractionDigits: d }));
 const cur = (c: string | null) => (c === "EUR" ? "€" : c === "RON" ? "lei" : c ?? "");
@@ -19,9 +19,10 @@ const esc = (x: string) => x.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 const cap = (s: string | null) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : "");
 const day = (s: string) => s.slice(0, 10).split("-").reverse().join(".");
 
-export function MarketExplorer({ base, current: c, rows, points, total, page, pages, cats, types, sources }: {
+export function MarketExplorer({ base, current: c, rows, points, total, page, pages, cats, types, sources, counties, cities, zones }: {
   base: string; current: Q; rows: Row[]; points: Point[]; total: number; page: number; pages: number;
   cats: [string, string, number][]; types: [string, number][]; sources: [string, number][];
+  counties: [string, string, number][]; cities: [string, string, number][]; zones: [string, string, number][];
 }) {
   const router = useRouter();
   const view = c.vezi === "lista" || c.vezi === "harta" ? c.vezi : "split";
@@ -111,7 +112,7 @@ export function MarketExplorer({ base, current: c, rows, points, total, page, pa
       </span>}
     </span>
   );
-  const active = [c.q, c.cat, c.tip, c.tr, c.src, c.st && c.st !== "activ" ? c.st : null, c.min || c.max, c.dup].filter(Boolean).length;
+  const active = [c.q, c.cat, c.tip, c.tr, c.src, c.st && c.st !== "activ" ? c.st : null, c.min || c.max, c.dup, c.cam, c.jud, c.oras, c.zona].filter(Boolean).length;
 
   const sel = (label: string, k: keyof Q, opts: [string, string][], all = "Toate") => (
     <label className="fsel" data-on={c[k] ? "" : undefined}><span>{label}</span>
@@ -167,10 +168,28 @@ export function MarketExplorer({ base, current: c, rows, points, total, page, pa
         {sel("Categorie", "cat", cats.map(([k, l, n]) => [k, `${l} (${n})`]))}
         {sel("Tip proprietate", "tip", types.map(([k, n]) => [k, `${cap(k)} (${n})`]))}
         {sel("Tranzacție", "tr", [["vanzare", "Vânzare"], ["inchiriere", "Închiriere"]])}
+        {sel("Camere", "cam", [["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"], ["5", "5 sau mai multe"]], "Oricâte")}
         {sel("Site", "src", sources.map(([k, n]) => [k, `${k} (${n})`]))}
         <label className="fsel" data-on={c.st && c.st !== "activ" ? "" : undefined}><span>Status</span>
           <select value={c.st ?? "activ"} onChange={(e) => go({ st: e.target.value === "activ" ? undefined : e.target.value })}>
             <option value="activ">Active</option><option value="inactiv">Dispărute</option><option value="expirat">Expirate</option><option value="all">Toate</option>
+          </select>
+        </label>
+      </div>
+      <div className="filterBar mkPlace">
+        <label className="fsel" data-on={c.jud ? "" : undefined}><span>Județ</span>
+          <select value={c.jud ?? ""} onChange={(e) => go({ jud: e.target.value || undefined, oras: undefined, zona: undefined })}>
+            <option value="">Toate</option>{counties.map(([k, l, n]) => <option key={k} value={k}>{l} ({n})</option>)}
+          </select>
+        </label>
+        <label className="fsel" data-on={c.oras ? "" : undefined}><span>Localitate</span>
+          <select value={c.oras ?? ""} onChange={(e) => go({ oras: e.target.value || undefined, zona: undefined })}>
+            <option value="">Toate</option>{cities.map(([k, l, n]) => <option key={k} value={k}>{l} ({n})</option>)}
+          </select>
+        </label>
+        <label className="fsel" data-on={c.zona ? "" : undefined}><span>Cartier / zonă</span>
+          <select value={c.zona ?? ""} onChange={(e) => go({ zona: e.target.value || undefined })} disabled={!c.oras}>
+            <option value="">{c.oras ? "Toate" : "alege localitatea"}</option>{zones.map(([k, l, n]) => <option key={k} value={k}>{l} ({n})</option>)}
           </select>
         </label>
       </div>

@@ -107,6 +107,8 @@ Comparabile de pe **imobiliare.ro, storia.ro, olx.ro, publi24.ro și homezz.ro**
 - **Duplicate comasate** (fără AI, `dedupe` în `crawler.ts`): o singură regulă, aceeași descriere + același preț + aceeași
   suprafață (anunțurile publicate din CRM-ul agenției pe mai multe portaluri). Grupul poartă id-ul celui mai complet anunț
   (`dup_group`), singurul afișat în liste și numărat în statistici.
+- **Localizare pentru filtre** (migrația `1098`, `place.ts`): `loc_county`, `loc_city`, `loc_zone` sunt cheile fără diacritice și
+  fără „Județul”, „Mun.”, „zona”…; filtrele Județ › Localitate › Cartier / zonă și Camere din Analize de piață lucrează pe ele.
 - **Contact** (migrația `1096`, `contact.ts`): persoana sau agenția, telefoanele și e-mailul, cum apar în pagina descărcată
   (datele site-ului, JSON-LD, linkuri `tel:` / `mailto:`). Telefonul afișat de un site abia după click nu este în pagină.
   Anunțurile descărcate anterior se completează între rulări, din paginile arhivate în R2.

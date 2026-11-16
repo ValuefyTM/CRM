@@ -4978,3 +4978,4 @@ tr:nth-last-child(-n+2):not(:first-child) .mkTip [role="tooltip"] { top: auto; b
 .ldMerged .hint { margin: 8px 0 2px; }
 @media (max-width: 720px) { .ldMerged table { display: block; overflow-x: auto; } }
 .cmMerged { margin: 8px 0; text-align: left; } .cmMerged td.t div { font-weight: 400; margin-top: 2px; }
+.filterBar.mkPlace { padding-top: 0; }

@@ -1,7 +1,9 @@
 // Server-only: reading the market listings (Piață page, a listing's page, comparables of a property, Claude).
 import { parseJson } from "../db";
 
-export type MarketFilters = { q?: string; cat?: string; tip?: string; tr?: string; src?: string; st?: string; dup?: string; min?: string; max?: string; loc?: string; p?: string; vezi?: string };
+export type MarketFilters = { q?: string; cat?: string; tip?: string; tr?: string; src?: string; st?: string; dup?: string; min?: string; max?: string; loc?: string; p?: string; vezi?: string;
+  /** rooms ("5" = five or more), county, town, zone (the keys of place.ts) */
+  cam?: string; jud?: string; oras?: string; zona?: string };
 export type MarketRow = {
   id: string; source: string; url: string; title: string | null; category: string | null; type: string | null; transaction: string | null;
   price: number | null; currency: string | null; price_sqm: number | null; area: number | null; county: string | null; city: string | null; zone: string | null;
@@ -35,6 +37,11 @@ function whereOf(f: MarketFilters) {
   if (f.tr) { w.push("l.deal = ?"); a.push(f.tr); }
   if (f.src) { w.push("l.source = ?"); a.push(f.src); }
   if (f.loc) { w.push("(l.city LIKE ? OR l.zone LIKE ? OR l.address LIKE ?)"); a.push(`%${f.loc}%`, `%${f.loc}%`, `%${f.loc}%`); }
+  if (f.jud) { w.push("l.loc_county = ?"); a.push(f.jud); }
+  if (f.oras) { w.push("l.loc_city = ?"); a.push(f.oras); }
+  if (f.zona) { w.push("l.loc_zone = ?"); a.push(f.zona); }
+  const cam = Number(f.cam);
+  if (cam >= 1 && cam <= 5) { w.push(cam === 5 ? "l.rooms >= 5" : "l.rooms = ?"); if (cam < 5) a.push(cam); }
   const min = Number(f.min), max = Number(f.max);
   if (f.min && Number.isFinite(min)) { w.push(`${AREA} >= ?`); a.push(min); }
   if (f.max && Number.isFinite(max)) { w.push(`${AREA} <= ?`); a.push(max); }
@@ -66,11 +73,29 @@ export async function marketPoints(db: D1Database, f: MarketFilters, limit = 150
   return results;
 }
 
-/** The values the filters offer (categories, types, sites), with how many listings each. */
-export async function marketFacets(db: D1Database) {
-  const q = (col: string) => db.prepare(`SELECT ${col} AS k, COUNT(*) AS n FROM market_listings WHERE ${col} IS NOT NULL AND ${col} <> '' GROUP BY ${col} ORDER BY n DESC`).all<{ k: string; n: number }>().then((r) => r.results);
-  const [cats, types, sources] = await Promise.all([q("category"), q("type"), q("source")]);
-  return { cats, types, sources };
+/** The values the filters offer (categories, types, sites, counties; towns of the chosen county, zones of the chosen
+ * town), with how many active listings each. A place shows under the most common spelling of its name. */
+export async function marketFacets(db: D1Database, f: MarketFilters = {}) {
+  type F = { k: string; n: number }; type P = F & { label: string };
+  const q = (col: string) => db.prepare(`SELECT ${col} AS k, COUNT(*) AS n FROM market_listings WHERE ${col} IS NOT NULL AND ${col} <> '' GROUP BY ${col} ORDER BY n DESC`).all<F>().then((r) => r.results);
+  // every spelling of a place with its count; the place takes the most common one (with diacritics when tied)
+  const place = async (key: string, name: string, where: string, binds: string[], limit: number) => {
+    const { results } = await db.prepare(`SELECT ${key} AS k, ${name} AS label, COUNT(*) AS n FROM market_listings WHERE status = 'activ' AND ${key} IS NOT NULL AND ${name} IS NOT NULL ${where}
+      GROUP BY ${key}, ${name} ORDER BY n DESC LIMIT 3000`).bind(...binds).all<P>();
+    const by = new Map<string, P & { top: number }>();
+    for (const r of results) {
+      const c = by.get(r.k);
+      if (!c) by.set(r.k, { ...r, top: r.n });
+      else { c.n += r.n; if (r.n === c.top && /[^\x00-\x7f]/.test(r.label) && !/[^\x00-\x7f]/.test(c.label)) c.label = r.label; }
+    }
+    return [...by.values()].sort((x, y) => y.n - x.n).slice(0, limit).map(({ k, n, label }) => ({ k, n, label })).sort((x, y) => x.label.localeCompare(y.label, "ro"));
+  };
+  const [cats, types, sources, counties, cities, zones] = await Promise.all([q("category"), q("type"), q("source"),
+    place("loc_county", "county", "", [], 60),
+    place("loc_city", "city", f.jud ? "AND loc_county = ?" : "", f.jud ? [f.jud] : [], 300),
+    f.oras ? place("loc_zone", "zone", "AND loc_city = ?", [f.oras], 300) : Promise.resolve([] as P[]),
+  ]);
+  return { cats, types, sources, counties, cities, zones };
 }
 
 export async function getMarketListing(db: D1Database, id: string) {
