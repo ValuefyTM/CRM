@@ -90,7 +90,7 @@ Comparabile de pe **imobiliare.ro, storia.ro, olx.ro, publi24.ro și homezz.ro**
 
 - **Căutări** (`market_searches`, editabile în pagină): o pagină de rezultate de pe un site, copiată din browser cu filtrele
   dorite, plus categoria din CRM (REZIDENTIAL, COMERCIAL, INDUSTRIAL, TEREN…) și tranzacția. Paginarea e automată.
-- **Rulare**: cronul `7 23 * * *` (01:07 în România) pornește rularea, iar `*/5 * * * *` avansează coada (`market_jobs`):
+- **Rulare**: cronul `*/5 * * * *` pornește rularea la orele și în zilele din Setări (ora României, implicit 01:07 zilnic; fiecare căutare are frecvența ei) și avansează coada (`market_jobs`):
   fiecare pas ~4 minute pornește rulări Apify (maximum cât e setat în panou, implicit 2) și le colectează pe cele terminate.
   „Rulează acum” pornește una imediat.
 - **Fără descărcări inutile**: fiecare anunț are o amprentă din pagina de rezultate (preț, suprafață, titlu); dacă nu s-a
@@ -100,6 +100,10 @@ Comparabile de pe **imobiliare.ro, storia.ro, olx.ro, publi24.ro și homezz.ro**
   pe Storia se ignoră.
 - **Dispărute**: un anunț care lipsește 3 rulări la rând dintr-o căutare citită complet devine `inactiv`; pagina 404 /
   redirecționată → `expirat`.
+- **Istoric pe rulare** (migrația `1095`): fiecare eveniment din `market_listing_history` ține `run_id` și, la „modificat”, `changes`
+  (vechi → nou). Setări › Analize de piață arată starea pe surse, istoricul rulărilor și, pe fiecare rulare, anunțurile adăugate,
+  modificate, expirate, dispărute, reapărute, erorile și rezumatul pe căutări (`market_runs.detail`, păstrat la închidere).
+  Limitele unei rulări (rulări Apify, ore), încercările, pragul de „dispărut” și rezumatul pe e-mail sunt setări.
 - **Căutare text**: FTS5 (`market_listings_fts`, fără diacritice) pe titlu, descriere și toată pagina (markdown).
 - **Comparabile**: pe pagina Comparabile a unei proprietăți apar și anunțurile de piață din zonă (aceeași categorie, rază,
   suprafață), cu mediana € / m². Claude: instrumentul MCP `anunturi_piata`.

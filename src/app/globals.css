@@ -4922,3 +4922,22 @@ button.ldNear { font: inherit; text-align: left; width: 100%; cursor: pointer; }
 .ldPin.dot { width: 9px; height: 9px; padding: 0; border-radius: 50%; background: var(--ink); border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); }
 .ldPin.dot.off { background: #fff; border: 2px dashed var(--err); }
 .ldPin.dot.hl { width: 13px; height: 13px; background: var(--acc); border: 2px solid var(--ink); }
+
+/* Analize de piață: programare, propunerea adresei, ce s-a schimbat la un anunț */
+.mkSub { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 6px 0 0; padding-top: 10px; border-top: 1px solid var(--divider); }
+.mkSub:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.mkTimes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; align-items: center; }
+.mkTimes span { display: inline-flex; gap: 4px; align-items: center; }
+.mkTimes .input { width: 118px; }
+.mkDays { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.mkDays label { border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 13px; font-weight: 700; cursor: pointer; color: var(--muted); user-select: none; }
+.mkDays label.on { background: var(--acc-soft); border-color: var(--acc); color: var(--acc-text); }
+.mkDays input { position: absolute; opacity: 0; width: 0; height: 0; }
+.mkDays label:focus-within { outline: 2px solid var(--acc); outline-offset: 2px; }
+.mkSuggest { border: 1px dashed var(--line); border-radius: 12px; padding: 10px 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 8px; align-items: center; margin: 0; }
+.mkSuggest legend { font-size: 12px; font-weight: 700; color: var(--muted); padding: 0 6px; }
+.mkSuggest small { grid-column: 1 / -1; }
+@media (max-width: 640px) { .mkSuggest { grid-template-columns: 1fr; } }
+.mkDiff { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.mkDiff s { color: var(--muted); }
+.mkDiff .pill { margin-left: 6px; }

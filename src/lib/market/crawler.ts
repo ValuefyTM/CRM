@@ -4,23 +4,24 @@
 // Apify run. The cron calls `tick` every 5 minutes: it collects the Apify runs that finished, processes them (new pages,
 // listings), starts new ones (at most MARKET_CONCURRENCY in parallel) and stops after ~4 minutes, so nothing waits
 // hours inside the Worker. When the queue is empty the run is closed: listings missing from complete searches are
-// counted (inactive after 3 runs) and duplicates across sites are grouped.
+// counted (inactive after 3 runs, a setting) and duplicates across sites are grouped.
 //
 // A listing whose card (price, area, title) did not change since the last run is not downloaded again.
 import { now, uuid } from "../db";
 import { abortRun, datasetItem, runStatus, startFetch, type FetchItem } from "./apify";
-import { getMarketSettings } from "./settings";
+import { dueSlot, getMarketSettings, type MarketSettings } from "./settings";
 import { SITES, type Card, type Detail } from "./sites";
 import { cleanMd, hex, norm, sha1, uniq } from "./util";
+import { esc, layout, sendEmail } from "../email";
 
-type Search = { id: string; name: string; source: string; url: string; category: string | null; type: string | null; deal: string; enabled: number; max_pages: number };
+type Search = { id: string; name: string; source: string; url: string; category: string | null; type: string | null; deal: string; enabled: number; max_pages: number;
+  every_days: number; max_details: number; last_run_at: string | null };
 type Job = { id: string; run_id: string; kind: "list" | "detail"; search_id: string; listing_id: string | null; url: string; page: number | null; card_fp: string | null;
   status: string; apify_run_id: string | null; dataset_id: string | null; attempts: number };
 type Listing = Record<string, unknown> & { id: string; source: string; ext_id: string; url: string; status: string; fp_card: string | null; fp_detail: string | null; last_seen_at: string };
 
-const MISSING_LIMIT = 3;          // runs in a row missing from a complete search → inactive
 const MAX_PHOTOS = 40;
-const MAX_ATTEMPTS = 3;
+const MAX_ATTEMPTS = 3;           // photos (the tries of a page are a setting)
 const DUP = { meters: 250, area: 0.03, price: 0.05 };
 
 const cardFp = (c: Card) => sha1(c.price ?? null, c.currency ?? null, c.usable_area ?? null, norm(c.title));
@@ -34,11 +35,27 @@ async function bump(db: D1Database, runId: string, k: string, n = 1) {
 
 // ---------------------------------------------------------------- start
 
-/** Starts a run (the nightly cron, or „Rulează acum”): page 1 of every enabled search, or of the given ones. */
+/** A search is due in a scheduled run: its frequency in days has passed since its last run (0 = on demand only). */
+const due = (s: Search, at = Date.now()) => s.every_days > 0 && (!s.last_run_at || at - Date.parse(s.last_run_at) >= s.every_days * 864e5 - 3 * 36e5);
+
+/** The scheduled start (called by the cron every 5 minutes): when an hour set in Setări has just passed, on a chosen day,
+ * a run starts with the searches that are due. One start per hour set (the slot is claimed in `settings`). */
+export async function startScheduled(db: D1Database) {
+  const slot = dueSlot(await getMarketSettings(db));
+  if (!slot) return null;
+  const claim = await db.prepare(`INSERT INTO settings (key, value, updated_at, updated_by) VALUES ('market_slot', ?, ?, 'cron')
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at WHERE settings.value <> excluded.value`).bind(slot, now()).run();
+  if (!claim.meta.changes) return null;
+  return { slot, ...(await startRun(db, "cron")) };
+}
+
+/** Starts a run: page 1 of the searches due (the schedule), of every enabled search („Pornește acum”) or of the given ones. */
 export async function startRun(db: D1Database, trigger: "cron" | "manual", searchIds?: string[]) {
   const running = await db.prepare("SELECT id, started_at FROM market_runs WHERE status = 'running' ORDER BY started_at DESC LIMIT 1").first<{ id: string; started_at: string }>();
+  // a scheduled start does not pile onto a run still going
+  if (running && trigger === "cron") return { runId: running.id, searches: 0, skipped: "o rulare e deja în desfășurare" };
   const { results: searches } = await db.prepare("SELECT * FROM market_searches WHERE enabled = 1").all<Search>();
-  const pick = searches.filter((s) => !searchIds?.length || searchIds.includes(s.id));
+  const pick = searches.filter((s) => (trigger === "cron" ? due(s) : !searchIds?.length || searchIds.includes(s.id)));
   if (!pick.length) return { runId: running?.id ?? null, searches: 0 };
   let runId = running?.id;
   if (!runId) {
@@ -68,7 +85,13 @@ export async function tick(db: D1Database, bucket: R2Bucket | null, budgetMs = 2
   let processed = 0, started = 0;
   const active = await db.prepare("SELECT id FROM market_runs WHERE status = 'running' LIMIT 1").first<{ id: string }>();
   if (!active) return { processed, started, idle: true, photos: budgetMs > 60_000 ? await retryPhotos(db, bucket, 20_000) : 0 };
-  const { concurrency } = await getMarketSettings(db);
+  const cfg = await getMarketSettings(db);
+  const { concurrency } = cfg;
+  // the limits of a run (Setări): past them it stops by itself; what is left is downloaded by the next run
+  const lim = await db.prepare("SELECT started_at, COALESCE(json_extract(stats, '$.rulari_apify'), 0) AS apify FROM market_runs WHERE id = ?").bind(active.id).first<{ started_at: string; apify: number }>();
+  const over = !lim ? null : cfg.max_apify && lim.apify >= cfg.max_apify ? `limita de ${cfg.max_apify} rulări Apify pe rulare`
+    : cfg.max_hours && Date.now() - Date.parse(lim.started_at) > cfg.max_hours * 36e5 ? `limita de ${cfg.max_hours} ore pe rulare` : null;
+  if (over) { await stopRun(db, over); return { processed, started, idle: false, stopped: over }; }
 
   while (left() > Math.min(20_000, budgetMs / 3)) {
     // 1. collect what finished
@@ -91,12 +114,18 @@ export async function tick(db: D1Database, bucket: R2Bucket | null, budgetMs = 2
         await db.prepare("UPDATE market_jobs SET status = 'done', error = NULL, updated_at = ? WHERE id = ?").bind(now(), j.id).run();
         processed++;
       } catch (e) {
-        await failJob(db, j, e);
+        await failJob(db, j, e, cfg.max_attempts);
       }
+    }
+    // the limit of Apify runs reached inside this pass
+    if (cfg.max_apify && lim && lim.apify + started >= cfg.max_apify) {
+      const why = `limita de ${cfg.max_apify} rulări Apify pe rulare`;
+      await stopRun(db, why);
+      return { processed, started, idle: false, stopped: why };
     }
     // 2. start new runs, up to the parallel limit
     const busy = (await db.prepare("SELECT COUNT(*) AS n FROM market_jobs WHERE status IN ('running', 'processing')").first<{ n: number }>())?.n ?? 0;
-    const free = concurrency - busy;
+    const free = Math.min(concurrency - busy, cfg.max_apify && lim ? cfg.max_apify - lim.apify - started : Infinity);
     if (free > 0) {
       // the results pages first (they decide what else to download), then the listings, alternating the sites
       const { results: pending } = await db.prepare(`SELECT j.* FROM market_jobs j WHERE j.status = 'pending'
@@ -119,7 +148,7 @@ export async function tick(db: D1Database, bucket: R2Bucket | null, budgetMs = 2
     }
     // 3. nothing left: close the run
     const open = await db.prepare("SELECT COUNT(*) AS n FROM market_jobs WHERE run_id = ? AND status IN ('pending', 'running', 'processing')").bind(active.id).first<{ n: number }>();
-    if (!open?.n) { await finishRun(db, bucket, active.id); break; }
+    if (!open?.n) { await finishRun(db, bucket, active.id, cfg); break; }
     // wait a little for the runs in progress (Apify answers as soon as one finishes)
     if (!collected) {
       const oldest = await db.prepare("SELECT apify_run_id FROM market_jobs WHERE status = 'running' ORDER BY updated_at LIMIT 1").first<{ apify_run_id: string }>();
@@ -134,9 +163,9 @@ export async function tick(db: D1Database, bucket: R2Bucket | null, budgetMs = 2
   return { processed, started, idle: false };
 }
 
-async function failJob(db: D1Database, j: Job, e: unknown) {
+async function failJob(db: D1Database, j: Job, e: unknown, maxAttempts: number) {
   const msg = String(e instanceof Error ? e.message : e).slice(0, 300);
-  const final = j.attempts >= MAX_ATTEMPTS;
+  const final = j.attempts >= maxAttempts;
   await db.prepare("UPDATE market_jobs SET status = ?, error = ?, apify_run_id = NULL, dataset_id = NULL, updated_at = ? WHERE id = ?")
     .bind(final ? "error" : "pending", msg, now(), j.id).run();
   if (!final) return;
@@ -172,7 +201,11 @@ async function processList(db: D1Database, j: Job, item: FetchItem) {
     return;
   }
   const stmts: D1PreparedStatement[] = [];
-  let nNew = 0, nSame = 0, nQueued = 0;
+  let nNew = 0, nSame = 0, nQueued = 0, nLater = 0;
+  // the search's limit of listings downloaded per run: the rest wait for the next run (their card is not marked as read)
+  let room = search.max_details > 0
+    ? Math.max(0, search.max_details - ((await db.prepare("SELECT COUNT(*) AS n FROM market_jobs WHERE run_id = ? AND search_id = ? AND kind = 'detail'").bind(j.run_id, search.id).first<{ n: number }>())?.n ?? 0))
+    : Infinity;
   for (const c of fresh) {
     const fp = await cardFp(c);
     const k = known.get(c.extId);
@@ -193,13 +226,14 @@ async function processList(db: D1Database, j: Job, item: FetchItem) {
       stmts.push(db.prepare("UPDATE market_listings SET last_seen_at = ?, missing_runs = 0, search_id = ?, url = ?, status = CASE WHEN status = 'inactiv' THEN 'activ' ELSE status END WHERE id = ?")
         .bind(run.started_at, search.id, c.url, k.id));
       if (k.status === "inactiv") {
-        stmts.push(db.prepare("INSERT INTO market_listing_history (id, listing_id, at, event, price, currency, title) VALUES (?, ?, ?, 'reaparut', ?, ?, ?)")
-          .bind(uuid(), k.id, now(), c.price ?? null, c.currency ?? null, c.title ?? null));
+        stmts.push(db.prepare("INSERT INTO market_listing_history (id, listing_id, at, event, price, currency, title, run_id) VALUES (?, ?, ?, 'reaparut', ?, ?, ?, ?)")
+          .bind(uuid(), k.id, now(), c.price ?? null, c.currency ?? null, c.title ?? null, j.run_id));
         await bump(db, j.run_id, "reaparute");
       }
     }
     if (!k || k.fp_card !== fp || !k.fp_detail || k.status === "expirat") {
-      nQueued++;
+      if (room <= 0) { nLater++; continue; }
+      room--; nQueued++;
       stmts.push(db.prepare(`INSERT INTO market_jobs (id, run_id, kind, search_id, listing_id, url, card_fp)
         SELECT ?, ?, 'detail', ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM market_jobs WHERE run_id = ? AND listing_id = ? AND kind = 'detail')`)
         .bind(uuid(), j.run_id, search.id, id, c.url, fp, j.run_id, id));
@@ -216,6 +250,7 @@ async function processList(db: D1Database, j: Job, item: FetchItem) {
   await bump(db, j.run_id, "anunturi_noi", nNew);
   await bump(db, j.run_id, "nemodificate", nSame);
   await bump(db, j.run_id, "de_descarcat", nQueued);
+  await bump(db, j.run_id, "amanate", nLater);
 }
 
 // ---------------------------------------------------------------- listing page
@@ -223,6 +258,17 @@ async function processList(db: D1Database, j: Job, item: FetchItem) {
 async function gzipJson(v: unknown) {
   const s = new Blob([JSON.stringify(v)]).stream().pipeThrough(new CompressionStream("gzip"));
   return new Response(s).arrayBuffer();
+}
+
+/** What changed between the listing as kept and as read now: old → new for the figures and the title, a flag for the rest. */
+function diff(old: Record<string, unknown>, m: Record<string, unknown>) {
+  const out: Record<string, unknown> = {};
+  for (const k of ["price", "currency", "usable_area", "built_area", "land_area", "title", "address", "zone"])
+    if ((old[k] ?? null) !== (m[k] ?? null) && !(typeof old[k] === "string" && norm(old[k] as string) === norm(m[k] as string))) out[k] = [old[k] ?? null, m[k] ?? null];
+  if (norm(old.description as string) !== norm(m.description as string)) out.description = true;
+  if ((old.lat ?? null) !== (m.lat ?? null) || (old.lng ?? null) !== (m.lng ?? null)) out.location = true;
+  if (!Object.keys(out).length) out.photos = true; // the fingerprint changed and nothing above did: the images
+  return out;
 }
 
 async function processDetail(db: D1Database, bucket: R2Bucket | null, j: Job, item: FetchItem) {
@@ -241,8 +287,8 @@ async function processDetail(db: D1Database, bucket: R2Bucket | null, j: Job, it
   if (d.expired) {
     await db.batch([
       db.prepare("UPDATE market_listings SET status = 'expirat', fetched_at = ?, source_key = ?, fp_card = ?, error = NULL WHERE id = ?").bind(at, bucket ? key : null, j.card_fp, row.id),
-      db.prepare("INSERT INTO market_listing_history (id, listing_id, at, event, price, currency, title, source_key) VALUES (?, ?, ?, 'expirat', ?, ?, ?, ?)")
-        .bind(uuid(), row.id, at, row.price ?? null, row.currency ?? null, row.title ?? null, bucket ? key : null),
+      db.prepare("INSERT INTO market_listing_history (id, listing_id, at, event, price, currency, title, source_key, run_id) VALUES (?, ?, ?, 'expirat', ?, ?, ?, ?, ?)")
+        .bind(uuid(), row.id, at, row.price ?? null, row.currency ?? null, row.title ?? null, bucket ? key : null, j.run_id),
     ]);
     await bump(db, j.run_id, "expirate");
     return;
@@ -269,8 +315,9 @@ async function processDetail(db: D1Database, bucket: R2Bucket | null, j: Job, it
     db.prepare("DELETE FROM market_listings_fts WHERE listing_id = ?").bind(row.id),
     db.prepare("INSERT INTO market_listings_fts (listing_id, title, body) VALUES (?, ?, ?)").bind(row.id, (m.title as string) ?? "", `${m.description ?? ""}\n\n${md}`),
   ];
-  if (changed) stmts.push(db.prepare("INSERT INTO market_listing_history (id, listing_id, at, event, price, currency, area, title, source_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(uuid(), row.id, at, first ? "nou" : "modificat", m.price ?? null, m.currency ?? null, area, m.title ?? null, bucket ? key : null));
+  if (changed) stmts.push(db.prepare("INSERT INTO market_listing_history (id, listing_id, at, event, price, currency, area, title, source_key, run_id, changes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(uuid(), row.id, at, first ? "nou" : "modificat", m.price ?? null, m.currency ?? null, area, m.title ?? null, bucket ? key : null, j.run_id,
+      first ? null : JSON.stringify(diff(row, m))));
   photos.forEach((u, i) => stmts.push(db.prepare("INSERT OR IGNORE INTO market_listing_photos (id, listing_id, position, url) VALUES (?, ?, ?, ?)").bind(uuid(), row.id, i, u)));
   for (let i = 0; i < stmts.length; i += 80) await db.batch(stmts.slice(i, i + 80));
   await bump(db, j.run_id, first ? "descarcate_noi" : changed ? "modificate" : "neschimbate");
@@ -333,20 +380,70 @@ async function retryPhotos(db: D1Database, bucket: R2Bucket | null, budgetMs: nu
 
 // ---------------------------------------------------------------- cancel / progress
 
-/** Stops the run in progress (control panel): the queue is emptied, the Apify runs in progress are aborted. Nothing is
- * marked as missing (the searches were not read to the end); what was already downloaded stays. */
-export async function cancelRun(db: D1Database, userName: string) {
+/** Stops the run in progress (the control panel, or a limit of the run): the queue is emptied, the Apify runs in progress
+ * are aborted. Nothing is marked as missing (the searches were not read to the end); what was already downloaded stays. */
+export async function stopRun(db: D1Database, why: string, userName?: string) {
   const run = await db.prepare("SELECT id, started_at FROM market_runs WHERE status = 'running' LIMIT 1").first<{ id: string; started_at: string }>();
   if (!run) return null;
   const { results: live } = await db.prepare("SELECT apify_run_id FROM market_jobs WHERE run_id = ? AND status = 'running' AND apify_run_id IS NOT NULL").bind(run.id).all<{ apify_run_id: string }>();
   await Promise.all(live.map((j) => abortRun(j.apify_run_id)));
+  const left = (await db.prepare("SELECT COUNT(*) AS n FROM market_jobs WHERE run_id = ? AND status IN ('pending', 'running', 'processing')").bind(run.id).first<{ n: number }>())?.n ?? 0;
   await db.batch([
     db.prepare("UPDATE market_jobs SET status = 'error', error = 'oprită', updated_at = ? WHERE run_id = ? AND status IN ('pending', 'running', 'processing')").bind(now(), run.id),
     db.prepare("UPDATE market_searches SET last_complete = 0, last_error = COALESCE(last_error, 'rulare oprită') WHERE last_run_at = ? AND COALESCE(last_complete, 0) = 0").bind(run.started_at),
-    db.prepare("UPDATE market_runs SET status = 'stopped', finished_at = ?, stats = json_set(stats, '$.oprita_de', ?) WHERE id = ?").bind(now(), userName, run.id),
+    db.prepare("UPDATE market_runs SET status = 'stopped', finished_at = ?, note = ?, stats = json_set(stats, '$.oprita_de', ?, '$.ramase_in_coada', ?) WHERE id = ?")
+      .bind(now(), why, userName ?? "limită", left, run.id),
   ]);
+  await snapshotRun(db, run.id);
   await dedupe(db);
+  if (!userName) await notifyRun(db, run.id).catch((e) => console.warn("market: notify", String(e)));
   return run.id;
+}
+export const cancelRun = (db: D1Database, userName: string) => stopRun(db, `oprită de ${userName}`, userName);
+
+export type RunDetail = {
+  searches: { id: string; name: string; source: string; pages: number; pages_err: number; det_done: number; det_err: number; left: number; listings: number | null; complete: number | null; error: string | null }[];
+  errors: { kind: string; source: string; search: string; page: number | null; url: string; listing_id: string | null; title: string | null; error: string | null; attempts: number }[];
+};
+
+/** Keeps what the queue knows about a run (per search, the pages and listings that failed) on the run itself: the jobs
+ * are deleted when the next run ends. */
+async function snapshotRun(db: D1Database, runId: string) {
+  const [per, errs] = await Promise.all([
+    db.prepare(`SELECT s.id, s.name, s.source, s.last_count AS listings, s.last_complete AS complete, s.last_error AS error,
+        COALESCE(SUM(j.kind = 'list' AND j.status = 'done'), 0) AS pages, COALESCE(SUM(j.kind = 'list' AND j.status = 'error' AND COALESCE(j.error, '') <> 'oprită'), 0) AS pages_err,
+        COALESCE(SUM(j.kind = 'detail' AND j.status = 'done'), 0) AS det_done, COALESCE(SUM(j.kind = 'detail' AND j.status = 'error' AND COALESCE(j.error, '') <> 'oprită'), 0) AS det_err,
+        COALESCE(SUM(j.error = 'oprită'), 0) AS left
+      FROM market_searches s JOIN market_jobs j ON j.search_id = s.id AND j.run_id = ? GROUP BY s.id ORDER BY s.name, s.source`).bind(runId).all<RunDetail["searches"][number]>(),
+    db.prepare(`SELECT j.kind, s.source, s.name AS search, j.page, j.url, j.listing_id, l.title, j.error, j.attempts FROM market_jobs j
+        JOIN market_searches s ON s.id = j.search_id LEFT JOIN market_listings l ON l.id = j.listing_id
+      WHERE j.run_id = ? AND j.status = 'error' AND COALESCE(j.error, '') <> 'oprită' ORDER BY j.kind = 'list' DESC, j.updated_at LIMIT 300`).bind(runId).all<RunDetail["errors"][number]>(),
+  ]);
+  const detail: RunDetail = { searches: per.results, errors: errs.results };
+  await db.prepare("UPDATE market_runs SET detail = ? WHERE id = ?").bind(JSON.stringify(detail), runId).run();
+  return detail;
+}
+
+/** The e-mail with the summary of a scheduled run (Setări: never / only with errors / always). */
+async function notifyRun(db: D1Database, runId: string) {
+  const cfg = await getMarketSettings(db);
+  if (cfg.notify === "never" || !cfg.notify_to) return;
+  const run = await db.prepare("SELECT trigger, status, started_at, finished_at, stats, note, detail FROM market_runs WHERE id = ?").bind(runId)
+    .first<{ trigger: string; status: string; started_at: string; finished_at: string | null; stats: string; note: string | null; detail: string | null }>();
+  if (!run || run.trigger !== "cron") return;
+  let st: Record<string, number> = {}, det: RunDetail = { searches: [], errors: [] };
+  try { st = JSON.parse(run.stats); det = run.detail ? JSON.parse(run.detail) : det; } catch { /* empty */ }
+  const bad = run.status === "stopped" || det.errors.length > 0 || det.searches.some((x) => x.pages_err > 0);
+  if (cfg.notify === "errors" && !bad) return;
+  const url = `${(process.env.CRM_URL || "https://crm.valuefy.ro").replace(/\/$/, "")}/setari/piata/rulari/${runId}`;
+  const lines = [["Anunțuri noi", st.descarcate_noi ?? st.anunturi_noi ?? 0], ["Modificate", st.modificate ?? 0], ["Expirate", st.expirate ?? 0], ["Dispărute", st.devenite_inactive ?? 0],
+    ["Reapărute", st.reaparute ?? 0], ["Pagini / anunțuri eșuate", `${st.pagini_esuate ?? 0} / ${st.anunturi_esuate ?? 0}`], ["Rulări Apify", st.rulari_apify ?? 0]] as [string, string | number][];
+  const title = run.status === "stopped" ? `Rularea de piață s-a oprit: ${run.note ?? ""}` : bad ? "Rularea de piață s-a încheiat cu erori" : "Rularea de piață s-a încheiat";
+  const body = `<table cellpadding="0" cellspacing="0" style="font-size:14px">${lines.map(([k, v]) => `<tr><td style="padding:3px 18px 3px 0;color:#666">${esc(k)}</td><td><b>${esc(v)}</b></td></tr>`).join("")}</table>`
+    + (det.searches.filter((x) => x.error).length ? `<p style="font-size:13px">${det.searches.filter((x) => x.error).map((x) => `${esc(x.name)} (${esc(x.source)}): ${esc(x.error)}`).join("<br>")}</p>` : "");
+  const text = `${title}\n${lines.map(([k, v]) => `${k}: ${v}`).join("\n")}\n${url}`;
+  const html = layout({ eyebrow: "Analize de piață", title, body, button: { label: "Vezi rularea", url }, foot: "Trimis automat de CRM (Setări › Analize de piață)." });
+  for (const to of cfg.notify_to.split(",").map((x) => x.trim()).filter(Boolean)) await sendEmail({ to, subject: title, html, text });
 }
 
 export type RunProgress = {
@@ -395,7 +492,7 @@ export async function runProgress(db: D1Database): Promise<RunProgress> {
 
 // ---------------------------------------------------------------- end of a run
 
-async function finishRun(db: D1Database, bucket: R2Bucket | null, runId: string) {
+async function finishRun(db: D1Database, bucket: R2Bucket | null, runId: string, cfg: MarketSettings) {
   const run = await db.prepare("SELECT started_at FROM market_runs WHERE id = ?").bind(runId).first<{ started_at: string }>();
   if (!run) return;
   // only the searches read to the last page: a listing missing from them is counted (inactive after 3 runs)
@@ -404,10 +501,10 @@ async function finishRun(db: D1Database, bucket: R2Bucket | null, runId: string)
   for (const s of complete) {
     await db.prepare("UPDATE market_listings SET missing_runs = missing_runs + 1 WHERE search_id = ? AND status = 'activ' AND last_seen_at < ?").bind(s.id, run.started_at).run();
     const { results: out } = await db.prepare("SELECT id, price, currency, title FROM market_listings WHERE search_id = ? AND status = 'activ' AND missing_runs >= ?")
-      .bind(s.id, MISSING_LIMIT).all<{ id: string; price: number | null; currency: string | null; title: string | null }>();
+      .bind(s.id, cfg.missing_limit).all<{ id: string; price: number | null; currency: string | null; title: string | null }>();
     const stmts = out.flatMap((r) => [
       db.prepare("UPDATE market_listings SET status = 'inactiv' WHERE id = ?").bind(r.id),
-      db.prepare("INSERT INTO market_listing_history (id, listing_id, at, event, price, currency, title) VALUES (?, ?, ?, 'disparut', ?, ?, ?)").bind(uuid(), r.id, now(), r.price, r.currency, r.title),
+      db.prepare("INSERT INTO market_listing_history (id, listing_id, at, event, price, currency, title, run_id) VALUES (?, ?, ?, 'disparut', ?, ?, ?, ?)").bind(uuid(), r.id, now(), r.price, r.currency, r.title, runId),
     ]);
     for (let i = 0; i < stmts.length; i += 80) await db.batch(stmts.slice(i, i + 80));
     gone += out.length;
@@ -415,6 +512,8 @@ async function finishRun(db: D1Database, bucket: R2Bucket | null, runId: string)
   await bump(db, runId, "devenite_inactive", gone);
   const groups = await dedupe(db);
   await db.prepare("UPDATE market_runs SET status = 'done', finished_at = ?, stats = json_set(stats, '$.grupuri_duplicate', ?) WHERE id = ?").bind(now(), groups, runId).run();
+  await snapshotRun(db, runId);
+  await notifyRun(db, runId).catch((e) => console.warn("market: notify", String(e)));
   // the finished jobs are no longer needed (the errors stay one more run, for the page)
   await db.prepare("DELETE FROM market_jobs WHERE run_id <> ? AND run_id IN (SELECT id FROM market_runs WHERE status IN ('done', 'stopped'))").bind(runId).run();
   await retryPhotos(db, bucket, 20_000);

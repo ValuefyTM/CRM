@@ -111,10 +111,10 @@ export async function nearbyMarket(db: D1Database, ll: [number, number], o: { ca
 export async function marketStatus(db: D1Database) {
   const [searches, runs, queue, counts] = await Promise.all([
     db.prepare(`SELECT s.*, s.deal AS "transaction", (SELECT COUNT(*) FROM market_listings l WHERE l.search_id = s.id AND l.status = 'activ') AS active FROM market_searches s ORDER BY s.name, s.source`)
-      .all<{ id: string; name: string; source: string; url: string; category: string | null; type: string | null; transaction: string; enabled: number; max_pages: number;
+      .all<{ id: string; name: string; source: string; url: string; category: string | null; type: string | null; transaction: string; enabled: number; max_pages: number; every_days: number; max_details: number;
         last_run_at: string | null; last_complete: number | null; last_count: number | null; last_error: string | null; active: number }>(),
-    db.prepare("SELECT id, trigger, status, started_at, finished_at, stats FROM market_runs ORDER BY started_at DESC LIMIT 5")
-      .all<{ id: string; trigger: string; status: string; started_at: string; finished_at: string | null; stats: string }>(),
+    db.prepare("SELECT id, trigger, status, started_at, finished_at, stats, note FROM market_runs ORDER BY started_at DESC LIMIT 40")
+      .all<{ id: string; trigger: string; status: string; started_at: string; finished_at: string | null; stats: string; note: string | null }>(),
     db.prepare("SELECT kind, status, COUNT(*) AS n FROM market_jobs WHERE run_id IN (SELECT id FROM market_runs WHERE status = 'running') GROUP BY kind, status")
       .all<{ kind: string; status: string; n: number }>(),
     db.prepare("SELECT status, COUNT(*) AS n FROM market_listings GROUP BY status").all<{ status: string; n: number }>(),
@@ -124,6 +124,50 @@ export async function marketStatus(db: D1Database) {
     runs: runs.results.map((r) => ({ ...r, stats: parseJson<Record<string, number>>(r.stats, {}) })),
     queue: queue.results,
     counts: Object.fromEntries(counts.results.map((c) => [c.status, c.n])) as Record<string, number>,
+  };
+}
+
+/** The health of each site: listings, what the last week brought, searches and their last errors. */
+export async function sourceHealth(db: D1Database) {
+  const week = new Date(Date.now() - 7 * 864e5).toISOString();
+  const [l, s, h, m] = await Promise.all([
+    db.prepare(`SELECT source, COALESCE(SUM(status = 'activ'), 0) AS active, COALESCE(SUM(status <> 'activ'), 0) AS gone, COALESCE(SUM(first_seen_at >= ?1), 0) AS new7,
+        COALESCE(SUM(error IS NOT NULL), 0) AS failed, MAX(fetched_at) AS last_fetch FROM market_listings GROUP BY source`).bind(week)
+      .all<{ source: string; active: number; gone: number; new7: number; failed: number; last_fetch: string | null }>(),
+    db.prepare(`SELECT source, COUNT(*) AS n, COALESCE(SUM(enabled), 0) AS enabled, MAX(last_run_at) AS last_run, COALESCE(SUM(enabled = 1 AND last_complete = 1), 0) AS complete,
+        COALESCE(SUM(enabled = 1 AND last_error IS NOT NULL), 0) AS errors FROM market_searches GROUP BY source`)
+      .all<{ source: string; n: number; enabled: number; last_run: string | null; complete: number; errors: number }>(),
+    db.prepare(`SELECT l.source, COALESCE(SUM(h.event = 'modificat'), 0) AS changed7, COALESCE(SUM(h.event IN ('expirat', 'disparut')), 0) AS out7 FROM market_listing_history h
+        JOIN market_listings l ON l.id = h.listing_id WHERE h.at >= ? GROUP BY l.source`).bind(week).all<{ source: string; changed7: number; out7: number }>(),
+    db.prepare("SELECT COALESCE(SUM(json_extract(stats, '$.rulari_apify')), 0) AS apify, COUNT(*) AS runs FROM market_runs WHERE started_at >= ?")
+      .bind(`${new Date().toISOString().slice(0, 7)}-01`).first<{ apify: number; runs: number }>(),
+  ]);
+  const names = [...new Set([...s.results.map((x) => x.source), ...l.results.map((x) => x.source)])].sort();
+  return {
+    sources: names.map((source) => ({ source, active: 0, gone: 0, new7: 0, failed: 0, last_fetch: null as string | null, n: 0, enabled: 0, last_run: null as string | null, complete: 0, errors: 0, changed7: 0, out7: 0,
+      ...l.results.find((x) => x.source === source), ...s.results.find((x) => x.source === source), ...h.results.find((x) => x.source === source) })),
+    month: m ?? { apify: 0, runs: 0 },
+  };
+}
+
+export type RunEvent = { at: string; event: string; price: number | null; currency: string | null; area: number | null; title: string | null; changes: string | null;
+  listing_id: string; source: string; url: string; city: string | null; zone: string | null; category: string | null; now_price: number | null; now_status: string; search: string | null };
+
+/** One run: its figures, what was kept about its searches and errors, and the listings it touched, per kind of event. */
+export async function runDetail(db: D1Database, id: string, event: string, limit = 300) {
+  const run = await db.prepare("SELECT id, trigger, status, started_at, finished_at, stats, note, detail FROM market_runs WHERE id = ?").bind(id)
+    .first<{ id: string; trigger: string; status: string; started_at: string; finished_at: string | null; stats: string; note: string | null; detail: string | null }>();
+  if (!run) return null;
+  const [counts, events] = await Promise.all([
+    db.prepare("SELECT event, COUNT(*) AS n FROM market_listing_history WHERE run_id = ? GROUP BY event").bind(id).all<{ event: string; n: number }>(),
+    db.prepare(`SELECT h.at, h.event, h.price, h.currency, h.area, h.title, h.changes, l.id AS listing_id, l.source, l.url, l.city, l.zone, l.category, l.price AS now_price, l.status AS now_status,
+        (SELECT name FROM market_searches s WHERE s.id = l.search_id) AS search
+      FROM market_listing_history h JOIN market_listings l ON l.id = h.listing_id WHERE h.run_id = ? AND h.event = ? ORDER BY l.source, h.at LIMIT ?`).bind(id, event, limit).all<RunEvent>(),
+  ]);
+  return {
+    run: { ...run, stats: parseJson<Record<string, number | string>>(run.stats, {}), detail: parseJson<import("./crawler").RunDetail | null>(run.detail ?? "null", null) },
+    counts: Object.fromEntries(counts.results.map((c) => [c.event, c.n])) as Record<string, number>,
+    events: events.results,
   };
 }
 

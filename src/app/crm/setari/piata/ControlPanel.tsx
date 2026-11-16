@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { RunProgress } from "@/lib/market/crawler";
+import type { MarketSettings } from "@/lib/market/settings";
 
 type SearchRow = { id: string; name: string; source: string; enabled: number; active: number };
 const time = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString("ro-RO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—");
@@ -121,10 +122,11 @@ export function ControlPanel({ searches, initial, base }: { searches: SearchRow[
             </div>
             {Object.keys(p.run.stats).length > 0 && (
               <p className="hint" style={{ marginTop: 10 }}>
-                {[["anunturi_noi", "noi"], ["modificate", "modificate"], ["nemodificate", "nemodificate (sărite)"], ["expirate", "expirate"], ["devenite_inactive", "dispărute"], ["grupuri_duplicate", "grupuri de duplicate"], ["rulari_apify", "rulări Apify"]]
+                {[["anunturi_noi", "noi"], ["modificate", "modificate"], ["nemodificate", "nemodificate (sărite)"], ["amanate", "amânate (limita căutării)"], ["expirate", "expirate"], ["reaparute", "reapărute"], ["devenite_inactive", "dispărute"], ["grupuri_duplicate", "grupuri de duplicate"], ["rulari_apify", "rulări Apify"]]
                   .filter(([k]) => p.run!.stats[k] != null).map(([k, l]) => `${p.run!.stats[k]} ${l}`).join(" · ")}
               </p>
             )}
+            <p style={{ marginTop: 8 }}><a className="link" href={`${base}/setari/piata/rulari/${p.run.id}`}>Detaliile rulării: anunțuri adăugate, modificate, dispărute, erori →</a></p>
           </>
         )}
       </section>
@@ -173,8 +175,10 @@ export function ControlPanel({ searches, initial, base }: { searches: SearchRow[
   );
 }
 
-/** The nightly run on / off and how many Apify runs in parallel. */
-export function MarketSettingsForm({ initial }: { initial: { nightly: boolean; concurrency: number } }) {
+const DAYS = ["Lu", "Ma", "Mi", "Jo", "Vi", "Sâ", "Du"];
+
+/** The schedule (hours, days), parallel runs, the limits of a run, the e-mail summary. */
+export function MarketSettingsForm({ initial }: { initial: MarketSettings }) {
   const router = useRouter();
   const [f, setF] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -183,17 +187,57 @@ export function MarketSettingsForm({ initial }: { initial: { nightly: boolean; c
     setBusy(true); setMsg(null);
     const r = await fetch("/api/crm/market/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(f) }).catch(() => null);
     setBusy(false);
+    if (r?.ok) setF(await r.json());
     setMsg(r?.ok ? { ok: true, text: "Setările au fost salvate." } : { ok: false, text: "Nu s-au putut salva." });
     router.refresh();
   };
+  const num = (k: "max_apify" | "max_hours" | "missing_limit" | "max_attempts" | "concurrency", label: string, hint: string, min: number, max: number) => (
+    <label className="field">{label} <small>({hint})</small>
+      <input className="input" type="number" min={min} max={max} value={f[k]} onChange={(e) => setF({ ...f, [k]: Number(e.target.value) })} /></label>
+  );
+  const setTime = (i: number, v: string) => setF({ ...f, times: f.times.map((t, k) => (k === i ? v : t)) });
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <label className="check"><input type="checkbox" checked={f.nightly} onChange={(e) => setF({ ...f, nightly: e.target.checked })} />Rulare automată în fiecare noapte (01:07)</label>
+      <h3 className="mkSub">Programare</h3>
+      <label className="check"><input type="checkbox" checked={f.nightly} onChange={(e) => setF({ ...f, nightly: e.target.checked })} />Rulări programate (pornirile la cerere rămân oricum)</label>
+      <div className="field">Ore de pornire <small>(ora României; pornirea are loc în cel mult 5 minute)</small>
+        <div className="mkTimes">
+          {f.times.map((t, i) => (
+            <span key={i}><input className="input" type="time" aria-label={`Ora ${i + 1}`} value={t} onChange={(e) => setTime(i, e.target.value)} />
+              {f.times.length > 1 && <button type="button" className="btn btnGhost btnSm" aria-label="Șterge ora" onClick={() => setF({ ...f, times: f.times.filter((_, k) => k !== i) })}>✕</button>}</span>
+          ))}
+          {f.times.length < 6 && <button type="button" className="btn btnGhost btnSm" onClick={() => setF({ ...f, times: [...f.times, "13:00"] })}>+ oră</button>}
+        </div>
+      </div>
+      <div className="field">Zile
+        <div className="mkDays">
+          {DAYS.map((d, i) => (
+            <label key={d} className={f.weekdays.includes(i + 1) ? "on" : ""}><input type="checkbox" checked={f.weekdays.includes(i + 1)}
+              onChange={(e) => setF({ ...f, weekdays: e.target.checked ? [...f.weekdays, i + 1].sort() : f.weekdays.filter((x) => x !== i + 1) })} />{d}</label>
+          ))}
+        </div>
+      </div>
+      <p className="hint">Fiecare căutare are propria frecvență (la fiecare rulare, la câteva zile, săptămânal, doar la cerere): „Modifică” la căutare.</p>
+
+      <h3 className="mkSub">Limitele unei rulări</h3>
       <label className="field">Rulări Apify în paralel <small>(cât permite planul Apify; mai multe = mai repede, dar consumă mai multă memorie din cont)</small>
         <select className="input" value={f.concurrency} onChange={(e) => setF({ ...f, concurrency: Number(e.target.value) })}>
           {[1, 2, 3, 4, 5, 6, 8, 10].map((n) => <option key={n} value={n}>{n}</option>)}
         </select>
       </label>
+      {num("max_apify", "Maximum rulări Apify pe rulare", "0 = fără limită; la atingere rularea se oprește, restul rămâne pentru următoarea", 0, 50000)}
+      {num("max_hours", "Durata maximă a unei rulări, ore", "0 = fără limită", 0, 48)}
+      {num("max_attempts", "Încercări pentru o pagină", "după atâtea eșecuri pagina e abandonată în rularea curentă", 1, 5)}
+      {num("missing_limit", "Rulări lipsă până la „dispărut”", "de câte ori la rând poate lipsi un anunț dintr-o căutare citită complet", 1, 10)}
+
+      <h3 className="mkSub">Rezumat pe e-mail</h3>
+      <label className="field">După rulările programate
+        <select className="input" value={f.notify} onChange={(e) => setF({ ...f, notify: e.target.value as MarketSettings["notify"] })}>
+          <option value="never">nu trimite</option><option value="errors">doar când sunt erori sau rularea s-a oprit</option><option value="always">după fiecare rulare</option>
+        </select>
+      </label>
+      {f.notify !== "never" && <label className="field">Către <small>(adrese separate prin virgulă)</small>
+        <input className="input" type="text" value={f.notify_to} onChange={(e) => setF({ ...f, notify_to: e.target.value })} placeholder="nume@firma.ro" /></label>}
       <button type="button" className="btn btnNavy btnSm" style={{ alignSelf: "flex-start" }} onClick={save} disabled={busy}>{busy ? "Se salvează…" : "Salvează"}</button>
       {msg && <div role="status" className={msg.ok ? "okMsg" : "error"}>{msg.text}</div>}
     </div>

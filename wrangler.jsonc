@@ -39,8 +39,8 @@
 	// Every morning at 06:47 UTC (09:47 / 08:47 in Romania): new SEAP notices for valuations (worker.ts → scheduled).
 	// Every 15 minutes (:13, :28, :43, :58): the inspections finished in UVALO that the webhook missed are brought in, then
 	// the alerts (bell, phone, email) — the ones repeated every few hours go out even when nobody is online.
-	// Every night at 23:07 UTC (01:07 / 02:07 in Romania): a new run of the market listings starts (Apify); every 5 minutes
-	// the queue advances (a pass of ~4 minutes, nothing to do outside a run except retrying failed photos).
-	"triggers": { "crons": ["47 6 * * *", "13,28,43,58 * * * *", "7 23 * * *", "*/5 * * * *"] },
+	// Every 5 minutes: a run of the market listings starts when one is scheduled (Setări → Analize de piață, Romanian time)
+	// and the queue advances (a pass of ~4 minutes, nothing to do outside a run except retrying failed photos).
+	"triggers": { "crons": ["47 6 * * *", "13,28,43,58 * * * *", "*/5 * * * *"] },
 	"observability": { "enabled": true }
 }
