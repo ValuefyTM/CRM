@@ -4941,3 +4941,19 @@ button.ldNear { font: inherit; text-align: left; width: 100%; cursor: pointer; }
 .mkDiff { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
 .mkDiff s { color: var(--muted); }
 .mkDiff .pill { margin-left: 6px; }
+/* Anunț de piață: graficul prețului și ce s-a schimbat la fiecare modificare */
+.ldTlChanges { grid-column: 2 / -1; margin-top: -2px; }
+.mkDiff .mkDesc summary { cursor: pointer; color: var(--muted); font-weight: 600; }
+.mkDiff .mkDesc div { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--cream-2); }
+.mkDiff .mkDesc p { margin: 2px 0 0; white-space: pre-wrap; font-size: 13px; }
+.mkChart { margin: 0 0 14px; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px 6px; background: #fff; }
+.mkChart figcaption { font-size: 13px; font-weight: 700; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.mkChart svg { width: 100%; height: auto; display: block; }
+.mkChart .axis { stroke: var(--divider); stroke-width: 1; }
+.mkChart .line { fill: none; stroke: var(--acc); stroke-width: 2.5; stroke-linejoin: round; }
+.mkChart .dot { fill: #fff; stroke: var(--acc); stroke-width: 2.5; }
+.mkChart .val { font-size: 12px; font-weight: 700; fill: var(--ink); }
+.mkChart .tick { font-size: 11px; fill: var(--muted-2); }
+.ldTimeline .mkDiff li { display: block; padding: 0; position: static; }
+.ldTimeline .mkDiff li::before { content: none; }
+.ldTimeline .mkDiff { gap: 4px; }

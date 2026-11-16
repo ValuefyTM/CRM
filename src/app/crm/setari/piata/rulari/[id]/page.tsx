@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { staffPage, fmtDate } from "@/lib/guard";
 import { CrmShell } from "@/components/CrmShell";
 import { runDetail } from "@/lib/market/search";
+import { MarketChanges } from "@/components/MarketChanges";
 import { SettingsTabs } from "../../../SettingsTabs";
 
 export const metadata: Metadata = { title: "Rulare · Analize de piață | CRM VALUEFY" };
@@ -10,32 +11,9 @@ export const dynamic = "force-dynamic";
 
 const RUN_STATUS: Record<string, string> = { running: "în desfășurare", done: "încheiată", stopped: "oprită" };
 const TABS: [key: string, label: string][] = [["nou", "Adăugate"], ["modificat", "Modificate"], ["expirat", "Expirate"], ["disparut", "Dispărute"], ["reaparut", "Reapărute"], ["erori", "Erori"], ["cautari", "Pe căutări"]];
-const FIELD: Record<string, string> = { price: "preț", currency: "monedă", usable_area: "suprafață utilă", built_area: "suprafață construită", land_area: "teren", title: "titlu", address: "adresă", zone: "zonă" };
-const FLAG: Record<string, string> = { description: "descriere", location: "poziția pe hartă", photos: "imagini" };
 const LIMIT = 300;
 
 const money = (v: number | null, c: string | null) => (v == null ? "—" : `${v.toLocaleString("ro-RO")} ${c ?? ""}`.trim());
-const val = (v: unknown) => (v == null || v === "" ? "—" : typeof v === "number" ? v.toLocaleString("ro-RO") : String(v));
-
-/** What changed, old → new, and the change of price in percent. */
-function Changes({ json }: { json: string | null }) {
-  let c: Record<string, unknown> = {};
-  try { c = json ? JSON.parse(json) : {}; } catch { /* empty */ }
-  const pairs = Object.entries(c).filter(([k, v]) => FIELD[k] && Array.isArray(v)) as [string, [unknown, unknown]][];
-  const flags = Object.keys(c).filter((k) => FLAG[k]);
-  if (!pairs.length && !flags.length) return <span className="muted">—</span>;
-  return (
-    <ul className="mkDiff">
-      {pairs.map(([k, [a, b]]) => {
-        const pct = k === "price" && typeof a === "number" && typeof b === "number" && a ? ((b - a) / a) * 100 : null;
-        return <li key={k}><span className="muted">{FIELD[k]}:</span> <s>{val(a)}</s> → <b>{val(b)}</b>
-          {pct != null && <span className={`pill ${pct < 0 ? "pillOk" : "pillErr"}`}>{pct > 0 ? "+" : ""}{pct.toFixed(1).replace(".", ",")}%</span>}</li>;
-      })}
-      {flags.length > 0 && <li><span className="muted">și:</span> {flags.map((k) => FLAG[k]).join(", ")}</li>}
-    </ul>
-  );
-}
-
 /** One run of the market crawler: its figures, and the listings it added, changed, found expired, lost or found again. */
 export default async function MarketRunPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
   const { db, user, base } = await staffPage("market:searches");
@@ -122,7 +100,7 @@ export default async function MarketRunPage({ params, searchParams }: { params: 
                       <td>{[e.zone, e.city].filter(Boolean).join(", ") || "—"}</td>
                       <td className="r" style={{ whiteSpace: "nowrap" }}>{money(e.price, e.currency)}</td>
                       <td className="r">{e.area ? `${e.area.toLocaleString("ro-RO")} m²` : "—"}</td>
-                      {tab === "modificat" && <td><Changes json={e.changes} /></td>}
+                      {tab === "modificat" && <td><MarketChanges json={e.changes} /></td>}
                     </tr>
                   ))}
                 </tbody>

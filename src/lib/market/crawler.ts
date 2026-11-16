@@ -265,7 +265,8 @@ function diff(old: Record<string, unknown>, m: Record<string, unknown>) {
   const out: Record<string, unknown> = {};
   for (const k of ["price", "currency", "usable_area", "built_area", "land_area", "title", "address", "zone"])
     if ((old[k] ?? null) !== (m[k] ?? null) && !(typeof old[k] === "string" && norm(old[k] as string) === norm(m[k] as string))) out[k] = [old[k] ?? null, m[k] ?? null];
-  if (norm(old.description as string) !== norm(m.description as string)) out.description = true;
+  // the description before and after are kept (the listing itself only holds the latest)
+  if (norm(old.description as string) !== norm(m.description as string)) out.description = [String(old.description ?? "").slice(0, 4000), String(m.description ?? "").slice(0, 4000)];
   if ((old.lat ?? null) !== (m.lat ?? null) || (old.lng ?? null) !== (m.lng ?? null)) out.location = true;
   if (!Object.keys(out).length) out.photos = true; // the fingerprint changed and nothing above did: the images
   return out;

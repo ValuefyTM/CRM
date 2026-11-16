@@ -73,8 +73,8 @@ export async function getMarketListing(db: D1Database, id: string) {
   if (!l) return null;
   const [photos, history, dups, search] = await Promise.all([
     db.prepare("SELECT position, url, r2_key, error FROM market_listing_photos WHERE listing_id = ? ORDER BY position").bind(id).all<{ position: number; url: string; r2_key: string | null; error: string | null }>(),
-    db.prepare("SELECT at, event, price, currency, area, title, source_key FROM market_listing_history WHERE listing_id = ? ORDER BY at DESC").bind(id)
-      .all<{ at: string; event: string; price: number | null; currency: string | null; area: number | null; title: string | null; source_key: string | null }>(),
+    db.prepare("SELECT at, event, price, currency, area, title, source_key, changes FROM market_listing_history WHERE listing_id = ? ORDER BY at DESC").bind(id)
+      .all<{ at: string; event: string; price: number | null; currency: string | null; area: number | null; title: string | null; source_key: string | null; changes: string | null }>(),
     l.dup_group ? db.prepare(`SELECT ${COLS} FROM market_listings l WHERE l.dup_group = ? AND l.id <> ?`).bind(l.dup_group, id).all<MarketRow>() : Promise.resolve({ results: [] as MarketRow[] }),
     l.search_id ? db.prepare("SELECT id, name FROM market_searches WHERE id = ?").bind(l.search_id).first<{ id: string; name: string }>() : Promise.resolve(null),
   ]);

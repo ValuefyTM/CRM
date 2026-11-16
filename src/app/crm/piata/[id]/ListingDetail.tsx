@@ -2,6 +2,7 @@
 import { fmtDate } from "@/lib/guard";
 import { CAT_LABEL } from "@/lib/registry-labels";
 import { marketFile, type getMarketListing, type listingContext } from "@/lib/market/search";
+import { MarketChanges, PriceChart } from "@/components/MarketChanges";
 import { Description, Gallery, ListingMap, type GalleryPhoto } from "@/components/MarketViews";
 
 const n0 = (v: unknown, d = 0) => (typeof v === "number" ? v.toLocaleString("ro-RO", { maximumFractionDigits: d }) : "—");
@@ -148,7 +149,14 @@ export function ListingDetail({ d, ctx, base }: { d: NonNullable<Awaited<ReturnT
             )}
 
             <section className="ldSection">
-              <h2>Istoric</h2>
+              <h2>Istoricul prețului și al modificărilor</h2>
+              {(() => {
+                // the price at every reading that kept one (same currency as now), closed at today / the last time seen
+                const pts = [...d.history].reverse().filter((h) => h.price != null && (!l.currency || h.currency === l.currency)).map((h) => ({ at: h.at, price: h.price! }));
+                if (pts.length && l.price != null) pts.push({ at: l.status === "activ" ? new Date().toISOString() : String(l.last_seen_at), price: pts[pts.length - 1].price });
+                return pts.length >= 2 ? <PriceChart points={pts} unit={cur(l.currency)} />
+                  : null;
+              })()}
               {d.history.length === 0 ? <p className="hint">Fără evenimente încă.</p> : (
                 <ol className="ldTimeline">
                   {d.history.map((h, i) => {
@@ -159,6 +167,7 @@ export function ListingDetail({ d, ctx, base }: { d: NonNullable<Awaited<ReturnT
                         <div><b>{lab}</b><small>{fmtDate(h.at, true)}</small></div>
                         <div className="ldTlVal">{h.price != null ? `${n0(h.price)} ${cur(h.currency)}` : "—"}{h.area ? <small>{n0(h.area)} m²</small> : null}
                           {h.source_key ? <a href={marketFile(h.source_key)!}>sursa</a> : null}</div>
+                        {h.event === "modificat" && h.changes ? <div className="ldTlChanges"><MarketChanges json={h.changes} full /></div> : null}
                       </li>
                     );
                   })}
