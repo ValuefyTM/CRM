@@ -69,7 +69,7 @@ export function SimilarListings({ report, asset, base, count, radius, canEdit = 
   return (
     <>
       <button type="button" className="simChip" onClick={() => setOpen(true)}>
-        <b>{count}</b> {count === 1 ? "anunț de vânzare similar" : "anunțuri de vânzare similare"} în raza de {String(radius).replace(".", ",")} km<span aria-hidden="true">→</span>
+        <b>{count}</b> {count === 1 ? "anunț de vânzare similar" : "anunțuri de vânzare similare"} în raza de {dist(radius)}<span aria-hidden="true">→</span>
       </button>
       {open && createPortal(
         <div className="vfModal" role="dialog" aria-modal="true" aria-labelledby="mkT" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>

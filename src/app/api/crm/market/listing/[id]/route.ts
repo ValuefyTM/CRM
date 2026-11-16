@@ -20,7 +20,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     price: l.price, currency: l.currency, price_sqm: l.price_sqm, usable_area: l.usable_area, built_area: l.built_area, land_area: l.land_area,
     county: l.county, city: l.city, zone: l.zone, address: l.address, lat: l.lat, lng: l.lng, geo_precision: l.geo_precision,
     seller_kind: l.seller_kind, seller_name: l.seller_name, description: l.description, src_created_at: l.src_created_at, first_seen_at: l.first_seen_at,
-    last_seen_at: l.last_seen_at, fetched_at: l.fetched_at, source_file: marketFile(l.source_key as string | null), year, floor, rooms, contact_name: l.contact_name ?? null, contact_phone: l.contact_phone ?? null, contact_email: l.contact_email ?? null, dup_reason: l.dup_reason, duplicates: d.duplicates.map((x) => ({ id: x.id, source: x.source, url: x.url, price: x.price, currency: x.currency })),
+    last_seen_at: l.last_seen_at, fetched_at: l.fetched_at, source_file: marketFile(l.source_key as string | null), year, floor, rooms, contact_name: l.contact_name ?? null, contact_phone: l.contact_phone ?? null, contact_email: l.contact_email ?? null, dup_reason: l.dup_reason, dup_group: l.dup_group ?? null,
+    duplicates: d.duplicates.map((x) => ({ id: x.id, source: x.source, url: x.url, price: x.price, currency: x.currency, title: x.title, area: x.area, status: x.status })),
     photos: saved.length ? saved.map((p) => ({ src: marketFile(p.r2_key)!, saved: true })) : d.photos.map((p) => ({ src: p.url, saved: false })),
     history: d.history.map((h) => ({ at: h.at, event: h.event, price: h.price, currency: h.currency })),
   }, { headers: { "Cache-Control": "no-store" } });

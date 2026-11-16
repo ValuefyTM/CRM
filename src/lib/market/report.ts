@@ -6,6 +6,8 @@ import { parseGeo } from "../registry";
 import { nearbyMarket, type MarketRow } from "./search";
 
 export const MK_RADII = ["0.5", "1", "2", "5", "10"];
+/** The default radius around the subject, km. */
+export const MK_RADIUS = 0.5;
 export type MarketSubject = { asset_id: string; type: string | null; category: string | null; address: string | null; city: string | null;
   usable_area: number | null; land_area: number | null; value_eur: number | null; sqm: number | null; ll: [number, number] | null };
 export type SimilarListing = MarketRow & { km: number; score: number; parts: { k: string; v: number }[]; vsMedian: number | null };
@@ -40,7 +42,7 @@ function similarity(s: MarketSubject, x: MarketRow & { km: number }, radius: num
 }
 
 export async function marketForReport(db: D1Database, reportId: string, o: { assetId?: string | null; radius?: string | null; tr?: string | null; tol?: string | null; all?: boolean }) {
-  const radius = MK_RADII.includes(o.radius ?? "") ? Number(o.radius) : 2;
+  const radius = MK_RADII.includes(o.radius ?? "") ? Number(o.radius) : MK_RADIUS;
   const tr = o.tr === "inchiriere" ? "inchiriere" : "vanzare";
   const tol = ["25", "50", "0"].includes(o.tol ?? "") ? Number(o.tol) : 50;
   const subject = await reportSubject(db, reportId, o.assetId);

@@ -4,7 +4,7 @@
 // similarity to the valued property, the position against it and the phone check (kept on the report); opened from
 // Analize de piață (no subject, no report) it shows the listing's own location instead.
 import "leaflet/dist/leaflet.css";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import type * as Leaflet from "leaflet";
 import { printFiche, pngFiche, simColor, wordFiche, type FicheData } from "@/lib/market/fiche";
 import { ListingMap } from "@/components/MarketViews";
@@ -16,7 +16,8 @@ type Listing = {
   price_sqm: number | null; usable_area: number | null; built_area: number | null; land_area: number | null; county: string | null; city: string | null; zone: string | null;
   address: string | null; lat: number | null; lng: number | null; geo_precision: string | null; seller_kind: string | null; seller_name: string | null; contact_name?: string | null; contact_phone?: string | null; contact_email?: string | null; description: string | null;
   src_created_at: string | null; first_seen_at: string; last_seen_at: string; fetched_at: string | null; source_file: string | null; year: string | null; floor: string | null; rooms: string | null;
-  duplicates: { id: string; source: string; url: string; price: number | null; currency: string | null }[];
+  dup_group?: string | null; dup_reason?: string | null;
+  duplicates: { id: string; source: string; url: string; price: number | null; currency: string | null; title?: string | null; area?: number | null; status?: string }[];
   photos: { src: string; saved: boolean }[]; history: { at: string; event: string; price: number | null; currency: string | null }[];
 };
 
@@ -246,7 +247,31 @@ export function ComparableModal({ c, index, report, base, subject, verif, onVeri
                     {l.status === "activ" ? <a className="btn btnNavy btnSm" href={l.url} target="_blank" rel="noreferrer">Anunț pe {l.source} ↗</a>
                       : <span className="hint">anunțul nu mai e pe site · rămâne arhiva</span>}
                   </div>
-                  {l.duplicates.length > 0 && <small className="muted">Apare și pe: {l.duplicates.map((d, k) => <a key={k} href={d.url} target="_blank" rel="noreferrer">{d.source}</a>).reduce<ReactNode[]>((a, x, k) => (k ? [...a, ", ", x] : [x]), [])}</small>}
+                  {l.duplicates.length > 0 && (() => {
+                    // the merged group, this listing included, the main one first
+                    const all = [{ id: l.id, source: l.source, url: l.url, price: l.price, currency: l.currency, title: l.title, area: l.usable_area ?? l.built_area ?? l.land_area, status: l.status }, ...l.duplicates]
+                      .sort((x, y) => Number(y.id === l.dup_group) - Number(x.id === l.dup_group) || x.source.localeCompare(y.source));
+                    const sites = [...new Set(all.map((x) => x.source))];
+                    return (
+                      <details className="ldMerged cmMerged">
+                        <summary><b>{all.length} anunțuri comasate</b> · {sites.map((x) => { const k = all.filter((y) => y.source === x).length; return k > 1 ? `${x} ×${k}` : x; }).join(", ")}</summary>
+                        <table>
+                          <tbody>
+                            {all.map((x) => (
+                              <tr key={x.id} className={x.id === l.id ? "cur" : ""}>
+                                <td className="t"><b>{x.source}</b>{x.id === l.dup_group ? <span className="pill pillOk">principal</span> : null}{x.id === l.id ? <span className="pill">acesta</span> : null}
+                                  <div>{x.id === l.id ? x.title : <a className="link" href={`${base}/piata/${x.id}`} target="_blank" rel="noreferrer">{x.title ?? "anunț"}</a>}</div>
+                                  <div className="muted">{[x.price != null ? `${num(x.price)} ${x.currency === "EUR" ? "€" : x.currency === "RON" ? "lei" : x.currency ?? ""}` : "la cerere", x.area ? `${num(x.area)} m²` : null,
+                                    x.status && x.status !== "activ" ? x.status : null].filter(Boolean).join(" · ")}</div></td>
+                                <td><a href={x.url} target="_blank" rel="noreferrer">pe site ↗</a></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {l.dup_reason ? <p className="hint">Găsite după: {l.dup_reason}.</p> : null}
+                      </details>
+                    );
+                  })()}
                   <a className="cmFull" href={`${base}/piata/${l.id}`} target="_blank" rel="noreferrer">Fișa completă în CRM ↗</a>
                 </section>
               </div>

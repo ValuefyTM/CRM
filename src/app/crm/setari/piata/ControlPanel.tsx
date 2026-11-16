@@ -235,14 +235,14 @@ export function MarketSettingsForm({ initial }: { initial: MarketSettings }) {
       {num("missing_limit", "Rulări lipsă până la „dispărut”", "de câte ori la rând poate lipsi un anunț dintr-o căutare citită complet", 1, 10)}
 
       <h3 className="mkSub">Comasarea duplicatelor</h3>
-      <p className="hint">Două anunțuri active sunt același imobil dacă îndeplinesc una dintre regulile bifate. La salvare grupurile se recalculează.</p>
+      <p className="hint">Două anunțuri active sunt același imobil dacă îndeplinesc una dintre regulile bifate. Toate regulile cer suprafață și preț apropiate, iar anunțurile cu număr diferit de camere nu se comasează niciodată. La salvare grupurile se recalculează.</p>
       {rule("dup_image", "Aceeași imagine (fișier identic)")}
       {rule("dup_text", "Aceeași descriere")}
-      {f.dup_text && num("dup_text_price", "Aceeași descriere: diferența de preț, %", "cât pot diferi prețurile", 0, 50)}
-      {rule("dup_geo", "Apropiate pe hartă, cu aceeași suprafață și preț")}
+      {(f.dup_text || f.dup_image) && num("dup_text_price", "Imagine sau descriere: diferența de preț, %", "cât pot diferi prețurile", 0, 50)}
+      {rule("dup_geo", "Ambele cu punct exact pe hartă: apropiate, cu aceeași suprafață și preț")}
       {f.dup_geo && num("dup_meters", "Distanța maximă, metri", "între punctele celor două anunțuri", 10, 2000)}
       {f.dup_geo && num("dup_area", "Diferența de suprafață, %", "regula cu harta", 0, 20)}
-      {rule("dup_city", "Fără punct pe hartă: aceeași localitate, suprafață și preț")}
+      {rule("dup_city", "Punct aproximativ sau lipsă: aceeași zonă sau localitate, suprafață, preț și titlu asemănător")}
       {f.dup_city && num("dup_city_area", "Diferența de suprafață, %", "regula cu localitatea", 0, 10)}
       {(f.dup_geo || f.dup_city) && num("dup_price", "Diferența de preț, %", "regulile cu harta și cu localitatea", 0, 30)}
 
