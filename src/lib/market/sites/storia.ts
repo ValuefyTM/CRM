@@ -26,6 +26,7 @@ export const storia: Site = {
         usable_area: num(a.areaInSquareMeters), land_area: num(a.terrainAreaInSquareMeters),
         ...loc(obj(obj(a.location).reverseGeocoding).locations),
         seller_kind: a.isPrivateOwner ? "proprietar" : "agentie", seller_name: s(obj(a.agency).name),
+        features: a.roomsNumber ? { rooms: a.roomsNumber } : undefined,
         photos: arr(a.images).map((i) => s(obj(i).large)).filter((u): u is string => !!u),
         src_created_at: s(a.createdAtFirst) ?? s(a.dateCreated),
       });

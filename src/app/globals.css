@@ -4966,3 +4966,14 @@ button.ldNear { font: inherit; text-align: left; width: 100%; cursor: pointer; }
 /* beside the label (the table clips what goes below it); on the last rows it grows upwards */
 tr:nth-last-child(-n+2):not(:first-child) .mkTip [role="tooltip"] { top: auto; bottom: -8px; }
 .mkMerged { background: var(--acc-soft); color: var(--acc-text); }
+/* Anunț de piață: lista compactă a anunțurilor comasate (se deschide la click) */
+.ldMerged { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 8px 12px; margin: 8px 0 4px; font-size: 13px; }
+.ldMerged summary { cursor: pointer; }
+.ldMerged table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+.ldMerged td { padding: 6px 8px; border-top: 1px solid var(--divider); vertical-align: middle; white-space: nowrap; }
+.ldMerged td.t { white-space: normal; width: 100%; }
+.ldMerged td.r { text-align: right; font-weight: 700; }
+.ldMerged tr.cur td { background: var(--cream-2); }
+.ldMerged .pill { margin-left: 6px; }
+.ldMerged .hint { margin: 8px 0 2px; }
+@media (max-width: 720px) { .ldMerged table { display: block; overflow-x: auto; } }

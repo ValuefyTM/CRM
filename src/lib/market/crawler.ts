@@ -12,6 +12,7 @@ import { abortRun, datasetItem, runStatus, startFetch, type FetchItem } from "./
 import { dueSlot, getMarketSettings, type MarketSettings } from "./settings";
 import { SITES, type Card, type Detail } from "./sites";
 import { contactOf } from "./contact";
+import { roomsOf } from "./rooms";
 import { cleanMd, hex, norm, sha1, uniq } from "./util";
 import { esc, layout, sendEmail } from "../email";
 
@@ -86,7 +87,8 @@ export async function tick(db: D1Database, bucket: R2Bucket | null, budgetMs = 2
   const active = await db.prepare("SELECT id FROM market_runs WHERE status = 'running' LIMIT 1").first<{ id: string }>();
   if (!active) {
     const long = budgetMs > 60_000;
-    return { processed, started, idle: true, photos: long ? await retryPhotos(db, bucket, 20_000) : 0, contacts: long ? await backfillContacts(db, bucket, 25_000).catch(() => 0) : 0 };
+    return { processed, started, idle: true, photos: long ? await retryPhotos(db, bucket, 20_000) : 0, contacts: long ? await backfillContacts(db, bucket, 25_000).catch(() => 0) : 0,
+      rooms: await backfillRooms(db).catch(() => 0) };
   }
   const cfg = await getMarketSettings(db);
   const { concurrency } = cfg;
@@ -220,11 +222,11 @@ async function processList(db: D1Database, j: Job, item: FetchItem) {
       const area = mainArea(c);
       stmts.push(db.prepare(`INSERT INTO market_listings (id, source, ext_id, url, search_id, category, type, deal, title, price, currency, price_sqm,
           usable_area, built_area, land_area, county, city, zone, address, lat, lng, geo_precision, seller_kind, seller_name, description, src_created_at,
-          status, first_seen_at, last_seen_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'activ',?,?)`)
+          rooms, status, first_seen_at, last_seen_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'activ',?,?)`)
         .bind(id, search.source, c.extId, c.url, search.id, search.category, search.type, c.transaction ?? search.deal, c.title ?? null, c.price ?? null,
           c.currency ?? null, c.price && area ? Math.round((c.price / area) * 100) / 100 : null, c.usable_area ?? null, c.built_area ?? null, c.land_area ?? null,
           c.county ?? null, c.city ?? null, c.zone ?? null, c.address ?? null, c.lat ?? null, c.lng ?? null, c.geo_precision ?? null, c.seller_kind ?? null,
-          c.seller_name ?? null, c.description ?? null, c.src_created_at ?? null, run.started_at, run.started_at));
+          c.seller_name ?? null, c.description ?? null, c.src_created_at ?? null, roomsOf(c.features, c.title), run.started_at, run.started_at));
       // searchable right away (the listing's page, when downloaded, replaces it with the full text)
       stmts.push(db.prepare("INSERT INTO market_listings_fts (listing_id, title, body) VALUES (?, ?, ?)").bind(id, c.title ?? "", c.description ?? ""));
     } else {
@@ -313,13 +315,14 @@ async function processDetail(db: D1Database, bucket: R2Bucket | null, j: Job, it
     db.prepare(`UPDATE market_listings SET title = ?, price = ?, currency = ?, price_sqm = ?, usable_area = ?, built_area = ?, land_area = ?, county = ?, city = ?, zone = ?,
         address = ?, lat = ?, lng = ?, geo_precision = ?, seller_kind = ?, seller_name = ?, description = ?, content_md = ?, features = ?, src_created_at = ?,
         src_updated_at = ?, deal = COALESCE(?, deal), fp_card = ?, fp_detail = ?, source_key = ?, status = 'activ', fetched_at = ?, error = NULL,
-        contact_name = COALESCE(?, contact_name), contact_phone = COALESCE(?, contact_phone), contact_email = COALESCE(?, contact_email), contact_at = ?
+        contact_name = COALESCE(?, contact_name), contact_phone = COALESCE(?, contact_phone), contact_email = COALESCE(?, contact_email), contact_at = ?,
+        rooms = ?, rooms_at = ?
         ${changed ? ", changed_at = ?" : ""} WHERE id = ?`)
       .bind(m.title ?? null, m.price ?? null, m.currency ?? null, m.price && area ? Math.round(((m.price as number) / area) * 100) / 100 : null,
         m.usable_area ?? null, m.built_area ?? null, m.land_area ?? null, m.county ?? null, m.city ?? null, m.zone ?? null, m.address ?? null,
         m.lat ?? null, m.lng ?? null, m.geo_precision ?? null, m.seller_kind ?? null, m.seller_name ?? null, m.description ?? null, md,
         JSON.stringify(d.features ?? {}), m.src_created_at ?? null, m.src_updated_at ?? null, d.transaction ?? null, j.card_fp, fp, bucket ? key : null, at,
-        contact.name, contact.phone, contact.email, at, ...(changed ? [at] : []), row.id),
+        contact.name, contact.phone, contact.email, at, roomsOf(d.features, m.title as string), at, ...(changed ? [at] : []), row.id),
     db.prepare("DELETE FROM market_listings_fts WHERE listing_id = ?").bind(row.id),
     db.prepare("INSERT INTO market_listings_fts (listing_id, title, body) VALUES (?, ?, ?)").bind(row.id, (m.title as string) ?? "", `${m.description ?? ""}\n\n${md}`),
   ];
@@ -383,6 +386,19 @@ async function retryPhotos(db: D1Database, bucket: R2Bucket | null, budgetMs: nu
     if (Date.now() - t0 > budgetMs) break;
     await downloadPhotos(db, bucket, r.listing_id, r.source, r.ext_id);
   }
+  return results.length;
+}
+
+/** The rooms of the listings kept before the number was extracted: from their fields and title, already in the database. */
+async function backfillRooms(db: D1Database) {
+  const { results } = await db.prepare("SELECT id, title, features FROM market_listings WHERE rooms_at IS NULL LIMIT 400").all<{ id: string; title: string | null; features: string | null }>();
+  const at = now();
+  const stmts = results.map((r) => {
+    let f: Record<string, unknown> = {};
+    try { f = r.features ? JSON.parse(r.features) : {}; } catch { /* none */ }
+    return db.prepare("UPDATE market_listings SET rooms = ?, rooms_at = ? WHERE id = ?").bind(roomsOf(f, r.title), at, r.id);
+  });
+  for (let i = 0; i < stmts.length; i += 80) await db.batch(stmts.slice(i, i + 80));
   return results.length;
 }
 

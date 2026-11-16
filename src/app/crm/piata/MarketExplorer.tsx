@@ -8,7 +8,7 @@ import { ComparableModal } from "@/components/ComparableModal";
 
 type Row = { id: string; source: string; url: string; title: string | null; category: string | null; type: string | null; transaction: string | null; price: number | null; currency: string | null;
   price_sqm: number | null; area: number | null; city: string | null; zone: string | null; county: string | null; lat: number | null; lng: number | null; geo_precision: string | null;
-  status: string; dup_group: string | null; dup_reason: string | null; dup_sources?: string | null; dup_n?: number | null; dup_min?: number | null; cover: string | null; first_seen_at: string; changed_at: string | null };
+  status: string; rooms?: number | null; dup_group: string | null; dup_reason: string | null; dup_sources?: string | null; dup_n?: number | null; dup_min?: number | null; cover: string | null; first_seen_at: string; changed_at: string | null };
 type Point = { id: string; lat: number; lng: number; price: number | null; currency: string | null; price_sqm: number | null; title: string | null; status: string; area: number | null; source: string };
 type Q = { q?: string; cat?: string; tip?: string; tr?: string; src?: string; st?: string; dup?: string; min?: string; max?: string; p?: string; vezi?: string };
 
@@ -132,11 +132,14 @@ export function MarketExplorer({ base, current: c, rows, points, total, page, pa
             <span className="ldNearTop">
               <span><small>{r.source} · {r.transaction === "inchiriere" ? "închiriere" : "vânzare"}{r.status !== "activ" ? ` · ${r.status}` : ""}</small>
                 <b>{r.title ?? "Anunț"}</b>
-                <em>{[[r.zone, r.city].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", "), r.area ? `${num(r.area)} m²` : null].filter(Boolean).join(" · ")}</em></span>
+                <em>{[r.zone, r.city].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ")}</em></span>
               <span className="ldNearPrice"><b>{r.price != null ? `${num(r.price)} ${cur(r.currency)}` : "la cerere"}</b><em>{r.price_sqm != null ? `${num(r.price_sqm, r.transaction === "inchiriere" ? 2 : 0)} ${cur(r.currency)}/m²` : ""}</em></span>
             </span>
             <span className="mkTags">
-              {r.category && <span className="ldNearTag">{cap(r.category)}{r.type ? ` · ${cap(r.type)}` : ""}</span>}
+              {r.category && <span className="ldNearTag">{cap(r.category)}</span>}
+              {r.type && <span className="ldNearTag">{cap(r.type)}</span>}
+              {r.rooms ? <span className="ldNearTag">{r.rooms === 1 ? "o cameră" : `${r.rooms} camere`}</span> : null}
+              {r.area ? <span className="ldNearTag">{num(r.area)} m²</span> : null}
               {r.dup_group && (r.dup_n ?? 0) > 1 && <span className="ldNearTag mkMerged" title={r.dup_reason ? `Găsit după: ${r.dup_reason}` : undefined}>
                 {r.dup_n} anunțuri comasate · {(r.dup_sources ?? r.source).split(",").join(", ")}{r.dup_min != null && r.price != null && r.dup_min < r.price ? ` · de la ${num(r.dup_min)} ${cur(r.currency)}` : ""}</span>}
               {r.lat == null && <span className="ldNearTag">fără coordonate</span>}

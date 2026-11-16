@@ -85,12 +85,39 @@ export function ListingDetail({ d, ctx, base }: { d: NonNullable<Awaited<ReturnT
           </div>
           <h1 className="ldTitle">{title}</h1>
           {where && <p className="ldWhere"><Icon d={I.pin} />{where}</p>}
+          {d.duplicates.length > 0 && (() => {
+            // the whole group, this listing included, the main one first
+            const all = [{ id: l.id, source: l.source, url: l.url, title: l.title, price: l.price, currency: l.currency, area: l.area, status: l.status, first_seen_at: l.first_seen_at }, ...d.duplicates]
+              .sort((x, y) => Number(y.id === l.dup_group) - Number(x.id === l.dup_group) || x.source.localeCompare(y.source));
+            const sites = [...new Set(all.map((x) => x.source))];
+            return (
+              <details className="ldMerged">
+                <summary><b>{all.length} anunțuri comasate</b> · {sites.map((x) => { const k = all.filter((y) => y.source === x).length; return k > 1 ? `${x} ×${k}` : x; }).join(", ")}
+                  <span className="muted"> · găsite după: {String(l.dup_reason ?? "—")}</span></summary>
+                <table>
+                  <tbody>
+                    {all.map((x) => (
+                      <tr key={x.id} className={x.id === l.id ? "cur" : ""}>
+                        <td><b>{x.source}</b>{x.id === l.dup_group ? <span className="pill pillOk">principal</span> : null}{x.id === l.id ? <span className="pill">acesta</span> : null}</td>
+                        <td className="t">{x.id === l.id ? x.title : <a className="link" href={`${base}/piata/${x.id}`}>{x.title ?? "anunț"}</a>}</td>
+                        <td className="r">{x.price != null ? `${n0(x.price)} ${cur(x.currency)}` : "la cerere"}</td>
+                        <td className="r">{x.area ? `${n0(x.area)} m²` : "—"}</td>
+                        <td>{x.status !== "activ" ? x.status : `din ${day(x.first_seen_at)}`}</td>
+                        <td><a href={x.url} target="_blank" rel="noreferrer">pe site ↗</a></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="hint">În liste și în statistici grupul apare o singură dată, prin anunțul principal.</p>
+              </details>
+            );
+          })()}
           {ctx && (
             <div className="ldSignals">
               {ctx.vsMedian != null && <span className={`ldSig ${ctx.vsMedian <= 0 ? "ok" : "err"}`} title={`față de mediana a ${ctx.n} anunțuri similare pe o rază de 2 km`}>
                 {Math.abs(ctx.vsMedian) < 0.005 ? "la mediana zonei" : `${ctx.vsMedian < 0 ? "sub" : "peste"} mediana zonei ${pct(ctx.vsMedian)}`}</span>}
               {ctx.days != null && <span className="ldSig">{ctx.days} {ctx.days === 1 ? "zi" : "zile"} pe piață</span>}
-              <span className="ldSig">{ctx.portals} {ctx.portals === 1 ? "portal" : "portaluri"}</span>
+              <span className="ldSig">{d.duplicates.length > 0 ? `${d.duplicates.length + 1} anunțuri comasate · ` : ""}{ctx.portals} {ctx.portals === 1 ? "portal" : "portaluri"}</span>
               {ctx.change != null && Math.abs(ctx.change) >= 0.001 && <span className={`ldSig ${ctx.change < 0 ? "warn" : ""}`}>{ctx.change < 0 ? "−" : "+"}{pct(ctx.change)} de la listare</span>}
             </div>
           )}
@@ -130,25 +157,6 @@ export function ListingDetail({ d, ctx, base }: { d: NonNullable<Awaited<ReturnT
                 </>
               ) : <div className="ldNoMap">Anunțul nu are încă coordonate: apar după descărcarea paginii lui.</div>}
             </section>
-
-            {d.duplicates.length > 0 && (
-              <section className="ldSection">
-                <h2>Același imobil în alte anunțuri</h2>
-                <p className="hint">Găsit după: {String(l.dup_reason ?? "")}. În liste și în statistici grupul apare o singură dată, prin anunțul principal.</p>
-                <div className="ldDups">
-                  {d.duplicates.map((x) => {
-                    const c = marketFile(x.cover_key);
-                    return (
-                      <a key={x.id} className="ldDup" href={`${base}/piata/${x.id}`}>
-                        {c ? <img src={c} alt="" loading="lazy" /> : <span className="ldDupNo" />}
-                        <span><small>{x.source} · {x.status}</small><b>{x.title}</b>
-                          <em>{x.price != null ? `${n0(x.price)} ${cur(x.currency)}` : "preț la cerere"}{x.area ? ` · ${n0(x.area)} m²` : ""}</em></span>
-                      </a>
-                    );
-                  })}
-                </div>
-              </section>
-            )}
 
             <section className="ldSection">
               <h2>Istoricul prețului și al modificărilor</h2>

@@ -14,7 +14,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   const pick = (re: RegExp) => { const e = f.find(([k]) => re.test(k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())); return e ? String(Array.isArray(e[1]) ? e[1].join(", ") : e[1]) : null; };
   const year = pick(/an(ul)? (constructie|finalizare)|year|building_year/)?.match(/\d{4}/)?.[0] ?? null;
   const floor = pick(/^etaj|floor/);
-  const rooms = pick(/camere|rooms/);
+  const rooms = l.rooms ? String(l.rooms) : pick(/camere|rooms/);
   return Response.json({
     id: l.id, source: l.source, ext_id: l.ext_id, url: l.url, title: l.title, transaction: l.transaction, category: l.category, status: l.status,
     price: l.price, currency: l.currency, price_sqm: l.price_sqm, usable_area: l.usable_area, built_area: l.built_area, land_area: l.land_area,
