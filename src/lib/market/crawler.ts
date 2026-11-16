@@ -88,6 +88,13 @@ export async function tick(db: D1Database, bucket: R2Bucket | null, budgetMs = 2
   const active = await db.prepare("SELECT id FROM market_runs WHERE status = 'running' LIMIT 1").first<{ id: string }>();
   if (!active) {
     const long = budgetMs > 60_000;
+    // the groups of duplicates are rebuilt once after the rule changes (the mark is cleared by a migration)
+    const mark = await db.prepare("SELECT value FROM settings WHERE key = 'market_dedupe'").first<{ value: string }>().catch(() => null);
+    if (!mark) {
+      const groups = await dedupe(db);
+      await db.prepare("INSERT INTO settings (key, value, updated_at, updated_by) VALUES ('market_dedupe', ?, ?, 'cron') ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at")
+        .bind(`descriere + preț + suprafață: ${groups} grupuri`, now()).run();
+    }
     return { processed, started, idle: true, photos: long ? await retryPhotos(db, bucket, 20_000) : 0, contacts: long ? await backfillContacts(db, bucket, 25_000).catch(() => 0) : 0,
       rooms: await backfillRooms(db).catch(() => 0), places: await backfillPlaces(db).catch(() => 0) };
   }
@@ -602,7 +609,8 @@ export async function dedupe(db: D1Database) {
     groups.get(k)!.push(r);
   }
   const why = "aceeași descriere, preț și suprafață";
-  const stmts: D1PreparedStatement[] = [];
+  // a listing no longer active leaves its group (the rule compares what is on the sites now)
+  const stmts: D1PreparedStatement[] = [db.prepare("UPDATE market_listings SET dup_group = NULL, dup_reason = NULL WHERE status <> 'activ' AND dup_group IS NOT NULL")];
   let n = 0;
   for (const g of groups.values()) {
     const main = g.length > 1 && g.length <= 12 ? [...g].sort((x, y) => mainScore(y) - mainScore(x) || x.first_seen_at.localeCompare(y.first_seen_at) || x.id.localeCompare(y.id))[0].id : null;
