@@ -80,14 +80,20 @@ export async function marketFacets(db: D1Database, f: MarketFilters = {}) {
   const q = (col: string) => db.prepare(`SELECT ${col} AS k, COUNT(*) AS n FROM market_listings WHERE ${col} IS NOT NULL AND ${col} <> '' GROUP BY ${col} ORDER BY n DESC`).all<F>().then((r) => r.results);
   // every spelling of a place with its count; the place takes the most common one (with diacritics when tied)
   const place = async (key: string, name: string, where: string, binds: string[], limit: number) => {
-    const { results } = await db.prepare(`SELECT ${key} AS k, ${name} AS label, COUNT(*) AS n FROM market_listings WHERE status = 'activ' AND ${key} IS NOT NULL AND ${name} IS NOT NULL ${where}
+    const { results } = await db.prepare(`SELECT ${key} AS k, COALESCE(${name}, '') AS label, COUNT(*) AS n FROM market_listings WHERE status = 'activ' AND ${key} IS NOT NULL ${where}
       GROUP BY ${key}, ${name} ORDER BY n DESC LIMIT 3000`).bind(...binds).all<P>();
+    // a better name: used more often; when tied, the one with diacritics, then the shorter (no "Județul", "zona")
+    const accents = (t: string) => /[^\x00-\x7f]/.test(t);
+    const better = (a: { label: string; top: number }, label: string, n: number) => !!label && (!a.label || n > a.top
+      || (n === a.top && (accents(label) !== accents(a.label) ? accents(label) : label.length < a.label.length)));
     const by = new Map<string, P & { top: number }>();
     for (const r of results) {
       const c = by.get(r.k);
-      if (!c) by.set(r.k, { ...r, top: r.n });
-      else { c.n += r.n; if (r.n === c.top && /[^\x00-\x7f]/.test(r.label) && !/[^\x00-\x7f]/.test(c.label)) c.label = r.label; }
+      if (!c) { by.set(r.k, { ...r, top: r.label ? r.n : 0 }); continue; }
+      c.n += r.n;
+      if (better(c, r.label, r.n)) { c.label = r.label; c.top = r.n; }
     }
+    for (const c of by.values()) if (!c.label) c.label = c.k;
     return [...by.values()].sort((x, y) => y.n - x.n).slice(0, limit).map(({ k, n, label }) => ({ k, n, label })).sort((x, y) => x.label.localeCompare(y.label, "ro"));
   };
   const [cats, types, sources, counties, cities, zones] = await Promise.all([q("category"), q("type"), q("source"),
