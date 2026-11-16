@@ -104,10 +104,9 @@ Comparabile de pe **imobiliare.ro, storia.ro, olx.ro, publi24.ro și homezz.ro**
   (vechi → nou). Setări › Analize de piață arată starea pe surse, istoricul rulărilor și, pe fiecare rulare, anunțurile adăugate,
   modificate, expirate, dispărute, reapărute, erorile și rezumatul pe căutări (`market_runs.detail`, păstrat la închidere).
   Limitele unei rulări (rulări Apify, ore), încercările, pragul de „dispărut” și rezumatul pe e-mail sunt setări.
-- **Duplicate comasate** (fără AI, `dedupe` în `crawler.ts`): aceeași imagine, aceeași descriere, punct exact apropiat, sau aceeași
-  zonă / localitate cu titlu asemănător. Toate regulile cer suprafață și preț apropiate, iar numărul diferit de camere blochează
-  comasarea; un grup de peste 8 anunțuri se desface. Regulile și pragurile sunt în Setări. Grupul poartă id-ul celui mai complet
-  anunț (`dup_group`), singurul afișat în liste și numărat în statistici.
+- **Duplicate comasate** (fără AI, `dedupe` în `crawler.ts`): o singură regulă, aceeași descriere + același preț + aceeași
+  suprafață (anunțurile publicate din CRM-ul agenției pe mai multe portaluri). Grupul poartă id-ul celui mai complet anunț
+  (`dup_group`), singurul afișat în liste și numărat în statistici.
 - **Contact** (migrația `1096`, `contact.ts`): persoana sau agenția, telefoanele și e-mailul, cum apar în pagina descărcată
   (datele site-ului, JSON-LD, linkuri `tel:` / `mailto:`). Telefonul afișat de un site abia după click nu este în pagină.
   Anunțurile descărcate anterior se completează între rulări, din paginile arhivate în R2.

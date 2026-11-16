@@ -564,121 +564,37 @@ async function finishRun(db: D1Database, bucket: R2Bucket | null, runId: string,
 }
 
 type DupRow = { id: string; source: string; category: string | null; transaction: string | null; price: number | null; currency: string | null; lat: number | null; lng: number | null;
-  city: string | null; usable_area: number | null; built_area: number | null; land_area: number | null; dup_group: string | null; dup_reason: string | null;
-  seller_name: string | null; d: string | null; geo_precision: string | null; photo_count: number | null; first_seen_at: string; title: string | null; rooms: number | null };
+  usable_area: number | null; built_area: number | null; land_area: number | null; dup_group: string | null; dup_reason: string | null;
+  d: string | null; geo_precision: string | null; photo_count: number | null; first_seen_at: string; rooms: number | null };
 
 /** How good a listing is as the face of its group: exact point, photos, area, price; then the oldest. */
 const mainScore = (r: DupRow) => (r.lat != null ? (/exact/i.test(r.geo_precision ?? "") ? 4 : 2) : 0) + ((r.photo_count ?? 0) > 0 ? 2 : 0) + (mainArea(r) ? 1 : 0) + (r.price ? 1 : 0);
 
-/** How alike two titles are: shared words (3+ letters, no numbers kept apart) over all their words. */
-function titleSim(a: string | null, b: string | null) {
-  const w = (t: string | null) => new Set(norm(t).replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((x) => x.length >= 3));
-  const x = w(a), y = w(b);
-  if (!x.size || !y.size) return 0;
-  let both = 0;
-  for (const k of x) if (y.has(k)) both++;
-  return both / (x.size + y.size - both);
-}
-
 /**
- * Merges the same property listed on several sites (or twice on one) into a group, by rules (no AI). Two listings
- * never merge when their numbers of rooms are known and differ, and every rule also asks for a close area and price
- * (the units of one development share photos, text and place, not area and price):
- *  1. the same image file;
- *  2. the same description (the agency's text copied across portals);
- *  3. both with an exact point, close on the map;
- *  4. an approximate point (the centre of a zone) or none: the same zone / town, and also a similar title.
- * Rules 3 and 4 do not apply to two listings of one seller on one site. A group that grows past 8 listings is a chain
- * of look-alikes, not one property: it is dissolved. Each rule can be turned off and has its thresholds in Setări.
- * The group takes the id of its best listing (the one shown in lists; the others stay as its sources).
+ * Merges the same property listed several times into a group, by one rule (no AI): the same description, the same
+ * price and the same area — in practice the listings an agency posts on several portals from its own CRM. Category,
+ * transaction and rooms (where known) must agree too. A text shared by more than 12 listings is a template, not a
+ * property. The group takes the id of its best listing (the one shown in lists; the others stay as its sources).
  */
 export async function dedupe(db: D1Database) {
-  const { results: rows } = await db.prepare(`SELECT id, source, category, deal AS "transaction", price, currency, lat, lng, city, usable_area, built_area, land_area, dup_group, dup_reason,
-    seller_name, substr(description, 1, 500) AS d, geo_precision, photo_count, first_seen_at, title, rooms FROM market_listings WHERE status = 'activ'`).all<DupRow>();
-  const cfg = await getMarketSettings(db);
-  const DUP = { meters: cfg.dup_meters, area: cfg.dup_area / 100, price: cfg.dup_price / 100, textPrice: cfg.dup_text_price / 100, cityArea: cfg.dup_city_area / 100 };
-  const byId = new Map(rows.map((r) => [r.id, r]));
-  const parent = new Map(rows.map((r) => [r.id, r.id]));
-  const why = new Map<string, string>();
-  const find = (x: string): string => { let p = parent.get(x)!; while (p !== parent.get(p)) p = parent.get(p)!; parent.set(x, p); return p; };
-  const union = (a: string, b: string, m: string) => {
-    const ra = find(a), rb = find(b);
-    if (ra === rb) return;
-    if (ra < rb) parent.set(rb, ra); else parent.set(ra, rb);
-    if (!why.has(a)) why.set(a, m);
-    if (!why.has(b)) why.set(b, m);
-  };
-  const near = (p1: number, p2: number, tol: number) => Math.abs(p1 - p2) <= tol * Math.max(p1, p2);
-  /** What every rule asks: same kind and transaction, rooms not different, area and price close (where both have them). */
-  const alike = (x: DupRow, y: DupRow, area: number, price: number) => {
-    if (x.category !== y.category || x.transaction !== y.transaction) return false;
-    if (x.rooms && y.rooms && x.rooms !== y.rooms) return false;
-    const a1 = mainArea(x), a2 = mainArea(y);
-    if (a1 && a2 && !near(a1, a2, area)) return false;
-    if (x.price && y.price && (x.currency !== y.currency || !near(x.price, y.price, price))) return false;
-    return true;
-  };
-  // 1. the same image file (a photo shared by more than 4 listings is a logo or placeholder)
-  const { results: same } = await db.prepare(`SELECT group_concat(DISTINCT p.listing_id) AS ids FROM market_listing_photos p JOIN market_listings l ON l.id = p.listing_id
-    WHERE p.sha1 IS NOT NULL AND l.status = 'activ' GROUP BY p.sha1 HAVING COUNT(DISTINCT p.listing_id) BETWEEN 2 AND 4`).all<{ ids: string }>();
-  if (cfg.dup_image) for (const g of same) {
-    const list = g.ids.split(",").map((x) => byId.get(x)).filter((x): x is DupRow => !!x);
-    for (let i = 0; i < list.length; i++) for (let k = i + 1; k < list.length; k++)
-      if (alike(list[i], list[k], Math.max(DUP.area, 0.05), DUP.textPrice)) union(list[i].id, list[k].id, "imagine identică");
-  }
-  // 2. the same description (long enough to mean something; a text shared by more than 6 listings is a template)
-  const texts = new Map<string, DupRow[]>();
-  for (const r of rows) {
-    const t = norm(r.d).replace(/[^a-z0-9 ]/g, "").slice(0, 300);
-    if (t.length < 150) continue;
-    if (!texts.has(t)) texts.set(t, []);
-    texts.get(t)!.push(r);
-  }
-  for (const g of texts.values()) {
-    if (!cfg.dup_text || g.length < 2 || g.length > 6) continue;
-    for (let i = 0; i < g.length; i++) for (let k = i + 1; k < g.length; k++)
-      if (alike(g[i], g[k], Math.max(DUP.area, 0.03), DUP.textPrice)) union(g[i].id, g[k].id, "aceeași descriere");
-  }
-  // 3 and 4. close (or the same zone / town), same area and price
-  const exact = (r: DupRow) => r.lat != null && r.lng != null && /^exact/i.test(r.geo_precision ?? "");
-  const by = new Map<string, { a: number; r: DupRow }[]>();
-  for (const r of rows) {
-    const a = mainArea(r);
-    if (!a || !r.price) continue;
-    const k = `${r.category}|${r.transaction}`;
-    if (!by.has(k)) by.set(k, []);
-    by.get(k)!.push({ a, r });
-  }
-  for (const list of by.values()) {
-    if (!cfg.dup_geo && !cfg.dup_city) break;
-    list.sort((x, y) => x.a - y.a);
-    const reach = Math.max(cfg.dup_geo ? DUP.area : 0, cfg.dup_city ? DUP.cityArea : 0);
-    for (let i = 0; i < list.length; i++) {
-      const { a: a1, r: r1 } = list[i];
-      for (let k = i + 1; k < list.length && list[k].a <= a1 * (1 + reach); k++) {
-        const r2 = list[k].r;
-        if (r1.source === r2.source && r1.seller_name && r1.seller_name === r2.seller_name) continue;
-        const dist = r1.lat != null && r2.lat != null && r1.lng != null && r2.lng != null
-          ? Math.hypot((r1.lat - r2.lat) * 111_320, (r1.lng - r2.lng) * 111_320 * Math.cos((r1.lat * Math.PI) / 180)) : null;
-        if (exact(r1) && exact(r2)) {
-          if (cfg.dup_geo && dist! <= DUP.meters && alike(r1, r2, DUP.area, DUP.price)) union(r1.id, r2.id, "locație exactă + suprafață + preț");
-        } else if (cfg.dup_city && alike(r1, r2, DUP.cityArea, DUP.price) && titleSim(r1.title, r2.title) >= 0.5
-          && (dist != null ? dist <= Math.max(DUP.meters, 1500) : !!norm(r1.city) && norm(r1.city) === norm(r2.city))) {
-          union(r1.id, r2.id, "zonă + suprafață + preț + titlu asemănător");
-        }
-      }
-    }
-  }
-  // the groups, each named after its best listing
+  const { results: rows } = await db.prepare(`SELECT id, source, category, deal AS "transaction", price, currency, lat, lng, usable_area, built_area, land_area, dup_group, dup_reason,
+    substr(description, 1, 500) AS d, geo_precision, photo_count, first_seen_at, rooms FROM market_listings WHERE status = 'activ'`).all<DupRow>();
   const groups = new Map<string, DupRow[]>();
-  for (const r of rows) { const root = find(r.id); if (!groups.has(root)) groups.set(root, []); groups.get(root)!.push(r); }
+  for (const r of rows) {
+    const t = norm(r.d).replace(/[^a-z0-9 ]/g, "").slice(0, 300), a = mainArea(r);
+    // without a real text, a price and an area there is nothing sure to compare: the listing stays alone
+    const k = t.length >= 150 && r.price && a ? `${r.category}|${r.transaction}|${r.currency}|${r.price}|${Math.round(a)}|${r.rooms ?? ""}|${t}` : `#${r.id}`;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k)!.push(r);
+  }
+  const why = "aceeași descriere, preț și suprafață";
   const stmts: D1PreparedStatement[] = [];
   let n = 0;
   for (const g of groups.values()) {
-    const main = g.length > 1 && g.length <= 8 ? [...g].sort((x, y) => mainScore(y) - mainScore(x) || x.first_seen_at.localeCompare(y.first_seen_at) || x.id.localeCompare(y.id))[0].id : null;
+    const main = g.length > 1 && g.length <= 12 ? [...g].sort((x, y) => mainScore(y) - mainScore(x) || x.first_seen_at.localeCompare(y.first_seen_at) || x.id.localeCompare(y.id))[0].id : null;
     if (main) n++;
     for (const r of g) {
-      const m = main ? why.get(r.id) ?? null : null;
+      const m = main ? why : null;
       if (r.dup_group !== main || r.dup_reason !== m) stmts.push(db.prepare("UPDATE market_listings SET dup_group = ?, dup_reason = ? WHERE id = ?").bind(main, m, r.id));
     }
   }

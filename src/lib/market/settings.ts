@@ -18,16 +18,10 @@ export type MarketSettings = {
   /** e-mail with the summary of a scheduled run: never | errors | always, to these addresses */
   notify: "never" | "errors" | "always";
   notify_to: string;
-  /** merging duplicates: which rules are on */
-  dup_image: boolean; dup_text: boolean; dup_geo: boolean; dup_city: boolean;
-  /** … and their thresholds: metres between the points, and tolerances in percent */
-  dup_meters: number; dup_area: number; dup_price: number; dup_text_price: number; dup_city_area: number;
 };
 export const MARKET_DEFAULTS: MarketSettings = { nightly: true, concurrency: 2, times: ["01:07"], weekdays: [1, 2, 3, 4, 5, 6, 7], max_apify: 3000, max_hours: 6,
-  missing_limit: 3, max_attempts: 3, notify: "never", notify_to: "",
-  dup_image: true, dup_text: true, dup_geo: true, dup_city: true, dup_meters: 250, dup_area: 3, dup_price: 5, dup_text_price: 10, dup_city_area: 1 };
+  missing_limit: 3, max_attempts: 3, notify: "never", notify_to: "" };
 
-const dec = (v: unknown, min: number, max: number, d: number) => { const n = Math.round(Number(v) * 10) / 10; return v != null && v !== "" && Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : d; };
 const int = (v: unknown, min: number, max: number, d: number) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : d; };
 
 /** Any input → valid settings. */
@@ -46,9 +40,6 @@ export function cleanSettings(v: Partial<MarketSettings>, envConcurrency?: numbe
     max_attempts: int(v.max_attempts, 1, 5, D.max_attempts),
     notify: v.notify === "errors" || v.notify === "always" ? v.notify : "never",
     notify_to: String(v.notify_to ?? "").split(/[,;\s]+/).filter((e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)).slice(0, 5).join(", "),
-    dup_image: v.dup_image ?? D.dup_image, dup_text: v.dup_text ?? D.dup_text, dup_geo: v.dup_geo ?? D.dup_geo, dup_city: v.dup_city ?? D.dup_city,
-    dup_meters: int(v.dup_meters, 10, 2000, D.dup_meters), dup_area: dec(v.dup_area, 0, 20, D.dup_area), dup_price: dec(v.dup_price, 0, 30, D.dup_price),
-    dup_text_price: dec(v.dup_text_price, 0, 50, D.dup_text_price), dup_city_area: dec(v.dup_city_area, 0, 10, D.dup_city_area),
   };
 }
 
