@@ -108,7 +108,7 @@ export function MarketExplorer({ base, current: c, rows, points, total, page, pa
   );
   const heatCtl = (
     <span className="mkHeatCtl">
-      <label className={`fsel toggle${heat ? " on" : ""}`} data-on={heat ? "" : undefined}><input type="checkbox" checked={heat} onChange={(e) => setHeatKeep(e.target.checked)} /> Nor de prețuri €/m²</label>
+      <label className={`fsel toggle${heat ? " on" : ""}`} data-on={heat ? "" : undefined}><input type="checkbox" checked={heat} onChange={(e) => setHeatKeep(e.target.checked)} /> <span>Nor de prețuri €/m²</span></label>
       {heat && <span className="segment" role="group" aria-label="Cât se întinde fiecare anunț">
         {([[300, "Detaliat"], [500, "Mediu"], [800, "Neted"]] as const).map(([v, t]) => <button key={v} type="button" aria-pressed={spread === v} title={`fiecare anunț acoperă ~${v} m`} onClick={() => setSpreadKeep(v)}>{t}</button>)}
       </span>}
@@ -167,20 +167,28 @@ export function MarketExplorer({ base, current: c, rows, points, total, page, pa
 
   return (
     <section className={`card rgCardBox mkEx ${view}`}>
-      <div className="filterBar">
-        <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută în titlu, descriere și pagina anunțului (ex. pod rulant, rampă)" aria-label="Caută" />
-        {sel("Categorie", "cat", cats.map(([k, l, n]) => [k, `${l} (${n})`]))}
-        {sel("Tip proprietate", "tip", types.map(([k, n]) => [k, `${cap(k)} (${n})`]))}
-        {sel("Tranzacție", "tr", [["vanzare", "Vânzare"], ["inchiriere", "Închiriere"]])}
-        {sel("Camere", "cam", [["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"], ["5", "5 sau mai multe"]], "Oricâte")}
-        {sel("Site", "src", sources.map(([k, n]) => [k, `${k} (${n})`]))}
-        <label className="fsel" data-on={c.st && c.st !== "activ" ? "" : undefined}><span>Status</span>
-          <select value={c.st ?? "activ"} onChange={(e) => go({ st: e.target.value === "activ" ? undefined : e.target.value })}>
-            <option value="activ">Active</option><option value="inactiv">Dispărute</option><option value="expirat">Expirate</option><option value="all">Toate</option>
-          </select>
+      <div className="mkTop">
+        <label className="mkSearch"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută în titlu, descriere și pagina anunțului (ex. pod rulant, rampă)" aria-label="Caută" />
+          {q && <button type="button" aria-label="Șterge căutarea" onClick={() => setQ("")}>✕</button>}
         </label>
+        <span className="segment rgViews" role="group" aria-label="Vizualizare">
+          {([["lista", "Listă"], ["split", "Listă + hartă"], ["harta", "Hartă"]] as const).map(([k, l]) => (
+            <a key={k} href={href({ vezi: k === "split" ? undefined : k, p: c.p })} aria-pressed={view === k} onClick={(e) => { e.preventDefault(); go({ vezi: k === "split" ? undefined : k, p: c.p }); }}>{l}</a>
+          ))}
+        </span>
       </div>
-      <div className="filterBar mkPlace">
+      <div className="mkChips" role="group" aria-label="Filtre">
+        {sel("Categorie", "cat", cats.map(([k, l, n]) => [k, `${l} (${n})`]))}
+        {sel("Tip", "tip", types.map(([k, n]) => [k, `${cap(k)} (${n})`]))}
+        {sel("Tranzacție", "tr", [["vanzare", "Vânzare"], ["inchiriere", "Închiriere"]])}
+        {sel("Camere", "cam", [["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"], ["5", "5+"]], "Oricâte")}
+        <span className="fsel rgRange" data-on={c.min || c.max ? "" : undefined}><span>m²</span>
+          <input inputMode="numeric" value={min} onChange={(e) => setMin(e.target.value.replace(/\D/g, ""))} placeholder="de la" aria-label="Suprafața minimă" />
+          <span className="muted">–</span>
+          <input inputMode="numeric" value={max} onChange={(e) => setMax(e.target.value.replace(/\D/g, ""))} placeholder="până la" aria-label="Suprafața maximă" />
+        </span>
+        <i className="mkSep" aria-hidden="true" />
         <label className="fsel" data-on={c.jud ? "" : undefined}><span>Județ</span>
           <select value={c.jud ?? ""} onChange={(e) => go({ jud: e.target.value || undefined, oras: undefined, zona: undefined })}>
             <option value="">Toate</option>{counties.map(([k, l, n]) => <option key={k} value={k}>{l} ({n})</option>)}
@@ -191,32 +199,36 @@ export function MarketExplorer({ base, current: c, rows, points, total, page, pa
             <option value="">Toate</option>{cities.map(([k, l, n]) => <option key={k} value={k}>{l} ({n})</option>)}
           </select>
         </label>
-        <label className="fsel" data-on={c.zona ? "" : undefined}><span>Cartier / zonă</span>
-          <select value={c.zona ?? ""} onChange={(e) => go({ zona: e.target.value || undefined })} disabled={!c.oras}>
-            <option value="">{c.oras ? "Toate" : "alege localitatea"}</option>{zones.map(([k, l, n]) => <option key={k} value={k}>{l} ({n})</option>)}
+        {c.oras && <label className="fsel" data-on={c.zona ? "" : undefined}><span>Zonă</span>
+          <select value={c.zona ?? ""} onChange={(e) => go({ zona: e.target.value || undefined })}>
+            <option value="">Toate</option>{zones.map(([k, l, n]) => <option key={k} value={k}>{l} ({n})</option>)}
+          </select>
+        </label>}
+        <i className="mkSep" aria-hidden="true" />
+        {sel("Site", "src", sources.map(([k, n]) => [k, `${k} (${n})`]))}
+        <label className="fsel" data-on={c.st && c.st !== "activ" ? "" : undefined}><span>Stare</span>
+          <select value={c.st ?? "activ"} onChange={(e) => go({ st: e.target.value === "activ" ? undefined : e.target.value })}>
+            <option value="activ">Active</option><option value="inactiv">Dispărute</option><option value="expirat">Expirate</option><option value="all">Toate</option>
           </select>
         </label>
+        <label className={`fsel toggle${c.dup ? " on" : ""}`} data-on={c.dup ? "" : undefined}><input type="checkbox" checked={!!c.dup} onChange={(e) => go({ dup: e.target.checked ? "1" : undefined })} /> <span>Cu duplicate</span></label>
+        {active > 0 && <a className="resetLink" href={`${base}/piata${view !== "split" ? `?vezi=${view}` : ""}`}>✕ Resetează ({active})</a>}
       </div>
-      <p className="mkTotals">În total <b>{num(totals.total)}</b> anunțuri colectate: <b>{num(totals.active)}</b> active
-        {totals.merged > 0 ? <> (din care {num(totals.merged)} duplicate comasate, ascunse; rămân <b>{num(totals.active - totals.merged)}</b>)</> : null}
-        , {num(totals.gone)} dispărute, {num(totals.expired)} expirate. {num(totals.nopoint)} active nu au punct propriu pe hartă.
-        Cifrele din filtre numără ca lista: {c.st === "all" ? "toate stările" : c.st === "inactiv" ? "doar cele dispărute" : c.st === "expirat" ? "doar cele expirate" : "doar cele active"}{c.dup ? ", cu duplicate" : ", fără duplicatele comasate"}.</p>
-      <div className="resultLine">
+      <div className="mkStatus">
         <span className="mkExMeta">
-          <b>{num(total)}</b> {total === 1 ? "anunț" : "anunțuri"} · {num(points.length)} pe hartă{loose > 0 ? <> (<i className="mkLooseDot" />{num(loose)} cu poziție aproximativă)</> : null}{nowhere > 0 ? ` · ${num(nowhere)} fără nicio localizare` : ""}
-          <span className="fsel rgRange" data-on={c.min || c.max ? "" : undefined}><span>m²</span>
-            <input inputMode="numeric" value={min} onChange={(e) => setMin(e.target.value.replace(/\D/g, ""))} placeholder="de la" aria-label="Suprafața minimă" />
-            <span className="muted">–</span>
-            <input inputMode="numeric" value={max} onChange={(e) => setMax(e.target.value.replace(/\D/g, ""))} placeholder="până la" aria-label="Suprafața maximă" />
-          </span>
-          <label className={`fsel toggle${c.dup ? " on" : ""}`} data-on={c.dup ? "" : undefined}><input type="checkbox" checked={!!c.dup} onChange={(e) => go({ dup: e.target.checked ? "1" : undefined })} /> Și duplicatele</label>
+          <span><b>{num(total)}</b> {total === 1 ? "anunț" : "anunțuri"}</span>
+          <span>{num(points.length)} pe hartă</span>
+          {loose > 0 && <span title="Locație aproximativă în anunț sau poziție estimată în centrul zonei"><i className="mkLooseDot" />{num(loose)} aproximative</span>}
+          {nowhere > 0 && <span>{num(nowhere)} fără localizare</span>}
           {view !== "lista" && heatCtl}
-          {active > 0 && <a className="resetLink" href={`${base}/piata${view !== "split" ? `?vezi=${view}` : ""}`}>✕ Resetează filtrele ({active})</a>}
         </span>
-        <span className="segment rgViews" role="group" aria-label="Vizualizare">
-          {([["lista", "Listă"], ["split", "Listă + hartă"], ["harta", "Hartă"]] as const).map(([k, l]) => (
-            <a key={k} href={href({ vezi: k === "split" ? undefined : k, p: c.p })} aria-pressed={view === k} onClick={(e) => { e.preventDefault(); go({ vezi: k === "split" ? undefined : k, p: c.p }); }}>{l}</a>
-          ))}
+        <span className="mkStats" title={`Cifrele din filtre numără ca lista: ${c.st === "all" ? "toate stările" : c.st === "inactiv" ? "doar cele dispărute" : c.st === "expirat" ? "doar cele expirate" : "doar cele active"}${c.dup ? ", cu duplicate" : ", fără duplicatele comasate"}.`}>
+          <span>Colectate <b>{num(totals.total)}</b></span>
+          <span>Active <b>{num(totals.active)}</b></span>
+          <span>Comasate <b>{num(totals.merged)}</b></span>
+          <span>Dispărute <b>{num(totals.gone)}</b></span>
+          <span>Expirate <b>{num(totals.expired)}</b></span>
+          <span>Fără punct <b>{num(totals.nopoint)}</b></span>
         </span>
       </div>
       {view === "lista" ? cards : view === "harta" ? <div className="mkExMapOnly mkMapRel"><MarketMap points={pts} onPick={openId} cloud={cloud} spread={spread} />{legend}</div> : (

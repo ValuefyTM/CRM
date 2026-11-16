@@ -4986,3 +4986,38 @@ tr:nth-last-child(-n+2):not(:first-child) .mkTip [role="tooltip"] { top: auto; b
 .mkLooseDot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #111; border: 2px solid #f5c400; margin-right: 4px; vertical-align: -1px; }
 .mkLooseTip { color: #7a5d00; }
 .mkTotals { margin: 0; padding: 4px 18px 10px; font-size: 12.5px; color: var(--muted); }
+
+/* Analize de piață: zona de filtre compactă (căutare + vizualizare, filtre ca pastile, o linie de stare cu sumarul) */
+.mkEx .mkTop { display: flex; gap: 10px; align-items: center; }
+.mkEx .mkSearch { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 999px; background: var(--cream-2); border: 1px solid transparent; color: var(--muted-2); transition: background 0.15s, border-color 0.15s; }
+.mkEx .mkSearch:focus-within { background: #fff; border-color: var(--ink); color: var(--ink); }
+.mkEx .mkSearch input { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; font: inherit; font-size: 13.5px; color: var(--ink); }
+.mkEx .mkSearch button { border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 12px; padding: 4px; }
+.mkEx .mkTop .segment { flex-shrink: 0; border-radius: 999px; padding: 3px; }
+.mkEx .mkTop .segment a { height: 28px; padding: 0 12px; border-radius: 999px; font-size: 12.5px; }
+.mkEx .mkChips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.mkEx .mkChips .fsel, .mkEx .mkStatus .fsel { height: 28px; border-radius: 999px; padding: 0 24px 0 10px; gap: 5px; background: #fff; border-color: var(--line); }
+.mkEx .mkChips .fsel > span, .mkEx .mkStatus .fsel > span { font-size: 11.5px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--muted); }
+.mkEx .mkChips .fsel select { font-size: 12.5px; font-weight: 700; max-width: 150px; }
+.mkEx .mkChips .fsel::after { right: 10px; width: 5px; height: 5px; border-width: 1.5px; }
+.mkEx .mkChips .fsel[data-on], .mkEx .mkStatus .fsel[data-on] { background: var(--ink); border-color: var(--ink); }
+.mkEx .mkChips .fsel[data-on] > span, .mkEx .mkStatus .fsel[data-on] > span { color: rgba(255, 255, 255, 0.7); }
+.mkEx .mkChips .fsel[data-on] select { color: #fff; }
+.mkEx .mkChips .fsel[data-on] select option { color: var(--ink); }
+.mkEx .mkChips .fsel[data-on]::after { border-color: #fff; }
+.mkEx .mkChips .fsel.rgRange, .mkEx .fsel.toggle { padding-right: 10px; }
+.mkEx .mkChips .rgRange input { width: 52px; height: 20px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; padding: 0 2px; font-size: 12.5px; font-weight: 700; outline: none; }
+.mkEx .mkChips .rgRange[data-on] input { color: #fff; border-bottom-color: rgba(255, 255, 255, 0.4); }
+.mkEx .mkChips .rgRange[data-on] input::placeholder { color: rgba(255, 255, 255, 0.5); }
+.mkEx .fsel.toggle input { width: 13px; height: 13px; accent-color: var(--acc); }
+.mkEx .fsel.toggle[data-on] > span { color: #fff; }
+.mkEx .mkSep { width: 1px; height: 18px; background: var(--line); margin: 0 2px; }
+.mkEx .resetLink { height: 28px; padding: 0 6px; font-size: 12.5px; }
+.mkEx .mkStatus { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; flex-wrap: wrap; margin: 10px 0 10px; padding-top: 8px; border-top: 1px solid var(--divider); font-size: 12.5px; color: var(--muted); }
+.mkEx .mkStatus .mkExMeta { gap: 6px 14px; }
+.mkEx .mkStats { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11.5px; color: var(--muted-2); cursor: help; }
+.mkEx .mkStats b { color: var(--muted); font-weight: 700; }
+.mkEx .mkHeatCtl .segment { border-radius: 999px; padding: 2px; }
+.mkEx .mkHeatCtl .segment button { height: 22px; padding: 0 9px; border-radius: 999px; font-size: 11.5px; }
+.mkEx .mkChips .fsel select { field-sizing: content; }
+@media (max-width: 720px) { .mkEx .mkTop { flex-wrap: wrap; } .mkEx .mkSearch { flex: 1 1 100%; } .mkEx .mkTop .segment { width: 100%; } .mkEx .mkSep { display: none; } }
