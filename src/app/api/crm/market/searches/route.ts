@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   try { host = new URL(url).hostname.replace(/^www\./, ""); } catch { return err("Adresa paginii de rezultate nu este validă."); }
   if (host !== source) return err(`Adresa trebuie să fie de pe ${source}.`);
   const transaction = str("transaction") === "inchiriere" ? "inchiriere" : "vanzare";
-  const maxPages = Math.min(50, Math.max(1, Math.round(Number(b.max_pages) || 20)));
+  const maxPages = Math.min(300, Math.max(1, Math.round(Number(b.max_pages) || 20)));
   const everyDays = [0, 1, 2, 3, 7, 14, 30].includes(Number(b.every_days)) ? Number(b.every_days) : 1;
   const maxDetails = Math.min(5000, Math.max(0, Math.round(Number(b.max_details) || 0)));
   const vals = [name, source, url, str("category", 40) || null, str("type", 80) || null, transaction, b.enabled === false ? 0 : 1, maxPages, everyDays, maxDetails];

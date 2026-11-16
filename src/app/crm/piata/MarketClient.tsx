@@ -119,7 +119,7 @@ export function Searches({ rows, sources, categories, edit }: { rows: (Search & 
               {(ASSET_CATEGORIES.find(([k]) => k === form.category)?.[2] ?? ASSET_CATEGORIES.flatMap(([, , t]) => t)).map((t) => <option key={t} value={t}>{t.charAt(0) + t.slice(1).toLowerCase()}</option>)}
             </select>
           </label>
-          <label className="field">Maximum pagini<input className="input" type="number" min={1} max={50} value={form.max_pages} onChange={(e) => set("max_pages", e.target.value)} /></label>
+          <label className="field">Maximum pagini <small>(cel mult 300; dacă se atinge limita, căutarea rămâne „incompletă”)</small><input className="input" type="number" min={1} max={300} value={form.max_pages} onChange={(e) => set("max_pages", e.target.value)} /></label>
           <label className="field">Cât de des <small>(în rulările programate)</small>
             <select className="input" value={form.every_days} onChange={(e) => set("every_days", e.target.value)}>{EVERY.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
           </label>
