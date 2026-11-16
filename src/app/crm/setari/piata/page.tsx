@@ -46,7 +46,8 @@ export default async function MarketSettingsPage() {
                   <td className="r">{n(x.gone)}</td><td className="r">{n(x.failed)}</td>
                   <td>{x.last_run ? fmtDate(x.last_run, true) : "—"}</td>
                   <td>{!x.enabled ? <span className="pill">fără căutări active</span> : !x.last_run ? <span className="pill pillWarn">nerulată încă</span>
-                    : x.errors ? <span className="pill pillErr">{x.errors} căutări cu probleme</span> : <span className="pill pillOk">în regulă</span>}</td>
+                    : x.errors ? <span className="pill pillErr mkTip" tabIndex={0}>{x.errors === 1 ? "o căutare cu probleme" : `${x.errors} căutări cu probleme`}
+                      <span role="tooltip">{status.searches.filter((q) => q.source === x.source && q.enabled && q.last_error).map((q) => <span key={q.id}><b>{q.name}</b>{q.last_error}</span>)}</span></span> : <span className="pill pillOk">în regulă</span>}</td>
                 </tr>
               ))}
             </tbody>
