@@ -8,8 +8,8 @@ import { ComparableModal } from "@/components/ComparableModal";
 
 type Row = { id: string; source: string; url: string; title: string | null; category: string | null; type: string | null; transaction: string | null; price: number | null; currency: string | null;
   price_sqm: number | null; area: number | null; city: string | null; zone: string | null; county: string | null; lat: number | null; lng: number | null; geo_precision: string | null;
-  status: string; rooms?: number | null; dup_group: string | null; dup_reason: string | null; dup_sources?: string | null; dup_n?: number | null; dup_min?: number | null; cover: string | null; first_seen_at: string; changed_at: string | null };
-type Point = { id: string; lat: number; lng: number; price: number | null; currency: string | null; price_sqm: number | null; title: string | null; status: string; area: number | null; source: string };
+  status: string; est?: "zona" | "localitate" | null; est_lat?: number | null; est_lng?: number | null; rooms?: number | null; dup_group: string | null; dup_reason: string | null; dup_sources?: string | null; dup_n?: number | null; dup_min?: number | null; cover: string | null; first_seen_at: string; changed_at: string | null };
+type Point = { id: string; lat: number; lng: number; price: number | null; currency: string | null; price_sqm: number | null; title: string | null; loose?: "aprox" | "zona" | "localitate"; status: string; area: number | null; source: string };
 type Q = { q?: string; cat?: string; tip?: string; tr?: string; src?: string; st?: string; dup?: string; min?: string; max?: string; p?: string; vezi?: string; cam?: string; jud?: string; oras?: string; zona?: string };
 
 const num = (n: number | null | undefined, d = 0) => (n == null ? "—" : n.toLocaleString("ro-RO", { maximumFractionDigits: d }));
@@ -19,10 +19,11 @@ const esc = (x: string) => x.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 const cap = (s: string | null) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : "");
 const day = (s: string) => s.slice(0, 10).split("-").reverse().join(".");
 
-export function MarketExplorer({ base, current: c, rows, points, total, page, pages, cats, types, sources, counties, cities, zones }: {
+export function MarketExplorer({ base, current: c, rows, points, total, page, pages, cats, types, sources, counties, cities, zones, nowhere, totals }: {
   base: string; current: Q; rows: Row[]; points: Point[]; total: number; page: number; pages: number;
   cats: [string, string, number][]; types: [string, number][]; sources: [string, number][];
   counties: [string, string, number][]; cities: [string, string, number][]; zones: [string, string, number][];
+  nowhere: number; totals: { total: number; active: number; gone: number; expired: number; merged: number; nopoint: number };
 }) {
   const router = useRouter();
   const view = c.vezi === "lista" || c.vezi === "harta" ? c.vezi : "split";
@@ -65,7 +66,7 @@ export function MarketExplorer({ base, current: c, rows, points, total, page, pa
   const [hover, setHover] = useState<string | null>(null);
   // the listing opened in the window (the same as in a report, without a subject)
   const [open, setOpen] = useState<{ id: string; lat: number | null; lng: number | null } | null>(null);
-  const openId = useCallback((id: string) => { const p = points.find((x) => x.id === id); const r = rows.find((x) => x.id === id); setOpen({ id, lat: r?.lat ?? p?.lat ?? null, lng: r?.lng ?? p?.lng ?? null }); }, [points, rows]);
+  const openId = useCallback((id: string) => { const p = points.find((x) => x.id === id); const r = rows.find((x) => x.id === id); setOpen({ id, lat: r?.lat ?? r?.est_lat ?? p?.lat ?? null, lng: r?.lng ?? r?.est_lng ?? p?.lng ?? null }); }, [points, rows]);
   const [picked, setPicked] = useState<string | null>(null);
   const reveal = useCallback((id: string) => {
     const box = list.current, row = box?.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"]`);
@@ -78,8 +79,9 @@ export function MarketExplorer({ base, current: c, rows, points, total, page, pa
   const onMapHover = useCallback((id: string | null) => { setHover(id); if (id) reveal(id); }, [reveal]);
 
   const pts = useMemo<ExplorerPoint[]>(() => points.map((p) => ({
-    id: p.id, lat: p.lat, lng: p.lng, label: short(p.price), inactive: p.status !== "activ",
-    tip: `<b>${esc(p.title ?? "Anunț")}</b><br><small>${p.price != null ? `${num(p.price)} ${cur(p.currency)}` : "la cerere"}${p.area ? ` · ${num(p.area)} m²` : ""} · ${esc(p.source)}</small>`,
+    id: p.id, lat: p.lat, lng: p.lng, label: short(p.price), inactive: p.status !== "activ", loose: !!p.loose,
+    tip: `<b>${esc(p.title ?? "Anunț")}</b><br><small>${p.price != null ? `${num(p.price)} ${cur(p.currency)}` : "la cerere"}${p.area ? ` · ${num(p.area)} m²` : ""} · ${esc(p.source)}</small>${
+      p.loose ? `<br><small class="mkLooseTip">${p.loose === "aprox" ? "locație aproximativă: centrul zonei din anunț" : p.loose === "zona" ? "fără punct în anunț: pus în centrul zonei" : "fără punct în anunț: pus în centrul localității"}</small>` : ""}`,
   })), [points]);
   // the price cloud (€/m² of the filtered listings), as on Hartă prețuri; remembered
   const [heat, setHeat] = useState(false);
@@ -112,6 +114,7 @@ export function MarketExplorer({ base, current: c, rows, points, total, page, pa
       </span>}
     </span>
   );
+  const loose = useMemo(() => points.filter((p) => p.loose).length, [points]);
   const active = [c.q, c.cat, c.tip, c.tr, c.src, c.st && c.st !== "activ" ? c.st : null, c.min || c.max, c.dup, c.cam, c.jud, c.oras, c.zona].filter(Boolean).length;
 
   const sel = (label: string, k: keyof Q, opts: [string, string][], all = "Toate") => (
@@ -143,7 +146,8 @@ export function MarketExplorer({ base, current: c, rows, points, total, page, pa
               {r.area ? <span className="ldNearTag">{num(r.area)} m²</span> : null}
               {r.dup_group && (r.dup_n ?? 0) > 1 && <span className="ldNearTag mkMerged" title={r.dup_reason ? `Găsit după: ${r.dup_reason}` : undefined}>
                 {r.dup_n} anunțuri comasate · {(r.dup_sources ?? r.source).split(",").join(", ")}{r.dup_min != null && r.price != null && r.dup_min < r.price ? ` · de la ${num(r.dup_min)} ${cur(r.currency)}` : ""}</span>}
-              {r.lat == null && <span className="ldNearTag">fără coordonate</span>}
+              {r.lat == null ? <span className="ldNearTag mkLoose">{r.est === "zona" ? "poziție estimată · centrul zonei" : r.est === "localitate" ? "poziție estimată · centrul localității" : "fără localizare"}</span>
+                : r.geo_precision && !/^exact/i.test(r.geo_precision) ? <span className="ldNearTag mkLoose">locație aproximativă</span> : null}
               <small className="muted">{day(r.changed_at ?? r.first_seen_at)}</small>
             </span>
           </span>
@@ -193,9 +197,13 @@ export function MarketExplorer({ base, current: c, rows, points, total, page, pa
           </select>
         </label>
       </div>
+      <p className="mkTotals">În total <b>{num(totals.total)}</b> anunțuri colectate: <b>{num(totals.active)}</b> active
+        {totals.merged > 0 ? <> (din care {num(totals.merged)} duplicate comasate, ascunse; rămân <b>{num(totals.active - totals.merged)}</b>)</> : null}
+        , {num(totals.gone)} dispărute, {num(totals.expired)} expirate. {num(totals.nopoint)} active nu au punct propriu pe hartă.
+        Cifrele din filtre numără ca lista: {c.st === "all" ? "toate stările" : c.st === "inactiv" ? "doar cele dispărute" : c.st === "expirat" ? "doar cele expirate" : "doar cele active"}{c.dup ? ", cu duplicate" : ", fără duplicatele comasate"}.</p>
       <div className="resultLine">
         <span className="mkExMeta">
-          <b>{num(total)}</b> {total === 1 ? "anunț" : "anunțuri"} · {num(points.length)} pe hartă
+          <b>{num(total)}</b> {total === 1 ? "anunț" : "anunțuri"} · {num(points.length)} pe hartă{loose > 0 ? <> (<i className="mkLooseDot" />{num(loose)} cu poziție aproximativă)</> : null}{nowhere > 0 ? ` · ${num(nowhere)} fără nicio localizare` : ""}
           <span className="fsel rgRange" data-on={c.min || c.max ? "" : undefined}><span>m²</span>
             <input inputMode="numeric" value={min} onChange={(e) => setMin(e.target.value.replace(/\D/g, ""))} placeholder="de la" aria-label="Suprafața minimă" />
             <span className="muted">–</span>

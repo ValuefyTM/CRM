@@ -8,7 +8,9 @@ export type MarketRow = {
   id: string; source: string; url: string; title: string | null; category: string | null; type: string | null; transaction: string | null;
   price: number | null; currency: string | null; price_sqm: number | null; area: number | null; county: string | null; city: string | null; zone: string | null;
   lat: number | null; lng: number | null; geo_precision: string | null; status: string; dup_group: string | null; dup_reason: string | null; photo_count: number;
-  cover_key: string | null; first_seen_at: string; changed_at: string | null; fetched_at: string | null; seller_name: string | null; rooms?: number | null; km?: number;
+  cover_key: string | null; first_seen_at: string; changed_at: string | null; fetched_at: string | null; seller_name: string | null; rooms?: number | null; km?: number; loc_city?: string | null; loc_zone?: string | null;
+  /** no point of its own: where it is drawn (the centre of its zone, or of its town) */
+  est?: "zona" | "localitate" | null; est_lat?: number | null; est_lng?: number | null;
   /** the merged group: its sites, how many listings, the lowest price among them */
   dup_sources?: string | null; dup_n?: number | null; dup_min?: number | null;
 };
@@ -20,7 +22,7 @@ export const marketFile = (key: string | null | undefined) => (key ? `/api/crm/m
 
 const AREA = "COALESCE(l.usable_area, l.built_area, l.land_area)";
 const COLS = `l.id, l.source, l.url, l.title, l.category, l.type, l.deal AS "transaction", l.price, l.currency, l.price_sqm, ${AREA} AS area, l.county, l.city, l.zone,
-  l.lat, l.lng, l.geo_precision, l.status, l.dup_group, l.dup_reason, l.photo_count, l.cover_key, l.first_seen_at, l.changed_at, l.fetched_at, l.seller_name, l.rooms,
+  l.lat, l.lng, l.geo_precision, l.status, l.dup_group, l.dup_reason, l.photo_count, l.cover_key, l.first_seen_at, l.changed_at, l.fetched_at, l.seller_name, l.rooms, l.loc_city, l.loc_zone,
   (SELECT group_concat(DISTINCT m.source) FROM market_listings m WHERE m.dup_group = l.dup_group AND m.status = 'activ') AS dup_sources,
   (SELECT COUNT(*) FROM market_listings m WHERE m.dup_group = l.dup_group AND m.status = 'activ') AS dup_n,
   (SELECT MIN(m.price) FROM market_listings m WHERE m.dup_group = l.dup_group AND m.status = 'activ' AND m.currency = l.currency) AS dup_min`;
@@ -59,29 +61,85 @@ export async function listMarket(db: D1Database, f: MarketFilters) {
     db.prepare(`SELECT ${COLS} FROM market_listings l ${where} ORDER BY COALESCE(l.changed_at, l.first_seen_at) DESC LIMIT ${PAGE} OFFSET ${(page - 1) * PAGE}`).bind(...a).all<MarketRow>(),
     db.prepare(`SELECT COUNT(*) AS n FROM market_listings l ${where}`).bind(...a).first<{ n: number }>(),
   ]);
-  return { rows: rows.results, total: total?.n ?? 0, page };
+  const centres = rows.results.some((r) => r.lat == null) ? await zoneCentres(db) : null;
+  return { rows: rows.results.map((r) => { const e = r.lat == null && centres ? centres(r.id, r.loc_city, r.loc_zone) : null; return e ? { ...r, est: e.est, est_lat: e.lat, est_lng: e.lng } : r; }), total: total?.n ?? 0, page };
 }
 
-export type MarketPoint = { id: string; lat: number; lng: number; price: number | null; currency: string | null; price_sqm: number | null; title: string | null; status: string; area: number | null; source: string };
+/** Where a listing without a point is drawn: the centre of the listings of its zone that have one, otherwise of its
+ * town, moved a little (always the same for one listing, up to ~150 m) so that the listings of a zone do not hide one another. */
+export async function zoneCentres(db: D1Database) {
+  const { results } = await db.prepare(`SELECT loc_city AS c, loc_zone AS z, AVG(lat) AS lat, AVG(lng) AS lng, COUNT(*) AS n FROM market_listings
+    WHERE lat IS NOT NULL AND lng IS NOT NULL AND loc_city IS NOT NULL GROUP BY loc_city, loc_zone`).all<{ c: string; z: string | null; lat: number; lng: number; n: number }>();
+  const zone = new Map<string, [number, number]>(), city = new Map<string, [number, number, number]>();
+  for (const r of results) {
+    if (r.z) zone.set(`${r.c}|${r.z}`, [r.lat, r.lng]);
+    const t = city.get(r.c) ?? [0, 0, 0];
+    city.set(r.c, [t[0] + r.lat * r.n, t[1] + r.lng * r.n, t[2] + r.n]);
+  }
+  return (id: string, c: string | null | undefined, z: string | null | undefined) => {
+    if (!c) return null;
+    const zc = z ? zone.get(`${c}|${z}`) : undefined, cc = city.get(c);
+    const at = zc ?? (cc ? [cc[0] / cc[2], cc[1] / cc[2]] as [number, number] : null);
+    if (!at) return null;
+    return { ...spread(id, at[0], at[1]), est: (zc ? "zona" : "localitate") as "zona" | "localitate" };
+  };
+}
 
-/** Every filtered listing that has a point (the map shows them all, not only the page of the list). */
-export async function marketPoints(db: D1Database, f: MarketFilters, limit = 1500) {
+/** A point moved a little (30–150 m, always the same for one listing): the listings that share the centre of a zone stay apart on the map. */
+function spread(id: string, lat: number, lng: number) {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
+  const ang = ((h >>> 0) % 3600) / 3600 * 2 * Math.PI, d = (30 + ((h >>> 12) % 120)) / 111_320;
+  return { lat: lat + Math.sin(ang) * d, lng: lng + (Math.cos(ang) * d) / Math.cos((lat * Math.PI) / 180) };
+}
+
+export type MarketPoint = { id: string; lat: number; lng: number; price: number | null; currency: string | null; price_sqm: number | null; title: string | null; status: string; area: number | null; source: string;
+  /** "aprox" = the site gives only the centre of a zone; "zona" / "localitate" = no point at all, drawn at the centre of its zone / town */
+  loose?: "aprox" | "zona" | "localitate" };
+
+/** Every filtered listing on the map (not only the page of the list): the ones with a point, and the ones without at
+ * the centre of their zone or town. `nowhere` = the ones that cannot be placed at all. */
+export async function marketPoints(db: D1Database, f: MarketFilters, limit = 20_000) {
   const { where, binds } = whereOf(f);
-  const w = where ? `${where} AND l.lat IS NOT NULL AND l.lng IS NOT NULL` : "WHERE l.lat IS NOT NULL AND l.lng IS NOT NULL";
-  const { results } = await db.prepare(`SELECT l.id, l.lat, l.lng, l.price, l.currency, l.price_sqm, l.title, l.status, ${AREA} AS area, l.source FROM market_listings l ${w}
-    ORDER BY COALESCE(l.changed_at, l.first_seen_at) DESC LIMIT ${limit}`).bind(...binds).all<MarketPoint>();
-  return results;
+  const { results } = await db.prepare(`SELECT l.id, l.lat, l.lng, l.price, l.currency, l.price_sqm, substr(l.title, 1, 70) AS title, l.status, ${AREA} AS area, l.source, l.geo_precision AS gp, l.loc_city, l.loc_zone
+    FROM market_listings l ${where} ORDER BY COALESCE(l.changed_at, l.first_seen_at) DESC LIMIT ${limit}`).bind(...binds)
+    .all<Omit<MarketPoint, "lat" | "lng" | "loose"> & { lat: number | null; lng: number | null; gp: string | null; loc_city: string | null; loc_zone: string | null }>();
+  const centres = results.some((r) => r.lat == null || r.lng == null) ? await zoneCentres(db) : null;
+  const points: MarketPoint[] = [];
+  let nowhere = 0;
+  for (const { gp, loc_city, loc_zone, ...r } of results) {
+    if (r.lat != null && r.lng != null) {
+      // an approximate point is the centre of a zone, shared by all its listings: drawn a little apart
+      if (gp && !/^exact/i.test(gp)) points.push({ ...r, ...spread(r.id, r.lat, r.lng), loose: "aprox" });
+      else points.push({ ...r, lat: r.lat, lng: r.lng });
+      continue;
+    }
+    const e = centres?.(r.id, loc_city, loc_zone);
+    if (e) points.push({ ...r, lat: e.lat, lng: e.lng, loose: e.est }); else nowhere++;
+  }
+  return { points, nowhere };
+}
+
+/** The whole base in figures: by status, and how many active listings are hidden as merged duplicates. */
+export async function marketTotals(db: D1Database) {
+  const r = await db.prepare(`SELECT COUNT(*) AS total, COALESCE(SUM(status = 'activ'), 0) AS active, COALESCE(SUM(status = 'inactiv'), 0) AS gone, COALESCE(SUM(status = 'expirat'), 0) AS expired,
+    COALESCE(SUM(status = 'activ' AND dup_group IS NOT NULL AND dup_group <> id), 0) AS merged, COALESCE(SUM(status = 'activ' AND lat IS NULL), 0) AS nopoint FROM market_listings`)
+    .first<{ total: number; active: number; gone: number; expired: number; merged: number; nopoint: number }>();
+  return r ?? { total: 0, active: 0, gone: 0, expired: 0, merged: 0, nopoint: 0 };
 }
 
 /** The values the filters offer (categories, types, sites, counties; towns of the chosen county, zones of the chosen
  * town), with how many active listings each. A place shows under the most common spelling of its name. */
 export async function marketFacets(db: D1Database, f: MarketFilters = {}) {
   type F = { k: string; n: number }; type P = F & { label: string };
-  const q = (col: string) => db.prepare(`SELECT ${col} AS k, COUNT(*) AS n FROM market_listings WHERE ${col} IS NOT NULL AND ${col} <> '' GROUP BY ${col} ORDER BY n DESC`).all<F>().then((r) => r.results);
+  // the counts follow what the list counts: the chosen status, one listing per merged group
+  const base = whereOf({ st: f.st, dup: f.dup });
+  const q = (col: string) => db.prepare(`SELECT l.${col} AS k, COUNT(*) AS n FROM market_listings l ${base.where ? `${base.where} AND` : "WHERE"} l.${col} IS NOT NULL AND l.${col} <> '' GROUP BY l.${col} ORDER BY n DESC`)
+    .bind(...base.binds).all<F>().then((r) => r.results);
   // every spelling of a place with its count; the place takes the most common one (with diacritics when tied)
   const place = async (key: string, name: string, where: string, binds: string[], limit: number) => {
-    const { results } = await db.prepare(`SELECT ${key} AS k, COALESCE(${name}, '') AS label, COUNT(*) AS n FROM market_listings WHERE status = 'activ' AND ${key} IS NOT NULL ${where}
-      GROUP BY ${key}, ${name} ORDER BY n DESC LIMIT 3000`).bind(...binds).all<P>();
+    const { results } = await db.prepare(`SELECT l.${key} AS k, COALESCE(l.${name}, '') AS label, COUNT(*) AS n FROM market_listings l ${base.where ? `${base.where} AND` : "WHERE"} l.${key} IS NOT NULL ${where}
+      GROUP BY l.${key}, l.${name} ORDER BY n DESC LIMIT 3000`).bind(...base.binds, ...binds).all<P>();
     // a better name: used more often; when tied, the one with diacritics, then the shorter (no "Județul", "zona")
     const accents = (t: string) => /[^\x00-\x7f]/.test(t);
     const better = (a: { label: string; top: number }, label: string, n: number) => !!label && (!a.label || n > a.top
@@ -98,8 +156,8 @@ export async function marketFacets(db: D1Database, f: MarketFilters = {}) {
   };
   const [cats, types, sources, counties, cities, zones] = await Promise.all([q("category"), q("type"), q("source"),
     place("loc_county", "county", "", [], 60),
-    place("loc_city", "city", f.jud ? "AND loc_county = ?" : "", f.jud ? [f.jud] : [], 300),
-    f.oras ? place("loc_zone", "zone", "AND loc_city = ?", [f.oras], 300) : Promise.resolve([] as P[]),
+    place("loc_city", "city", f.jud ? "AND l.loc_county = ?" : "", f.jud ? [f.jud] : [], 300),
+    f.oras ? place("loc_zone", "zone", "AND l.loc_city = ?", [f.oras], 300) : Promise.resolve([] as P[]),
   ]);
   return { cats, types, sources, counties, cities, zones };
 }

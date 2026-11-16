@@ -148,7 +148,7 @@ export function Description({ text }: { text: string }) {
   );
 }
 
-export type ExplorerPoint = { id: string; lat: number; lng: number; label: string; tip: string; inactive?: boolean };
+export type ExplorerPoint = { id: string; lat: number; lng: number; label: string; tip: string; inactive?: boolean; /** approximate or estimated place: yellow outline */ loose?: boolean };
 
 // the price cloud: green (the cheapest) → yellow → red (the most expensive), as on Hartă prețuri
 export const CLOUD_RAMP = ["#1a9850", "#66bd63", "#c2e478", "#fee08b", "#f88d52", "#d73027"];
@@ -174,6 +174,7 @@ export function MarketMap({ points, hover = null, onPick, onHover, cloud = null,
   const layer = useRef<Leaflet.LayerGroup | null>(null);
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const marks = useRef<Map<string, Leaflet.Marker>>(new Map());
+  const dots = useRef<Map<string, Leaflet.CircleMarker>>(new Map());
   const [ready, setReady] = useState(false);
   const clouded = !!cloud?.points.length;
   const prevCloud = useRef(clouded);
@@ -203,26 +204,60 @@ export function MarketMap({ points, hover = null, onPick, onHover, cloud = null,
     return () => { off = true; window.removeEventListener("resize", re); map.current?.remove(); map.current = null; };
   }, []);
 
+  // Every point is drawn. Few in view: price tags (only the ones in view). Many: dots on a canvas (thousands stay
+  // fast), which turn into tags as the map is zoomed in. Approximate / estimated places have a yellow outline.
+  const TAGS_MAX = 300;
   useEffect(() => {
     const l = L.current, m = map.current, g = layer.current;
     if (!ready || !l || !m || !g) return;
-    g.clearLayers(); marks.current.clear();
-    for (const p of points) {
-      // with the cloud on, the price tags give way to small dots (the listing still opens from the map)
-      const html = clouded ? `<span class="ldPin dot${p.inactive ? " off" : ""}"></span>` : `<span class="ldPin${p.inactive ? " off" : ""}">${p.label}</span>`;
-      const mk = l.marker([p.lat, p.lng], { icon: l.divIcon({ className: "", html, iconSize: [0, 0] }) })
-        .bindTooltip(p.tip, { direction: "top", offset: [0, clouded ? -6 : -12] })
-        .on("click", () => cb.current.onPick?.(p.id)).on("mouseover", () => cb.current.onHover?.(p.id)).on("mouseout", () => cb.current.onHover?.(null));
-      mk.addTo(g); marks.current.set(p.id, mk);
-    }
+    const renderer = l.canvas({ padding: 0.3 });
+    let mode = "";
+    const draw = () => {
+      const box = m.getBounds().pad(0.15);
+      const vis = points.filter((p) => box.contains([p.lat, p.lng]));
+      const next = clouded || vis.length > TAGS_MAX ? "dots" : "tags";
+      if (next === "dots" && mode === "dots") return; // the canvas already holds every point
+      mode = next;
+      g.clearLayers(); marks.current.clear(); dots.current.clear();
+      if (next === "dots") {
+        for (const p of points) {
+          const d = l.circleMarker([p.lat, p.lng], { renderer, radius: p.loose ? 5 : 4, color: p.loose ? "#f5c400" : p.inactive ? "#c0392b" : "#fff", weight: p.loose ? 2.5 : 1.5,
+            fillColor: p.inactive ? "#fff" : "#111", fillOpacity: 1, dashArray: p.inactive && !p.loose ? "2 2" : undefined })
+            .bindTooltip(p.tip, { direction: "top", offset: [0, -6] })
+            .on("click", () => cb.current.onPick?.(p.id)).on("mouseover", () => cb.current.onHover?.(p.id)).on("mouseout", () => cb.current.onHover?.(null));
+          d.addTo(g); dots.current.set(p.id, d);
+        }
+        return;
+      }
+      for (const p of vis) {
+        const mk = l.marker([p.lat, p.lng], { icon: l.divIcon({ className: "", html: `<span class="ldPin${p.inactive ? " off" : ""}${p.loose ? " loose" : ""}">${p.label}</span>`, iconSize: [0, 0] }) })
+          .bindTooltip(p.tip, { direction: "top", offset: [0, -12] })
+          .on("click", () => cb.current.onPick?.(p.id)).on("mouseover", () => cb.current.onHover?.(p.id)).on("mouseout", () => cb.current.onHover?.(null));
+        mk.addTo(g); marks.current.set(p.id, mk);
+      }
+    };
     // new points: the map fits them; the cloud turned on or off: the view stays where it is
     const toggled = prevCloud.current !== clouded;
     prevCloud.current = clouded;
-    if (points.length && !toggled) m.fitBounds(l.latLngBounds(points.map((p) => [p.lat, p.lng] as [number, number])), { padding: [30, 30], maxZoom: 15 });
+    if (points.length && !toggled) m.fitBounds(l.latLngBounds(points.map((p) => [p.lat, p.lng] as [number, number])), { padding: [30, 30], maxZoom: 15, animate: false });
+    draw();
+    m.on("moveend", draw);
+    return () => { m.off("moveend", draw); g.clearLayers(); marks.current.clear(); dots.current.clear(); };
   }, [points, ready, clouded]);
+  const lastHover = useRef<string | null>(null);
   useEffect(() => {
     marks.current.forEach((m, id) => { m.getElement()?.querySelector(".ldPin")?.classList.toggle("hl", id === hover); m.setZIndexOffset(id === hover ? 900 : 0); });
-  }, [hover]);
+    // dots: only the one left and the one entered are restyled
+    const byId = new Map(points.map((p) => [p.id, p]));
+    const style = (id: string | null, on: boolean) => {
+      const d = id ? dots.current.get(id) : null, p = id ? byId.get(id) : null;
+      if (!d || !p) return;
+      d.setStyle(on ? { radius: 8, color: "#111", weight: 2.5, fillColor: "#f2a93b" } : { radius: p.loose ? 5 : 4, color: p.loose ? "#f5c400" : p.inactive ? "#c0392b" : "#fff", weight: p.loose ? 2.5 : 1.5, fillColor: p.inactive ? "#fff" : "#111" });
+      if (on) d.bringToFront();
+    };
+    style(lastHover.current, false); style(hover, true);
+    lastHover.current = hover;
+  }, [hover, points]);
 
   // the cloud: drawn on the pane's canvas (in the map's layer coordinates) after every move or zoom
   useEffect(() => {
