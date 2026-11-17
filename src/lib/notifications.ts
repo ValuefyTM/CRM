@@ -86,7 +86,8 @@ export async function notificationsFor(db: D1Database, u: WithPerms & { id: stri
       id: `i${i.id}`, at: i.at, kind: "inspection", title: `Inspecție nouă${i.number ? ` · raport ${num(i.number)}` : ""}`,
       sub: [i.place, i.who && `de la ${i.who}`].filter(Boolean).join(" · "), href: i.rid ? `${rep(i.rid)}?tab=inspectii` : `${base}/agenda-inspectii`,
     })),
-    ...orders.map((o): Notice => ({
+    // a new order already told by an alert of Setări → Alerte is not told twice
+    ...orders.filter((o) => !rules.some((n) => n.newOrder === o.id)).map((o): Notice => ({
       id: `o${o.id}`, at: o.at, kind: "order", title: `Comandă nouă ${orderCode({ id: o.id, seq: o.seq, bank_ref: o.bank_ref, bank: o.bank, source: o.source ?? undefined })}`,
       sub: [o.client, o.bank].filter(Boolean).join(" · ") || "neprocesată", href: `${base}/comenzi/${o.id}`,
     })),

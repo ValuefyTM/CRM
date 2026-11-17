@@ -4,7 +4,8 @@
 export type AlertKind =
   | "report_assigned" | "insp_done" | "insp_not_scheduled" | "insp_overdue"
   | "uncollected_after_insp" | "delivered_uncollected" | "to_invoice"
-  | "review_waiting" | "overdue" | "order_new" | "docs_missing";
+  | "review_waiting" | "overdue" | "order_new" | "docs_missing"
+  | "order_site" | "order_partner" | "order_msg" | "order_doc_added" | "order_docs_waiting";
 
 export type AlertRule = {
   id: string; kind: AlertKind;
@@ -48,6 +49,11 @@ export const ALERT_KINDS: Record<AlertKind, KindInfo> = {
   review_waiting: { label: "Raport la verificare", hint: "așteaptă verificatorul", from: "de la trimiterea la verificare", group: "Rapoarte", tone: "warn", lasting: true, roles: ["verifier", "evaluator", "team", "admins", "all"] },
   overdue: { label: "Raport nepredat la termen", hint: "termenul de predare a trecut", from: "de la ziua următoare termenului", group: "Rapoarte", tone: "err", lasting: true, roles: ["evaluator", "verifier", "team", "ops", "admins", "all"] },
   docs_missing: { label: "Documente lipsă", hint: "un act cerut (marcat lipsă) nu a fost încă încărcat", from: "de la marcarea ca lipsă", group: "Rapoarte", tone: "err", lasting: true, roles: ["evaluator", "team", "ops", "orders", "admins", "all"] },
+  order_site: { label: "Comandă nouă de pe site", hint: "cerere trimisă de pe valuefy.ro, încă nedeschisă", from: "de la primirea comenzii", group: "Comenzi", tone: "warn", lasting: true, roles: ["orders", "admins", "all"] },
+  order_partner: { label: "Comandă nouă de la colaboratori", hint: "comandă trimisă din portalul colaboratorilor, încă nedeschisă", from: "de la primirea comenzii", group: "Comenzi", tone: "warn", lasting: true, roles: ["orders", "admins", "all"] },
+  order_msg: { label: "Mesaj de la colaborator", hint: "colaboratorul a scris la o comandă din portal", from: "de la mesaj", group: "Comenzi", tone: "info", lasting: false, roles: ["evaluator", "team", "orders", "admins", "all"] },
+  order_doc_added: { label: "Acte încărcate ulterior", hint: "colaboratorul sau clientul a încărcat un act după trimiterea comenzii", from: "de la încărcare", group: "Comenzi", tone: "info", lasting: false, roles: ["evaluator", "team", "orders", "admins", "all"] },
+  order_docs_waiting: { label: "Acte solicitate, neprimite", hint: "actele cerute colaboratorului nu au fost încă încărcate", from: "de la solicitare", group: "Comenzi", tone: "warn", lasting: true, roles: ["evaluator", "team", "orders", "admins", "all"] },
   order_new: { label: "Comandă neprocesată", hint: "nimeni nu a deschis comanda", from: "de la primirea comenzii", group: "Comenzi", tone: "warn", lasting: true, roles: ["orders", "admins", "all"] },
 };
 
@@ -68,10 +74,19 @@ export const DAY_CHOICES: [number, string][] = [[0, "imediat"], [1, "după 1 zi"
 /** How often a lasting alert is told again while the situation lasts (hours; 0 = once). */
 export const EVERY_CHOICES: [number, string][] = [[0, "o singură dată"], [1, "la fiecare oră"], [2, "la 2 ore"], [4, "la 4 ore"], [8, "la 8 ore"], [12, "la 12 ore"], [24, "o dată pe zi"], [48, "la 2 zile"], [72, "la 3 zile"], [168, "o dată pe săptămână"]];
 
+/** The alerts about the orders received (site, collaborators' portal) and what follows on them; added once to the rules already saved (migration 1101). */
+export const ORDER_RULES: AlertRule[] = [
+  { id: "r-order-site", kind: "order_site", days: 0, to: ["orders", "admins"], scope: [], dashboard: false, enabled: true },
+  { id: "r-order-partner", kind: "order_partner", days: 0, to: ["orders", "admins"], scope: [], dashboard: false, enabled: true },
+  { id: "r-order-msg", kind: "order_msg", days: 0, to: ["evaluator", "orders"], scope: [], dashboard: false, enabled: true },
+  { id: "r-order-doc", kind: "order_doc_added", days: 0, to: ["evaluator", "orders"], scope: [], dashboard: false, enabled: true },
+];
+
 /** The rules of a firm that set none yet. */
 export const DEFAULT_RULES: AlertRule[] = [
   { id: "r-assigned", kind: "report_assigned", days: 0, to: ["assigned"], scope: [], dashboard: false, enabled: true },
   { id: "r-insp-done", kind: "insp_done", days: 0, to: ["team", "admins"], scope: [], dashboard: false, enabled: true },
+  ...ORDER_RULES,
 ];
 
 export const newRuleId = () => `r-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;

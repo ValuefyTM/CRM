@@ -74,6 +74,14 @@ const INSP_JOINS = `LEFT JOIN reports r ON r.id = i.report_id LEFT JOIN assets a
 const OPEN_REPORT = `r.status IN ('draft', 'in_progress') AND r.delivered_at IS NULL`;
 const NEW_HERE = `r.glide_id IS NULL`;
 
+/** What an alert about an order reports (the roles of the user in the team of the order's report: for the recipients). */
+const ORDER_COLS = `NULL AS rid, o.id AS oid, NULL AS number, NULL AS label, o.client_name AS client, o.bank, NULL AS fee,
+  (SELECT k.id FROM contracts k WHERE k.id = o.contract_id AND k.kind = 'framework') AS kid, o.collaboration_id AS cid,
+  (SELECT group_concat(rm.role) FROM report_members rm JOIN reports r ON r.id = rm.report_id WHERE r.order_id = COALESCE(o.linked_order_id, o.id) AND rm.user_id = ?1) AS my_roles, o.seq, o.bank_ref, o.source`;
+/** An order of one source nobody opened yet. */
+const ORDER_NEW = (where: string) => `SELECT o.id AS key, NULL AS assigned_id, NULL AS inspector_id, NULL AS who, COALESCE(NULLIF(o.city, ''), o.address) AS place, o.created_at AS anchor, o.property_type AS extra, ${ORDER_COLS}
+  FROM orders o WHERE ${where} AND o.viewed_at IS NULL AND o.status <> 'cancelled' AND o.created_at > ?2`;
+
 /** ?1 = user id, ?2 = the oldest moment still of interest, ?3 / ?4 = the billing defaults (framework, collaboration). */
 const SQL: Record<AlertKind, string> = {
   report_assigned: `SELECT rm.report_id || ':' || rm.user_id || ':' || rm.role AS key, rm.user_id AS assigned_id, NULL AS inspector_id,
@@ -105,6 +113,20 @@ const SQL: Record<AlertKind, string> = {
       (SELECT MIN(COALESCE(d.requested_at, d.created_at)) FROM report_documents d WHERE d.report_id = r.id AND d.status = 'missing') AS anchor,
       (SELECT COUNT(*) || '|' || group_concat(d.filename, ', ') FROM report_documents d WHERE d.report_id = r.id AND d.status = 'missing') AS extra, ${REPORT_COLS}
     FROM reports r ${REPORT_JOINS} WHERE ${OPEN_REPORT} AND EXISTS (SELECT 1 FROM report_documents d WHERE d.report_id = r.id AND d.status = 'missing')`,
+  order_site: ORDER_NEW("o.source = 'site'"),
+  order_partner: ORDER_NEW("o.source = 'partner' AND o.glide_id IS NULL"),
+  // what the collaborator wrote (not the lines the chat writes by itself when a document is uploaded)
+  order_msg: `SELECT m.id AS key, NULL AS assigned_id, NULL AS inspector_id, COALESCE(NULLIF(u.name, ''), m.author_name, m.author_email) AS who, substr(m.body, 1, 140) AS place, m.created_at AS anchor, NULL AS extra, ${ORDER_COLS}
+    FROM messages m JOIN orders o ON o.id = m.entity_id JOIN users u ON u.id = m.author_id
+    WHERE m.entity = 'order' AND m.shared = 1 AND u.kind IN ('partner', 'client') AND m.body NOT LIKE 'Am încărcat: %' AND m.created_at > ?2`,
+  // a document added by the one who sent the order, later than the order itself (the ones sent with it are part of it)
+  order_doc_added: `SELECT d.id AS key, NULL AS assigned_id, NULL AS inspector_id, COALESCE(NULLIF(u.name, ''), u.email) AS who, d.filename AS place, d.created_at AS anchor, NULL AS extra, ${ORDER_COLS}
+    FROM order_documents d JOIN orders o ON o.id = d.order_id JOIN users u ON u.id = d.uploaded_by
+    WHERE u.kind IN ('partner', 'client') AND d.created_at > ?2 AND d.created_at > strftime('%Y-%m-%dT%H:%M:%fZ', o.created_at, '+15 minutes') AND o.status <> 'cancelled'`,
+  order_docs_waiting: `SELECT o.id AS key, NULL AS assigned_id, NULL AS inspector_id, NULL AS who, NULL AS place,
+      (SELECT MIN(q.requested_at) FROM order_doc_requests q WHERE q.order_id = o.id AND q.done_at IS NULL AND q.cancelled_at IS NULL) AS anchor,
+      (SELECT COUNT(*) || '|' || group_concat(q.name, ', ') FROM order_doc_requests q WHERE q.order_id = o.id AND q.done_at IS NULL AND q.cancelled_at IS NULL) AS extra, ${ORDER_COLS}
+    FROM orders o WHERE o.status NOT IN ('cancelled', 'done') AND EXISTS (SELECT 1 FROM order_doc_requests q WHERE q.order_id = o.id AND q.done_at IS NULL AND q.cancelled_at IS NULL)`,
   order_new: `SELECT o.id AS key, NULL AS assigned_id, NULL AS inspector_id, NULL AS who, NULL AS place, o.created_at AS anchor, NULL AS extra,
       NULL AS rid, o.id AS oid, NULL AS number, NULL AS label, o.client_name AS client, o.bank, NULL AS fee,
       (SELECT k.id FROM contracts k WHERE k.id = o.contract_id AND k.kind = 'framework') AS kid, o.collaboration_id AS cid, NULL AS my_roles, o.seq, o.bank_ref, o.source
@@ -228,6 +250,21 @@ export function describe(h: Hit, base: string) {
       const [n, names] = [(row.extra ?? "").split("|")[0], (row.extra ?? "").split("|").slice(1).join("|")];
       title = `${head} · ${r}`; sub = [Number(n) > 1 ? `${n} acte: ${names}` : names, row.client, row.bank].filter(Boolean).join(" · "); href = rep ? `${rep}?tab=documente` : href; break;
     }
+    case "order_site": case "order_partner": {
+      const code = orderCode({ id: row.key, seq: row.seq, bank_ref: row.bank_ref, bank: row.bank, source: row.source ?? undefined });
+      short = code; title = `${head} · ${code}`; sub = [row.client, row.place, `primită ${dm(row.anchor)}`].filter(Boolean).join(" · "); href = `${base}/comenzi/${row.key}`; break;
+    }
+    case "order_msg": case "order_doc_added": case "order_docs_waiting": {
+      const code = orderCode({ id: row.oid!, seq: row.seq, bank_ref: row.bank_ref, bank: row.bank, source: row.source ?? undefined });
+      short = code; href = `${base}/comenzi/${row.oid}`;
+      if (rule.kind === "order_msg") { title = `${row.who ?? "Colaboratorul"} a scris · comanda ${code}`; sub = [row.place, row.client].filter(Boolean).join(" · "); }
+      else if (rule.kind === "order_doc_added") { title = `${head} · comanda ${code}`; sub = [row.place, row.who && `de ${row.who}`, row.client].filter(Boolean).join(" · "); }
+      else {
+        const [n, names] = [(row.extra ?? "").split("|")[0], (row.extra ?? "").split("|").slice(1).join("|")];
+        title = `${head}${days} · comanda ${code}`; sub = [Number(n) > 1 ? `${n} acte: ${names}` : names, row.client, `cerute ${dm(row.anchor)}`].filter(Boolean).join(" · ");
+      }
+      break;
+    }
     case "order_new": {
       const code = orderCode({ id: row.key, seq: row.seq, bank_ref: row.bank_ref, bank: row.bank, source: row.source ?? undefined });
       short = code; title = `${head} ${code}`; sub = [row.client, row.bank, `primită ${dm(row.anchor)}`].filter(Boolean).join(" · "); href = `${base}/comenzi/${row.key}`; break;
@@ -235,7 +272,8 @@ export function describe(h: Hit, base: string) {
   }
   const kind = k.group === "Bani" ? "collect" : k.group === "Inspecții" ? "inspection" : k.group === "Comenzi" ? "order" : "alert";
   // the person assigned gets the dedicated assignment email (dossier.ts) when the rule is ticked, not the digest
-  return { id: `r${rule.id}:${row.key}${h.round ? `:${h.round}` : ""}`, at: h.at, kind, title, short, sub, href, tone: k.tone, email: !!rule.email && !h.self };
+  const newOrder = rule.kind === "order_site" || rule.kind === "order_partner" || rule.kind === "order_new" ? row.key : null;
+  return { id: `r${rule.id}:${row.key}${h.round ? `:${h.round}` : ""}`, at: h.at, kind, title, short, sub, href, tone: k.tone, email: !!rule.email && !h.self, newOrder };
 }
 
 export type DashAlert = { key: string; kind?: AlertKind; tone: "err" | "warn" | "info"; title: string; hint: string; count: number; href: string; items: { label: string; sub?: string; href: string }[] };
@@ -260,7 +298,7 @@ export async function dashboardAlerts(db: D1Database, u: Viewer, base: string): 
   return rules.map((rule) => {
     const mine = hits.filter((h) => h.rule.id === rule.id).map((h) => describe(h, base));
     const k = ALERT_KINDS[rule.kind];
-    const list = rule.kind === "to_invoice" ? `${base}/facturare` : rule.kind === "order_new" ? `${base}/comenzi` : rule.kind === "overdue" ? `${base}/rapoarte?termen=depasit`
+    const list = rule.kind === "to_invoice" ? `${base}/facturare` : k.group === "Comenzi" ? `${base}/comenzi` : rule.kind === "overdue" ? `${base}/rapoarte?termen=depasit`
       : rule.kind === "review_waiting" ? `${base}/rapoarte?etapa=verificare` : k.group === "Inspecții" ? `${base}/agenda-inspectii` : mine[0]?.href ?? `${base}/rapoarte`;
     return { key: `rule:${rule.id}`, kind: rule.kind, tone: k.tone, title: rule.title || k.label, hint: k.hint, count: mine.length, href: list,
       items: mine.slice(0, 4).map((m) => ({ label: m.short, sub: m.sub, href: m.href })) };

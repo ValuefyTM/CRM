@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { staffPage } from "@/lib/guard";
 import { can } from "@/lib/perms";
 import { MyHome } from "./acasa/MyHome";
-import { BankTasksCard } from "./emailuri/BankTasksCard";
+import { NewOrdersCard } from "./emailuri/NewOrdersCard";
 import { BillingTasksCard } from "@/components/BillingTasksCard";
 import { dashboard, type Alert } from "@/lib/dashboard";
 import { dashboardAlerts } from "@/lib/alerts";
@@ -146,7 +146,7 @@ export default async function CrmHome({ searchParams }: { searchParams: Promise<
           ))}
         </nav>
       </section>
-      <BankTasksCard user={user} base={base} />
+      <NewOrdersCard user={user} base={base} />
       {/* "Emite factura" without the Facturare module: the reports to invoice, right here. */}
       {can(user, "billing:issue") && !can(user, "billing") && <BillingTasksCard user={user} base={base} />}
 
