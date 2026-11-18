@@ -4087,7 +4087,7 @@ span.rdPick { display: inline-block; }
 .tkList li.late .tkTxt small { color: var(--err); font-weight: 700; }
 .tkGo { font-weight: 700; font-size: 13px; color: var(--acc-ink); white-space: nowrap; }
 .tkBanks.hot { border-color: #f3b4ae; box-shadow: 0 0 0 3px #fde4e1, 0 12px 28px -22px rgba(17, 17, 17, 0.35); }
-.tkBankRow { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.tkBankRow { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 10px; }
 .tkBank { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; }
 .tkBank.hot { border-color: #f3b4ae; background: #fff4f3; }
 .tkN { display: flex; flex-direction: column; align-items: center; font-size: 22px; font-weight: 800; line-height: 1; color: var(--muted-2); }
@@ -5022,3 +5022,8 @@ tr:nth-last-child(-n+2):not(:first-child) .mkTip [role="tooltip"] { top: auto; b
 .mkEx .mkChips .fsel select { field-sizing: content; }
 @media (max-width: 720px) { .mkEx .mkTop { flex-wrap: wrap; } .mkEx .mkSearch { flex: 1 1 100%; } .mkEx .mkTop .segment { width: 100%; } .mkEx .mkSep { display: none; } }
 .tkLogo svg { width: 100%; height: 100%; display: block; }
+/* Comenzi noi: brokerul care a trimis comanda (poză sau inițiale, cu semnul portalului în colț) */
+.tkLogo.tkFace { position: relative; overflow: visible; border-radius: 50%; background: var(--acc-soft); color: var(--acc-text); font-weight: 800; font-size: 13px; }
+.tkLogo.tkFace > img { border-radius: 50%; object-fit: cover; padding: 0; }
+.tkLogo.tkFace > i { position: absolute; right: -4px; bottom: -4px; width: 18px; height: 18px; border-radius: 6px; overflow: hidden; box-shadow: 0 0 0 2px #fff; }
+.tkNew { margin-left: 8px; font-size: 10.5px; vertical-align: 1px; }

@@ -1,15 +1,22 @@
 // Dashboard: the new orders, by where they come from — each bank with a processing rule (BRD, BCR…: the tasks from its
 // emails), the website (valuefy.ro) and the collaborators' portal (the orders nobody opened yet) — each with its logo,
-// what is new (urgent) and its work in progress; under them the bank tasks and the new orders, a click away.
+// what is new (urgent) and its work in progress; under them the bank tasks and the orders not processed yet, a click
+// away. An order stays in the card until it is processed (opening it does not take it out); a collaborator's order shows
+// the broker who sent it, with their photo.
 import { fileSrc } from "@/lib/files";
 import { getDb } from "@/lib/db";
 import { niceName } from "@/lib/labels";
 import { openTasks } from "@/lib/mail-rules";
 import { orderCode, propertyLabel } from "@/lib/order-labels";
 import { can, type WithPerms } from "@/lib/perms";
+import { photoUrl } from "@/lib/presence";
 import { TaskList } from "./TaskList";
 
-type NewOrder = { id: string; seq: number | null; source: string; client: string | null; what: string | null; place: string | null; partner: string | null; who: string | null; at: string; urgent: number | null };
+type NewOrder = { id: string; seq: number | null; source: string; client: string | null; what: string | null; place: string | null; partner: string | null; who: string | null; who_id: string | null; avatar_at: string | null; at: string; urgent: number | null; viewed_at: string | null; viewer: string | null };
+
+/** Not processed yet: received, no offer or contract made from it, no report opened. */
+const PENDING = `o.status = 'received' AND o.processed_at IS NULL AND NOT EXISTS (SELECT 1 FROM reports r WHERE r.order_id = COALESCE(o.linked_order_id, o.id))`;
+const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0]!.toUpperCase()).join("") || "?";
 
 const age = (iso: string) => {
   const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
@@ -39,20 +46,21 @@ export async function NewOrdersCard({ user, base }: { user: WithPerms & { id: st
       FROM entities e WHERE e.id IN (SELECT bank_id FROM mail_rules WHERE action = 'bank_order' AND active = 1 AND bank_id IS NOT NULL) ORDER BY e.name`)
       .all<{ id: string; name: string; code: string | null; logo: string | null; open: number }>().then((x) => x.results).catch(() => []),
     every ? db.prepare(`SELECT o.id, o.seq, o.source, o.client_name AS client, o.property_type AS what, COALESCE(NULLIF(o.city, ''), o.address) AS place, o.urgent, o.created_at AS at,
-          (SELECT p.name FROM partners p WHERE p.id = o.partner_id) AS partner, (SELECT COALESCE(NULLIF(u.name, ''), u.email) FROM users u WHERE u.id = o.created_by) AS who
-        FROM orders o WHERE o.source IN ('site', 'partner') AND o.glide_id IS NULL AND o.viewed_at IS NULL AND o.status <> 'cancelled' ORDER BY o.created_at DESC LIMIT 40`)
+          (SELECT p.name FROM partners p WHERE p.id = o.partner_id) AS partner, COALESCE(NULLIF(u.name, ''), u.email) AS who, u.id AS who_id, u.avatar_at, o.viewed_at,
+          (SELECT COALESCE(NULLIF(v.name, ''), v.email) FROM users v WHERE v.id = o.viewed_by) AS viewer
+        FROM orders o LEFT JOIN users u ON u.id = o.created_by WHERE o.source IN ('site', 'partner') AND o.glide_id IS NULL AND ${PENDING} ORDER BY o.viewed_at IS NULL DESC, o.created_at DESC LIMIT 40`)
       .all<NewOrder>().then((x) => x.results).catch(() => []) : Promise.resolve([] as NewOrder[]),
-    every ? db.prepare(`SELECT o.source, COUNT(*) AS n FROM orders o WHERE o.source IN ('site', 'partner') AND o.glide_id IS NULL AND o.status IN ('received', 'in_progress') AND o.viewed_at IS NOT NULL GROUP BY o.source`)
+    every ? db.prepare(`SELECT o.source, COUNT(*) AS n FROM orders o WHERE o.source IN ('site', 'partner') AND o.glide_id IS NULL AND o.status IN ('received', 'in_progress') AND NOT (${PENDING}) GROUP BY o.source`)
       .all<{ source: string; n: number }>().then((x) => Object.fromEntries(x.results.map((r) => [r.source, r.n])) as Record<string, number>).catch(() => ({} as Record<string, number>)) : Promise.resolve({} as Record<string, number>),
   ]);
   if (!banks.length && !tasks.length && !every) return null;
   const site = fresh.filter((o) => o.source === "site"), collab = fresh.filter((o) => o.source === "partner");
   const total = tasks.length + fresh.length;
-  const tile = (key: string, logo: React.ReactNode, name: string, sub: string, n: number, href?: string) => (
+  const tile = (key: string, logo: React.ReactNode, name: string, sub: string, n: number, href?: string, unit: [string, string] = ["nouă", "noi"]) => (
     <a key={key} className={`tkBank${n ? " hot" : ""}`} href={href}>
       <span className="tkLogo">{logo}</span>
       <span className="tkTxt"><b>{name}</b><small>{sub}</small></span>
-      <span className={`tkN${n ? " hot" : ""}`}>{n}<small>{n === 1 ? "nouă" : "noi"}</small></span>
+      <span className={`tkN${n ? " hot" : ""}`}>{n}<small>{n === 1 ? unit[0] : unit[1]}</small></span>
     </a>
   );
   return (
@@ -64,23 +72,28 @@ export async function NewOrdersCard({ user, base }: { user: WithPerms & { id: st
           return tile(b.id, logo ? <img src={logo} alt="" /> : <b>{(b.code || b.name).slice(0, 3)}</b>, b.code || (niceName(b.name) || b.name).split(/\s+/)[0], `pe email · ${b.open} în curs`,
             tasks.filter((t) => t.bank_id === b.id).length, orders ? `${base}/comenzi?tab=banci` : undefined);
         })}
-        {every && tile("site", <img src="/valuefy-mark.png" alt="" />, "valuefy.ro", `de pe site · ${open.site ?? 0} în curs`, site.length, `${base}/comenzi?tab=site`)}
-        {every && tile("collab", <CollabLogo />, "Colaboratori", `din portal · ${open.partner ?? 0} în curs`, collab.length, `${base}/comenzi?tab=parteneri`)}
+        {every && tile("site", <img src="/valuefy-mark.png" alt="" />, "valuefy.ro", `de pe site · ${open.site ?? 0} în curs`, site.length, `${base}/comenzi?tab=site`, ["neprocesată", "neprocesate"])}
+        {every && tile("collab", <CollabLogo />, "Colaboratori", `din portal · ${open.partner ?? 0} în curs`, collab.length, `${base}/comenzi?tab=parteneri`, ["neprocesată", "neprocesate"])}
       </div>
       {tasks.length > 0 && <TaskList tasks={tasks} base={base} />}
       {fresh.length > 0 && (
         <ul className="tkList">
-          {fresh.slice(0, 8).map((o) => (
-            <li key={o.id} className={Date.now() - Date.parse(o.at) > 2 * 3600e3 ? "late" : ""}>
-              <a href={`${base}/comenzi/${o.id}`}>
-                <span className="tkLogo">{o.source === "site" ? <img src="/valuefy-mark.png" alt="" /> : <CollabLogo />}</span>
-                <span className="tkTxt"><b>{orderCode({ id: o.id, seq: o.seq, source: o.source })}{o.client ? ` · ${o.client}` : ""}{o.urgent ? " · urgent" : ""}</b>
-                  <small>{[o.source === "site" ? "de pe valuefy.ro" : `de la ${o.partner ?? o.who ?? "colaborator"}`, o.what ? propertyLabel(o.what) : null, o.place, `primită ${age(o.at)}`].filter(Boolean).join(" · ")}</small></span>
-                <span className="tkGo">Deschide →</span>
-              </a>
-            </li>
-          ))}
-          {fresh.length > 8 && <li><a href={`${base}/comenzi`}><span className="tkTxt"><small>încă {fresh.length - 8} comenzi noi</small></span><span className="tkGo">Toate →</span></a></li>}
+          {fresh.slice(0, 8).map((o) => {
+            const photo = o.who_id ? photoUrl(o.who_id, o.avatar_at) : null;
+            return (
+              <li key={o.id} className={Date.now() - Date.parse(o.at) > 2 * 3600e3 ? "late" : ""}>
+                <a href={`${base}/comenzi/${o.id}`}>
+                  {o.source === "site" ? <span className="tkLogo"><img src="/valuefy-mark.png" alt="" /></span>
+                    : <span className="tkLogo tkFace" title={o.who ?? undefined}>{photo ? <img src={photo} alt="" /> : <b>{initials(o.who ?? o.partner ?? "")}</b>}<i><CollabLogo /></i></span>}
+                  <span className="tkTxt"><b>{orderCode({ id: o.id, seq: o.seq, source: o.source })}{o.client ? ` · ${o.client}` : ""}{o.urgent ? " · urgent" : ""}{!o.viewed_at && <span className="pill pillErr tkNew">nouă</span>}</b>
+                    <small>{[o.source === "site" ? "de pe valuefy.ro" : `de la ${[o.who, o.partner].filter(Boolean).join(" · ") || "colaborator"}`, o.what ? propertyLabel(o.what) : null, o.place, `primită ${age(o.at)}`,
+                      o.viewed_at ? `deschisă${o.viewer ? ` de ${o.viewer}` : ""}, neprocesată` : null].filter(Boolean).join(" · ")}</small></span>
+                  <span className="tkGo">{o.viewed_at ? "Procesează →" : "Deschide →"}</span>
+                </a>
+              </li>
+            );
+          })}
+          {fresh.length > 8 && <li><a href={`${base}/comenzi`}><span className="tkTxt"><small>încă {fresh.length - 8} comenzi neprocesate</small></span><span className="tkGo">Toate →</span></a></li>}
         </ul>
       )}
     </section>
