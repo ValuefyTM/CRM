@@ -132,6 +132,14 @@ export function UserForm(props: {
           {kind === "client" && <label className="field"><span>Localitate <small>(opțional)</small></span><input className="input" value={f.city} onChange={set("city")} placeholder="ex. Timișoara" /></label>}
         </div>
 
+        {kind === "internal" && (
+          <>
+            <div className="section">Expertize judiciare</div>
+            <label className="check"><input type="checkbox" checked={!!f.judicial_expert} disabled={props.readOnly} onChange={(e) => setF({ ...f, judicial_expert: e.target.checked })} />
+              <span><b>Expert judiciar</b> <small className="muted">· primește modulul „Expertize judiciare”, unde își ține dosarele. Dosarele le vede doar el.</small></span></label>
+          </>
+        )}
+
         {kind === "internal" && f.role !== "operator" && (
           <>
             <div className="section">Evaluări și inspecții</div>
@@ -139,8 +147,6 @@ export function UserForm(props: {
               <label className="field"><span>Nr. legitimație ANEVAR <small>(opțional)</small></span><input className="input" value={f.anevar_no} onChange={(e) => setF({ ...f, anevar_no: e.target.value, duties: e.target.value.trim() ? f.duties : [] })} placeholder="ex. 12345" /></label>
               <label className="field"><span>Zonă acoperită <small>(opțional)</small></span><input className="input" value={f.coverage} onChange={set("coverage")} placeholder="ex. Timiș, Arad, Caraș-Severin" /></label>
             </div>
-            <label className="check"><input type="checkbox" checked={!!f.judicial_expert} disabled={props.readOnly} onChange={(e) => setF({ ...f, judicial_expert: e.target.checked })} />
-              <span><b>Expert judiciar</b> <small className="muted">· primește modulul „Expertize judiciare”, unde își ține dosarele. Dosarele le vede doar el.</small></span></label>
             <div className="field"><span>Roluri în rapoarte <small>{f.anevar_no.trim() ? "(apare în listele de alocare pentru ce bifezi)" : "(se bifează doar cu nr. de legitimație ANEVAR completat)"}</small></span>
               <div className="chips">
                 {DUTIES.map(([k, l]) => {
