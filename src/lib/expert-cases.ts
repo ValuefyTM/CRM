@@ -3,6 +3,7 @@
 // is no administrator's view. The module is given by the tick „Expert judiciar” on the user.
 import { now, uuid, parseJson } from "./db";
 import { bucket } from "./orders";
+import { syncCase } from "./expert-portal";
 
 import { DONE_STAGE, FILE_BEFORE_DAYS, MAX_FILE, PRESET_FOLDERS, REMIND_DAYS, SUMMON_METHODS, TERM_KINDS, type Case, type Doc, type Folder, type Objective, type Party, type Summon, type Term } from "./expert-labels";
 export * from "./expert-labels";
@@ -43,7 +44,7 @@ export async function caseDetail(db: D1Database, ownerId: string, id: string) {
   if (!c) return null;
   const [parties, terms, summons, folders, docs] = await Promise.all([
     db.prepare("SELECT id, role, name, address, phone, email, lawyer, note FROM expert_case_parties WHERE case_id = ? ORDER BY position, rowid").bind(id).all<Party>(),
-    db.prepare("SELECT id, on_date, at_time, kind, title, note, done, result FROM expert_case_terms WHERE case_id = ? ORDER BY on_date, COALESCE(at_time, ''), rowid").bind(id).all<Term>(),
+    db.prepare("SELECT id, on_date, at_time, kind, title, note, done, result, source, panel, solution, summary, doc, doc_no, doc_date FROM expert_case_terms WHERE case_id = ? ORDER BY on_date, COALESCE(at_time, ''), rowid").bind(id).all<Term>(),
     db.prepare("SELECT id, to_name, method, sent_on, confirmed_on, proof FROM expert_case_summons WHERE case_id = ? ORDER BY COALESCE(sent_on, created_at), rowid").bind(id).all<Summon>(),
     db.prepare("SELECT id, name, preset FROM expert_case_folders WHERE case_id = ? ORDER BY position, rowid").bind(id).all<Folder>(),
     db.prepare("SELECT id, folder_id, filename, size_bytes, version, current, created_at FROM expert_case_docs WHERE case_id = ? ORDER BY filename COLLATE NOCASE, version DESC").bind(id).all<Doc>(),
@@ -60,7 +61,11 @@ const caseFields = (b: Body) => ({
   appointed_on: date(b.appointed_on), property: str(b.property, 500), notes: str(b.notes, 4000),
 });
 const objectivesIn = (v: unknown): Objective[] => (Array.isArray(v) ? v : String(v ?? "").split("\n"))
-  .map((x) => (typeof x === "string" ? { text: x.trim().slice(0, 600), done: false } : { text: String((x as Objective)?.text ?? "").trim().slice(0, 600), done: !!(x as Objective)?.done }))
+  .map((x): Objective => {
+    if (typeof x === "string") return { text: x.trim().slice(0, 1500), done: false };
+    const o = x as Objective, by = String(o?.by ?? "").trim().slice(0, 80);
+    return { text: String(o?.text ?? "").trim().slice(0, 1500), done: !!o?.done, ...(by ? { by } : {}) };
+  })
   .filter((x) => x.text).slice(0, 30);
 
 /** A new case, with what the appointment says: parties, the next hearing (and the filing limit before it), the fee, the folders. */
@@ -88,7 +93,10 @@ export async function createCase(db: D1Database, ownerId: string, b: Body) {
     if (b.with_filing !== false) stmts.push(termStmt(db, id, { on_date: minus(hearing, FILE_BEFORE_DAYS), kind: "depunere", title: "Limită depunere raport", note: `cu ${FILE_BEFORE_DAYS} zile înainte de termenul din ${hearing.split("-").reverse().join(".")}` }));
   }
   await db.batch(stmts);
-  return { ok: true as const, id };
+  // the folder the appointment itself goes into (the form uploads the file read by the assistant)
+  const folder = await db.prepare("SELECT id FROM expert_case_folders WHERE case_id = ? ORDER BY position LIMIT 1").bind(id).first<{ id: string }>();
+  if (b.monitor) await db.prepare("UPDATE expert_cases SET monitor = 1 WHERE id = ?").bind(id).run();
+  return { ok: true as const, id, folder: folder?.id ?? null };
 }
 
 const termStmt = (db: D1Database, caseId: string, t: { on_date: string; at_time?: string | null; kind: string; title: string; note?: string | null; done?: number }) =>
@@ -224,6 +232,14 @@ export async function caseAction(db: D1Database, ownerId: string, id: string, b:
       if (!b.all && d.current) await db.prepare(`UPDATE expert_case_docs SET current = 1 WHERE id = (SELECT id FROM expert_case_docs WHERE case_id = ? AND folder_id = ? AND filename = ? COLLATE NOCASE ORDER BY version DESC LIMIT 1)`).bind(id, d.folder_id, d.filename).run();
       break;
     }
+    case "portal.monitor": await db.prepare("UPDATE expert_cases SET monitor = ? WHERE id = ?").bind(b.on ? 1 : 0, id).run(); break;
+    /** „Am verificat dosarul electronic”: the news of the portal are no longer told */
+    case "portal.ack": await db.prepare("UPDATE expert_cases SET portal_ack_at = ? WHERE id = ?").bind(now(), id).run(); break;
+    case "portal.sync": {
+      const r = await syncCase(db, c);
+      if (!r.ok) return { ok: false, error: r.error };
+      break;
+    }
     default: return { ok: false, error: "Acțiune necunoscută." };
   }
   await touch();
@@ -287,5 +303,10 @@ export async function termNotices(db: D1Database, u: { id: string; judicial_expe
     const when = left === 0 ? "astăzi" : left === 1 ? "mâine" : `în ${left} zile`;
     out.push({ id: `xt${t.id}d${step}`, at: morning(minus(t.on_date, step)), title: `${t.title} ${when}`, sub, caseId: t.case_id });
   }
+  // news from the portal not looked at yet: the expert checks the electronic file, in case something is theirs to do
+  const news = await db.prepare(`SELECT id, number, portal_changed_at AS at, portal_change AS what FROM expert_cases
+    WHERE owner_id = ? AND portal_changed_at IS NOT NULL AND portal_changed_at > COALESCE(portal_ack_at, '') AND portal_changed_at > ?`).bind(u.id, new Date(Date.now() - 30 * 864e5).toISOString())
+    .all<{ id: string; number: string; at: string; what: string | null }>().catch(() => ({ results: [] as { id: string; number: string; at: string; what: string | null }[] }));
+  for (const n of news.results) out.push({ id: `xp${n.id}${n.at}`, at: n.at, title: `Dosar ${n.number}: noutăți pe portal · verifică dosarul electronic`, sub: (n.what ?? "").split("\n").join(" · ").slice(0, 200), caseId: n.id });
   return out.filter((n) => Date.parse(n.at) <= Date.now());
 }

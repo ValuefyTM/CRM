@@ -143,4 +143,10 @@ paginile `/expertize`). Modulul îl primește cine are bifa **Expert judiciar** 
   nume de fișier; fișierele stau în R2 sub `expertize/<expert>/<dosar>/`) și onorariu.
 - **Alerte**: pentru fiecare termen deschis, expertul este anunțat (clopoțel, telefon, e-mail) cu 7, 3 și 1 zi înainte, în
   ziua termenului și o dată după ce a fost depășit (`termNotices`).
-
+- **Portal.just.ro** (`expert-portal.ts`, migrația `1103`): serviciul public de interogare (`portalquery.just.ro`, fără autentificare).
+  „Monitorizează dosarul” îl verifică la câteva ore (cronul de 15 minute, cel mult 8 dosare pe trecere): fiecare ședință devine
+  termen al dosarului, cu completul, tipul soluției, soluția pe scurt și documentul ședinței; termenul viitor apare ca termen
+  deschis, cu limita de depunere. Ce e nou rămâne alertă pentru expert până apasă „Am verificat dosarul electronic”.
+- **Citirea încheierii de numire** (`expert-read.ts`, Claude Haiku 5.5, cheia `ANTHROPIC_API_KEY`; modelul se poate schimba cu
+  `EXPERT_READ_MODEL`): PDF-ul încărcat în „Dosar nou” completează dosarul, părțile, obiectivele (ale instanței și ale părților),
+  onorariul și termenul următor; expertul verifică formularul înainte de salvare, iar fișierul intră în „Încheiere de numire”.

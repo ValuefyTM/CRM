@@ -35,6 +35,7 @@ export function CaseClient({ base, d, tab }: { base: string; d: Detail; tab: str
   };
   return (
     <div className="xj">
+      <PortalBar c={c} busy={busy} act={act} />
       <div className="xjFlow">
         {STAGES.map((s, i) => (
           <button key={s} type="button" className={i < c.stage ? "done" : i === c.stage ? "now" : ""} disabled={busy} title="Mută dosarul la această etapă" onClick={() => i !== c.stage && send("PUT", { stage: i })}>{s}</button>
@@ -54,6 +55,32 @@ export function CaseClient({ base, d, tab }: { base: string; d: Detail; tab: str
   );
 }
 
+/** The portal: news to look at (with „am verificat”), monitoring on / off, check now, when it was last checked. */
+function PortalBar({ c, busy, act }: { c: Case; busy: boolean; act: Act }) {
+  const news = c.portal_changed_at && c.portal_changed_at > (c.portal_ack_at ?? "") ? (c.portal_change ?? "").split("\n").filter(Boolean) : [];
+  const when = (iso: string) => new Date(iso).toLocaleString("ro-RO", { timeZone: "Europe/Bucharest", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return (
+    <>
+      {news.length > 0 && (
+        <div className="xjNews" role="status">
+          <div><b>Noutăți pe portal.just.ro</b> <small>· {when(c.portal_changed_at!)}</small>
+            <ul>{news.map((n, i) => <li key={i}>{n}</li>)}</ul>
+            <small>Intră în dosarul electronic și verifică dacă ai de făcut ceva: de depus, de răspuns, de convocat.</small></div>
+          <button type="button" className="btn btnGold btnSm" disabled={busy} onClick={() => act("portal.ack")}>Am verificat dosarul electronic</button>
+        </div>
+      )}
+      <div className="xjMon">
+        <button type="button" className={`btn btnSm ${c.monitor ? "btnNavy" : "btnGhost"}`} aria-pressed={!!c.monitor} disabled={busy} onClick={() => act("portal.monitor", { on: !c.monitor })}>
+          <i className={c.monitor ? "on" : ""} />{c.monitor ? "Dosar monitorizat" : "Monitorizează dosarul"}</button>
+        <button type="button" className="btn btnGhost btnSm" disabled={busy} onClick={() => act("portal.sync")}>{busy ? "Se verifică…" : "Verifică acum pe portal"}</button>
+        <span className="muted">{c.portal_error ? <span style={{ color: "var(--err)" }}>{c.portal_error}</span>
+          : c.portal_at ? <>Ultima verificare: {when(c.portal_at)}{c.portal_stage ? ` · stadiu: ${c.portal_stage}` : ""}{c.monitor ? " · se verifică singur, la câteva ore" : ""}</>
+          : c.monitor ? "Prima verificare are loc în cel mult 15 minute." : "Monitorizarea preia singură ședințele, soluțiile și termenele noi din portal.just.ro."}</span>
+      </div>
+    </>
+  );
+}
+
 type Save = (b: Record<string, unknown>) => Promise<boolean>;
 type Act = (action: string, body?: Record<string, unknown>) => Promise<boolean>;
 
@@ -63,6 +90,7 @@ function DataTab({ c, busy, save, remove }: { c: Case; busy: boolean; save: Save
   let objs: Objective[] = [];
   try { objs = JSON.parse(c.objectives) as Objective[]; } catch { /* none */ }
   const [text, setText] = useState("");
+  const [by, setBy] = useState("instanța");
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
   const rows: [string, string | null][] = [["Număr dosar", c.number], ["Instanța", c.court], ["Secția · complet", [c.section, c.panel].filter(Boolean).join(" · ") || null], ["Obiectul dosarului", c.object],
     ["Specializarea", c.specialty], ["Încheiere de numire", c.appointed_on ? ro(c.appointed_on) : null], ["Bunul expertizat", c.property], ["Note", c.notes]];
@@ -94,14 +122,16 @@ function DataTab({ c, busy, save, remove }: { c: Case; busy: boolean; save: Save
           <ol className="xjObj">
             {objs.map((o, i) => (
               <li key={i} className={o.done ? "done" : ""}>
-                <label className="check"><input type="checkbox" checked={o.done} disabled={busy} onChange={() => save({ objectives: objs.map((x, n) => (n === i ? { ...x, done: !x.done } : x)) })} /><span>{o.text}</span></label>
+                <label className="check"><input type="checkbox" checked={o.done} disabled={busy} onChange={() => save({ objectives: objs.map((x, n) => (n === i ? { ...x, done: !x.done } : x)) })} />
+                  <span>{i === 0 && <b className="xjMain">Obiectivul principal</b>}{o.text}<small className="xjBy">stabilit de {o.by || "instanță"}</small></span></label>
                 <button type="button" className="linkBtn" aria-label="Șterge obiectivul" disabled={busy} onClick={() => save({ objectives: objs.filter((_, n) => n !== i) })}>✕</button>
               </li>
             ))}
           </ol>
         )}
-        <form className="xjInline" onSubmit={async (e) => { e.preventDefault(); if (text.trim() && await save({ objectives: [...objs, { text, done: false }] })) setText(""); }}>
+        <form className="xjInline" onSubmit={async (e) => { e.preventDefault(); if (text.trim() && await save({ objectives: [...objs, { text, done: false, by }] })) setText(""); }}>
           <input className="input" value={text} onChange={(e) => setText(e.target.value)} placeholder="Obiectiv nou" aria-label="Obiectiv nou" />
+          <select className="input xjBySel" value={by} onChange={(e) => setBy(e.target.value)} aria-label="Stabilit de">{["instanța", "reclamant", "pârât", "intervenient"].map((x) => <option key={x}>{x}</option>)}</select>
           <button type="submit" className="btn btnNavy btnSm" disabled={busy || !text.trim()}>Adaugă</button>
         </form>
         <p className="hint">Bifează un obiectiv când are răspuns în raport.</p>
@@ -185,6 +215,11 @@ function TermsTab({ list, busy, act, closed }: { list: Term[]; busy: boolean; ac
                 <time>{ro(t.on_date)}{t.at_time ? <small>{t.at_time}</small> : null}</time><i />
                 <div>
                   <b>{t.title}</b>{t.id === next && <span className="pill pillWarn">următorul · {k === 0 ? "astăzi" : k === 1 ? "mâine" : `în ${k} zile`}</span>}{late && <span className="pill pillErr">depășit cu {-k} {k === -1 ? "zi" : "zile"}</span>}
+                  {t.source === "portal" && <span className="pill xjSrc">portal.just.ro</span>}
+                  {t.panel && <small>Complet: {t.panel}</small>}
+                  {t.solution && <small><span className="pill pillInfo">{t.solution}</span></small>}
+                  {t.summary && <small className="xjSum">{t.summary}</small>}
+                  {t.doc && <small>Document: {t.doc}{t.doc_no ? ` nr. ${t.doc_no}` : ""}{t.doc_date ? ` din ${ro(t.doc_date)}` : ""} <span className="muted">· îl găsești în dosarul electronic</span></small>}
                   {t.note && <small>{t.note}</small>}{t.result && <small>→ {t.result}</small>}
                   <span className="tdActs">
                     {!t.done ? <button type="button" className="btn btnGhost btnSm" disabled={busy} onClick={() => { const r = prompt("Ce s-a întâmplat la termen? (opțional)") ; if (r !== null) act("term.done", { id: t.id, result: r }); }}>Marchează trecut</button>

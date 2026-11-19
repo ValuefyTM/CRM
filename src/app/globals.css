@@ -5084,3 +5084,18 @@ form.xjForm > .card + .card { margin-top: 4px; }
 .xjVers .linkBtn { margin-left: 8px; }
 .xjMove { height: 30px; padding: 0 8px; font-size: 12.5px; max-width: 180px; }
 .xjDue { margin: 0; font-size: 14px; }
+/* Expertize judiciare: portalul (noutăți, monitorizare), obiectivele cu cine le-a stabilit, citirea încheierii */
+.xjNews { display: flex; gap: 14px; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; border: 1px solid var(--acc); background: var(--acc-soft); border-radius: 14px; padding: 12px 14px; font-size: 13.5px; }
+.xjNews ul { margin: 6px 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+.xjNews small { color: var(--acc-text); font-size: 12.5px; }
+.xjMon { display: flex; gap: 8px 10px; align-items: center; flex-wrap: wrap; font-size: 12.5px; }
+.xjMon .btn i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted-2); margin-right: 7px; }
+.xjMon .btn i.on { background: var(--ok); box-shadow: 0 0 0 3px rgba(31, 169, 113, 0.25); }
+.xjObjIn { display: grid; grid-template-columns: minmax(0, 1fr) 170px auto; gap: 8px; align-items: end; }
+@media (max-width: 760px) { .xjObjIn { grid-template-columns: 1fr; } }
+.xjMain { display: block; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--acc-text); }
+.xjBy { display: block; font-size: 12px; color: var(--muted-2); margin-top: 2px; }
+.xjBySel { flex: 0 0 130px !important; }
+.xjSrc { font-size: 10.5px; margin-left: 8px; }
+.xjSum { color: var(--ink) !important; white-space: pre-wrap; }
+.xjRead { border-style: dashed; }
