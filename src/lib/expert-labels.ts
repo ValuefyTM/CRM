@@ -25,7 +25,9 @@ export type Case = {
 };
 export type Party = { id: string; role: string; name: string; address: string | null; phone: string | null; email: string | null; lawyer: string | null; note: string | null };
 export type Term = { id: string; on_date: string; at_time: string | null; kind: string; title: string; note: string | null; done: number; result: string | null;
-  source?: string; panel?: string | null; solution?: string | null; summary?: string | null; doc?: string | null; doc_no?: string | null; doc_date?: string | null };
+  source?: string; panel?: string | null; solution?: string | null; summary?: string | null; doc?: string | null; doc_no?: string | null; doc_date?: string | null;
+  /** the court and the procedural stage (Fond, Apel, Recurs) a hearing taken from the portal was at */
+  court?: string | null; phase?: string | null };
 export type Summon = { id: string; to_name: string; method: string; sent_on: string | null; confirmed_on: string | null; proof: string | null };
 export type Folder = { id: string; name: string; preset: number };
 export type Doc = { id: string; folder_id: string; filename: string; size_bytes: number; version: number; current: number; created_at: string };

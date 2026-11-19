@@ -65,15 +65,16 @@ const ro = (d: string) => d.split("-").reverse().join(".");
 const minus = (d: string, days: number) => new Date(Date.parse(`${d}T12:00:00Z`) - days * 864e5).toISOString().slice(0, 10);
 
 /**
- * Brings a case up to date with the portal: every hearing becomes (or completes) a term of the case — past ones with
+ * Brings a case up to date with the portal, at every court the number is at (first court, appeal, second appeal — the
+ * whole past of a case entered when it is already under way): every hearing becomes (or completes) a term of the case — past ones with
  * their kind of solution, the solution in short and the document, the coming one as the next term, with the day by
  * which the report is filed. Parties and the case's empty fields are filled in. What is new since the last check is
  * kept on the case as an alert for its expert: to look into the electronic file and see whether something is theirs to do.
  */
 export async function syncCase(db: D1Database, c: Case & { portal_at?: string | null }, fileBefore = FILE_BEFORE_DAYS) {
   const t = now(), today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
-  let found: PortalCase | null;
-  try { found = pickCase(await portalLookup(c.number), c.court); } catch (e) {
+  let found: PortalCase | null, all: PortalCase[] = [];
+  try { all = await portalLookup(c.number); found = pickCase(all, c.court); } catch (e) {
     const msg = e instanceof Error ? e.message : "Nu am putut citi portalul.";
     await db.prepare("UPDATE expert_cases SET portal_error = ? WHERE id = ?").bind(msg.slice(0, 300), c.id).run();
     return { ok: false as const, error: msg };
@@ -85,34 +86,45 @@ export async function syncCase(db: D1Database, c: Case & { portal_at?: string | 
   }
   const first = !c.portal_at;
   const [terms, parties] = await Promise.all([
-    db.prepare("SELECT id, on_date, kind, done, solution, summary, source FROM expert_case_terms WHERE case_id = ?").bind(c.id).all<{ id: string; on_date: string; kind: string; done: number; solution: string | null; summary: string | null; source: string }>(),
+    db.prepare("SELECT id, on_date, kind, done, solution, summary, source, court FROM expert_case_terms WHERE case_id = ?").bind(c.id).all<{ id: string; on_date: string; kind: string; done: number; solution: string | null; summary: string | null; source: string; court: string | null }>(),
     db.prepare("SELECT name FROM expert_case_parties WHERE case_id = ?").bind(c.id).all<{ name: string }>(),
   ]);
   const stmts: D1PreparedStatement[] = [], news: string[] = [];
+  // where the case is now: the court whose file changed last
+  const latest = [...all].sort((a, b) => (b.modified ?? "").localeCompare(a.modified ?? ""))[0] ?? found;
   // the case's empty fields
-  stmts.push(db.prepare("UPDATE expert_cases SET court = COALESCE(court, ?), section = COALESCE(section, ?), object = COALESCE(object, ?), portal_stage = ? WHERE id = ?").bind(found.court, found.section, found.object, found.stage, c.id));
+  stmts.push(db.prepare("UPDATE expert_cases SET court = COALESCE(court, ?), section = COALESCE(section, ?), object = COALESCE(object, ?), portal_stage = ? WHERE id = ?")
+    .bind(found.court, found.section, found.object, all.length > 1 ? `${latest.stage ?? "—"} · ${latest.court ?? ""}` : found.stage, c.id));
   const known = new Set(parties.results.map((p) => plain(p.name)));
-  found.parties.filter((p) => !known.has(plain(p.name))).forEach((p, i) => {
-    stmts.push(db.prepare("INSERT INTO expert_case_parties (id, case_id, role, name, position) VALUES (?, ?, ?, ?, ?)").bind(uuid(), c.id, p.role, p.name, parties.results.length + i));
+  let added = 0;
+  for (const p of all.flatMap((x) => x.parties)) {
+    if (known.has(plain(p.name))) continue;
+    known.add(plain(p.name));
+    stmts.push(db.prepare("INSERT INTO expert_case_parties (id, case_id, role, name, position) VALUES (?, ?, ?, ?, ?)").bind(uuid(), c.id, p.role, p.name, parties.results.length + added++));
     if (!first) news.push(`parte nouă: ${p.name} (${p.role.toLowerCase()})`);
-  });
-  for (const s of found.sessions) {
+  }
+  // every hearing, at every court, oldest first
+  const sessions = all.flatMap((x) => x.sessions.map((s) => ({ ...s, court: x.court, phase: x.stage }))).sort((a, b) => a.date.localeCompare(b.date));
+  const many = all.length > 1;
+  for (const s of sessions) {
     const held = !!(s.solution || s.summary) || s.date < today;
-    const old = terms.results.find((x) => x.on_date === s.date && x.kind === "judecata");
+    // the same hearing: the same day at the same court (a term written by hand has no court yet)
+    const old = terms.results.find((x) => x.on_date === s.date && x.kind === "judecata" && (!x.court || plain(x.court) === plain(s.court)));
+    const where = many && s.court ? `, ${s.court}` : "";
     if (old) {
       const fresh = (s.solution ?? "") !== (old.solution ?? "") || (s.summary ?? "") !== (old.summary ?? "");
-      stmts.push(db.prepare(`UPDATE expert_case_terms SET at_time = COALESCE(?, at_time), panel = ?, solution = ?, summary = ?, doc = ?, doc_no = ?, doc_date = ?, done = CASE WHEN ? THEN 1 ELSE done END,
-        source = CASE WHEN source = 'manual' AND ? = 0 THEN source ELSE 'portal' END WHERE id = ?`).bind(s.time, s.panel, s.solution, s.summary, s.doc, s.doc_no, s.doc_date, s.solution || s.summary ? 1 : 0, 0, old.id));
+      stmts.push(db.prepare(`UPDATE expert_case_terms SET at_time = COALESCE(?, at_time), panel = ?, solution = ?, summary = ?, doc = ?, doc_no = ?, doc_date = ?, court = ?, phase = ?, done = CASE WHEN ? THEN 1 ELSE done END WHERE id = ?`)
+        .bind(s.time, s.panel, s.solution, s.summary, s.doc, s.doc_no, s.doc_date, s.court, s.phase, s.solution || s.summary ? 1 : 0, old.id));
       // the hearing was held: the day by which the report had to be filed for it is no longer open
       if (s.solution || s.summary) stmts.push(db.prepare("UPDATE expert_case_terms SET done = 1 WHERE case_id = ? AND kind = 'depunere' AND on_date = ? AND done = 0").bind(c.id, minus(s.date, fileBefore)));
-      if (fresh && (s.solution || s.summary) && !first) news.push(`soluție la ședința din ${ro(s.date)}: ${[s.solution, s.summary].filter(Boolean).join(" · ").slice(0, 220)}`);
+      if (fresh && (s.solution || s.summary) && !first) news.push(`soluție la ședința din ${ro(s.date)}${where}: ${[s.solution, s.summary].filter(Boolean).join(" · ").slice(0, 220)}`);
       continue;
     }
-    stmts.push(db.prepare("INSERT INTO expert_case_terms (id, case_id, on_date, at_time, kind, title, done, source, panel, solution, summary, doc, doc_no, doc_date) VALUES (?, ?, ?, ?, 'judecata', ?, ?, 'portal', ?, ?, ?, ?, ?, ?)")
-      .bind(uuid(), c.id, s.date, s.time, held ? "Ședință de judecată" : "Termen de judecată", held ? 1 : 0, s.panel, s.solution, s.summary, s.doc, s.doc_no, s.doc_date));
+    stmts.push(db.prepare("INSERT INTO expert_case_terms (id, case_id, on_date, at_time, kind, title, done, source, panel, solution, summary, doc, doc_no, doc_date, court, phase) VALUES (?, ?, ?, ?, 'judecata', ?, ?, 'portal', ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(uuid(), c.id, s.date, s.time, held ? "Ședință de judecată" : "Termen de judecată", held ? 1 : 0, s.panel, s.solution, s.summary, s.doc, s.doc_no, s.doc_date, s.court, s.phase));
     if (first) { /* the history of the case: no news */ }
-    else if (held) news.push(`ședință nouă pe portal, ${ro(s.date)}: ${[s.solution, s.summary].filter(Boolean).join(" · ").slice(0, 220) || "fără soluție încă"}`);
-    else news.push(`termen nou: ${ro(s.date)}${s.time ? `, ora ${s.time}` : ""}`);
+    else if (held) news.push(`ședință nouă pe portal, ${ro(s.date)}${where}: ${[s.solution, s.summary].filter(Boolean).join(" · ").slice(0, 220) || "fără soluție încă"}`);
+    else news.push(`termen nou: ${ro(s.date)}${s.time ? `, ora ${s.time}` : ""}${where}`);
     // a coming hearing while the report is not filed: the day by which it has to be
     const limit = minus(s.date, fileBefore);
     if (!held && c.stage < 4 && !terms.results.some((x) => x.kind === "depunere" && x.on_date === limit))
@@ -123,8 +135,8 @@ export async function syncCase(db: D1Database, c: Case & { portal_at?: string | 
     ? db.prepare("UPDATE expert_cases SET portal_at = ?, portal_error = NULL, portal_changed_at = ?, portal_change = ?, updated_at = ? WHERE id = ?").bind(t, t, news.join("\n").slice(0, 1500), t, c.id)
     : db.prepare("UPDATE expert_cases SET portal_at = ?, portal_error = NULL WHERE id = ?").bind(t, c.id));
   for (let i = 0; i < stmts.length; i += 80) await db.batch(stmts.slice(i, i + 80));
-  const next = found.sessions.find((s) => s.date >= today && !s.solution && !s.summary) ?? null;
-  return { ok: true as const, news, sessions: found.sessions.length, next: next ? { date: next.date, time: next.time } : null, stage: found.stage };
+  const next = sessions.find((s) => s.date >= today && !s.solution && !s.summary) ?? null;
+  return { ok: true as const, news, sessions: sessions.length, courts: all.length, next: next ? { date: next.date, time: next.time } : null, stage: latest.stage };
 }
 
 /** The cron: the monitored open cases not checked in the last 6 hours, the oldest check first, a few at a time. */

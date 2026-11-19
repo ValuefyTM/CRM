@@ -216,7 +216,7 @@ function TermsTab({ list, busy, act, closed, prefs, base }: { list: Term[]; busy
                 <div>
                   <b>{t.title}</b>{t.id === next && <span className="pill pillWarn">următorul · {k === 0 ? "astăzi" : k === 1 ? "mâine" : `în ${k} zile`}</span>}{late && <span className="pill pillErr">depășit cu {-k} {k === -1 ? "zi" : "zile"}</span>}
                   {t.source === "portal" && <span className="pill xjSrc">portal.just.ro</span>}
-                  {t.panel && <small>Complet: {t.panel}</small>}
+                  {(t.phase || t.court || t.panel) && <small>{[t.phase, t.court, t.panel && `complet ${t.panel}`].filter(Boolean).join(" · ")}</small>}
                   {t.solution && <small><span className="pill pillInfo">{t.solution}</span></small>}
                   {t.summary && <small className="xjSum">{t.summary}</small>}
                   {t.doc && <small>Document: {t.doc}{t.doc_no ? ` nr. ${t.doc_no}` : ""}{t.doc_date ? ` din ${ro(t.doc_date)}` : ""} <span className="muted">· îl găsești în dosarul electronic</span></small>}

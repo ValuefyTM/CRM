@@ -36,9 +36,10 @@ export function CaseForm({ base, roles, fileBefore, monitor }: { base: string; r
     const r = await fetch("/api/crm/expertize", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, parties, objectives: objs.filter((o) => o.text.trim()).map((o) => ({ ...o, done: false })) }) }).catch(() => null);
     const d = (await r?.json().catch(() => ({}))) as { id?: string; folder?: string | null; error?: string };
     if (!r?.ok || !d.id) { setBusy(false); setError({ text: d?.error ?? "Nu am putut salva dosarul.", id: d?.id }); return; }
-    // the decision itself goes into „Încheiere de numire”; the first check of the portal brings the hearings so far
+    // the decision itself goes into „Încheiere de numire”
     if (file && d.folder) { const fd = new FormData(); fd.set("folder", d.folder); fd.append("file", file); await fetch(`/api/crm/expertize/${d.id}/docs`, { method: "POST", body: fd }).catch(() => null); }
-    if (f.monitor) await fetch(`/api/crm/expertize/${d.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "portal.sync" }) }).catch(() => null);
+    // the whole past of the case from the portal (every hearing so far, at every court it went through), monitored or not
+    await fetch(`/api/crm/expertize/${d.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "portal.sync" }) }).catch(() => null);
     router.push(`${base}/expertize/${d.id}`);
   };
   /** The decision read by the assistant fills the form (what is already written by hand is replaced only where it found something). */
@@ -144,6 +145,7 @@ export function CaseForm({ base, roles, fileBefore, monitor }: { base: string; r
         <label className="field"><span>Detalii termen <small>(sala)</small></span><input className="input" value={f.next_note} onChange={set("next_note")} placeholder="ex. sala 331" /></label>
         <label className="check"><input type="checkbox" checked={f.with_filing} onChange={(e) => setF({ ...f, with_filing: e.target.checked })} />
           <span>Adaugă și limita de depunere a raportului, cu {fileBefore} zile înainte de termen</span></label>
+        <p className="hint">La salvare se preia din portal.just.ro tot istoricul dosarului: ședințele de până acum, cu soluțiile lor, de la toate instanțele prin care a trecut (fond, apel, recurs).</p>
         <label className="check"><input type="checkbox" checked={f.monitor} onChange={(e) => setF({ ...f, monitor: e.target.checked })} />
           <span><b>Monitorizează dosarul pe portal.just.ro</b> <small className="muted">· ședințele, soluțiile și termenele noi se preiau singure, iar tu primești alertă să verifici dosarul electronic</small></span></label>
         <label className="field"><span>Note <small>(doar pentru tine)</small></span><textarea className="input" rows={3} value={f.notes} onChange={set("notes")} /></label>

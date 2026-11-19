@@ -58,7 +58,7 @@ export async function caseDetail(db: D1Database, ownerId: string, id: string) {
   if (!c) return null;
   const [parties, terms, summons, folders, docs] = await Promise.all([
     db.prepare("SELECT id, role, name, address, phone, email, lawyer, note FROM expert_case_parties WHERE case_id = ? ORDER BY position, rowid").bind(id).all<Party>(),
-    db.prepare("SELECT id, on_date, at_time, kind, title, note, done, result, source, panel, solution, summary, doc, doc_no, doc_date FROM expert_case_terms WHERE case_id = ? ORDER BY on_date, COALESCE(at_time, ''), rowid").bind(id).all<Term>(),
+    db.prepare("SELECT id, on_date, at_time, kind, title, note, done, result, source, panel, solution, summary, doc, doc_no, doc_date, court, phase FROM expert_case_terms WHERE case_id = ? ORDER BY on_date, COALESCE(at_time, ''), rowid").bind(id).all<Term>(),
     db.prepare("SELECT id, to_name, method, sent_on, confirmed_on, proof FROM expert_case_summons WHERE case_id = ? ORDER BY COALESCE(sent_on, created_at), rowid").bind(id).all<Summon>(),
     db.prepare("SELECT id, name, preset FROM expert_case_folders WHERE case_id = ? ORDER BY position, rowid").bind(id).all<Folder>(),
     db.prepare("SELECT id, folder_id, filename, size_bytes, version, current, created_at FROM expert_case_docs WHERE case_id = ? ORDER BY filename COLLATE NOCASE, version DESC").bind(id).all<Doc>(),
