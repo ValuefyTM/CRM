@@ -150,3 +150,6 @@ paginile `/expertize`). Modulul îl primește cine are bifa **Expert judiciar** 
 - **Citirea încheierii de numire** (`expert-read.ts`, Claude Haiku 5.5, cheia `ANTHROPIC_API_KEY`; modelul se poate schimba cu
   `EXPERT_READ_MODEL`): PDF-ul încărcat în „Dosar nou” completează dosarul, părțile, obiectivele (ale instanței și ale părților),
   onorariul și termenul următor; expertul verifică formularul înainte de salvare, iar fișierul intră în „Încheiere de numire”.
+- **Alertele și setările sunt ale fiecărui expert** (`/expertize/setari`, cheia `expert_prefs:<utilizator>` din `settings`): zilele dinaintea
+  termenelor, alerta de termen depășit, noutățile din portal, e-mailul, monitorizarea implicită și numărul de zile pentru limita
+  de depunere. Nu țin de Setări › Alerte.

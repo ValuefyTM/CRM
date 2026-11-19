@@ -28,7 +28,7 @@ export default async function ExpertCasesPage({ searchParams }: { searchParams: 
   const lei = (n: number) => `${Math.round(n).toLocaleString("ro-RO")} lei`;
   return (
     <CrmShell user={user} base={base} active="expert" title="Expertize judiciare" subtitle="Dosarele tale de expert tehnic judiciar · le vezi doar tu"
-      actions={<a className="btn btnGold btnSm" href={`${base}/expertize/nou`}>+ Dosar nou</a>}>
+      actions={<><a className="btn btnGhost btnSm" href={`${base}/expertize/setari`}>Alerte și setări</a><a className="btn btnGold btnSm" href={`${base}/expertize/nou`}>+ Dosar nou</a></>}>
       <div className="dbKpis">
         <div className="dbKpi static"><span className="dbKpiLabel">Dosare active</span><b>{active.length}</b><span className="dbKpiFoot"><span className="dbDelta flat">din {all.length} în evidență</span></span></div>
         <div className="dbKpi static"><span className="dbKpiLabel">Termene în 7 zile</span><b style={soon.length ? { color: "var(--err)" } : undefined}>{soon.length}</b><span className="dbKpiFoot"><span className="dbDelta flat">judecată, depunere, răspuns</span></span></div>

@@ -5,7 +5,7 @@ import { now, uuid, parseJson } from "./db";
 import { bucket } from "./orders";
 import { syncCase } from "./expert-portal";
 
-import { DONE_STAGE, FILE_BEFORE_DAYS, MAX_FILE, PRESET_FOLDERS, REMIND_DAYS, SUMMON_METHODS, TERM_KINDS, type Case, type Doc, type Folder, type Objective, type Party, type Summon, type Term } from "./expert-labels";
+import { DONE_STAGE, MAX_FILE, PRESET_FOLDERS, SUMMON_METHODS, TERM_KINDS, cleanPrefs, type ExpertPrefs, type Case, type Doc, type Folder, type Objective, type Party, type Summon, type Term } from "./expert-labels";
 export * from "./expert-labels";
 
 /** Has the module, as themself: an administrator looking at the CRM as this person („Vezi ca…”) does not get their cases. */
@@ -19,6 +19,20 @@ const date = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.tes
 const time = (v: unknown) => (typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : null);
 const money = (v: unknown) => { const n = Number(v); return v === "" || v == null || !Number.isFinite(n) || n < 0 ? null : Math.round(n * 100) / 100; };
 const minus = (d: string, days: number) => new Date(Date.parse(`${d}T12:00:00Z`) - days * 864e5).toISOString().slice(0, 10);
+
+// ---------------------------------------------------------------- the expert's own settings
+
+const prefsKey = (userId: string) => `expert_prefs:${userId}`;
+export async function getExpertPrefs(db: D1Database, userId: string): Promise<ExpertPrefs> {
+  const row = await db.prepare("SELECT value FROM settings WHERE key = ?").bind(prefsKey(userId)).first<{ value: string }>().catch(() => null);
+  return cleanPrefs(row ? parseJson<Partial<ExpertPrefs>>(row.value, {}) : null);
+}
+export async function saveExpertPrefs(db: D1Database, userId: string, v: Partial<ExpertPrefs>) {
+  const p = cleanPrefs(v);
+  await db.prepare("INSERT INTO settings (key, value, updated_at, updated_by) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at, updated_by = excluded.updated_by")
+    .bind(prefsKey(userId), JSON.stringify(p), now(), userId).run();
+  return p;
+}
 
 // ---------------------------------------------------------------- reading
 
@@ -74,7 +88,7 @@ export async function createCase(db: D1Database, ownerId: string, b: Body) {
   if (!f.number) return { ok: false as const, error: "Scrie numărul dosarului." };
   const dup = await db.prepare("SELECT id FROM expert_cases WHERE owner_id = ? AND number = ?").bind(ownerId, f.number).first<{ id: string }>();
   if (dup) return { ok: false as const, error: "Ai deja un dosar cu acest număr.", id: dup.id };
-  const id = uuid(), t = now();
+  const id = uuid(), t = now(), before = (await getExpertPrefs(db, ownerId)).file_before;
   const stmts: D1PreparedStatement[] = [
     db.prepare(`INSERT INTO expert_cases (id, owner_id, number, court, section, panel, object, specialty, appointed_on, property, objectives, fee_prov, notes, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(id, ownerId, f.number, f.court, f.section, f.panel, f.object, f.specialty, f.appointed_on, f.property, JSON.stringify(objectivesIn(b.objectives)), money(b.fee_prov), f.notes, t, t),
@@ -90,7 +104,7 @@ export async function createCase(db: D1Database, ownerId: string, b: Body) {
   const hearing = date(b.next_hearing);
   if (hearing) {
     stmts.push(termStmt(db, id, { on_date: hearing, at_time: time(b.next_time), kind: "judecata", title: "Termen de judecată", note: str(b.next_note) }));
-    if (b.with_filing !== false) stmts.push(termStmt(db, id, { on_date: minus(hearing, FILE_BEFORE_DAYS), kind: "depunere", title: "Limită depunere raport", note: `cu ${FILE_BEFORE_DAYS} zile înainte de termenul din ${hearing.split("-").reverse().join(".")}` }));
+    if (b.with_filing !== false) stmts.push(termStmt(db, id, { on_date: minus(hearing, before), kind: "depunere", title: "Limită depunere raport", note: `cu ${before} zile înainte de termenul din ${hearing.split("-").reverse().join(".")}` }));
   }
   await db.batch(stmts);
   // the folder the appointment itself goes into (the form uploads the file read by the assistant)
@@ -164,7 +178,8 @@ export async function caseAction(db: D1Database, ownerId: string, id: string, b:
       else {
         const stmts = [termStmt(db, id, { on_date: on, at_time: time(b.at_time), kind, title, note: str(b.note, 600), done: b.done ? 1 : 0 })];
         // with a hearing: the day by which the report has to be filed
-        if (kind === "judecata" && b.with_filing) stmts.push(termStmt(db, id, { on_date: minus(on, FILE_BEFORE_DAYS), kind: "depunere", title: "Limită depunere raport", note: `cu ${FILE_BEFORE_DAYS} zile înainte de termenul din ${on.split("-").reverse().join(".")}` }));
+        const before = (await getExpertPrefs(db, ownerId)).file_before;
+        if (kind === "judecata" && b.with_filing) stmts.push(termStmt(db, id, { on_date: minus(on, before), kind: "depunere", title: "Limită depunere raport", note: `cu ${before} zile înainte de termenul din ${on.split("-").reverse().join(".")}` }));
         await db.batch(stmts);
       }
       break;
@@ -236,7 +251,7 @@ export async function caseAction(db: D1Database, ownerId: string, id: string, b:
     /** „Am verificat dosarul electronic”: the news of the portal are no longer told */
     case "portal.ack": await db.prepare("UPDATE expert_cases SET portal_ack_at = ? WHERE id = ?").bind(now(), id).run(); break;
     case "portal.sync": {
-      const r = await syncCase(db, c);
+      const r = await syncCase(db, c, (await getExpertPrefs(db, ownerId)).file_before);
       if (!r.ok) return { ok: false, error: r.error };
       break;
     }
@@ -279,13 +294,15 @@ export async function docFile(db: D1Database, ownerId: string, id: string, docId
 
 // ---------------------------------------------------------------- reminders (the bell, the phone, email)
 
-export type TermNotice = { id: string; at: string; title: string; sub: string; caseId: string };
+export type TermNotice = { id: string; at: string; title: string; sub: string; caseId: string; email: boolean };
 
-/** The open terms of this expert that are near: told 7, 3 and 1 day before and on the day (8:00, Romanian time), and once more when overdue. */
+/** The open terms of this expert that are near: told on the days they chose (by default 7, 3 and 1 day before and on the day; 8:00, Romanian time) and once more when overdue; and the portal's news. */
 export async function termNotices(db: D1Database, u: { id: string; judicial_expert?: number | null; kind?: string; impersonator?: unknown }): Promise<TermNotice[]> {
   if (!isExpert(u)) return [];
+  const prefs = await getExpertPrefs(db, u.id);
+  const REMIND_DAYS = prefs.remind, email = prefs.email;
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
-  const until = minus(today, -Math.max(...REMIND_DAYS));
+  const until = minus(today, -Math.max(0, ...REMIND_DAYS));
   const { results } = await db.prepare(`SELECT t.id, t.on_date, t.at_time, t.title, c.id AS case_id, c.number, c.court FROM expert_case_terms t JOIN expert_cases c ON c.id = t.case_id
     WHERE c.owner_id = ? AND t.done = 0 AND c.stage < ${DONE_STAGE} AND t.on_date <= ? AND t.on_date >= ? ORDER BY t.on_date`).bind(u.id, until, minus(today, 30))
     .all<{ id: string; on_date: string; at_time: string | null; title: string; case_id: string; number: string; court: string | null }>();
@@ -296,17 +313,17 @@ export async function termNotices(db: D1Database, u: { id: string; judicial_expe
   for (const t of results) {
     const left = Math.round((Date.parse(`${t.on_date}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 864e5);
     const sub = [`dosar ${t.number}`, t.court, `${ro(t.on_date)}${t.at_time ? `, ora ${t.at_time}` : ""}`].filter(Boolean).join(" · ");
-    if (left < 0) { out.push({ id: `xt${t.id}late`, at: morning(minus(t.on_date, -1)), title: `Termen depășit: ${t.title}`, sub, caseId: t.case_id }); continue; }
+    if (left < 0) { if (prefs.overdue) out.push({ id: `xt${t.id}late`, at: morning(minus(t.on_date, -1)), title: `Termen depășit: ${t.title}`, sub, caseId: t.case_id, email }); continue; }
     // the latest reminder already due
     const step = REMIND_DAYS.filter((d) => d >= left).sort((a, b) => a - b)[0];
     if (step == null) continue;
     const when = left === 0 ? "astăzi" : left === 1 ? "mâine" : `în ${left} zile`;
-    out.push({ id: `xt${t.id}d${step}`, at: morning(minus(t.on_date, step)), title: `${t.title} ${when}`, sub, caseId: t.case_id });
+    out.push({ id: `xt${t.id}d${step}`, at: morning(minus(t.on_date, step)), title: `${t.title} ${when}`, sub, caseId: t.case_id, email });
   }
   // news from the portal not looked at yet: the expert checks the electronic file, in case something is theirs to do
-  const news = await db.prepare(`SELECT id, number, portal_changed_at AS at, portal_change AS what FROM expert_cases
+  const news = !prefs.portal ? { results: [] as { id: string; number: string; at: string; what: string | null }[] } : await db.prepare(`SELECT id, number, portal_changed_at AS at, portal_change AS what FROM expert_cases
     WHERE owner_id = ? AND portal_changed_at IS NOT NULL AND portal_changed_at > COALESCE(portal_ack_at, '') AND portal_changed_at > ?`).bind(u.id, new Date(Date.now() - 30 * 864e5).toISOString())
     .all<{ id: string; number: string; at: string; what: string | null }>().catch(() => ({ results: [] as { id: string; number: string; at: string; what: string | null }[] }));
-  for (const n of news.results) out.push({ id: `xp${n.id}${n.at}`, at: n.at, title: `Dosar ${n.number}: noutăți pe portal · verifică dosarul electronic`, sub: (n.what ?? "").split("\n").join(" · ").slice(0, 200), caseId: n.id });
+  for (const n of news.results) out.push({ id: `xp${n.id}${n.at}`, at: n.at, title: `Dosar ${n.number}: noutăți pe portal · verifică dosarul electronic`, sub: (n.what ?? "").split("\n").join(" · ").slice(0, 200), caseId: n.id, email });
   return out.filter((n) => Date.parse(n.at) <= Date.now());
 }

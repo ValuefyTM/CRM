@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DONE_STAGE, FILE_BEFORE_DAYS, PARTY_ROLES, STAGES, SUMMON_METHODS, TERM_KINDS, type Case, type Doc, type Folder, type Objective, type Party, type Summon, type Term } from "@/lib/expert-labels";
+import { DONE_STAGE, PARTY_ROLES, STAGES, SUMMON_METHODS, TERM_KINDS, type Case, type Doc, type Folder, type Objective, type Party, type Summon, type ExpertPrefs, type Term } from "@/lib/expert-labels";
 
 type Detail = { case: Case; parties: Party[]; terms: Term[]; summons: Summon[]; folders: Folder[]; docs: Doc[] };
 const ro = (d: string | null) => (d ? d.slice(0, 10).split("-").reverse().join(".") : "—");
@@ -11,7 +11,7 @@ const size = (b: number) => (b >= 1048576 ? `${(b / 1048576).toFixed(1).replace(
 const today = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
 
 /** The page of a case: stages, then one tab at a time; every change is saved at once and the page reloads its data. */
-export function CaseClient({ base, d, tab }: { base: string; d: Detail; tab: string }) {
+export function CaseClient({ base, d, tab, prefs }: { base: string; d: Detail; tab: string; prefs: ExpertPrefs }) {
   const router = useRouter();
   const c = d.case;
   const [busy, setBusy] = useState(false);
@@ -47,7 +47,7 @@ export function CaseClient({ base, d, tab }: { base: string; d: Detail; tab: str
       {error && <div className="error" role="alert">{error}</div>}
       {tab === "date" && <DataTab c={c} busy={busy} save={(b) => send("PUT", b)} remove={remove} />}
       {tab === "parti" && <PartiesTab list={d.parties} busy={busy} act={act} />}
-      {tab === "termene" && <TermsTab list={d.terms} busy={busy} act={act} closed={c.stage >= DONE_STAGE} />}
+      {tab === "termene" && <TermsTab list={d.terms} busy={busy} act={act} closed={c.stage >= DONE_STAGE} prefs={prefs} base={base} />}
       {tab === "convocari" && <SummonsTab c={c} list={d.summons} parties={d.parties} busy={busy} act={act} save={(b) => send("PUT", b)} />}
       {tab === "acte" && <DocsTab caseId={c.id} folders={d.folders} docs={d.docs} busy={busy} act={act} onError={setError} />}
       {tab === "onorariu" && <FeeTab c={c} busy={busy} save={(b) => send("PUT", b)} />}
@@ -182,7 +182,7 @@ function PartiesTab({ list, busy, act }: { list: Party[]; busy: boolean; act: Ac
   );
 }
 
-function TermsTab({ list, busy, act, closed }: { list: Term[]; busy: boolean; act: Act; closed: boolean }) {
+function TermsTab({ list, busy, act, closed, prefs, base }: { list: Term[]; busy: boolean; act: Act; closed: boolean; prefs: ExpertPrefs; base: string }) {
   const EMPTY = { id: "", on_date: "", at_time: "", kind: "judecata", title: "", note: "", done: false, result: "", with_filing: true };
   const [f, setF] = useState<typeof EMPTY | null>(null);
   const t0 = today();
@@ -201,7 +201,7 @@ function TermsTab({ list, busy, act, closed }: { list: Term[]; busy: boolean; ac
           </div>
           <label className="field"><span>Detalii <small>(sala, ce s-a dispus)</small></span><input className="input" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></label>
           {f.id ? <label className="field"><span>Ce s-a întâmplat la termen</span><input className="input" value={f.result} onChange={(e) => setF({ ...f, result: e.target.value })} placeholder="ex. amânat pentru lipsa raportului" /></label>
-            : f.kind === "judecata" && <label className="check"><input type="checkbox" checked={f.with_filing} onChange={(e) => setF({ ...f, with_filing: e.target.checked })} /><span>Adaugă și limita de depunere a raportului, cu {FILE_BEFORE_DAYS} zile înainte</span></label>}
+            : f.kind === "judecata" && <label className="check"><input type="checkbox" checked={f.with_filing} onChange={(e) => setF({ ...f, with_filing: e.target.checked })} /><span>Adaugă și limita de depunere a raportului, cu {prefs.file_before} zile înainte</span></label>}
           <label className="check"><input type="checkbox" checked={f.done} onChange={(e) => setF({ ...f, done: e.target.checked })} /><span>Trecut / rezolvat (nu mai dă alerte)</span></label>
           <span className="actions"><button type="submit" className="btn btnGold btnSm" disabled={busy}>Salvează</button><button type="button" className="btn btnGhost btnSm" onClick={() => setF(null)}>Renunță</button></span>
         </form>
@@ -233,7 +233,9 @@ function TermsTab({ list, busy, act, closed }: { list: Term[]; busy: boolean; ac
           })}
         </ol>
       )}
-      <p className="hint">{closed ? "Dosarul este finalizat: termenele nu mai dau alerte." : "Pentru fiecare termen deschis primești alertă în clopoțel, pe telefon și pe e-mail cu 7, 3 și 1 zi înainte și în ziua respectivă."}</p>
+      <p className="hint">{closed ? "Dosarul este finalizat: termenele nu mai dau alerte." : prefs.remind.length
+        ? `Pentru fiecare termen deschis primești alertă în clopoțel, pe telefon${prefs.email ? " și pe e-mail" : ""}: ${prefs.remind.map((d) => (d === 0 ? "în ziua termenului" : d === 1 ? "cu o zi înainte" : `cu ${d} zile înainte`)).join(", ")}. `
+        : "Alertele dinaintea termenelor sunt oprite. "}{!closed && <a className="link" href={`${base}/expertize/setari`}>Schimbă alertele →</a>}</p>
     </section>
   );
 }

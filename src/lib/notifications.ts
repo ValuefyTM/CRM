@@ -100,7 +100,7 @@ export async function notificationsFor(db: D1Database, u: WithPerms & { id: stri
     })),
     ...rules.map((n): Notice => ({ id: n.id, at: n.at, kind: n.kind as Notice["kind"], title: n.title, sub: n.sub, href: n.href, email: n.email })),
     ...taskItems,
-    ...terms.map((t): Notice => ({ id: t.id, at: t.at, kind: "alert", title: t.title, sub: t.sub, href: `${base}/expertize/${t.caseId}?tab=termene`, email: true })),
+    ...terms.map((t): Notice => ({ id: t.id, at: t.at, kind: "alert", title: t.title, sub: t.sub, href: `${base}/expertize/${t.caseId}?tab=termene`, email: t.email })),
   ].sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 30);
 
   return { items, seen, unread: items.filter((n) => !seen || n.at > seen).length };

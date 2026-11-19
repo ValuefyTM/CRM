@@ -2,7 +2,7 @@
 // parties and its hearings (panel, kind of solution, the solution in short, the hearing's document). No sign-in.
 // The documents themselves are not there: they are in the electronic case file, where the expert looks.
 import { now, uuid } from "./db";
-import { DONE_STAGE, FILE_BEFORE_DAYS, type Case } from "./expert-labels";
+import { DONE_STAGE, FILE_BEFORE_DAYS, cleanPrefs, type Case } from "./expert-labels";
 
 const ENDPOINTS = ["http://portalquery.just.ro/query.asmx", "https://portalquery.just.ro/query.asmx"];
 
@@ -70,7 +70,7 @@ const minus = (d: string, days: number) => new Date(Date.parse(`${d}T12:00:00Z`)
  * which the report is filed. Parties and the case's empty fields are filled in. What is new since the last check is
  * kept on the case as an alert for its expert: to look into the electronic file and see whether something is theirs to do.
  */
-export async function syncCase(db: D1Database, c: Case & { portal_at?: string | null }) {
+export async function syncCase(db: D1Database, c: Case & { portal_at?: string | null }, fileBefore = FILE_BEFORE_DAYS) {
   const t = now(), today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
   let found: PortalCase | null;
   try { found = pickCase(await portalLookup(c.number), c.court); } catch (e) {
@@ -104,7 +104,7 @@ export async function syncCase(db: D1Database, c: Case & { portal_at?: string | 
       stmts.push(db.prepare(`UPDATE expert_case_terms SET at_time = COALESCE(?, at_time), panel = ?, solution = ?, summary = ?, doc = ?, doc_no = ?, doc_date = ?, done = CASE WHEN ? THEN 1 ELSE done END,
         source = CASE WHEN source = 'manual' AND ? = 0 THEN source ELSE 'portal' END WHERE id = ?`).bind(s.time, s.panel, s.solution, s.summary, s.doc, s.doc_no, s.doc_date, s.solution || s.summary ? 1 : 0, 0, old.id));
       // the hearing was held: the day by which the report had to be filed for it is no longer open
-      if (s.solution || s.summary) stmts.push(db.prepare("UPDATE expert_case_terms SET done = 1 WHERE case_id = ? AND kind = 'depunere' AND on_date = ? AND done = 0").bind(c.id, minus(s.date, FILE_BEFORE_DAYS)));
+      if (s.solution || s.summary) stmts.push(db.prepare("UPDATE expert_case_terms SET done = 1 WHERE case_id = ? AND kind = 'depunere' AND on_date = ? AND done = 0").bind(c.id, minus(s.date, fileBefore)));
       if (fresh && (s.solution || s.summary) && !first) news.push(`soluție la ședința din ${ro(s.date)}: ${[s.solution, s.summary].filter(Boolean).join(" · ").slice(0, 220)}`);
       continue;
     }
@@ -114,10 +114,10 @@ export async function syncCase(db: D1Database, c: Case & { portal_at?: string | 
     else if (held) news.push(`ședință nouă pe portal, ${ro(s.date)}: ${[s.solution, s.summary].filter(Boolean).join(" · ").slice(0, 220) || "fără soluție încă"}`);
     else news.push(`termen nou: ${ro(s.date)}${s.time ? `, ora ${s.time}` : ""}`);
     // a coming hearing while the report is not filed: the day by which it has to be
-    const limit = minus(s.date, FILE_BEFORE_DAYS);
+    const limit = minus(s.date, fileBefore);
     if (!held && c.stage < 4 && !terms.results.some((x) => x.kind === "depunere" && x.on_date === limit))
       stmts.push(db.prepare("INSERT INTO expert_case_terms (id, case_id, on_date, kind, title, note, done, source) VALUES (?, ?, ?, 'depunere', 'Limită depunere raport', ?, 0, 'portal')")
-        .bind(uuid(), c.id, limit, `cu ${FILE_BEFORE_DAYS} zile înainte de termenul din ${ro(s.date)}`));
+        .bind(uuid(), c.id, limit, `cu ${fileBefore} zile înainte de termenul din ${ro(s.date)}`));
   }
   stmts.push(news.length
     ? db.prepare("UPDATE expert_cases SET portal_at = ?, portal_error = NULL, portal_changed_at = ?, portal_change = ?, updated_at = ? WHERE id = ?").bind(t, t, news.join("\n").slice(0, 1500), t, c.id)
@@ -133,7 +133,11 @@ export async function syncMonitoredCases(db: D1Database, max = 8) {
     .bind(new Date(Date.now() - 6 * 3600e3).toISOString(), max).all<Case & { portal_at: string | null }>();
   let changed = 0, failed = 0;
   for (const c of results) {
-    const r = await syncCase(db, c).catch(() => null);
+    // the limit of filing counts as its expert set it (the module's own settings)
+    const row = await db.prepare("SELECT value FROM settings WHERE key = ?").bind(`expert_prefs:${c.owner_id}`).first<{ value: string }>().catch(() => null);
+    let before = FILE_BEFORE_DAYS;
+    try { before = cleanPrefs(row ? JSON.parse(row.value) : null).file_before; } catch { /* the default */ }
+    const r = await syncCase(db, c, before).catch(() => null);
     // a failed check also counts as a check: the case waits its turn again instead of being retried every pass
     if (!r?.ok) { failed++; await db.prepare("UPDATE expert_cases SET portal_at = ? WHERE id = ?").bind(now(), c.id).run().catch(() => {}); }
     else if (r.news.length) changed++;

@@ -13,10 +13,10 @@ const ro = (d: string) => d.split("-").reverse().join(".");
 const COURTS = ["Judecătoria Timișoara", "Tribunalul Timiș", "Curtea de Apel Timișoara", "Judecătoria Lugoj", "Judecătoria Deta", "Judecătoria Făget", "Judecătoria Sânnicolau Mare", "Tribunalul Arad", "Judecătoria Arad", "Tribunalul Caraș-Severin"];
 
 /** A new case, from the appointment: the case, the parties, the objectives, the next hearing, the provisional fee. */
-export function CaseForm({ base, roles, fileBefore }: { base: string; roles: string[]; fileBefore: number }) {
+export function CaseForm({ base, roles, fileBefore, monitor }: { base: string; roles: string[]; fileBefore: number; monitor: boolean }) {
   const router = useRouter();
   const [f, setF] = useState({ number: "", court: "", section: "", panel: "", object: "", specialty: "Evaluarea proprietății imobiliare", appointed_on: "", property: "",
-    next_hearing: "", next_time: "", next_note: "", with_filing: true, fee_prov: "", notes: "", monitor: true });
+    next_hearing: "", next_time: "", next_note: "", with_filing: true, fee_prov: "", notes: "", monitor });
   const [objs, setObjs] = useState<ObjIn[]>([{ text: "", by: "instanța" }]);
   // the appointment decision, read by the assistant: kept to be put in the case's first folder
   const [file, setFile] = useState<File | null>(null);

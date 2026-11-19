@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { staffPage } from "@/lib/guard";
 import { CrmShell } from "@/components/CrmShell";
-import { STAGES, caseDetail, isExpert, stagePill } from "@/lib/expert-cases";
+import { STAGES, caseDetail, getExpertPrefs, isExpert, stagePill } from "@/lib/expert-cases";
 import { CaseClient } from "./CaseClient";
 
 export const metadata: Metadata = { title: "Dosar · Expertize judiciare | CRM VALUEFY" };
@@ -22,7 +22,7 @@ export default async function ExpertCasePage({ params, searchParams }: { params:
   return (
     <CrmShell user={user} base={base} active="expert" title={c.object || `Dosar ${c.number}`} subtitle={[`Dosar ${c.number}`, c.court, who].filter(Boolean).join(" · ")}
       back={{ href: `${base}/expertize`, label: "Expertize judiciare" }} actions={<span className={`pill ${stagePill(c.stage)}`}>{STAGES[c.stage]}</span>}>
-      <CaseClient base={base} d={d} tab={TABS.includes(want) ? want : "date"} />
+      <CaseClient base={base} d={d} tab={TABS.includes(want) ? want : "date"} prefs={await getExpertPrefs(db, user.id)} />
     </CrmShell>
   );
 }

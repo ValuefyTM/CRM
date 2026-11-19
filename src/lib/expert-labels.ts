@@ -30,3 +30,26 @@ export type Summon = { id: string; to_name: string; method: string; sent_on: str
 export type Folder = { id: string; name: string; preset: number };
 export type Doc = { id: string; folder_id: string; filename: string; size_bytes: number; version: number; current: number; created_at: string };
 
+/** The expert's own alert settings (set in the module, by each expert for themself). */
+export type ExpertPrefs = {
+  /** days before an open term when they are told (0 = on the day) */
+  remind: number[];
+  /** told once more after a term has passed without being closed */
+  overdue: boolean;
+  /** told when the portal has something new on a monitored case */
+  portal: boolean;
+  /** also by email (the bell and the phone always) */
+  email: boolean;
+  /** new cases are monitored on the portal unless unticked */
+  monitor_new: boolean;
+  /** the report is filed this many days before the hearing (the limit added with a hearing) */
+  file_before: number;
+};
+export const REMIND_CHOICES = [30, 14, 10, 7, 5, 3, 2, 1, 0];
+export const DEFAULT_PREFS: ExpertPrefs = { remind: [...REMIND_DAYS], overdue: true, portal: true, email: true, monitor_new: true, file_before: FILE_BEFORE_DAYS };
+export function cleanPrefs(v: Partial<ExpertPrefs> | null | undefined): ExpertPrefs {
+  const D = DEFAULT_PREFS, x = v ?? {};
+  const remind = Array.isArray(x.remind) ? [...new Set(x.remind.map(Number).filter((n) => REMIND_CHOICES.includes(n)))].sort((a, b) => b - a) : D.remind;
+  const fb = Math.round(Number(x.file_before));
+  return { remind, overdue: x.overdue ?? D.overdue, portal: x.portal ?? D.portal, email: x.email ?? D.email, monitor_new: x.monitor_new ?? D.monitor_new, file_before: Number.isFinite(fb) && fb >= 0 && fb <= 60 ? fb : D.file_before };
+}
