@@ -5,6 +5,7 @@ import { can, type WithPerms } from "./perms";
 import { orderCode } from "./order-labels";
 import { alertHits, describe } from "./alerts";
 import { lastReminder, openTasks } from "./mail-rules";
+import { termNotices } from "./expert-cases";
 
 export type Notice = { id: string; at: string; kind: "message" | "team" | "review" | "verified" | "back" | "inspection" | "order" | "collect" | "alert"; title: string; sub: string; href: string;
   /** also sent by email (a configurable alert with the email tick) */
@@ -31,6 +32,8 @@ export async function notificationsFor(db: D1Database, u: WithPerms & { id: stri
     return [first, { id: `t${t.id}r${due.k}`, at: new Date(due.at).toISOString(), kind: "alert", title: `Reamintire: ${t.title}`, sub: `Neprocesat de ${h} ${h === 1 ? "oră" : "ore"}${t.opened_name ? ` · deschis de ${t.opened_name}` : ""}`, href, email: true }];
   });
 
+  // Expertize judiciare: the expert's own terms that are near (7, 3, 1 day before, on the day, overdue).
+  const terms = await termNotices(db, u).catch(() => []);
   const [msgs, log, insp, orders, rules, resent] = await Promise.all([
     // Messages from the others on the reports the user is in the team of.
     db.prepare(`SELECT m.id, m.created_at AS at, r.id AS rid, r.number, COALESCE(NULLIF(au.name, ''), m.author_name, m.author_email, 'Cineva') AS who, substr(m.body, 1, 110) AS body
@@ -97,6 +100,7 @@ export async function notificationsFor(db: D1Database, u: WithPerms & { id: stri
     })),
     ...rules.map((n): Notice => ({ id: n.id, at: n.at, kind: n.kind as Notice["kind"], title: n.title, sub: n.sub, href: n.href, email: n.email })),
     ...taskItems,
+    ...terms.map((t): Notice => ({ id: t.id, at: t.at, kind: "alert", title: t.title, sub: t.sub, href: `${base}/expertize/${t.caseId}?tab=termene`, email: true })),
   ].sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 30);
 
   return { items, seen, unread: items.filter((n) => !seen || n.at > seen).length };

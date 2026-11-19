@@ -89,7 +89,7 @@ export default async function UserPage({ params, searchParams }: { params: Promi
             roles={roleOptions} shares={u.kind === "internal" && (me.role === "owner" || self || can(me, "fees.all"))} editShares={me.role === "owner"} profitShare={me.role === "owner" && u.kind === "internal"}
             initial={{
               name: u.name, email: u.email, phone: u.phone ?? "", role: u.role, engagement: u.engagement ?? "employee", anevar_no: u.anevar_no ?? "", duties: dutiesOf(u),
-              specializations: u.specializations ? u.specializations.split(",") : [], coverage: u.coverage ?? "", partner_id: u.partner_id ?? "",
+              specializations: u.specializations ? u.specializations.split(",") : [], coverage: u.coverage ?? "", judicial_expert: !!u.judicial_expert, partner_id: u.partner_id ?? "",
               client_type: u.client_type ?? "person", company: u.company ?? "", cui: u.cui ?? "", city: u.city ?? "", notes: u.notes ?? "",
               share_evaluator: numStr(shares?.share_evaluator), share_verifier: numStr(shares?.share_verifier),
               inspector_fee_kind: shares?.inspector_fee_kind ?? "fixed", inspector_fee: numStr(shares?.inspector_fee),

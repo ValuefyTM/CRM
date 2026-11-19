@@ -16,6 +16,8 @@ export type User = {
   client_type: string | null; company: string | null; cui: string | null; city: string | null; notes: string | null;
   entity_id?: string | null; created_by: string | null; invited_at: string | null; activated_at: string | null; last_login_at: string | null; created_at: string; updated_at: string;
   last_seen_at?: string | null; avatar_at?: string | null;
+  /** has the module Expertize judiciare (their own court cases, seen by nobody else) */
+  judicial_expert?: number | null;
   /** CRM only: the permissions of the role (see perms.ts). */
   perms?: string[];
   /** CRM only: what each role in a report's team may do (Setări → Permisiuni). */
@@ -77,7 +79,7 @@ export async function partnerPeople(db: D1Database, partnerId: string) {
 
 export type UserInput = {
   name: string; email: string; phone: string | null; role: string; partner_id: string | null; duties: string | null;
-  engagement: string | null; anevar_no: string | null; specializations: string | null; coverage: string | null;
+  engagement: string | null; anevar_no: string | null; specializations: string | null; coverage: string | null; judicial_expert: number;
   client_type: string | null; company: string | null; cui: string | null; city: string | null; notes: string | null;
 };
 
@@ -95,7 +97,7 @@ export function validateUser(kind: Kind, body: unknown, currentRole?: string, by
   if (!validEmail(email)) return { ok: false, error: "Adresa de email nu pare validă." };
   const v: UserInput = {
     name: str(b.name, 120), email: normEmail(email), phone: opt(b.phone, 40), role: "", partner_id: null, duties: null,
-    engagement: null, anevar_no: null, specializations: null, coverage: null,
+    engagement: null, anevar_no: null, specializations: null, coverage: null, judicial_expert: 0,
     client_type: null, company: null, cui: null, city: opt(b.city, 80), notes: opt(b.notes, 4000),
   };
   if (kind === "internal") {
@@ -116,6 +118,7 @@ export function validateUser(kind: Kind, body: unknown, currentRole?: string, by
     const specs = Array.isArray(b.specializations) ? b.specializations : String(b.specializations ?? "").split(",");
     v.specializations = SPECIALIZATIONS.map(([k]) => k).filter((k) => specs.includes(k)).join(",") || null;
     v.coverage = opt(b.coverage, 200);
+    v.judicial_expert = b.judicial_expert === true || b.judicial_expert === 1 ? 1 : 0;
   } else if (kind === "partner") {
     v.partner_id = str(b.partner_id, 60) || null;
     if (!v.partner_id) return { ok: false, error: "Alege firma colaboratorului." };
@@ -150,9 +153,9 @@ export async function createUser(db: D1Database, kind: Kind, v: UserInput, creat
   await db
     .prepare(
       `INSERT INTO users (id, kind, email, name, phone, role, status, partner_id, engagement, anevar_no, specializations, coverage, duties,
-        client_type, company, cui, city, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, 'invited', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        client_type, company, cui, city, notes, created_by, judicial_expert) VALUES (?, ?, ?, ?, ?, ?, 'invited', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(id, kind, v.email, v.name, v.phone, v.role, v.partner_id, v.engagement, v.anevar_no, v.specializations, v.coverage, v.duties, v.client_type, v.company, v.cui, v.city, v.notes, createdBy)
+    .bind(id, kind, v.email, v.name, v.phone, v.role, v.partner_id, v.engagement, v.anevar_no, v.specializations, v.coverage, v.duties, v.client_type, v.company, v.cui, v.city, v.notes, createdBy, v.judicial_expert)
     .run();
   return { ok: true as const, id };
 }
@@ -177,9 +180,9 @@ export async function updateUser(db: D1Database, u: User, v: UserInput) {
   await db
     .prepare(
       `UPDATE users SET email = ?, name = ?, phone = ?, role = ?, partner_id = ?, engagement = ?, anevar_no = ?, specializations = ?, coverage = ?, duties = ?,
-        client_type = ?, company = ?, cui = ?, city = ?, notes = ?, updated_at = ? WHERE id = ?`,
+        client_type = ?, company = ?, cui = ?, city = ?, notes = ?, judicial_expert = ?, updated_at = ? WHERE id = ?`,
     )
-    .bind(v.email, v.name, v.phone, v.role, v.partner_id, v.engagement, v.anevar_no, v.specializations, v.coverage, v.duties, v.client_type, v.company, v.cui, v.city, v.notes, now(), u.id)
+    .bind(v.email, v.name, v.phone, v.role, v.partner_id, v.engagement, v.anevar_no, v.specializations, v.coverage, v.duties, v.client_type, v.company, v.cui, v.city, v.notes, v.judicial_expert, now(), u.id)
     .run();
   return { ok: true as const };
 }

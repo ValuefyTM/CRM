@@ -1,4 +1,5 @@
 import { getDb } from "@/lib/db";
+import { isExpert, termNotices } from "@/lib/expert-cases";
 import { PresenceLive } from "./PresenceLive";
 import { initials } from "@/lib/guard";
 import { isAdmin, roleLabel, type User } from "@/lib/users";
@@ -63,6 +64,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
   // Inspecții: the ones still to do (to schedule or scheduled), as the page shows them to this user.
   // Oferte: the ones still open (to send or waiting for an answer).
   const quotesN = db && may("orders") ? await openQuotes(db) : 0;
+  const expertN = db && isExpert(u) ? (await termNotices(db, u).catch(() => [])).length : 0;
   const inspN = db && may("inspections") ? await activeInspections(db, scopeOf(u, "inspections") as "all" | "lead" | "own", u.id) : 0;
   return (
     <Shell
@@ -89,6 +91,8 @@ export async function CrmShell(props: { user: User; base: string; active: string
           may("properties") && { key: "properties", label: "Proprietăți", href: `${b}/proprietati` },
           may("properties") && { key: "pricemap", label: "Hartă prețuri", href: `${b}/harta-preturi` },
           may("market") && { key: "market", label: "Analize de piață", href: `${b}/piata` },
+          // the person's own court cases as a judicial expert (the tick on the user); nobody else sees them
+          isExpert(u) && { key: "expert", label: "Expertize judiciare", href: `${b}/expertize`, badge: expertN, hot: true },
           // The inspections app (phone: sheets, photos, signature), with the same sign-in: on phones only, and only
           // when the firm's inspections go through it (not through UVALO).
           may("inspections") && inspViaApp && { key: "inspapp", label: "Aplicația de inspecții", href: inspApp || "/", mobile: true },

@@ -130,3 +130,17 @@ Configurare: secretul **`APIFY_TOKEN`** (Settings → Variables and Secrets; htt
 (un parser per site în `sites/`; dacă un site își schimbă paginile și o căutare aduce brusc 0 anunțuri, acolo se repară).
 Prețurile sunt cele cerute în anunțuri; termenii portalurilor restricționează de obicei extragerea automată: date pentru uz
 intern (documentarea evaluărilor), fără republicare și fără datele de contact ale persoanelor.
+
+## Expertize judiciare
+
+Evidența dosarelor în care un evaluator este numit expert tehnic judiciar (migrația `1102`, `src/lib/expert-cases.ts`,
+paginile `/expertize`). Modulul îl primește cine are bifa **Expert judiciar** pe utilizator.
+
+- **Dosarele sunt personale**: fiecare rând ține de `owner_id` și toate citirile și scrierile trec prin el. Nu există vedere
+  de administrator, iar „Vezi ca alt utilizator” nu deschide dosarele acelei persoane. Dosarele nu intră în căutarea
+  globală și nici în conectorul Claude.
+- Un dosar are date, obiective, părți, termene, convocări, acte (foldere predefinite + foldere proprii, versiuni la același
+  nume de fișier; fișierele stau în R2 sub `expertize/<expert>/<dosar>/`) și onorariu.
+- **Alerte**: pentru fiecare termen deschis, expertul este anunțat (clopoțel, telefon, e-mail) cu 7, 3 și 1 zi înainte, în
+  ziua termenului și o dată după ce a fost depășit (`termNotices`).
+

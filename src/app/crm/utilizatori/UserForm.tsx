@@ -5,7 +5,7 @@ import { CLIENT_TYPES, DUTIES, ENGAGEMENTS, INTERNAL_ROLES, PARTNER_ROLES, SPECI
 import type { Kind } from "@/lib/site";
 
 export type UserValues = {
-  name: string; email: string; phone: string; role: string; engagement: string; anevar_no: string; specializations: string[]; coverage: string;
+  name: string; email: string; phone: string; role: string; engagement: string; anevar_no: string; specializations: string[]; coverage: string; judicial_expert?: boolean;
   duties: string[]; partner_id: string; client_type: string; company: string; cui: string; city: string; notes: string;
   /** Fee shares (owner only): % as main evaluator, % as verifier, inspection fee fixed (lei) or % when only the inspector. */
   share_evaluator: string; share_verifier: string; inspector_fee_kind: string; inspector_fee: string;
@@ -139,6 +139,8 @@ export function UserForm(props: {
               <label className="field"><span>Nr. legitimație ANEVAR <small>(opțional)</small></span><input className="input" value={f.anevar_no} onChange={(e) => setF({ ...f, anevar_no: e.target.value, duties: e.target.value.trim() ? f.duties : [] })} placeholder="ex. 12345" /></label>
               <label className="field"><span>Zonă acoperită <small>(opțional)</small></span><input className="input" value={f.coverage} onChange={set("coverage")} placeholder="ex. Timiș, Arad, Caraș-Severin" /></label>
             </div>
+            <label className="check"><input type="checkbox" checked={!!f.judicial_expert} disabled={props.readOnly} onChange={(e) => setF({ ...f, judicial_expert: e.target.checked })} />
+              <span><b>Expert judiciar</b> <small className="muted">· primește modulul „Expertize judiciare”, unde își ține dosarele. Dosarele le vede doar el.</small></span></label>
             <div className="field"><span>Roluri în rapoarte <small>{f.anevar_no.trim() ? "(apare în listele de alocare pentru ce bifezi)" : "(se bifează doar cu nr. de legitimație ANEVAR completat)"}</small></span>
               <div className="chips">
                 {DUTIES.map(([k, l]) => {

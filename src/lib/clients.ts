@@ -182,7 +182,7 @@ export async function enablePortal(db: D1Database, client: Client, contact: Cont
   const company = client.kind !== "person";
   const input: UserInput = {
     name: contact?.name ?? (company ? "" : client.name), email, phone: contact?.phone ?? client.phone, role: "client", partner_id: null, duties: null,
-    engagement: null, anevar_no: null, specializations: null, coverage: null,
+    engagement: null, anevar_no: null, specializations: null, coverage: null, judicial_expert: 0,
     client_type: company ? "company" : "person", company: company ? client.name : null, cui: client.cui, city: client.city, notes: null,
   };
   const r = await createUser(db, "client", input, actor);
