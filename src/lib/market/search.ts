@@ -185,16 +185,20 @@ const km = (a: [number, number], b: [number, number]) => {
 
 /** Market listings around a point, for the comparables of a property: same category, similar area, one per duplicate group. */
 export async function nearbyMarket(db: D1Database, ll: [number, number], o: { category?: string | null; transaction?: string | null; area?: number | null; tol?: number; radiusKm?: number; status?: string; limit?: number;
-  /** within a residential category: only houses, or only apartments (by the listing's CRM type, else by its title) */
-  family?: "casa" | "apartament" | null }) {
+  /** within the category, only one kind of property (houses, offices, storage…): by the listing's CRM type, else — where
+   * its search gave it none — by words of its title */
+  family?: { types: string[]; titles: string[] } | null }) {
   const r = o.radiusKm ?? 5, tol = o.tol ?? 50;
   const dLat = r / 111, dLng = r / (111 * Math.cos((ll[0] * Math.PI) / 180));
   const w = ["l.lat BETWEEN ? AND ?", "l.lng BETWEEN ? AND ?"], a: (string | number)[] = [ll[0] - dLat, ll[0] + dLat, ll[1] - dLng, ll[1] + dLng];
   if (o.status !== "all") { w.push("l.status = ?"); a.push(o.status ?? "activ"); }
   if (o.category) { w.push("l.category = ?"); a.push(o.category); }
   if (o.transaction) { w.push("l.deal = ?"); a.push(o.transaction); }
-  if (o.family === "casa") w.push("(l.type LIKE 'CASA%' OR (l.type IS NULL AND (l.title LIKE '%casa%' OR l.title LIKE '%casă%' OR l.title LIKE '%vila%' OR l.title LIKE '%vilă%' OR l.title LIKE '%duplex%')))");
-  if (o.family === "apartament") w.push("(l.type LIKE 'APARTAMENT%' OR (l.type IS NULL AND (l.title LIKE '%apartament%' OR l.title LIKE '%garsonier%' OR l.title LIKE '%camere%')))");
+  if (o.family?.types.length) {
+    const byTitle = o.family.titles.length ? ` OR (l.type IS NULL AND (${o.family.titles.map(() => "l.title LIKE ?").join(" OR ")}))` : "";
+    w.push(`(${o.family.types.map(() => "l.type LIKE ?").join(" OR ")}${byTitle})`);
+    a.push(...o.family.types.map((t) => `${t}%`), ...o.family.titles.map((t) => `%${t}%`));
+  }
   if (tol && o.area) { w.push(`${AREA} BETWEEN ? AND ?`); a.push(o.area * (1 - tol / 100), o.area * (1 + tol / 100)); }
   const { results } = await db.prepare(`SELECT ${COLS} FROM market_listings l WHERE ${w.join(" AND ")} LIMIT 800`).bind(...a).all<MarketRow>();
   const seen = new Set<string>(), rows: MarketRow[] = [];

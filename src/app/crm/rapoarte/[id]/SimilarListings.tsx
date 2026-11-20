@@ -27,13 +27,11 @@ type Row = {
 };
 type Group = { rows: Row[]; median: number | null; n: number };
 type Data = {
-  radius: number; tr: string; tol: number; median: number | null; n: number; rows: Row[]; verif: Record<string, Verif>; kind: string;
+  radius: number; tr: string; tol: number; median: number | null; n: number; rows: Row[]; verif: Record<string, Verif>; kind: string; kinds: string;
   /** the same kind as the subject, and (sales around a building on its own land) free land */
   groups: { prop: Group; teren?: Group };
   subject: { type: string | null; category: string | null; address: string | null; city: string | null; usable_area: number | null; land_area: number | null; sqm: number | null; ll: [number, number] | null } | null;
 };
-
-const KIND_PL: Record<string, [string, string]> = { "casă": ["casă", "case"], apartament: ["apartament", "apartamente"], teren: ["teren", "terenuri"] };
 
 export function SimilarListings({ report, asset, base, count, land = null, kind = "", radius, canEdit = true }: { report: string; asset?: string; base: string; count: number;
   /** free land nearby, where it is suggested (a building on its own land); null = not suggested */
@@ -99,7 +97,7 @@ export function SimilarListings({ report, asset, base, count, land = null, kind 
             </div>
             {data?.groups?.teren && !rent && (
               <div className="tabs simTabs" role="tablist">
-                <a href="#" role="tab" aria-current={shown === "prop" ? "page" : undefined} onClick={(e) => { e.preventDefault(); setTab("prop"); }}>{((t) => t.charAt(0).toUpperCase() + t.slice(1))(KIND_PL[data.kind]?.[1] ?? `proprietăți de tip ${data.kind}`)} <small>{data.groups.prop.rows.length}</small></a>
+                <a href="#" role="tab" aria-current={shown === "prop" ? "page" : undefined} onClick={(e) => { e.preventDefault(); setTab("prop"); }}>{((t) => t.charAt(0).toUpperCase() + t.slice(1))(data.kinds || "proprietăți similare")} <small>{data.groups.prop.rows.length}</small></a>
                 <a href="#" role="tab" aria-current={shown === "teren" ? "page" : undefined} onClick={(e) => { e.preventDefault(); setTab("teren"); }}>Terenuri libere <small>{data.groups.teren.rows.length}</small></a>
               </div>
             )}

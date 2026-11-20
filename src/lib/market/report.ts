@@ -41,20 +41,34 @@ function similarity(s: MarketSubject, x: MarketRow & { km: number }, radius: num
   return { score: Math.round((parts.reduce((t, p) => t + p.v * p.w, 0) / tw) * 100), parts: parts.map((p) => ({ k: p.k, v: Math.round(p.v * 100) })) };
 }
 
-/** Within „Rezidențial”: a house is compared with houses, an apartment with apartments. */
-const family = (s: { category: string | null; type: string | null }): "casa" | "apartament" | null =>
-  /apartament|garsonier/i.test(s.type ?? "") ? "apartament" : /cas[aă]|vil[aă]|duplex/i.test(s.type ?? "") ? "casa" : null;
-/** A building on its own land (a house, a commercial or industrial property — not an apartment, a parking place, bare land):
- * free land nearby is suggested too, for the value of the land. */
-const onOwnLand = (s: { category: string | null; type: string | null }) => !isLand(s) && family(s) !== "apartament" && !/parcare|box[aă]|accesoriu|curte|parte dintr-o cl[aă]dire/i.test(s.type ?? "");
-/** How the subject's kind is named in „x proprietăți de tip …”. */
-const kindLabel = (s: { category: string | null; type: string | null }) => {
+/**
+ * The kinds of property compared only among themselves, within their category: a house with houses, offices with
+ * offices, storage with storage. `is`: how the subject's type says it; `types`: the CRM types of the listings (given
+ * by their search); `titles`: words of the title, for listings whose search gave no type; `one` / `many`: the names.
+ */
+const FAMILIES: { key: string; is: RegExp; types: string[]; titles: string[]; one: string; many: string }[] = [
+  { key: "apartament", is: /apartament|garsonier/i, types: ["APARTAMENT"], titles: ["apartament", "garsonier", "camere"], one: "apartament", many: "apartamente" },
+  { key: "casa", is: /cas[aă]|vil[aă]|duplex/i, types: ["CASA"], titles: ["casa", "casă", "vila", "vilă", "duplex"], one: "casă", many: "case" },
+  { key: "birouri", is: /birou/i, types: ["SPATIU DE BIROURI"], titles: ["birou", "office"], one: "spațiu de birouri", many: "spații de birouri" },
+  { key: "cazare", is: /cazare|hotel|pensiun/i, types: ["UNITATE CAZARE"], titles: ["hotel", "pensiun", "cazare", "hostel"], one: "unitate de cazare", many: "unități de cazare" },
+  { key: "agrement", is: /agrement/i, types: ["SPATIU DE AGREMENT"], titles: ["agrement", "restaurant", "sala de evenimente", "sală de evenimente"], one: "spațiu de agrement", many: "spații de agrement" },
+  { key: "comercial", is: /spa[tț]iu comercial|magazin|retail/i, types: ["SPATIU COMERCIAL", "BLOC APARTAMENTE CU SPATIU COMERCIAL"], titles: ["spatiu comercial", "spațiu comercial", "magazin", "showroom"], one: "spațiu comercial", many: "spații comerciale" },
+  // a hall is offered for production and for storage alike: an untyped „hală” counts for both
+  { key: "productie", is: /produc[tț]ie|fabric[aă]/i, types: ["SPATIU DE PRODUCTIE"], titles: ["product", "producț", "fabrica", "fabrică", "hal"], one: "spațiu de producție", many: "spații de producție" },
+  { key: "depozitare", is: /depozit|logistic|hal[aă]/i, types: ["SPATIU DE DEPOZITARE"], titles: ["depozit", "logistic", "hal"], one: "spațiu de depozitare", many: "spații de depozitare" },
+];
+const family = (s: { category: string | null; type: string | null }) => (isLand(s) ? null : FAMILIES.find((f) => f.is.test(s.type ?? "")) ?? null);
+/** A building on its own land (a house, a commercial or industrial property — not an apartment, a parking place, a part
+ * of a building, bare land): free land nearby is suggested too, for the value of the land. */
+const onOwnLand = (s: { category: string | null; type: string | null }) => !isLand(s) && family(s)?.key !== "apartament" && !/parcare|box[aă]|accesoriu|curte|parte dintr-o cl[aă]dire/i.test(s.type ?? "");
+/** How the subject's kind is named: „x proprietăți de tip …” and the tab of the window. */
+const kindNames = (s: { category: string | null; type: string | null }): { one: string; many: string } => {
   const f = family(s);
-  if (f === "casa") return "casă";
-  if (f === "apartament") return "apartament";
-  if (isLand(s)) return "teren";
+  if (f) return { one: f.one, many: f.many };
+  if (isLand(s)) return { one: "teren", many: "terenuri" };
   const c = (s.category ?? "").toUpperCase();
-  return c === "COMERCIAL" ? "comercial" : c === "INDUSTRIAL" ? "industrial" : c.includes("AGRICOL") ? "agricol" : c === "MIXT" ? "mixt" : (s.category ?? "similar").toLowerCase();
+  const one = c === "COMERCIAL" ? "comercial" : c === "INDUSTRIAL" ? "industrial" : c.includes("AGRICOL") ? "agricol" : c === "MIXT" ? "mixt" : (s.category ?? "similar").toLowerCase();
+  return { one, many: `proprietăți de tip ${one}` };
 };
 
 export type MarketGroup = { rows: SimilarListing[]; median: number | null; n: number };
@@ -70,7 +84,8 @@ export async function marketForReport(db: D1Database, reportId: string, o: { ass
   const tr = o.tr === "inchiriere" ? "inchiriere" : "vanzare";
   const tol = ["25", "50", "0"].includes(o.tol ?? "") ? Number(o.tol) : 50;
   const subject = await reportSubject(db, reportId, o.assetId);
-  const base = { radius, tr, tol, subject, kind: subject ? kindLabel(subject) : "" };
+  const names = subject ? kindNames(subject) : { one: "", many: "" };
+  const base = { radius, tr, tol, subject, kind: names.one, kinds: names.many };
   if (!subject?.ll) return { ...base, ...EMPTY, groups: { prop: EMPTY } as { prop: MarketGroup; teren?: MarketGroup } };
   const group = async (land: boolean): Promise<MarketGroup> => {
     // free land is compared by the land of the subject; the property itself by its usable area
