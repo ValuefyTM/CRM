@@ -113,7 +113,7 @@ export function Searches({ rows, sources, categories, edit }: { rows: (Search & 
           <label className="field">Categoria (din CRM) <small>(după ea se caută comparabilele unei proprietăți)</small>
             <select className="input" value={form.category} onChange={(e) => set("category", e.target.value)}><option value="">—</option>{categories.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
           </label>
-          <label className="field">Tipul proprietății (din CRM) <small>(opțional; filtrul „Tip proprietate” din Analize de piață)</small>
+          <label className="field">Tipul proprietății (din CRM) <small>(opțional; filtrul „Tip proprietate” din Comparabile)</small>
             <select className="input" value={form.type} onChange={(e) => set("type", e.target.value)}>
               <option value="">— oricare —</option>
               {(ASSET_CATEGORIES.find(([k]) => k === form.category)?.[2] ?? ASSET_CATEGORIES.flatMap(([, , t]) => t)).map((t) => <option key={t} value={t}>{t.charAt(0) + t.slice(1).toLowerCase()}</option>)}

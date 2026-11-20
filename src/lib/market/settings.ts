@@ -1,4 +1,4 @@
-// Server-only: the settings of the market crawler (Setări → Analize de piață), in the shared `settings` table.
+// Server-only: the settings of the market crawler (Setări → Comparabile), in the shared `settings` table.
 export type MarketSettings = {
   /** the scheduled runs on / off (the runs on demand stay) */
   nightly: boolean;

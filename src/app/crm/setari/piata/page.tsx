@@ -11,7 +11,7 @@ import { Searches } from "../../piata/MarketClient";
 import { CAT_LABEL } from "@/lib/registry-labels";
 import { SOURCES } from "@/lib/market/sites";
 
-export const metadata: Metadata = { title: "Setări · Analize de piață | CRM VALUEFY" };
+export const metadata: Metadata = { title: "Setări · Comparabile | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
 
 const RUN_STATUS: Record<string, string> = { running: "în desfășurare", done: "încheiată", stopped: "oprită" };
@@ -25,7 +25,7 @@ export default async function MarketSettingsPage() {
   const dur = (a: string, b: string | null) => { if (!b) return "—"; const m = Math.round((Date.parse(b) - Date.parse(a)) / 60_000); return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`; };
   const n = (v: unknown) => (Number(v) ? Number(v).toLocaleString("ro-RO") : "—");
   return (
-    <CrmShell user={user} base={base} active="settings" title="Setări · Analize de piață" subtitle="Căutările pe portaluri și rulările: pornire la cerere, progres, oprire">
+    <CrmShell user={user} base={base} active="settings" title="Setări · Comparabile" subtitle="Căutările pe portaluri și rulările: pornire la cerere, progres, oprire">
       <SettingsTabs base={base} active="piata" user={user} />
       {!apifyConfigured() && <div className="note">Lipsește secretul <b>APIFY_TOKEN</b> (Cloudflare → Workers → crm → Settings → Variables and Secrets): rulările nu pot porni.</div>}
       <section className="card">
@@ -35,14 +35,14 @@ export default async function MarketSettingsPage() {
         </div>
         <div className="tableWrap">
           <table className="table">
-            <thead><tr><th>Sursă</th><th className="r">Căutări active</th><th className="r">Anunțuri active</th><th className="r">Noi (7 zile)</th><th className="r">Modificate (7 zile)</th><th className="r">Ieșite (7 zile)</th>
+            <thead><tr><th>Sursă</th><th className="r">Căutări active</th><th className="r">Anunțuri active</th><th className="r" title="Văzute în paginile de rezultate, cu pagina proprie încă nedescărcată. Nu apar în Comparabile până la descărcare.">Nedescărcate</th><th className="r">Noi (7 zile)</th><th className="r">Modificate (7 zile)</th><th className="r">Ieșite (7 zile)</th>
               <th className="r">Inactive</th><th className="r">Descărcări eșuate</th><th>Ultima rulare</th><th>Stare</th></tr></thead>
             <tbody>
               {health.sources.map((x) => (
                 <tr key={x.source}>
                   <td><b>{x.source}</b></td>
                   <td className="r">{x.enabled}<span className="muted"> / {x.n}</span></td>
-                  <td className="r"><b>{n(x.active)}</b></td><td className="r">{n(x.new7)}</td><td className="r">{n(x.changed7)}</td><td className="r">{n(x.out7)}</td>
+                  <td className="r"><b>{n(x.active)}</b></td><td className="r">{n(x.pending)}</td><td className="r">{n(x.new7)}</td><td className="r">{n(x.changed7)}</td><td className="r">{n(x.out7)}</td>
                   <td className="r">{n(x.gone)}</td><td className="r">{n(x.failed)}</td>
                   <td>{x.last_run ? fmtDate(x.last_run, true) : "—"}</td>
                   <td>{!x.enabled ? <span className="pill">fără căutări active</span> : !x.last_run ? <span className="pill pillWarn">nerulată încă</span>
@@ -59,7 +59,7 @@ export default async function MarketSettingsPage() {
           <ControlPanel searches={status.searches} initial={progress} base={base} />
           <section className="card">
             <h2>Căutări</h2>
-            <p className="hint">Fiecare căutare e o pagină de rezultate de pe un site, copiată din browser cu filtrele dorite (zonă, tip, preț), plus categoria din CRM și tranzacția. Paginile se parcurg automat până la ultima; anunțurile apar în <a className="link" href={`${base}/piata`}>Analize de piață</a>.</p>
+            <p className="hint">Fiecare căutare e o pagină de rezultate de pe un site, copiată din browser cu filtrele dorite (zonă, tip, preț), plus categoria din CRM și tranzacția. Paginile se parcurg automat până la ultima; anunțurile apar în <a className="link" href={`${base}/piata`}>Comparabile</a>.</p>
             <Searches rows={status.searches} sources={SOURCES} categories={Object.entries(CAT_LABEL)} edit />
           </section>
         </div>

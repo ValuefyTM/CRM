@@ -90,7 +90,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
           may("inspections") && { key: "inspections", label: may("inspections.all") ? "Inspecții" : "Inspecțiile mele", href: `${b}/agenda-inspectii`, badge: inspN },
           may("properties") && { key: "properties", label: "Proprietăți", href: `${b}/proprietati` },
           may("properties") && { key: "pricemap", label: "Hartă prețuri", href: `${b}/harta-preturi` },
-          may("market") && { key: "market", label: "Analize de piață", href: `${b}/piata` },
+          may("market") && { key: "market", label: "Comparabile", href: `${b}/piata` },
           // the person's own court cases as a judicial expert (the tick on the user); nobody else sees them
           isExpert(u) && { key: "expert", label: "Expertize judiciare", href: `${b}/expertize`, badge: expertN, hot: true },
           // The inspections app (phone: sheets, photos, signature), with the same sign-in: on phones only, and only

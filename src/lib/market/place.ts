@@ -10,6 +10,14 @@ export function placeKey(v: string | null | undefined): string | null {
   return t || null;
 }
 
+/** A point a listing in Romania can have (a little over the borders); anything else — the ocean, 0 / 0 — is no point. */
+export const inRomania = (lat: unknown, lng: unknown) => typeof lat === "number" && typeof lng === "number" && lat >= 43.5 && lat <= 48.4 && lng >= 20.2 && lng <= 29.8;
+/** The point of a listing as it can be kept: as given, turned round when latitude and longitude came swapped, or none. */
+export function goodPoint(lat: unknown, lng: unknown): { lat: number; lng: number } | null {
+  const a = typeof lat === "number" ? lat : Number.NaN, b = typeof lng === "number" ? lng : Number.NaN;
+  return inRomania(a, b) ? { lat: a, lng: b } : inRomania(b, a) ? { lat: b, lng: a } : null;
+}
+
 /** The three keys of a listing; the zone is dropped when it only repeats the town. */
 export function placeKeys(r: { county?: unknown; city?: unknown; zone?: unknown }) {
   const county = placeKey(r.county as string), city = placeKey(r.city as string), zone = placeKey(r.zone as string);

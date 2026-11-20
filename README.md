@@ -101,15 +101,15 @@ Comparabile de pe **imobiliare.ro, storia.ro, olx.ro, publi24.ro și homezz.ro**
 - **Dispărute**: un anunț care lipsește 3 rulări la rând dintr-o căutare citită complet devine `inactiv`; pagina 404 /
   redirecționată → `expirat`.
 - **Istoric pe rulare** (migrația `1095`): fiecare eveniment din `market_listing_history` ține `run_id` și, la „modificat”, `changes`
-  (vechi → nou). Setări › Analize de piață arată starea pe surse, istoricul rulărilor și, pe fiecare rulare, anunțurile adăugate,
+  (vechi → nou). Setări › Comparabile arată starea pe surse, istoricul rulărilor și, pe fiecare rulare, anunțurile adăugate,
   modificate, expirate, dispărute, reapărute, erorile și rezumatul pe căutări (`market_runs.detail`, păstrat la închidere).
   Limitele unei rulări (rulări Apify, ore), încercările, pragul de „dispărut” și rezumatul pe e-mail sunt setări.
 - **Duplicate comasate** (fără AI, `dedupe` în `crawler.ts`): o singură regulă, aceeași descriere + același preț + aceeași
   suprafață (anunțurile publicate din CRM-ul agenției pe mai multe portaluri). Grupul poartă id-ul celui mai complet anunț
   (`dup_group`), singurul afișat în liste și numărat în statistici.
 - **Localizare pentru filtre** (migrația `1098`, `place.ts`): `loc_county`, `loc_city`, `loc_zone` sunt cheile fără diacritice și
-  fără „Județul”, „Mun.”, „zona”…; filtrele Județ › Localitate › Cartier / zonă și Camere din Analize de piață lucrează pe ele.
-- **Harta din Analize de piață** arată toate anunțurile filtrate: puncte pe canvas când sunt multe, etichete cu preț la apropiere.
+  fără „Județul”, „Mun.”, „zona”…; filtrele Județ › Localitate › Cartier / zonă și Camere din Comparabile lucrează pe ele.
+- **Harta din Comparabile** arată toate anunțurile filtrate: puncte pe canvas când sunt multe, etichete cu preț la apropiere.
   Anunțurile fără punct sunt puse în centrul zonei lor (sau al localității), iar cele cu punct aproximativ sunt răsfirate ușor;
   ambele au contur galben și etichetă distinctă în listă. Cifrele din filtre numără ca lista (starea aleasă, fără duplicate).
 - **Contact** (migrația `1096`, `contact.ts`): persoana sau agenția, telefoanele și e-mailul, cum apar în pagina descărcată

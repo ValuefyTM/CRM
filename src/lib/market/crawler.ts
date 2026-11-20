@@ -13,7 +13,7 @@ import { dueSlot, getMarketSettings, type MarketSettings } from "./settings";
 import { SITES, type Card, type Detail } from "./sites";
 import { contactOf } from "./contact";
 import { roomsOf } from "./rooms";
-import { placeKeys } from "./place";
+import { goodPoint, placeKeys } from "./place";
 import { cleanMd, hex, norm, sha1, uniq } from "./util";
 import { esc, layout, sendEmail } from "../email";
 
@@ -227,13 +227,13 @@ async function processList(db: D1Database, j: Job, item: FetchItem) {
     let id = k?.id;
     if (!k) {
       id = uuid(); nNew++;
-      const area = mainArea(c), pk = placeKeys(c);
+      const area = mainArea(c), pk = placeKeys(c), pt = goodPoint(c.lat, c.lng);
       stmts.push(db.prepare(`INSERT INTO market_listings (id, source, ext_id, url, search_id, category, type, deal, title, price, currency, price_sqm,
           usable_area, built_area, land_area, county, city, zone, address, lat, lng, geo_precision, seller_kind, seller_name, description, src_created_at,
           rooms, loc_county, loc_city, loc_zone, loc_at, status, first_seen_at, last_seen_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'activ',?,?)`)
         .bind(id, search.source, c.extId, c.url, search.id, search.category, search.type, c.transaction ?? search.deal, c.title ?? null, c.price ?? null,
           c.currency ?? null, c.price && area ? Math.round((c.price / area) * 100) / 100 : null, c.usable_area ?? null, c.built_area ?? null, c.land_area ?? null,
-          c.county ?? null, c.city ?? null, c.zone ?? null, c.address ?? null, c.lat ?? null, c.lng ?? null, c.geo_precision ?? null, c.seller_kind ?? null,
+          c.county ?? null, c.city ?? null, c.zone ?? null, c.address ?? null, pt?.lat ?? null, pt?.lng ?? null, pt ? c.geo_precision ?? null : null, c.seller_kind ?? null,
           c.seller_name ?? null, c.description ?? null, c.src_created_at ?? null, roomsOf(c.features, c.title), pk.county, pk.city, pk.zone, run.started_at, run.started_at, run.started_at));
       // searchable right away (the listing's page, when downloaded, replaces it with the full text)
       stmts.push(db.prepare("INSERT INTO market_listings_fts (listing_id, title, body) VALUES (?, ?, ?)").bind(id, c.title ?? "", c.description ?? ""));
@@ -312,6 +312,10 @@ async function processDetail(db: D1Database, bucket: R2Bucket | null, j: Job, it
   // the listing's page completes and corrects the card
   const m: Record<string, unknown> = { ...row };
   for (const [k, v] of Object.entries(d)) if (v != null && v !== "" && k !== "features" && k !== "photos") m[k] = v;
+  // a point outside Romania (the ocean, 0 / 0) is no point: the listing is drawn at the centre of its zone instead
+  const pt = goodPoint(m.lat, m.lng);
+  m.lat = pt?.lat ?? null; m.lng = pt?.lng ?? null;
+  if (!pt) m.geo_precision = null;
   const photos = uniq((d.photos?.length ? d.photos : []).filter(Boolean)).slice(0, MAX_PHOTOS);
   const area = mainArea(m);
   const fp = await sha1(m.price ?? null, m.currency ?? null, m.usable_area ?? null, m.built_area ?? null, m.land_area ?? null, norm(m.title as string),
@@ -507,7 +511,7 @@ async function notifyRun(db: D1Database, runId: string) {
   const body = `<table cellpadding="0" cellspacing="0" style="font-size:14px">${lines.map(([k, v]) => `<tr><td style="padding:3px 18px 3px 0;color:#666">${esc(k)}</td><td><b>${esc(v)}</b></td></tr>`).join("")}</table>`
     + (det.searches.filter((x) => x.error).length ? `<p style="font-size:13px">${det.searches.filter((x) => x.error).map((x) => `${esc(x.name)} (${esc(x.source)}): ${esc(x.error)}`).join("<br>")}</p>` : "");
   const text = `${title}\n${lines.map(([k, v]) => `${k}: ${v}`).join("\n")}\n${url}`;
-  const html = layout({ eyebrow: "Analize de piață", title, body, button: { label: "Vezi rularea", url }, foot: "Trimis automat de CRM (Setări › Analize de piață)." });
+  const html = layout({ eyebrow: "Comparabile", title, body, button: { label: "Vezi rularea", url }, foot: "Trimis automat de CRM (Setări › Comparabile)." });
   for (const to of cfg.notify_to.split(",").map((x) => x.trim()).filter(Boolean)) await sendEmail({ to, subject: title, html, text });
 }
 

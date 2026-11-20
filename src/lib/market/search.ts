@@ -34,6 +34,8 @@ function whereOf(f: MarketFilters) {
   const w: string[] = [], a: (string | number)[] = [];
   const st = STATUSES.some(([k]) => k === f.st) ? f.st! : "activ";
   if (st !== "all") { w.push("l.status = ?"); a.push(st); }
+  // only the listings whose own page was downloaded (the ones only seen in a results page wait in Setări → Comparabile)
+  w.push("l.fetched_at IS NOT NULL");
   if (f.cat) { w.push("l.category = ?"); a.push(f.cat); }
   if (f.tip) { w.push("l.type = ?"); a.push(f.tip); }
   if (f.tr) { w.push("l.deal = ?"); a.push(f.tr); }
@@ -123,7 +125,7 @@ export async function marketPoints(db: D1Database, f: MarketFilters, limit = 20_
 /** The whole base in figures: by status, and how many active listings are hidden as merged duplicates. */
 export async function marketTotals(db: D1Database) {
   const r = await db.prepare(`SELECT COUNT(*) AS total, COALESCE(SUM(status = 'activ'), 0) AS active, COALESCE(SUM(status = 'inactiv'), 0) AS gone, COALESCE(SUM(status = 'expirat'), 0) AS expired,
-    COALESCE(SUM(status = 'activ' AND dup_group IS NOT NULL AND dup_group <> id), 0) AS merged, COALESCE(SUM(status = 'activ' AND lat IS NULL), 0) AS nopoint FROM market_listings`)
+    COALESCE(SUM(status = 'activ' AND dup_group IS NOT NULL AND dup_group <> id), 0) AS merged, COALESCE(SUM(status = 'activ' AND lat IS NULL), 0) AS nopoint FROM market_listings WHERE fetched_at IS NOT NULL`)
     .first<{ total: number; active: number; gone: number; expired: number; merged: number; nopoint: number }>();
   return r ?? { total: 0, active: 0, gone: 0, expired: 0, merged: 0, nopoint: 0 };
 }
@@ -225,9 +227,10 @@ export async function marketStatus(db: D1Database) {
 export async function sourceHealth(db: D1Database) {
   const week = new Date(Date.now() - 7 * 864e5).toISOString();
   const [l, s, h, m] = await Promise.all([
-    db.prepare(`SELECT source, COALESCE(SUM(status = 'activ'), 0) AS active, COALESCE(SUM(status <> 'activ'), 0) AS gone, COALESCE(SUM(first_seen_at >= ?1), 0) AS new7,
+    db.prepare(`SELECT source, COALESCE(SUM(status = 'activ' AND fetched_at IS NOT NULL), 0) AS active, COALESCE(SUM(status <> 'activ'), 0) AS gone, COALESCE(SUM(first_seen_at >= ?1), 0) AS new7,
+        COALESCE(SUM(status = 'activ' AND fetched_at IS NULL), 0) AS pending,
         COALESCE(SUM(error IS NOT NULL), 0) AS failed, MAX(fetched_at) AS last_fetch FROM market_listings GROUP BY source`).bind(week)
-      .all<{ source: string; active: number; gone: number; new7: number; failed: number; last_fetch: string | null }>(),
+      .all<{ source: string; active: number; gone: number; new7: number; pending: number; failed: number; last_fetch: string | null }>(),
     db.prepare(`SELECT source, COUNT(*) AS n, COALESCE(SUM(enabled), 0) AS enabled, MAX(last_run_at) AS last_run, COALESCE(SUM(enabled = 1 AND last_complete = 1), 0) AS complete,
         COALESCE(SUM(enabled = 1 AND last_error IS NOT NULL), 0) AS errors FROM market_searches GROUP BY source`)
       .all<{ source: string; n: number; enabled: number; last_run: string | null; complete: number; errors: number }>(),
@@ -238,7 +241,7 @@ export async function sourceHealth(db: D1Database) {
   ]);
   const names = [...new Set([...s.results.map((x) => x.source), ...l.results.map((x) => x.source)])].sort();
   return {
-    sources: names.map((source) => ({ source, active: 0, gone: 0, new7: 0, failed: 0, last_fetch: null as string | null, n: 0, enabled: 0, last_run: null as string | null, complete: 0, errors: 0, changed7: 0, out7: 0,
+    sources: names.map((source) => ({ source, active: 0, gone: 0, new7: 0, pending: 0, failed: 0, last_fetch: null as string | null, n: 0, enabled: 0, last_run: null as string | null, complete: 0, errors: 0, changed7: 0, out7: 0,
       ...l.results.find((x) => x.source === source), ...s.results.find((x) => x.source === source), ...h.results.find((x) => x.source === source) })),
     month: m ?? { apify: 0, runs: 0 },
   };

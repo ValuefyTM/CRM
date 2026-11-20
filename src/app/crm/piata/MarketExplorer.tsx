@@ -1,5 +1,5 @@
 "use client";
-// Analize de piață: the listings brought in from the portals as a list and a map side by side (an adjustable
+// Comparabile: the listings brought in from the portals as a list and a map side by side (an adjustable
 // separator between them), with filters that apply by themselves.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";

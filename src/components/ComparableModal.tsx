@@ -2,7 +2,7 @@
 // The listing's window (fișa comparabilei): gallery, technical data, price history, the map, the seller, the original
 // title and text, the sheet exported as PDF / Word / PNG. Opened from a report's similar listings it also has the
 // similarity to the valued property, the position against it and the phone check (kept on the report); opened from
-// Analize de piață (no subject, no report) it shows the listing's own location instead.
+// Comparabile (no subject, no report) it shows the listing's own location instead.
 import "leaflet/dist/leaflet.css";
 import { useEffect, useRef, useState } from "react";
 import type * as Leaflet from "leaflet";

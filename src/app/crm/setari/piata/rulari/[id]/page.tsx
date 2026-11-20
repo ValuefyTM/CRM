@@ -6,7 +6,7 @@ import { runDetail } from "@/lib/market/search";
 import { MarketChanges } from "@/components/MarketChanges";
 import { SettingsTabs } from "../../../SettingsTabs";
 
-export const metadata: Metadata = { title: "Rulare · Analize de piață | CRM VALUEFY" };
+export const metadata: Metadata = { title: "Rulare · Comparabile | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
 
 const RUN_STATUS: Record<string, string> = { running: "în desfășurare", done: "încheiată", stopped: "oprită" };
@@ -35,7 +35,7 @@ export default async function MarketRunPage({ params, searchParams }: { params: 
     <CrmShell user={user} base={base} active="settings" title={`Rularea din ${fmtDate(run.started_at, true)}`}
       subtitle={`${run.trigger === "manual" ? "La cerere" : "Programată"} · ${RUN_STATUS[run.status] ?? run.status}${run.note ? ` (${run.note})` : ""}${mins != null ? ` · ${mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`}` : ""}`}>
       <SettingsTabs base={base} active="piata" user={user} />
-      <p><a className="link" href={`${base}/setari/piata`}>← Analize de piață: stare și istoric</a></p>
+      <p><a className="link" href={`${base}/setari/piata`}>← Comparabile: stare și istoric</a></p>
       <div className="dbKpis">
         {kpi("Pagini citite", st.pagini, `${st.anunturi_vazute ?? 0} anunțuri văzute`)}
         {kpi("Adăugate", counts.nou ?? 0, `${st.anunturi_noi ?? 0} găsite în liste`)}
