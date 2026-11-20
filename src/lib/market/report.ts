@@ -41,26 +41,57 @@ function similarity(s: MarketSubject, x: MarketRow & { km: number }, radius: num
   return { score: Math.round((parts.reduce((t, p) => t + p.v * p.w, 0) / tw) * 100), parts: parts.map((p) => ({ k: p.k, v: Math.round(p.v * 100) })) };
 }
 
+/** Within „Rezidențial”: a house is compared with houses, an apartment with apartments. */
+const family = (s: { category: string | null; type: string | null }): "casa" | "apartament" | null =>
+  /apartament|garsonier/i.test(s.type ?? "") ? "apartament" : /cas[aă]|vil[aă]|duplex/i.test(s.type ?? "") ? "casa" : null;
+/** A building on its own land (a house, a commercial or industrial property — not an apartment, a parking place, bare land):
+ * free land nearby is suggested too, for the value of the land. */
+const onOwnLand = (s: { category: string | null; type: string | null }) => !isLand(s) && family(s) !== "apartament" && !/parcare|box[aă]|accesoriu|curte|parte dintr-o cl[aă]dire/i.test(s.type ?? "");
+/** How the subject's kind is named in „x proprietăți de tip …”. */
+const kindLabel = (s: { category: string | null; type: string | null }) => {
+  const f = family(s);
+  if (f === "casa") return "casă";
+  if (f === "apartament") return "apartament";
+  if (isLand(s)) return "teren";
+  const c = (s.category ?? "").toUpperCase();
+  return c === "COMERCIAL" ? "comercial" : c === "INDUSTRIAL" ? "industrial" : c.includes("AGRICOL") ? "agricol" : c === "MIXT" ? "mixt" : (s.category ?? "similar").toLowerCase();
+};
+
+export type MarketGroup = { rows: SimilarListing[]; median: number | null; n: number };
+const EMPTY: MarketGroup = { rows: [], median: null, n: 0 };
+
+/**
+ * The listings around the subject, in up to two groups: `prop` — the same kind as the subject (houses for a house,
+ * apartments for an apartment, the category otherwise) — and, for sales around a building on its own land, `teren` —
+ * free land, compared by the subject's land area. Rentals have no land group.
+ */
 export async function marketForReport(db: D1Database, reportId: string, o: { assetId?: string | null; radius?: string | null; tr?: string | null; tol?: string | null; all?: boolean }) {
   const radius = MK_RADII.includes(o.radius ?? "") ? Number(o.radius) : MK_RADIUS;
   const tr = o.tr === "inchiriere" ? "inchiriere" : "vanzare";
   const tol = ["25", "50", "0"].includes(o.tol ?? "") ? Number(o.tol) : 50;
   const subject = await reportSubject(db, reportId, o.assetId);
-  const base = { radius, tr, tol, subject };
-  if (!subject?.ll) return { ...base, rows: [] as SimilarListing[], median: null as number | null, n: 0 };
-  const area = isLand(subject) ? subject.land_area : subject.usable_area ?? subject.land_area;
-  const near = await nearbyMarket(db, subject.ll, { category: subject.category, transaction: tr, area, tol, radiusKm: radius, limit: 200, status: o.all ? "all" : "activ" });
-  const act = near.rows.filter((x) => x.status === "activ").map((x) => x.price_sqm).filter((v): v is number => v != null && v > 0).sort((p, q) => p - q);
-  const median = act.length ? (act.length % 2 ? act[(act.length - 1) / 2] : (act[act.length / 2 - 1] + act[act.length / 2]) / 2) : null;
-  const rows: SimilarListing[] = near.rows.map((x) => {
-    const k = x.km ?? 0;
-    return { ...x, km: k, ...similarity(subject, { ...x, km: k }, radius), vsMedian: median && x.price_sqm ? (x.price_sqm - median) / median : null };
-  }).sort((p, q) => q.score - p.score);
-  return { ...base, rows, median, n: act.length };
+  const base = { radius, tr, tol, subject, kind: subject ? kindLabel(subject) : "" };
+  if (!subject?.ll) return { ...base, ...EMPTY, groups: { prop: EMPTY } as { prop: MarketGroup; teren?: MarketGroup } };
+  const group = async (land: boolean): Promise<MarketGroup> => {
+    // free land is compared by the land of the subject; the property itself by its usable area
+    const s: MarketSubject = land ? { ...subject, category: "TEREN", type: null, usable_area: null } : subject;
+    const area = land || isLand(subject) ? subject.land_area : subject.usable_area ?? subject.land_area;
+    const near = await nearbyMarket(db, subject.ll!, { category: land ? "TEREN" : subject.category, family: land ? null : family(subject), transaction: tr, area, tol, radiusKm: radius, limit: 200, status: o.all ? "all" : "activ" });
+    const act = near.rows.filter((x) => x.status === "activ").map((x) => x.price_sqm).filter((v): v is number => v != null && v > 0).sort((p, q) => p - q);
+    const median = act.length ? (act.length % 2 ? act[(act.length - 1) / 2] : (act[act.length / 2 - 1] + act[act.length / 2]) / 2) : null;
+    const rows: SimilarListing[] = near.rows.map((x) => {
+      const k = x.km ?? 0;
+      return { ...x, km: k, ...similarity(s, { ...x, km: k }, radius), vsMedian: median && x.price_sqm ? (x.price_sqm - median) / median : null };
+    }).sort((p, q) => q.score - p.score);
+    return { rows, median, n: act.length };
+  };
+  const withLand = tr === "vanzare" && onOwnLand(subject);
+  const [prop, teren] = await Promise.all([group(false), withLand ? group(true) : Promise.resolve(null)]);
+  return { ...base, ...prop, groups: { prop, ...(teren ? { teren } : {}) } as { prop: MarketGroup; teren?: MarketGroup } };
 }
 
-/** For the button: how many listings around the subject (default radius and filters). */
+/** For the button: how many listings around the subject (default radius and filters), of its kind and — where suggested — free land. */
 export async function marketCount(db: D1Database, reportId: string, assetId?: string | null) {
   const r = await marketForReport(db, reportId, { assetId }).catch(() => null);
-  return r?.subject?.ll ? { n: r.rows.length, radius: r.radius } : null;
+  return r?.subject?.ll ? { n: r.rows.length, land: r.groups.teren ? r.groups.teren.rows.length : null, kind: r.kind, radius: r.radius } : null;
 }

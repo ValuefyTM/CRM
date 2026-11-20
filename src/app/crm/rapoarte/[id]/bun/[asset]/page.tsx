@@ -490,7 +490,7 @@ export default async function AssetPage({ params, searchParams }: {
                   {market && <div><dt>Anunțuri de vânzare · {String(market.radius).replace(".", ",")} km</dt><dd>{market.n}</dd></div>}
                 </dl>
                 {similar && similar.rows.length > 0 && <SimilarReports report={id} base={base} count={similar.rows.length} bank={similar.subject?.bank ?? null} />}
-                {market && <SimilarListings report={id} asset={a.id} base={base} count={market.n} radius={market.radius} />}
+                {market && <SimilarListings report={id} asset={a.id} base={base} count={market.n} land={market.land} kind={market.kind} radius={market.radius} />}
               </section>
             )}
           </div>

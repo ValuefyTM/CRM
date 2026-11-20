@@ -476,7 +476,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                     {assets.length > 1 && <Row k="Alte bunuri"><a className="link" href={href("bunuri")}>{assets.length - 1} {assets.length === 2 ? "bun" : "bunuri"} →</a></Row>}
                   </dl>
                   {similar?.located && <SimilarReports report={r.id} base={base} count={similar.rows.length} bank={similar.subject?.bank ?? null} />}
-                  {market && <SimilarListings report={r.id} base={base} count={market.n} radius={market.radius} />}
+                  {market && <SimilarListings report={r.id} base={base} count={market.n} land={market.land} kind={market.kind} radius={market.radius} />}
                 </>
               )}
             </section>

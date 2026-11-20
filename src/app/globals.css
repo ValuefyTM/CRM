@@ -5099,3 +5099,4 @@ form.xjForm > .card + .card { margin-top: 4px; }
 .xjSrc { font-size: 10.5px; margin-left: 8px; }
 .xjSum { color: var(--ink) !important; white-space: pre-wrap; }
 .xjRead { border-style: dashed; }
+.simTabs { padding: 0 18px; } .simTabs a { padding: 10px 14px; }

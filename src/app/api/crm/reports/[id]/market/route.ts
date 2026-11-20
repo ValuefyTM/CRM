@@ -13,5 +13,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const q = new URL(req.url).searchParams;
   const r = await marketForReport(a.db, id, { assetId: q.get("bun"), radius: q.get("raza"), tr: q.get("tr"), tol: q.get("tol"), all: q.get("toate") === "1" });
   const verif = await verificationsOf(a.db, id).catch(() => ({}));
-  return Response.json({ ...r, verif, rows: r.rows.map((x) => ({ ...x, photo: marketFile(x.cover_key) })) }, { headers: { "Cache-Control": "no-store" } });
+  const photos = <T extends { rows: { cover_key: string | null }[] }>(g: T) => ({ ...g, rows: g.rows.map((x) => ({ ...x, photo: marketFile(x.cover_key) })) });
+  return Response.json({ ...r, verif, rows: photos(r).rows, groups: { prop: photos(r.groups.prop), ...(r.groups.teren ? { teren: photos(r.groups.teren) } : {}) } }, { headers: { "Cache-Control": "no-store" } });
 }

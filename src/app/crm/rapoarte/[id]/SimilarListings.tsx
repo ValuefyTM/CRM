@@ -25,12 +25,20 @@ type Row = {
   area: number | null; city: string | null; zone: string | null; lat: number | null; lng: number | null; geo_precision: string | null; status: string;
   dup_group: string | null; photo: string | null; km: number; score: number; parts: { k: string; v: number }[]; vsMedian: number | null; first_seen_at: string;
 };
+type Group = { rows: Row[]; median: number | null; n: number };
 type Data = {
-  radius: number; tr: string; tol: number; median: number | null; n: number; rows: Row[]; verif: Record<string, Verif>;
+  radius: number; tr: string; tol: number; median: number | null; n: number; rows: Row[]; verif: Record<string, Verif>; kind: string;
+  /** the same kind as the subject, and (sales around a building on its own land) free land */
+  groups: { prop: Group; teren?: Group };
   subject: { type: string | null; category: string | null; address: string | null; city: string | null; usable_area: number | null; land_area: number | null; sqm: number | null; ll: [number, number] | null } | null;
 };
 
-export function SimilarListings({ report, asset, base, count, radius, canEdit = true }: { report: string; asset?: string; base: string; count: number; radius: number; canEdit?: boolean }) {
+const KIND_PL: Record<string, [string, string]> = { "casă": ["casă", "case"], apartament: ["apartament", "apartamente"], teren: ["teren", "terenuri"] };
+
+export function SimilarListings({ report, asset, base, count, land = null, kind = "", radius, canEdit = true }: { report: string; asset?: string; base: string; count: number;
+  /** free land nearby, where it is suggested (a building on its own land); null = not suggested */
+  land?: number | null; kind?: string; radius: number; canEdit?: boolean }) {
+  const [tab, setTab] = useState<"prop" | "teren">("prop");
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ raza: String(radius), tr: "vanzare", tol: "50", toate: false });
   const [data, setData] = useState<Data | null>(null);
@@ -56,20 +64,27 @@ export function SimilarListings({ report, asset, base, count, radius, canEdit = 
     return () => document.removeEventListener("keydown", k);
   }, [open, pick]);
 
-  const rows = data?.rows ?? [];
   const s = data?.subject ?? null;
   const rent = f.tr === "inchiriere";
+  // rentals (and subjects without land of their own) have no land tab
+  const shown: "prop" | "teren" = tab === "teren" && data?.groups?.teren && !rent ? "teren" : "prop";
+  const g = data?.groups?.[shown] ?? null;
+  const rows = g?.rows ?? data?.rows ?? [];
+  const median = g ? g.median : data?.median ?? null;
+  const isLandTab = shown === "teren";
   const pins = useMemo<MapPin[]>(() => rows.filter((r) => r.lat != null && r.lng != null).map((r) => ({
     id: r.id, lat: r.lat!, lng: r.lng!, label: short(r.price), inactive: r.status !== "activ",
     tip: `<b>${esc(r.title ?? "Anunț")}</b><br><small>${r.price != null ? `${num(r.price)} ${cur(r.currency)}` : "la cerere"}${r.area ? ` · ${num(r.area)} m²` : ""} · ${dist(r.km)} · similaritate ${r.score}%</small>`,
   })), [rows]);
-  const subjectVs = !rent && s?.sqm && data?.median ? (s.sqm - data.median) / data.median : null;
+  const subjectVs = !rent && !isLandTab && s?.sqm && median ? (s.sqm - median) / median : null;
   const set = (k: keyof typeof f, v: string | boolean) => setF((x) => ({ ...x, [k]: v }));
 
   return (
     <>
       <button type="button" className="simChip" onClick={() => setOpen(true)}>
-        <b>{count}</b> {count === 1 ? "anunț de vânzare similar" : "anunțuri de vânzare similare"} în raza de {dist(radius)}<span aria-hidden="true">→</span>
+        {land == null ? <><b>{count}</b> {count === 1 ? "anunț de vânzare similar" : "anunțuri de vânzare similare"}</>
+          : <><b>{count}</b> {count === 1 ? "proprietate" : "proprietăți"} de tip {kind || "similar"} și <b>{land}</b> {land === 1 ? "teren liber" : "terenuri libere"} de vânzare</>}
+        {" "}în raza de {dist(radius)}<span aria-hidden="true">→</span>
       </button>
       {open && createPortal(
         <div className="vfModal" role="dialog" aria-modal="true" aria-labelledby="mkT" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
@@ -78,10 +93,16 @@ export function SimilarListings({ report, asset, base, count, radius, canEdit = 
               <div>
                 <h2 id="mkT">Anunțuri similare în apropiere</h2>
                 <p className="muted">{s ? [cap(s.type) || cap(s.category), s.usable_area ? `${num(s.usable_area, 1)} mp` : s.land_area ? `${num(s.land_area)} mp teren` : null, s.address ?? s.city].filter(Boolean).join(" · ") : ""}
-                  {" "}· aceeași categorie · prețuri cerute în anunțuri</p>
+                  {" "}· {isLandTab ? (s?.land_area ? `terenuri libere, comparate cu terenul de ${num(s.land_area)} mp al proprietății` : "terenuri libere de orice suprafață (terenul proprietății nu are suprafața completată)") : "același tip de proprietate"} · prețuri cerute în anunțuri</p>
               </div>
               <button type="button" className="btn btnGhost btnSm" onClick={() => setOpen(false)} aria-label="Închide">✕</button>
             </div>
+            {data?.groups?.teren && !rent && (
+              <div className="tabs simTabs" role="tablist">
+                <a href="#" role="tab" aria-current={shown === "prop" ? "page" : undefined} onClick={(e) => { e.preventDefault(); setTab("prop"); }}>{((t) => t.charAt(0).toUpperCase() + t.slice(1))(KIND_PL[data.kind]?.[1] ?? `proprietăți de tip ${data.kind}`)} <small>{data.groups.prop.rows.length}</small></a>
+                <a href="#" role="tab" aria-current={shown === "teren" ? "page" : undefined} onClick={(e) => { e.preventDefault(); setTab("teren"); }}>Terenuri libere <small>{data.groups.teren.rows.length}</small></a>
+              </div>
+            )}
             <div className="simBar">
               <div className="simRadii" role="group" aria-label="Tranzacția">
                 <button type="button" aria-pressed={!rent} onClick={() => set("tr", "vanzare")}>Vânzare</button>
@@ -94,13 +115,13 @@ export function SimilarListings({ report, asset, base, count, radius, canEdit = 
                 {TOLS.map(([k, l]) => <button key={k} type="button" aria-pressed={f.tol === k} onClick={() => set("tol", k)} title="suprafața față de subiect">{l}</button>)}
               </div>
               <label className="simSame"><input type="checkbox" checked={f.toate} onChange={(e) => set("toate", e.target.checked)} />Și anunțurile dispărute</label>
-              <span className="simSum">{busy ? "Se caută…" : `${rows.length} ${rows.length === 1 ? "anunț" : "anunțuri"}${data?.median ? ` · mediana ${num(data.median, rent ? 2 : 0)} €/mp${rent ? "/lună" : ""}` : ""}`}</span>
+              <span className="simSum">{busy ? "Se caută…" : `${rows.length} ${rows.length === 1 ? "anunț" : "anunțuri"}${median ? ` · mediana ${num(median, rent ? 2 : 0)} €/mp${rent ? "/lună" : ""}` : ""}`}</span>
             </div>
             {subjectVs != null && (
               <p className="mkSubjectVs">Valoarea din raport: <b>{num(s!.sqm)} €/mp</b> — <span className={Math.abs(subjectVs) < 0.1 ? "ok" : "warn"}>{Math.abs(subjectVs) < 0.005 ? "la mediana prețurilor cerute" : `${subjectVs < 0 ? "sub" : "peste"} mediana prețurilor cerute cu ${pct(subjectVs)}`}</span> (fără ajustarea de negociere)</p>
             )}
             {!busy && data && !s?.ll && <p className="hint pad">Bunul nu are coordonate: localizează-l (pagina bunului) ca să găsim anunțurile din jur.</p>}
-            {!busy && s?.ll && rows.length === 0 && <p className="hint pad">Niciun anunț {rent ? "de închiriere" : "de vânzare"} pentru criteriile alese. Mărește raza sau toleranța suprafeței.</p>}
+            {!busy && s?.ll && rows.length === 0 && <p className="hint pad">{isLandTab ? "Niciun teren liber de vânzare" : `Niciun anunț ${rent ? "de închiriere" : "de vânzare"}`} pentru criteriile alese. Mărește raza sau toleranța suprafeței.</p>}
             {s?.ll && rows.length > 0 && (
               <div className="mkSplit">
                 <div className="mkList">
