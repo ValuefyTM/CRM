@@ -38,6 +38,7 @@ import { RevisionAsk } from "../RevisionAsk";
 import { SimilarReports } from "./SimilarReports";
 import { SimilarListings } from "./SimilarListings";
 import { marketCount } from "@/lib/market/report";
+import { billedPerOrder, lastInspectionPrice } from "@/lib/billing-tasks";
 import { LegalCheck } from "./LegalCheck";
 import { docReadings, latestChecks, legalEnabled } from "@/lib/legal-check";
 import { similarReports } from "@/lib/similar-reports";
@@ -144,6 +145,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   // reports of the same type of property within 1 km (the general tab shows how many; the list opens on click)
   const similar = tab === "general" && main ? await similarReports(db, user, id, { radius: "1" }).catch(() => null) : null;
   // market listings around the subject (Anunțuri de piață): how many; the list and the map open on click
+  // cancelling a report whose inspection was done asks about invoicing the inspection: the suggested price, and whether a task follows
+  const cancelAsk = isAdmin(user) && r.status !== "cancelled" ? { price: await lastInspectionPrice(db, id), billed: await billedPerOrder(db, id) } : { price: null, billed: false };
   const market = tab === "general" && main && can(user, "market") ? await marketCount(db, id).catch(() => null) : null;
   const [mayAssign, inspectors, inspDocs, sheetList] = await Promise.all([canAssign(db, user, id), inspectorChoices(db, user.id), docsByAsset(db, id, assets.map((a) => a.id)), templateList(db)]);
   // The sheets an inspection of an asset can be given with: the firm's sheets meant for its type of asset, and the standard one
@@ -378,7 +381,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             {/* drafting mode: the texts for the bank's application, chapter by chapter (the owner only, while it is being built) */}
             {user.role === "owner" && assets.length > 0 && r.status !== "cancelled" && <a className="stBtn draft" href={`${base}/rapoarte/${r.id}/redactare`}>Redactare raport</a>}
             {/* the status as what can be done next; "Finalizează" goes through the delivery (date, values per asset, euro, approach) */}
-            {c.status && <StatusActions id={r.id} status={r.status} reason={r.suspend_reason} locked={acc.locked} canCancel={isAdmin(user)} pausedDays={d.pausedTotal}
+            {c.status && <StatusActions id={r.id} status={r.status} reason={r.suspend_reason} locked={acc.locked} canCancel={isAdmin(user)} pausedDays={d.pausedTotal} inspDone={stageRow.insp_done} inspPrice={cancelAsk.price} billedHere={cancelAsk.billed}
               finish={r.delivered_at ? null : !c.deliver ? "Raportul îl finalizează evaluatorul principal, din „Predă raportul”." : final && !workMissing ? `${href("documente")}&predare=1` : final ? `Marchează în „Acte & livrare” › „Dosar de lucru” și ${workMissing}; apoi predai raportul.` : "Încarcă PDF-ul semnat în „Acte & livrare” › „Dosar de lucru” și marchează-l ca „Raport PDF final”; apoi îl predai cu valorile."} />}
             {c.status && !acc.locked && !r.glide_id && r.status !== "cancelled" && r.status !== "suspended" && <StageActions id={r.id} stage={stage} hasVerifier={!!verifier} />}
           </div>

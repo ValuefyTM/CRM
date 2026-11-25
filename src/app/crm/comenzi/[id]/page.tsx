@@ -24,6 +24,7 @@ import { OfferEditor } from "./OfferEditor";
 import { DossierOpen } from "./DossierOpen";
 import { DeleteOrder } from "./DeleteOrder";
 import { BankRefEdit } from "./BankRefEdit";
+import { OrderFeeEdit } from "./OrderFeeEdit";
 import { CancelReason } from "@/components/CancelReason";
 import { Messages } from "@/components/Messages";
 import { orderThread } from "@/lib/messages";
@@ -44,6 +45,8 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
   const { db, user, base } = await staffPage("orders");
   const { id } = await params;
   const o = await getOrder(db, id);
+  // the fee no longer changes once the order's report is invoiced
+  const feeLocked = !!(await db.prepare("SELECT 1 AS x FROM reports WHERE order_id = ? AND (invoice_id IS NOT NULL OR billed_outside_at IS NOT NULL) LIMIT 1").bind(id).first<{ x: number }>().catch(() => null));
   if (!o) notFound();
   // „Create de el”: only the orders the user created.
   if (!(await inScope(db, user, "orders", id))) notFound();
@@ -188,7 +191,7 @@ export default async function CrmOrderPage({ params }: { params: Promise<{ id: s
                 <div><dt>Client</dt><dd>{o.client_name ?? "—"}</dd></div>
                 <div><dt>Recomandată de</dt><dd>{refEdit}</dd></div>
                 {o.report_type && <div><dt>Tip raport</dt><dd>{o.report_type}</dd></div>}
-                <div><dt>Tarif</dt><dd>{lei(o.fee)}</dd></div>
+                <OrderFeeEdit order={o.id} fee={o.fee} canEdit={can(user, "orders.E")} locked={feeLocked ? "facturat: nu se mai schimbă" : null} />
                 {o.share != null && <div><dt>Cota VALUEFY</dt><dd>{Math.round(o.share * 100)}% · {lei(o.fee_net)}</dd></div>}
                 {o.source !== "bank" && <div><dt>Data comenzii</dt><dd>{fmtDate(o.ordered_on ?? o.created_at)}</dd></div>}
               </dl>

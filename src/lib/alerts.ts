@@ -102,7 +102,7 @@ const SQL: Record<AlertKind, string> = {
     FROM reports r ${REPORT_JOINS} WHERE r.delivered_at IS NOT NULL AND COALESCE(r.collected, 0) = 0 AND r.status <> 'cancelled' AND ${NEW_HERE}`,
   to_invoice: `SELECT r.id AS key, NULL AS assigned_id, NULL AS inspector_id, NULL AS who, NULL AS place, COALESCE(r.delivered_at, r.updated_at) AS anchor, NULL AS extra, ${REPORT_COLS}
     FROM reports r ${REPORT_JOINS} LEFT JOIN contracts k ON k.id = r.contract_id LEFT JOIN collaborations cb ON cb.id = o.collaboration_id
-    WHERE r.invoice_id IS NULL AND r.billed_outside_at IS NULL AND r.status <> 'cancelled' AND (r.delivered_at IS NOT NULL OR r.status = 'done') AND ${FINISHED_HERE}
+    WHERE r.invoice_id IS NULL AND r.billed_outside_at IS NULL AND ((r.status <> 'cancelled' AND (r.delivered_at IS NOT NULL OR r.status = 'done')) OR (r.status = 'cancelled' AND r.cancel_bill = 1)) AND ${FINISHED_HERE}
       AND ((k.kind = 'framework' AND COALESCE(k.billing_mode, ?3) = 'per_order') OR (o.collaboration_id IS NOT NULL AND COALESCE(cb.billing_mode, ?4) = 'per_order'))`,
   review_waiting: `SELECT r.id AS key, NULL AS assigned_id, NULL AS inspector_id, NULL AS who, NULL AS place,
       COALESCE((SELECT MAX(al.at) FROM audit_log al WHERE al.entity = 'report' AND al.entity_id = r.id AND al.action = 'report.stage' AND al.details = 'Verificare'), r.updated_at) AS anchor, NULL AS extra, ${REPORT_COLS}

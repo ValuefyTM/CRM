@@ -1,4 +1,5 @@
 import { err, json, staffApi } from "@/lib/api";
+import { setOrderFee } from "@/lib/billing-tasks";
 import { inScope } from "@/lib/scope";
 import { cancelOrder, deleteOrder } from "@/lib/orders";
 import { editBankOrder } from "@/lib/contract-orders";
@@ -21,6 +22,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params;
   if (!(await inScope(a.db, a.user, "orders", id))) return err("Nu există.", 404);
   const b = await json(req);
+  if (b.fee !== undefined) {
+    const fee = Math.round(Number(b.fee) * 100) / 100;
+    if (!Number.isFinite(fee) || fee < 0) return err("Scrie tariful, în lei fără TVA.");
+    const r = await setOrderFee(a.db, a.user.id, id, fee);
+    return r.ok ? Response.json({ ok: true }) : err(r.error, 409);
+  }
   if (b.bank_ref !== undefined || b.ordered_on !== undefined) {
     const r = await editBankOrder(a.db, `user:${a.user.id}`, id, b);
     return r.ok ? Response.json({ ok: true }) : err(r.error, "dup" in r ? 409 : 400);

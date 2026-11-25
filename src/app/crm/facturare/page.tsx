@@ -63,7 +63,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
               <tbody>
                 {tasks.map((x) => (
                   <ClickRow key={x.id} href={`${base}/rapoarte/${x.id}`}>
-                    <td><b className="mono">{x.number ? `nr. ${x.number}` : "fără număr"}</b>{x.label && <div className="muted">{x.label}</div>}</td>
+                    <td><b className="mono">{x.number ? `nr. ${x.number}` : "fără număr"}</b>{x.cancel_bill ? <> <span className="pill pillWarn">doar inspecția · comandă anulată</span></> : null}{x.label && <div className="muted">{x.label}</div>}</td>
                     <td><b>{niceName(x.party) || "—"}</b>{x.bank_ref && <div className="muted">comanda {x.bank_ref}</div>}</td>
                     <td>{x.collab ? "colaborare" : x.contract_number ? `cadru nr. ${x.contract_number}` : "—"}</td>
                     {!own && <td>{x.evaluator ?? <span className="muted">—</span>}</td>}

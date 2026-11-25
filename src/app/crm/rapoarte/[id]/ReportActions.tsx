@@ -33,9 +33,18 @@ const ASK: Record<Ask["kind"], Ask> = {
  * reason). Cancelling (with the reason) is in "⋯", for administrators.
  * `finish`: the delivery (a link) or why it cannot be yet (a message); null: already delivered.
  */
-export function StatusActions({ id, status, reason, locked = false, finish = null, canCancel = false, pausedDays = 0 }: {
+export function StatusActions({ id, status, reason, locked = false, finish = null, canCancel = false, pausedDays = 0, inspDone = 0, inspPrice = null, billedHere = false }: {
   id: string; status: string; reason: string | null; locked?: boolean; finish?: string | null; canCancel?: boolean; pausedDays?: number;
+  /** inspections already done: cancelling asks whether the inspection is invoiced */
+  inspDone?: number;
+  /** the suggested price of an inspection (the last one asked on the same contract) */
+  inspPrice?: number | null;
+  /** the contract is invoiced from the CRM: the inspection becomes a task of „De facturat” */
+  billedHere?: boolean;
 }) {
+  // cancelling a report whose inspection was done: is the inspection invoiced, and for how much
+  const [bill, setBill] = useState<"" | "da" | "nu">("");
+  const [price, setPrice] = useState(inspPrice ? String(inspPrice) : "");
   const cur = locked ? "done" : status === "draft" ? "in_progress" : status;
   const [ask, setAsk] = useState<Ask | null>(null);
   const [why, setWhy] = useState("");
@@ -48,14 +57,18 @@ export function StatusActions({ id, status, reason, locked = false, finish = nul
   const go = async (s: string, r = "") => {
     setBusy(true); setMsg("");
     const at = s === "suspended" && ask?.kind === "suspended" && since ? new Date(since).toISOString() : undefined;
-    const error = await patch(id, { status: s, reason: r, ...(at ? { since: at } : {}) });
+    const error = await patch(id, { status: s, reason: r, ...(at ? { since: at } : {}), ...(s === "cancelled" && bill === "da" ? { bill_inspection: true, inspection_fee: Number(price) } : {}) });
     setBusy(false);
     if (error) { if (ask) setMsg(error); else alert(error); return; }
     location.reload();
   };
-  const open = (k: Ask["kind"]) => { setAsk(ASK[k]); setWhy(k === "reason" ? reason ?? "" : ""); setSince(local(new Date())); setMsg(""); setMenu(false); };
+  const open = (k: Ask["kind"]) => { setBill(""); setAsk(ASK[k]); setWhy(k === "reason" ? reason ?? "" : ""); setSince(local(new Date())); setMsg(""); setMenu(false); };
   const submit = () => {
     if (!ask || !why.trim()) return setMsg("Scrie motivul.");
+    if (ask.kind === "cancelled" && inspDone > 0) {
+      if (!bill) return setMsg("Alege dacă se facturează inspecția.");
+      if (bill === "da" && !(Number(price) > 0)) return setMsg("Scrie tariful inspecției, în lei fără TVA.");
+    }
     go(ask.kind === "reopen" ? "in_progress" : ask.kind === "reason" ? "suspended" : ask.kind, why.trim());
   };
   const finishNow = () => {
@@ -95,6 +108,22 @@ export function StatusActions({ id, status, reason, locked = false, finish = nul
               <label className="field">Suspendat din <small>(implicit acum; schimbă dacă s-a suspendat mai demult și nu s-a notat)</small>
                 <input className="input" type="datetime-local" value={since} max={local(new Date())} onChange={(e) => setSince(e.target.value)} />
               </label>
+            )}
+            {ask.kind === "cancelled" && inspDone > 0 && (
+              <fieldset className="stBill">
+                <legend>Inspecția a fost efectuată. Este necesară facturarea inspecției?</legend>
+                <span className="chips">
+                  <button type="button" className="chip" aria-pressed={bill === "da"} onClick={() => setBill("da")}>Da, se facturează inspecția</button>
+                  <button type="button" className="chip" aria-pressed={bill === "nu"} onClick={() => setBill("nu")}>Nu</button>
+                </span>
+                {bill === "da" && <>
+                  <label className="field">Tariful inspecției <small>(lei, fără TVA)</small>
+                    <input className="input" type="number" min={0} step={10} value={price} onChange={(e) => setPrice(e.target.value)} placeholder="ex. 150" autoFocus /></label>
+                  <p className="hint">Tariful inspecției înlocuiește onorariul raportului și tariful din comandă. {billedHere
+                    ? "Raportul anulat apare la Facturare › De facturat, de unde se emite factura în Oblio."
+                    : "Contractul nu se facturează per comandă din CRM, deci nu se creează sarcină de facturare; tariful rămâne notat pe comandă."}</p>
+                </>}
+              </fieldset>
             )}
             {msg && <div role="alert" className="error">{msg}</div>}
             <div className="actions" style={{ justifyContent: "flex-end" }}>

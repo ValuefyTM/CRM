@@ -5100,3 +5100,4 @@ form.xjForm > .card + .card { margin-top: 4px; }
 .xjSum { color: var(--ink) !important; white-space: pre-wrap; }
 .xjRead { border-style: dashed; }
 .simTabs { padding: 0 18px; } .simTabs a { padding: 10px 14px; }
+.stBill { border: 1px solid var(--acc-line); background: var(--acc-soft); border-radius: 12px; padding: 10px 12px; margin: 0; display: flex; flex-direction: column; gap: 8px; } .stBill legend { font-weight: 700; font-size: 13.5px; padding: 0 4px; }

@@ -1,4 +1,5 @@
 import { audit } from "@/lib/auth";
+import { billInspection, unbillInspection } from "@/lib/billing-tasks";
 import { now } from "@/lib/db";
 import { err, json, reportApi } from "@/lib/api";
 import { REPORT_STATUS } from "@/lib/reports";
@@ -107,6 +108,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const reason = raw.trim().slice(0, 500);
     const why = b.status === "suspended" || b.status === "cancelled";
     if (why && !reason) return err(b.status === "suspended" ? "Scrie motivul suspendării." : "Scrie motivul anulării.");
+    // Cancelled after the inspection was done: the inspection can be invoiced (its price takes the place of the fee).
+    const billInsp = b.status === "cancelled" && b.bill_inspection === true;
+    const inspPrice = Math.round(Number(b.inspection_fee) * 100) / 100;
+    if (billInsp) {
+      if (!Number.isFinite(inspPrice) || inspPrice <= 0) return err("Scrie tariful inspecției, în lei fără TVA.");
+      const done = await a.db.prepare("SELECT COUNT(*) AS n FROM inspections WHERE report_id = ? AND status <> 'cancelled' AND (status = 'done' OR done_at IS NOT NULL)").bind(id).first<{ n: number }>();
+      if (!done?.n) return err("Raportul nu are nicio inspecție efectuată.");
+    }
     await a.db.prepare("UPDATE reports SET status = ?, suspend_reason = ?, updated_at = ? WHERE id = ?")
       .bind(b.status, why ? reason : null, now(), id).run();
     // The pause: suspending stops the report's time; leaving the suspension adds the pause to the days left out (and
@@ -120,6 +129,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       if (made && t < Date.parse(made.created_at) - 86400000) return err("Data suspendării e înainte de crearea raportului.");
       if (Date.now() - t > 5 * 60000) since = new Date(t).toISOString();
     }
+    if (billInsp) {
+      const bi = await billInspection(a.db, a.user.id, id, inspPrice);
+      if (!bi.ok) return err(`Raportul a fost anulat, dar tariful inspecției nu s-a putut trece: ${bi.error}`, 409);
+      await addMessage(a.db, "report", id, a.user, `Se facturează inspecția: ${inspPrice.toLocaleString("ro-RO")} lei fără TVA (tariful comenzii a fost schimbat).`);
+    }
+    // brought back from cancelled: the fee of before the cancellation returns
+    if (r.status === "cancelled" && b.status !== "cancelled") await unbillInspection(a.db, a.user.id, id);
     const pause = await setPause(a.db, id, r.status, b.status, since);
     await audit(a.db, actor, "report.status", "report", id, `${REPORT_STATUS[r.status]?.[0] ?? r.status} → ${REPORT_STATUS[b.status][0]}${why ? ` (${reason})` : ""}${since ? ` · din ${new Date(since).toLocaleString("ro-RO", { timeZone: "Europe/Bucharest", dateStyle: "short", timeStyle: "short" })}` : ""}${pause ? ` · pauză ${pause} ${pause === 1 ? "zi lucrătoare" : "zile lucrătoare"}` : ""}`);
     if (why) await addMessage(a.db, "report", id, a.user, `${b.status === "suspended" ? (r.status === "suspended" ? "Motivul suspendării" : `Raport suspendat${since ? ` din ${new Date(since).toLocaleString("ro-RO", { timeZone: "Europe/Bucharest", dateStyle: "short", timeStyle: "short" })}` : ""}`) : (r.status === "cancelled" ? "Motivul anulării" : "Raport anulat")}: ${reason}`);

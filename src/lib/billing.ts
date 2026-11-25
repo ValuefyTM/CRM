@@ -203,13 +203,13 @@ export const FINISHED_HERE = `(r.delivered_at >= (SELECT COALESCE(MAX(value), '9
 
 export async function draftForReport(db: D1Database, reportId: string): Promise<Draft | { error: string }> {
   const b = await getBilling(db);
-  const r = await db.prepare(`SELECT r.id, r.fee, r.fee_gross, r.delivered_at, r.status, r.glide_id, r.invoice_id, r.billed_outside_at, r.contract_id, k.kind AS contract_kind, k.client_id AS party_id, k.billing_mode, k.billing_text, k.fee_grid,
+  const r = await db.prepare(`SELECT r.id, r.fee, r.fee_gross, r.cancel_bill, r.delivered_at, r.status, r.glide_id, r.invoice_id, r.billed_outside_at, r.contract_id, k.kind AS contract_kind, k.client_id AS party_id, k.billing_mode, k.billing_text, k.fee_grid,
       (SELECT p.category FROM assets a JOIN crm_properties p ON p.id = a.property_id WHERE a.report_id = r.id ORDER BY a.is_main DESC LIMIT 1) AS asset_category,
       (SELECT p.type FROM assets a JOIN crm_properties p ON p.id = a.property_id WHERE a.report_id = r.id ORDER BY a.is_main DESC LIMIT 1) AS asset_type,
       ${FINISHED_HERE} AS finished_here,
-      o.collaboration_id, o.fee_net, c.billing_mode AS collab_mode, c.billing_text AS collab_text, c.firm_id
+      o.collaboration_id, o.fee_net, o.bank_ref, o.client_name, c.billing_mode AS collab_mode, c.billing_text AS collab_text, c.firm_id
     FROM reports r LEFT JOIN contracts k ON k.id = r.contract_id LEFT JOIN orders o ON o.id = r.order_id LEFT JOIN collaborations c ON c.id = o.collaboration_id WHERE r.id = ?`).bind(reportId)
-    .first<{ id: string; fee: number | null; fee_gross: number | null; delivered_at: string | null; status: string; glide_id: string | null; invoice_id: string | null; billed_outside_at: string | null; contract_id: string | null; contract_kind: string | null; party_id: string | null; finished_here: number;
+    .first<{ id: string; fee: number | null; fee_gross: number | null; cancel_bill: number; bank_ref?: string | null; client_name?: string | null; delivered_at: string | null; status: string; glide_id: string | null; invoice_id: string | null; billed_outside_at: string | null; contract_id: string | null; contract_kind: string | null; party_id: string | null; finished_here: number;
       fee_grid: string | null; asset_category: string | null; asset_type: string | null;
       billing_mode: BillingMode | null; billing_text: string | null; collaboration_id: string | null; fee_net: number | null; collab_mode: BillingMode | null; collab_text: string | null; firm_id: string | null }>();
   if (!r) return { error: "Raportul nu există." };
@@ -220,21 +220,26 @@ export async function draftForReport(db: D1Database, reportId: string): Promise<
   if (mode !== "per_order") return { error: "Acest raport nu se facturează per comandă (vezi Setări → Facturare)." };
   // Reports closed before "De facturat" existed were invoiced the old way; the ones finished from the CRM since then, once finished.
   if (!r.finished_here) return { error: "Raport închis înainte de pornirea facturării din CRM: a fost facturat în afara CRM-ului." };
-  if (!r.delivered_at && r.status !== "done") return { error: "Factura se emite după finalizarea raportului." };
+  // cancelled after the inspection, with the inspection to be paid: invoiced as it is
+  const inspOnly = r.status === "cancelled" && !!r.cancel_bill;
+  if (r.status === "cancelled" && !inspOnly) return { error: "Raportul este anulat." };
+  if (!inspOnly && !r.delivered_at && r.status !== "done") return { error: "Factura se emite după finalizarea raportului." };
   const party = await partyOf(db, collab ? r.firm_id : r.party_id);
   if (!party) return { error: "Nu știu cui se facturează: contractul nu are bancă / firmă." };
   const price = collab ? r.fee_net ?? r.fee : r.fee;
-  if (!price) return { error: "Raportul nu are onorariu." };
+  if (!price) return { error: inspOnly ? "Inspecția nu are tarif." : "Raportul nu are onorariu." };
   const text = { ...DEFAULT_TEXT, ...parseJson<BillingText>(collab ? r.collab_text : r.billing_text, {}) };
   const vals = (await reportValues(db, r.id)) ?? {};
   // The fee given with VAT (grid "cu TVA", or typed with VAT): the invoice totals exactly it.
   // A net fee with more than 2 decimals (taken out of VAT) is invoiced on its amount with VAT, so the total comes out round.
   const fine = Math.abs(price * 100 - Math.round(price * 100)) > 1e-6;
   const gross = !b.vatPayer ? null : !collab && r.fee_gross != null ? r.fee_gross : fine ? round2(price * (1 + b.vatPercent / 100)) : null;
-  const lines: InvoiceLine[] = [{ name: text.product || b.product, price, quantity: 1, reportId: r.id, description: fillText(text.line, vals), gross }];
+  const lines: InvoiceLine[] = [{ name: inspOnly ? "Inspecție proprietate (comandă anulată)" : text.product || b.product, price, quantity: 1, reportId: r.id,
+    description: inspOnly ? ["Inspecție efectuată; comanda a fost anulată înainte de întocmirea raportului.", r.bank_ref && `Comanda ${r.bank_ref}.`, r.client_name && `Client: ${r.client_name}.`].filter(Boolean).join(" ") : fillText(text.line, vals), gross }];
   const draft = await finishDraft(db, b, "invoice", party, lines, collab ? null : r.contract_id, r.collaboration_id, fillText(text.mentions, vals));
   // Framework contract: the total with VAT is checked against the bank's fee grid for the main asset's kind.
-  if (!collab && r.contract_kind === "framework") {
+  // (the price of an inspection alone is not in the grid)
+  if (!collab && r.contract_kind === "framework" && !inspOnly) {
     const grid = parseFeeGrid(r.fee_grid), kind = feeKindOf(r.asset_category, r.asset_type), rate = gridRate(grid, kind);
     if (!grid) draft.warnings.push("contractul cadru nu are grilă de onorarii setată, deci totalul nu a putut fi verificat");
     else if (!kind || rate == null) draft.warnings.push(`bunul principal (${r.asset_type ?? "fără tip"}) nu are tarif în grila contractului, deci totalul nu a putut fi verificat`);
