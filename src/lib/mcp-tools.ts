@@ -51,7 +51,7 @@ const ASSET_PROPS = {
   adresa: S("Adresa bunului."), localitate: S("Localitatea."), judet: S("Județul."), suprafata: N("Suprafața utilă în m² (opțional)."),
 };
 const BUNURI = { type: "array", maxItems: 20, items: { type: "object", properties: ASSET_PROPS, required: ["bun"] },
-  description: "Mai multe bunuri într-o singură ofertă (de ex. 4 utilaje): câte un element pe bun. Dacă îl dai, câmpurile „bun”, „adresa”… de la nivelul ofertei sunt ignorate; adresa, localitatea și județul lipsă se iau de la primul bun." };
+  description: "Mai multe bunuri într-o singură ofertă (de ex. 4 utilaje): câte un element pe bun (listă; se acceptă și ca text JSON). Dacă îl dai, câmpurile „bun”, „adresa”… de la nivelul ofertei sunt ignorate; adresa, localitatea și județul lipsă se iau de la primul bun." };
 function assetOf(a: Args, fallback: Args = {}) {
   const area = num(a, "suprafata");
   return { type: guessType(str(a, "bun")), description: str(a, "descriere"), vehicle_make: str(a, "marca"), vehicle_model: str(a, "model"), year_built: str(a, "an"),
@@ -59,8 +59,12 @@ function assetOf(a: Args, fallback: Args = {}) {
 }
 /** The assets of a call: the `bunuri` list, else the single asset at the top level; null when the call names none. */
 function assetsOf(a: Args) {
-  const list = Array.isArray(a.bunuri) ? (a.bunuri as unknown[]).filter((x): x is Args => !!x && typeof x === "object") : [];
-  if (list.length) { const head = { ...a, ...list[0] }; return list.map((x) => assetOf(x, head)); }
+  // a client with an older copy of the schema sends the list as JSON text, in „bunuri” or even in „bun”: read it all the same
+  const parsed = (v: unknown): unknown => { if (typeof v !== "string" || !v.trim().startsWith("[")) return v; try { return JSON.parse(v); } catch { return v; } };
+  const given = parsed(a.bunuri), inBun = parsed(a.bun);
+  const src = Array.isArray(given) ? given : Array.isArray(inBun) ? inBun : [];
+  const list = (src as unknown[]).filter((x): x is Args => !!x && typeof x === "object" && !Array.isArray(x));
+  if (list.length) { const head = { ...a, ...list[0] }; return list.map((x) => assetOf(x, head)).filter((x) => x.type); }
   return str(a, "bun") ? [assetOf(a)] : null;
 }
 const validUntil = (days: number) => new Date(Date.now() + Math.max(1, Math.min(365, days)) * 86400000).toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
@@ -181,7 +185,7 @@ export const TOOLS: Tool[] = [
       const seq = /^(?:of-?)?(\d{1,7})$/i.exec(ref)?.[1];
       const row = await c.db.prepare("SELECT id FROM quotes WHERE id = ?1 OR (?2 IS NOT NULL AND seq = CAST(?2 AS INTEGER)) ORDER BY id = ?1 DESC LIMIT 1").bind(ref, seq ?? null).first<{ id: string }>();
       const q = row ? await getQuote(c.db, row.id) : null;
-      if (!q || (!can(c.user, "orders.all") && q.created_by !== c.user.id)) return { eroare: "Oferta nu a fost găsită. Caut-o cu „oferte”." };
+      if (!q || !can(c.user, "quotes.E") || (!can(c.user, "quotes.all") && q.created_by !== c.user.id)) return { eroare: "Oferta nu a fost găsită. Caut-o cu „oferte”." };
       if (q.status !== "draft" || q.sent_at) return { eroare: `Oferta ${quoteCode(q)} nu mai e ciornă (${QUOTE_STATUS[q.status][0].toLowerCase()}): se modifică din CRM.`, link: c.link(`/oferte/${q.id}`) };
       const has = (k: string) => a[k] !== undefined && a[k] !== null && a[k] !== "";
       const days = num(a, "valabila_zile");
