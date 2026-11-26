@@ -72,7 +72,7 @@ export async function NewOrdersCard({ user, base }: { user: WithPerms & { id: st
           return tile(b.id, logo ? <img src={logo} alt="" /> : <b>{(b.code || b.name).slice(0, 3)}</b>, b.code || (niceName(b.name) || b.name).split(/\s+/)[0], `pe email · ${b.open} în curs`,
             tasks.filter((t) => t.bank_id === b.id).length, orders ? `${base}/comenzi?tab=banci` : undefined);
         })}
-        {every && tile("site", <img src="/valuefy-mark.png" alt="" />, "valuefy.ro", `de pe site · ${open.site ?? 0} în curs`, site.length, `${base}/comenzi?tab=site`, ["neprocesată", "neprocesate"])}
+        {every && tile("site", <img src="/valuefy-mark.png" alt="" />, "valuefy.ro", `cereri de ofertă · ${open.site ?? 0} în curs`, site.length, `${base}/comenzi?tab=site`, ["fără ofertă", "fără ofertă"])}
         {every && tile("collab", <CollabLogo />, "Colaboratori", `din portal · ${open.partner ?? 0} în curs`, collab.length, `${base}/comenzi?tab=parteneri`, ["neprocesată", "neprocesate"])}
       </div>
       {tasks.length > 0 && <TaskList tasks={tasks} base={base} />}
@@ -86,9 +86,9 @@ export async function NewOrdersCard({ user, base }: { user: WithPerms & { id: st
                   {o.source === "site" ? <span className="tkLogo"><img src="/valuefy-mark.png" alt="" /></span>
                     : <span className="tkLogo tkFace" title={o.who ?? undefined}>{photo ? <img src={photo} alt="" /> : <b>{initials(o.who ?? o.partner ?? "")}</b>}<i><CollabLogo /></i></span>}
                   <span className="tkTxt"><b>{orderCode({ id: o.id, seq: o.seq, source: o.source })}{o.client ? ` · ${o.client}` : ""}{o.urgent ? " · urgent" : ""}{!o.viewed_at && <span className="pill pillErr tkNew">nouă</span>}</b>
-                    <small>{[o.source === "site" ? "de pe valuefy.ro" : `de la ${[o.who, o.partner].filter(Boolean).join(" · ") || "colaborator"}`, o.what ? propertyLabel(o.what) : null, o.place, `primită ${age(o.at)}`,
-                      o.viewed_at ? `deschisă${o.viewer ? ` de ${o.viewer}` : ""}, neprocesată` : null].filter(Boolean).join(" · ")}</small></span>
-                  <span className="tkGo">{o.viewed_at ? "Procesează →" : "Deschide →"}</span>
+                    <small>{[o.source === "site" ? "cerere de ofertă de pe valuefy.ro" : `de la ${[o.who, o.partner].filter(Boolean).join(" · ") || "colaborator"}`, o.what ? propertyLabel(o.what) : null, o.place, `primită ${age(o.at)}`,
+                      o.viewed_at ? `deschisă${o.viewer ? ` de ${o.viewer}` : ""}, ${o.source === "site" ? "fără ofertă trimisă" : "neprocesată"}` : null].filter(Boolean).join(" · ")}</small></span>
+                  <span className="tkGo">{!o.viewed_at ? "Deschide →" : o.source === "site" ? "Trimite oferta →" : "Procesează →"}</span>
                 </a>
               </li>
             );

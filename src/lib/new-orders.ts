@@ -2,8 +2,12 @@
 import { can, type WithPerms } from "./perms";
 import { openTasks } from "./mail-rules";
 
-/** An order of the website or of the collaborators' portal nobody processed yet (alias `o`). */
-export const PENDING = `o.status = 'received' AND o.processed_at IS NULL AND NOT EXISTS (SELECT 1 FROM reports r WHERE r.order_id = COALESCE(o.linked_order_id, o.id))`;
+/**
+ * An order of the website or of the collaborators' portal nobody took over yet (alias `o`): no report, not marked
+ * processed, no offer sent. The website sends requests for an offer, so the offer sent is what answers them.
+ */
+export const PENDING = `o.status = 'received' AND o.processed_at IS NULL AND NOT EXISTS (SELECT 1 FROM reports r WHERE r.order_id = COALESCE(o.linked_order_id, o.id))
+  AND NOT EXISTS (SELECT 1 FROM offers f WHERE f.order_id = o.id AND f.sent_at IS NOT NULL)`;
 
 /** Who works on every order (the accredited on framework contracts see the banks only). */
 export const seesEveryOrder = (u: WithPerms) => can(u, "orders") && !(can(u, "orders.contract") && !can(u, "orders.all"));

@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { WithFace } from "@/components/Avatar";
 import { fmtDate, staffPage } from "@/lib/guard";
 import { can } from "@/lib/perms";
-import { isExpired, listQuotes, quoteCode, quoteCounts, QUOTE_STATUS, QUOTE_TABS, quoteWhat } from "@/lib/quotes";
+import { isExpired, listOrderOffers, listQuotes, quoteCode, quoteCounts, QUOTE_STATUS, QUOTE_TABS, quoteWhat } from "@/lib/quotes";
+import { orderCode, propertyLabel } from "@/lib/order-labels";
 import { CrmShell } from "@/components/CrmShell";
 import { ClickRow } from "@/components/ClickRow";
 import { niceName } from "@/lib/labels";
@@ -17,7 +18,10 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
   const tab = QUOTE_TABS.some(([k]) => k === sp.tab) ? sp.tab! : "deschise";
   // Without "all orders": only one's own offers.
   const mine = !can(user, "orders.all") || sp.ale === "1" ? user.id : null;
-  const [rows, counts] = await Promise.all([listQuotes(db, { tab, q: sp.q, mine }), quoteCounts(db, mine)]);
+  const [quotes, onOrders, counts] = await Promise.all([listQuotes(db, { tab, q: sp.q, mine }), listOrderOffers(db, { tab, q: sp.q, mine }), quoteCounts(db, mine)]);
+  // one list: the offers noted here and the ones sent on orders (the website's requests), the latest change first
+  const rows = [...quotes.map((q) => ({ at: q.updated_at, q, o: null })), ...onOrders.map((o) => ({ at: o.updated_at, q: null, o }))].sort((a, b) => (a.at < b.at ? 1 : -1));
+  const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
   const link = (change: { tab?: string; q?: string; ale?: string }) => {
     const n = { tab, q: sp.q, ale: sp.ale, ...change };
     const qs = Object.entries(n).filter(([k, v]) => v && !(k === "tab" && v === "deschise")).map(([k, v]) => `${k}=${encodeURIComponent(v!)}`).join("&");
@@ -45,7 +49,29 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
             <table className="table qtTable">
               <thead><tr><th>Ofertă</th><th>Client</th><th>Ce se evaluează</th><th>Scop · tip</th><th style={{ textAlign: "right" }}>Onorariu</th><th>Valabilă până</th><th>Stare</th><th>De cine</th></tr></thead>
               <tbody>
-                {rows.map((q) => {
+                {rows.map(({ q, o }) => {
+                  if (o) {
+                    const open = o.status === "draft" || o.status === "sent";
+                    const exp = open && o.valid_until < today;
+                    const [label, cls] = open && o.order_status === "cancelled" ? ["Anulată", "pillErr"] : exp ? ["Expirată", "pillWarn"]
+                      : o.status === "accepted" && o.report_number ? ["Convertită", "pillOk"] : QUOTE_STATUS[o.status];
+                    const href = `${base}/comenzi/${o.order_id}#oferta`;
+                    const code = orderCode({ id: o.order_id, seq: o.order_seq, source: o.source ?? undefined });
+                    return (
+                      <ClickRow key={`o${o.id}`} href={href}>
+                        <td><a className="rowLink" href={href}><b className="mono">{o.number}</b></a><div className="muted">{fmtDate(o.sent_at ?? o.created_at)}</div></td>
+                        <td><b>{niceName(o.client_name ?? "")}</b><div className="muted">{[o.client_phone, o.client_email].filter(Boolean).join(" · ")}</div></td>
+                        <td>{[o.property_type ? propertyLabel(o.property_type) : null, o.place].filter(Boolean).join(" · ") || <span className="muted">—</span>}</td>
+                        <td><div className="two"><b>{o.purpose || "—"}</b><small>{o.source === "site" ? `cerere de pe valuefy.ro · ${code}` : `la comanda ${code}`}</small></div></td>
+                        <td style={{ textAlign: "right" }} className="mono num">{lei(o.fee)}</td>
+                        <td><span className={exp ? "errTxt" : undefined}>{fmtDate(o.valid_until)}</span></td>
+                        <td><span className={`pill ${cls}`}><i />{label}</span>{o.urgent ? <span className="pill pillErr" style={{ marginLeft: 4 }}><i />Urgent</span> : null}
+                          {o.report_number && <div className="muted">raport {o.report_number}</div>}</td>
+                        <td><WithFace id={o.created_by} name={o.author} /></td>
+                      </ClickRow>
+                    );
+                  }
+                  if (!q) return null;
                   const exp = isExpired(q);
                   const [label, cls] = exp ? ["Expirată", "pillWarn"] : QUOTE_STATUS[q.status];
                   return (

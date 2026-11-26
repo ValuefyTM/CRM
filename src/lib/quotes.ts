@@ -96,9 +96,49 @@ export async function listQuotes(db: D1Database, f: { tab?: string; q?: string; 
   return rows;
 }
 
-/** How many offers wait (not answered, not expired): the badge in the menu. */
-export const openQuotes = (db: D1Database) =>
-  db.prepare("SELECT COUNT(*) AS n FROM quotes WHERE status IN ('draft', 'sent') AND (valid_until IS NULL OR valid_until >= ?)").bind(today()).first<{ n: number }>().then((r) => r?.n ?? 0).catch(() => 0);
+// ---------- the offers made on orders (the website's requests, the orders typed in): shown in the same list ----------
+
+/** An offer prepared on an order (Comenzi → the order → Ofertă), as a row of the Oferte list; it opens the order. */
+export type OrderOfferRow = {
+  id: string; order_id: string; number: string; status: "draft" | "sent" | "accepted" | "declined"; fee: number; valid_until: string; sent_at: string | null; created_at: string; updated_at: string;
+  created_by: string | null; author: string | null; client_name: string | null; client_phone: string | null; client_email: string | null; property_type: string | null; place: string | null;
+  purpose: string | null; report_type: string | null; urgent: number; order_seq: number | null; source: string | null; order_status: string; report_number: string | null;
+};
+/** only the last offer of an order counts (a new one replaces a declined one) */
+const OO_FROM = `FROM offers f JOIN orders o ON o.id = f.order_id WHERE f.created_at = (SELECT MAX(x.created_at) FROM offers x WHERE x.order_id = f.order_id)`;
+const OO_REPORT = `EXISTS (SELECT 1 FROM reports r WHERE r.order_id = COALESCE(o.linked_order_id, o.id))`;
+/** ?1 = today (named in every one, as D1 wants each parameter used) */
+const OO_TAB: Record<string, string> = {
+  deschise: `f.status IN ('draft', 'sent') AND f.valid_until >= ?1 AND o.status <> 'cancelled'`,
+  acceptate: `f.status = 'accepted' AND ?1 = ?1 AND NOT ${OO_REPORT}`,
+  convertite: `f.status = 'accepted' AND ?1 = ?1 AND ${OO_REPORT}`,
+  refuzate: `(f.status = 'declined' OR (f.status IN ('draft', 'sent') AND (f.valid_until < ?1 OR o.status = 'cancelled')))`,
+  toate: `?1 = ?1`,
+};
+
+export async function listOrderOffers(db: D1Database, f: { tab?: string; q?: string; mine?: string | null }) {
+  const w = [OO_TAB[f.tab ?? "deschise"] ?? OO_TAB.deschise], p: (string | number)[] = [today()];
+  if (f.mine) { p.push(f.mine); w.push(`f.created_by = ?${p.length}`); }
+  const s = (f.q ?? "").trim().replace(/[%_]/g, "");
+  if (s) { p.push(`%${s}%`); const n = `?${p.length}`; w.push(`(COALESCE(f.client_name, o.client_name) LIKE ${n} OR o.client_phone LIKE ${n} OR COALESCE(f.client_email, o.client_email) LIKE ${n} OR o.city LIKE ${n} OR o.address LIKE ${n} OR f.number LIKE ${n} OR o.purpose LIKE ${n})`); }
+  return (await db.prepare(`SELECT f.id, f.order_id, f.number, f.status, f.fee, f.valid_until, f.sent_at, f.created_at, f.updated_at, f.created_by,
+        (SELECT COALESCE(NULLIF(u.name, ''), u.email) FROM users u WHERE u.id = f.created_by) AS author,
+        COALESCE(NULLIF(f.client_name, ''), o.client_name) AS client_name, o.client_phone, COALESCE(NULLIF(f.client_email, ''), o.client_email) AS client_email,
+        o.property_type, COALESCE(NULLIF(o.city, ''), o.address) AS place, o.purpose, o.report_type, o.urgent, o.seq AS order_seq, o.source, o.status AS order_status,
+        (SELECT r.number FROM reports r WHERE r.order_id = COALESCE(o.linked_order_id, o.id) ORDER BY r.created_at LIMIT 1) AS report_number
+      ${OO_FROM} AND ${w.join(" AND ")} ORDER BY f.updated_at DESC LIMIT 300`).bind(...p).all<OrderOfferRow>().catch((e) => { console.error("order offers", e); return { results: [] as OrderOfferRow[] }; })).results;
+}
+
+async function orderOfferCounts(db: D1Database, mine?: string | null) {
+  const r = await db.prepare(`SELECT ${Object.entries(OO_TAB).map(([k, c]) => `SUM(${c}) AS ${k}`).join(", ")} ${OO_FROM} ${mine ? "AND f.created_by = ?2" : ""}`)
+    .bind(today(), ...(mine ? [mine] : [])).first<Record<string, number | null>>().catch(() => null);
+  return r ?? {};
+}
+
+/** How many offers wait (not answered, not expired), the ones made on orders included: the badge in the menu. */
+export const openQuotes = async (db: D1Database) =>
+  (await db.prepare("SELECT COUNT(*) AS n FROM quotes WHERE status IN ('draft', 'sent') AND (valid_until IS NULL OR valid_until >= ?)").bind(today()).first<{ n: number }>().then((r) => r?.n ?? 0).catch(() => 0))
+  + ((await orderOfferCounts(db)).deschise ?? 0);
 
 export async function quoteCounts(db: D1Database, mine?: string | null) {
   const t = today();
@@ -106,7 +146,8 @@ export async function quoteCounts(db: D1Database, mine?: string | null) {
       SUM(status IN ('draft', 'sent') AND (valid_until IS NULL OR valid_until >= ?1)) AS deschise, SUM(status = 'accepted') AS acceptate, SUM(status = 'converted') AS convertite,
       SUM(status IN ('declined', 'cancelled') OR (status IN ('draft', 'sent') AND valid_until IS NOT NULL AND valid_until < ?1)) AS refuzate, COUNT(*) AS toate
     FROM quotes ${mine ? "WHERE created_by = ?2" : ""}`).bind(t, ...(mine ? [mine] : [])).first<Record<string, number | null>>();
-  return Object.fromEntries(QUOTE_TABS.map(([k]) => [k, r?.[k] ?? 0])) as Record<string, number>;
+  const oo = await orderOfferCounts(db, mine);
+  return Object.fromEntries(QUOTE_TABS.map(([k]) => [k, (r?.[k] ?? 0) + (oo[k] ?? 0)])) as Record<string, number>;
 }
 
 // ---------- write ----------
