@@ -92,8 +92,16 @@ export function objectFor(o: Order) {
   return `${what}${size ? ` (${size})` : ""}${where ? `, situat(ă) în ${where}` : ""} — dreptul de proprietate deplin.`;
 }
 
-export function defaultTerms(o: Order, f: { evaluator: string | null; anevar: string | null; object: string; valueType: string; client: string }) {
+/** `movable`: equipment and vehicles — no land register, no building; the wording follows the goods. */
+export function defaultTerms(o: Order, f: { evaluator: string | null; anevar: string | null; object: string; valueType: string; client: string; movable?: boolean }) {
   const user = o.bank ? `${o.bank}, în calitate de finanțator, și clientul` : "clientul";
+  const scope = f.movable
+    ? "Inspecția vizuală a bunurilor la fața locului și analiza documentelor puse la dispoziție de client. Nu se efectuează verificări juridice ale dreptului de proprietate, expertize tehnice, probe de funcționare sau demontări."
+    : "Inspecția vizuală a proprietății la fața locului și analiza documentelor puse la dispoziție de client. Nu se efectuează verificări juridice ale titlului de proprietate, expertize tehnice ale construcției, măsurători topografice sau investigații de mediu.";
+  const assumptions = f.movable
+    ? "Dreptul de proprietate este considerat valabil și transferabil, liber de sarcini, cu excepția celor comunicate de client. Bunurile sunt considerate complete și în stare de funcționare, dacă la inspecție nu se constată altfel. Nu se utilizează ipoteze speciale, cu excepția celor convenite în scris înainte de emiterea raportului."
+    : "Dreptul de proprietate este considerat valabil și transferabil, liber de sarcini, cu excepția celor menționate în extrasul de carte funciară. Nu se utilizează ipoteze speciale, cu excepția celor convenite în scris înainte de emiterea raportului.";
+  const access = f.movable ? "acces refuzat la bunuri" : "acces refuzat la proprietate";
   return `## Evaluatorul
 ${COMPANY.name} (CUI ${COMPANY.cui}), firmă autorizată ANEVAR. Evaluator desemnat: ${f.evaluator ?? "se comunică la acceptare"}${f.anevar ? `, legitimație ANEVAR nr. ${f.anevar}` : ""}. Evaluatorul acționează independent și obiectiv și nu are niciun interes legat de bunul evaluat sau de părțile implicate.
 
@@ -113,13 +121,13 @@ ${f.valueType}
 Data evaluării este data inspecției, dacă nu se convine altfel în scris. Valoarea se exprimă în lei; unde este cazul, se prezintă și echivalentul în euro la cursul BNR din data evaluării.
 
 ## Natura și amploarea investigațiilor
-Inspecția vizuală a proprietății la fața locului și analiza documentelor puse la dispoziție de client. Nu se efectuează verificări juridice ale titlului de proprietate, expertize tehnice ale construcției, măsurători topografice sau investigații de mediu.
+${scope}
 
 ## Natura și sursa informațiilor
 Documentele și informațiile furnizate de client sunt considerate corecte și complete. Informațiile de piață provin din tranzacții și oferte comparabile, baze de date de specialitate și analiza proprie a evaluatorului.
 
 ## Ipoteze și ipoteze speciale
-Dreptul de proprietate este considerat valabil și transferabil, liber de sarcini, cu excepția celor menționate în extrasul de carte funciară. Nu se utilizează ipoteze speciale, cu excepția celor convenite în scris înainte de emiterea raportului.
+${assumptions}
 
 ## Restricții de utilizare, difuzare și publicare
 Raportul este confidențial și destinat exclusiv clientului și utilizatorilor desemnați, în scopul precizat. Nicio parte a raportului nu poate fi publicată sau transmisă terților fără acordul scris al evaluatorului.
@@ -131,7 +139,7 @@ Evaluarea se realizează în conformitate cu Standardele de evaluare a bunurilor
 Raport de evaluare scris, transmis în format PDF semnat electronic, împreună cu anexele relevante (fotografii, comparabile, documente).
 
 ## Onorariu
-Onorariul nu depinde de valoarea rezultată din evaluare. Dacă evaluarea nu poate fi finalizată din motive care țin de client (documente indisponibile, acces refuzat la proprietate), se datorează contravaloarea lucrărilor efectuate până la acel moment.
+Onorariul nu depinde de valoarea rezultată din evaluare. Dacă evaluarea nu poate fi finalizată din motive care țin de client (documente indisponibile, ${access}), se datorează contravaloarea lucrărilor efectuate până la acel moment.
 
 ## Confidențialitate și protecția datelor
 Datele personale sunt prelucrate conform Politicii de confidențialitate VALUEFY, exclusiv pentru realizarea evaluării și îndeplinirea obligațiilor legale.`;
