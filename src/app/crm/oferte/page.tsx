@@ -13,12 +13,12 @@ export const dynamic = "force-dynamic";
 
 /** The offers made to clients: open (to send / waiting for an answer), accepted, converted into work, declined or expired. */
 export default async function QuotesPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; ale?: string }> }) {
-  const { db, user, base } = await staffPage("orders");
+  const { db, user, base } = await staffPage("quotes");
   const sp = await searchParams;
   const tab = QUOTE_TABS.some(([k]) => k === sp.tab) ? sp.tab! : "deschise";
-  // Without "all orders": only one's own offers.
-  const mine = !can(user, "orders.all") || sp.ale === "1" ? user.id : null;
-  const [quotes, onOrders, counts] = await Promise.all([listQuotes(db, { tab, q: sp.q, mine }), listOrderOffers(db, { tab, q: sp.q, mine }), quoteCounts(db, mine)]);
+  // With "Făcute de el": only one's own offers.
+  const mine = !can(user, "quotes.all") || sp.ale === "1" ? user.id : null;
+  const [quotes, onOrders, counts] = await Promise.all([listQuotes(db, { tab, q: sp.q, mine }), can(user, "orders") ? listOrderOffers(db, { tab, q: sp.q, mine }) : Promise.resolve([]), quoteCounts(db, mine, can(user, "orders"))]);
   // one list: the offers noted here and the ones sent on orders (the website's requests), the latest change first
   const rows = [...quotes.map((q) => ({ at: q.updated_at, q, o: null })), ...onOrders.map((o) => ({ at: o.updated_at, q: null, o }))].sort((a, b) => (a.at < b.at ? 1 : -1));
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
@@ -30,7 +30,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
   const lei = (n: number | null) => (n == null ? "—" : `${n.toLocaleString("ro-RO", { maximumFractionDigits: 2 })} lei`);
   return (
     <CrmShell user={user} base={base} active="quotes" title="Oferte" subtitle="Ofertele făcute clienților, până devin comenzi sau contracte"
-      actions={<>{can(user, "orders.all") && <a className={`btn btnSm ${mine ? "btnGold" : "btnGhost"}`} href={link({ ale: mine ? undefined : "1" })}>{mine ? "Toate ofertele" : "Ofertele mele"}</a>}{can(user, "orders.A") && <a className="btn btnGold btnSm" href={`${base}/oferte/noua`}>+ Ofertă nouă</a>}</>}>
+      actions={<>{can(user, "quotes.all") && <a className={`btn btnSm ${mine ? "btnGold" : "btnGhost"}`} href={link({ ale: mine ? undefined : "1" })}>{mine ? "Toate ofertele" : "Ofertele mele"}</a>}{can(user, "quotes.A") && <a className="btn btnGold btnSm" href={`${base}/oferte/noua`}>+ Ofertă nouă</a>}</>}>
       <section className="card repFilters">
         <form className="filterBar" method="get" action={`${base}/oferte`}>
           {tab !== "deschise" && <input type="hidden" name="tab" value={tab} />}

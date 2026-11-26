@@ -21,11 +21,11 @@ export const dynamic = "force-dynamic";
 
 /** One offer: what was offered to whom, its state, and the way into work (direct or on a collaboration). */
 export default async function QuotePage({ params }: { params: Promise<{ id: string }> }) {
-  const { db, user, base } = await staffPage("orders");
+  const { db, user, base } = await staffPage("quotes");
   const { id } = await params;
   const q = await getQuote(db, id);
   if (!q) notFound();
-  if (!can(user, "orders.all") && q.created_by !== user.id) notFound();
+  if (!can(user, "quotes.all") && q.created_by !== user.id) notFound();
   const [{ collabs }, evaluators, billing, log, publicLink] = await Promise.all([contractChoices(db), evaluatorChoices(db), getBilling(db), history(db, [id]), q.token && q.sent_at ? offerLink({ token: q.token }) : Promise.resolve(null)]);
   const assets = quoteAssets(q);
   const exp = isExpired(q);
@@ -72,7 +72,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
                 {q.contract_id && <> · <a className="link" href={`${base}/contracte/${q.contract_id}`}>contract {q.contract_number ?? ""}</a></>}
               </div>
             )}
-            <QuoteActions id={q.id} status={q.status} base={base} canEdit={can(user, "orders.E")} canDelete={can(user, "orders.D")} canConvert={can(user, "orders.A")}
+            <QuoteActions id={q.id} status={q.status} base={base} canEdit={can(user, "quotes.E")} canSend={can(user, "quotes:send")} canDelete={can(user, "quotes.D")} canConvert={can(user, "quotes:convert")}
               collabs={collabs.map((c) => ({ id: c.id, firm: c.firm, number: c.number }))} me={user.id} channel={q.channel} collaborationId={q.collaboration_id} hasEmail={!!q.client_email} email={q.client_email ?? ""} hasFee={!!q.fee} publicLink={publicLink}
               evaluators={evaluators.map((e) => ({ id: e.id, name: e.name, sub: e.sub, presence: e.presence, seen: e.seen, photo: e.photo, duties: e.duties }))} />
           </section>

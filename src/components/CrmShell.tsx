@@ -64,7 +64,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
   const toBillN = db && may("billing") ? await toBillCount(db, ownBillingOnly(u) ? u.id : null).catch(() => 0) : 0;
   // Inspecții: the ones still to do (to schedule or scheduled), as the page shows them to this user.
   // Oferte: the ones still open (to send or waiting for an answer).
-  const quotesN = db && may("orders") ? await openQuotes(db) : 0;
+  const quotesN = db && may("quotes") ? await openQuotes(db, may("quotes.all") ? null : u.id, may("orders")) : 0;
   // Comenzi neprocesate: the red circle next to the bell, leading to the card on the dashboard.
   const pendingN = db ? await pendingOrdersCount(db, u).catch(() => 0) : 0;
   const expertN = db && isExpert(u) ? (await termNotices(db, u).catch(() => [])).length : 0;
@@ -85,7 +85,7 @@ export async function CrmShell(props: { user: User; base: string; active: string
         ...group("CRM", "g-crm", [
           may("clients") && { key: "clients", label: "Clienți / Entități", href: `${b}/clienti` },
           may("contracts") && { key: "contracts", label: "Contracte", href: `${b}/contracte` },
-          may("orders") && { key: "quotes", label: "Oferte", href: `${b}/oferte`, badge: quotesN },
+          may("quotes") && { key: "quotes", label: "Oferte", href: `${b}/oferte`, badge: quotesN },
           may("orders") && { key: "orders", label: "Comenzi", href: `${b}/comenzi`, badge: unread, hot: true },
           may("tenders") && { key: "tenders", label: "Licitații SEAP", href: `${b}/licitatii` },
           may("listings") && { key: "listings", label: "Anunțuri imobiliare", href: `${b}/anunturi`, badge: inquiries, hot: true },

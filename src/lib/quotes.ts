@@ -136,17 +136,17 @@ async function orderOfferCounts(db: D1Database, mine?: string | null) {
 }
 
 /** How many offers wait (not answered, not expired), the ones made on orders included: the badge in the menu. */
-export const openQuotes = async (db: D1Database) =>
-  (await db.prepare("SELECT COUNT(*) AS n FROM quotes WHERE status IN ('draft', 'sent') AND (valid_until IS NULL OR valid_until >= ?)").bind(today()).first<{ n: number }>().then((r) => r?.n ?? 0).catch(() => 0))
-  + ((await orderOfferCounts(db)).deschise ?? 0);
+export const openQuotes = async (db: D1Database, mine: string | null = null, withOrders = true) =>
+  (await db.prepare(`SELECT COUNT(*) AS n FROM quotes WHERE status IN ('draft', 'sent') AND (valid_until IS NULL OR valid_until >= ?1) ${mine ? "AND created_by = ?2" : ""}`).bind(today(), ...(mine ? [mine] : [])).first<{ n: number }>().then((r) => r?.n ?? 0).catch(() => 0))
+  + (withOrders ? (await orderOfferCounts(db, mine)).deschise ?? 0 : 0);
 
-export async function quoteCounts(db: D1Database, mine?: string | null) {
+export async function quoteCounts(db: D1Database, mine?: string | null, withOrders = true) {
   const t = today();
   const r = await db.prepare(`SELECT
       SUM(status IN ('draft', 'sent') AND (valid_until IS NULL OR valid_until >= ?1)) AS deschise, SUM(status = 'accepted') AS acceptate, SUM(status = 'converted') AS convertite,
       SUM(status IN ('declined', 'cancelled') OR (status IN ('draft', 'sent') AND valid_until IS NOT NULL AND valid_until < ?1)) AS refuzate, COUNT(*) AS toate
     FROM quotes ${mine ? "WHERE created_by = ?2" : ""}`).bind(t, ...(mine ? [mine] : [])).first<Record<string, number | null>>();
-  const oo = await orderOfferCounts(db, mine);
+  const oo = withOrders ? await orderOfferCounts(db, mine) : {};
   return Object.fromEntries(QUOTE_TABS.map(([k]) => [k, (r?.[k] ?? 0) + (oo[k] ?? 0)])) as Record<string, number>;
 }
 

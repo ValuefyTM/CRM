@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: "Modifică oferta | CRM VALUEFY" };
 export const dynamic = "force-dynamic";
 
 export default async function EditQuote({ params }: { params: Promise<{ id: string }> }) {
-  const { db, user, base } = await staffPage("orders.E");
+  const { db, user, base } = await staffPage("quotes.E");
   const { id } = await params;
   const q = await getQuote(db, id);
   if (!q) notFound();

@@ -13,10 +13,10 @@ export const dynamic = "force-dynamic";
 
 /** An offer from Oferte exactly as the client will see it, also while it is a draft; nothing is counted as opened by the client. */
 export default async function QuotePreview({ params }: { params: Promise<{ id: string }> }) {
-  const { db, user, base } = await staffPage("orders");
+  const { db, user, base } = await staffPage("quotes");
   const { id } = await params;
   const q = await getQuote(db, id);
-  if (!q || (!can(user, "orders.all") && q.created_by !== user.id)) notFound();
+  if (!q || (!can(user, "quotes.all") && q.created_by !== user.id)) notFound();
   const v = await quoteAsOffer(db, q);
   const a = quoteAssets(q)[0];
   const ll = parseGeo(typeof a?.geo === "string" ? a.geo : null);
@@ -29,7 +29,7 @@ export default async function QuotePreview({ params }: { params: Promise<{ id: s
           <div><b>Previzualizare</b><span>{q.status === "draft" ? "Ciornă: așa va vedea clientul oferta. Încă nu a fost trimisă." : "Așa vede clientul oferta."}</span></div>
           <div className="ofRow">
             <a className="ofBtnGhost" href={back}>← Înapoi la ofertă</a>
-            {q.status === "draft" && can(user, "orders.E") && <a className="ofBtnGhost" href={`${back}/editare`}>Modifică</a>}
+            {q.status === "draft" && can(user, "quotes.E") && <a className="ofBtnGhost" href={`${back}/editare`}>Modifică</a>}
           </div>
         </div>
       )} />

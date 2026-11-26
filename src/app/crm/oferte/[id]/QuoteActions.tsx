@@ -17,8 +17,8 @@ async function patch(id: string, body: Record<string, unknown>) {
   return r?.ok ? null : d.error ?? "Nu am putut salva.";
 }
 
-export function QuoteActions({ id, status, base, canEdit, canDelete, canConvert, collabs, evaluators, me, channel, collaborationId, hasEmail, email, hasFee, publicLink }: {
-  id: string; status: string; base: string; canEdit: boolean; canDelete: boolean; canConvert: boolean; collabs: Collab[]; evaluators: PickPerson[]; me: string;
+export function QuoteActions({ id, status, base, canEdit, canSend, canDelete, canConvert, collabs, evaluators, me, channel, collaborationId, hasEmail, email, hasFee, publicLink }: {
+  id: string; status: string; base: string; canEdit: boolean; canSend: boolean; canDelete: boolean; canConvert: boolean; collabs: Collab[]; evaluators: PickPerson[]; me: string;
   channel: string | null; collaborationId: string | null; hasEmail: boolean; email: string; hasFee: boolean;
   /** the public page, once the offer was sent by email */
   publicLink: string | null;
@@ -85,7 +85,7 @@ export function QuoteActions({ id, status, base, canEdit, canDelete, canConvert,
   const open = status === "draft" || status === "sent" || status === "accepted";
   return (
     <div className="qtActions">
-      {(status === "draft" || status === "sent") && canEdit && <button type="button" className="btn btnNavy btnSm" disabled={busy || !hasFee} title={hasFee ? undefined : "Completează întâi onorariul"} onClick={() => { setSentLink(null); setSendBox(true); }}>{status === "sent" ? "Retrimite pe email" : "Trimite clientului"}</button>}
+      {(status === "draft" || status === "sent") && canSend && <button type="button" className="btn btnNavy btnSm" disabled={busy || !hasFee} title={hasFee ? undefined : "Completează întâi onorariul"} onClick={() => { setSentLink(null); setSendBox(true); }}>{status === "sent" ? "Retrimite pe email" : "Trimite clientului"}</button>}
       {status === "draft" && canEdit && <button type="button" className="btn btnGhost btnSm" disabled={busy} onClick={() => setSentBox(true)}>Marchează trimisă</button>}
       {publicLink && <button type="button" className="btn btnGhost btnSm" onClick={() => copy(publicLink)}>{copied ? "Link copiat ✓" : "Copiază linkul public"}</button>}
       {publicLink && <a className="btn btnGhost btnSm" href={publicLink} target="_blank" rel="noopener">Vezi pagina clientului ↗</a>}
