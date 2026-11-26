@@ -10,7 +10,8 @@ import { DOCS, type PropertyType } from "./order-labels";
 import type { Order } from "./orders";
 import { DEFAULT_APPROACHES, DEFAULT_PAYMENT_TERMS, defaultTerms, objectFor, offerHash, standardsFor, valueTypeFor, type Offer } from "./offers";
 import { sendAcceptedEmails, sendDeclinedEmail, sendOfferEmail } from "./offer-emails";
-import { getQuote, quoteAssets, quoteCode, type Quote } from "./quotes";
+import { getQuote, quoteAssets, quoteCode, type Quote, type QuoteAsset } from "./quotes";
+import { capType } from "./asset-labels";
 
 export const quoteByToken = (db: D1Database, token: string) =>
   token.length >= 20 ? db.prepare("SELECT id FROM quotes WHERE token = ?").bind(token).first<{ id: string }>().then((r) => (r ? getQuote(db, r.id) : null)) : Promise.resolve(null);
@@ -22,6 +23,37 @@ export async function ensureQuoteToken(db: D1Database, q: Quote) {
   await db.prepare("UPDATE quotes SET token = ? WHERE id = ? AND token IS NULL").bind(token, q.id).run();
   return (await getQuote(db, q.id))?.token ?? token;
 }
+
+// ---------- equipment and vehicles (bunuri mobile) ----------
+
+const VEHICLE = /AUTOTURISM|AUTOUTILITARA|MOTOSCUTER/;
+const isMovable = (a: QuoteAsset) => a.category === "BUN MOBIL" || /UTILAJ/.test(String(a.type ?? "")) || VEHICLE.test(String(a.type ?? ""));
+const txt = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+/** "Utilaj Schmitt Bonding — linie de laminare cu flacără" */
+const movableLine = (a: QuoteAsset) => {
+  const name = [capType(txt(a.type)), txt(a.vehicle_make), txt(a.vehicle_model)].filter(Boolean).join(" ");
+  return [name, txt(a.description)].filter(Boolean).join(" — ");
+};
+/** The object of the valuation when every asset of the quote is equipment or a vehicle: all of them, not only the first. */
+function movableObject(assets: QuoteAsset[]) {
+  const first = assets[0];
+  const place = [txt(first.full_address), txt(first.city)].filter(Boolean);
+  const where = place.length > 1 && place[0].toLowerCase().includes(place[1].toLowerCase()) ? place[0] : place.join(", ");
+  if (assets.length === 1) return `${movableLine(first)}${where ? `, aflat în ${where}` : ""} — dreptul de proprietate deplin.`;
+  return `${assets.length} bunuri mobile${where ? `, aflate în ${where}` : ""}: ${assets.map((a, i) => `(${i + 1}) ${movableLine(a)}`).join("; ")} — dreptul de proprietate deplin.`;
+}
+const MOVABLE_APPROACHES = "Abordarea prin piață și/sau abordarea prin cost, conform datelor disponibile pentru fiecare bun.";
+const EQUIPMENT_DOCS = [
+  { label: "Factură sau contract de achiziție", received: false },
+  { label: "Fișa mijlocului fix / extras din registrul mijloacelor fixe", received: false },
+  { label: "Carte tehnică sau date de identificare (producător, model, serie, an)", received: false },
+  { label: "Facturi de modernizări și reparații capitale", received: false, optional: true },
+];
+const VEHICLE_DOCS = [
+  { label: "Certificat de înmatriculare (talon)", received: false },
+  { label: "Cartea de identitate a vehiculului", received: false },
+  { label: "Factură sau contract de achiziție", received: false, optional: true },
+];
 
 const plusDays = (n: number) => new Date(Date.now() + n * 86400000).toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
 
@@ -52,7 +84,9 @@ export async function quoteAsOffer(db: D1Database, q: Quote): Promise<{ offer: O
     creator_name: author?.name ?? null, creator_email: null, partner_name: null, doc_count: 0, collab_firm: q.collab_firm, contract_number: null, contract_kind: null,
     bank_logo: null, report_id: q.report_id, report_number: q.report_number,
   };
-  const object = objectFor(order), valueType = valueTypeFor(q.purpose);
+  // equipment and vehicles: the object names every asset, and the documents and terms are those of movable goods
+  const movable = raw.length > 0 && raw.every(isMovable);
+  const object = movable ? movableObject(raw) : objectFor(order), valueType = valueTypeFor(q.purpose);
   const type = (order.property_type && DOCS[order.property_type as PropertyType] ? order.property_type : "other") as PropertyType;
   const status: Offer["status"] = q.status === "accepted" || q.status === "converted" ? "accepted" : q.status === "declined" || q.status === "cancelled" ? "declined" : q.status === "sent" ? "sent" : "draft";
   const offer: Offer = {
@@ -60,9 +94,9 @@ export async function quoteAsOffer(db: D1Database, q: Quote): Promise<{ offer: O
     client_name: q.client_name, client_email: q.client_email,
     fee: q.fee ?? 0, travel_fee: null, travel_label: null, urgent_fee: null, vat_rate: billing.vatPercent,
     term_days: q.term_days ?? 3, urgent_days: null, valid_until: q.valid_until ?? plusDays(14), payment_terms: q.payment_terms ?? DEFAULT_PAYMENT_TERMS,
-    evaluator_id: author?.id ?? null, message: q.message, object_text: object, value_type: valueType, approaches: DEFAULT_APPROACHES, standards: standardsFor(q.purpose),
-    documents: JSON.stringify(DOCS[type].map((d) => ({ label: d.label, received: false, optional: d.optional }))),
-    terms: defaultTerms(order, { evaluator: author?.name ?? null, anevar: author?.anevar_no ?? null, object, valueType, client: q.client_name }),
+    evaluator_id: author?.id ?? null, message: q.message, object_text: object, value_type: valueType, approaches: movable ? MOVABLE_APPROACHES : DEFAULT_APPROACHES, standards: standardsFor(q.purpose),
+    documents: JSON.stringify(movable ? (raw.every((a) => VEHICLE.test(String(a.type ?? ""))) ? VEHICLE_DOCS : EQUIPMENT_DOCS) : DOCS[type].map((d) => ({ label: d.label, received: false, optional: d.optional }))),
+    terms: defaultTerms(order, { evaluator: author?.name ?? null, anevar: author?.anevar_no ?? null, object, valueType, client: q.client_name, movable }),
     sent_at: q.sent_at, sent_to: q.sent_to, viewed_at: q.viewed_at,
     accepted_at: status === "accepted" ? q.decided_at : null, accepted_name: q.accepted_name, accepted_urgent: 0, signature: q.signature, accepted_ip: q.accepted_ip,
     content_hash: q.content_hash, declined_at: status === "declined" ? q.decided_at : null, decline_reason: q.decline_reason,

@@ -1,4 +1,4 @@
-// Server-only: the actions Claude can use through the MCP connector — read-only (one exception: noting an offer),
+// Server-only: the actions Claude can use through the MCP connector — read-only (one exception: draft offers, created and edited),
 // at most 50 rows per answer.
 // Each one reuses the CRM's own queries where they exist, and returns compact JSON with links to the CRM pages.
 import { resultEurSql, toEur } from "./eur";
@@ -16,7 +16,7 @@ import { invoicesFor } from "./billing";
 import { dashboard } from "./dashboard";
 import { listLeads, leadStatus } from "./leads";
 import { listInquiries } from "./listings";
-import { createQuote, guessType, isExpired, listQuotes, quoteCode, QUOTE_STATUS, quoteWhat } from "./quotes";
+import { createQuote, getQuote, guessType, isExpired, listQuotes, quoteAssets, quoteCode, QUOTE_STATUS, quoteWhat, updateQuote, type Quote } from "./quotes";
 import { PURPOSES } from "./order-labels";
 import { can } from "./perms";
 import { listMarket, nearbyMarket } from "./market/search";
@@ -41,6 +41,35 @@ const today = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/B
 const S = (description: string, extra: Record<string, unknown> = {}) => ({ type: "string", description, ...extra });
 const N = (description: string, extra: Record<string, unknown> = {}) => ({ type: "number", description, ...extra });
 const LIMIT = N(`Câte rânduri (implicit 20, maxim ${MAX}).`);
+
+// ---------- offers (the only writes) ----------
+
+const ASSET_PROPS = {
+  bun: S("Ce se evaluează: apartament, casă, teren, spațiu comercial, autoturism, utilaj… (se potrivește cu tipurile din CRM)."),
+  descriere: S("Descrierea bunului, cum apare în ofertă (max. 300 de caractere), de ex. „linie de laminare cu flacără, serie 3257/88, an 1988”."),
+  marca: S("Marca / producătorul (utilaje, vehicule)."), model: S("Modelul (utilaje, vehicule)."), an: S("Anul fabricației sau al construcției."),
+  adresa: S("Adresa bunului."), localitate: S("Localitatea."), judet: S("Județul."), suprafata: N("Suprafața utilă în m² (opțional)."),
+};
+const BUNURI = { type: "array", maxItems: 20, items: { type: "object", properties: ASSET_PROPS, required: ["bun"] },
+  description: "Mai multe bunuri într-o singură ofertă (de ex. 4 utilaje): câte un element pe bun. Dacă îl dai, câmpurile „bun”, „adresa”… de la nivelul ofertei sunt ignorate; adresa, localitatea și județul lipsă se iau de la primul bun." };
+function assetOf(a: Args, fallback: Args = {}) {
+  const area = num(a, "suprafata");
+  return { type: guessType(str(a, "bun")), description: str(a, "descriere"), vehicle_make: str(a, "marca"), vehicle_model: str(a, "model"), year_built: str(a, "an"),
+    full_address: str(a, "adresa") || str(fallback, "adresa"), city: str(a, "localitate") || str(fallback, "localitate"), county: str(a, "judet") || str(fallback, "judet"), usable_area: area != null ? String(area) : "" };
+}
+/** The assets of a call: the `bunuri` list, else the single asset at the top level; null when the call names none. */
+function assetsOf(a: Args) {
+  const list = Array.isArray(a.bunuri) ? (a.bunuri as unknown[]).filter((x): x is Args => !!x && typeof x === "object") : [];
+  if (list.length) { const head = { ...a, ...list[0] }; return list.map((x) => assetOf(x, head)); }
+  return str(a, "bun") ? [assetOf(a)] : null;
+}
+const validUntil = (days: number) => new Date(Date.now() + Math.max(1, Math.min(365, days)) * 86400000).toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
+/** What a write on an offer answers: the offer as stored, with the links to check, edit and send it. */
+function quoteAnswer(c: Ctx, q: Quote) {
+  return { ok: true, numar: quoteCode(q), id: q.id, stare: QUOTE_STATUS[q.status][0], client: q.client_name, bunuri: quoteAssets(q).length, bun: quoteWhat(q) || null,
+    onorariu_lei: q.fee, termen_zile: q.term_days, plata: q.payment_terms, valabila_pana: q.valid_until,
+    previzualizare: c.link(`/oferte/${q.id}/previzualizare`), link: c.link(`/oferte/${q.id}`), modifica: c.link(`/oferte/${q.id}/editare`) };
+}
 
 /** Finds a team member by (part of) the name or email; null when none or several match. */
 async function findPerson(db: D1Database, q: string) {
@@ -95,20 +124,19 @@ export const TOOLS: Tool[] = [
   {
     name: "adauga_oferta",
     title: "Creează o ofertă (ciornă)",
-    description: "Creează în CRM o ofertă pentru un client (modulul Oferte), ca ciornă: cine, ce se evaluează, onorariul, termenul, plata. Pentru un client existent dă „client_id” (din „client” sau „cauta”): numele, telefonul, emailul și CUI-ul se iau din fișa lui. Întoarce „previzualizare”: linkul paginii ofertei exact cum o va vedea clientul (se deschide cu contul de CRM); arată-l utilizatorului. Oferta rămâne ciornă și NU se trimite clientului de aici: trimiterea se face din CRM. Cu „transmisa_prin” doar notezi o ofertă deja făcută pe alt canal. Nu creează comandă sau contract. Singura acțiune care scrie în CRM.",
+    description: "Creează în CRM o ofertă pentru un client (modulul Oferte), ca ciornă: cine, ce se evaluează, onorariul, termenul, plata. Pentru un client existent dă „client_id” (din „client” sau „cauta”): numele, telefonul, emailul și CUI-ul se iau din fișa lui. Întoarce „previzualizare”: linkul paginii ofertei exact cum o va vedea clientul (se deschide cu contul de CRM); arată-l utilizatorului. Oferta rămâne ciornă și NU se trimite clientului de aici: trimiterea se face din CRM. Cu „transmisa_prin” doar notezi o ofertă deja făcută pe alt canal. Nu creează comandă sau contract. Scriu în CRM doar această acțiune și „modifica_oferta”.",
     inputSchema: { type: "object", properties: {
       client_id: S("Id-ul unui client existent în CRM (din „client” sau „cauta”); oferta se leagă de fișa lui."),
       client: S("Numele clientului (persoană sau firmă); poate lipsi dacă dai client_id."), telefon: S("Telefonul clientului (telefon sau email, cel puțin unul)."), email: S("Emailul clientului."),
       firma: { type: "boolean", description: "true dacă clientul e persoană juridică." }, cui: S("CUI-ul firmei, dacă e cazul."),
-      bun: S("Ce se evaluează: apartament, casă, teren, spațiu comercial, autoturism… (se potrivește cu tipurile din CRM)."),
-      adresa: S("Adresa bunului."), localitate: S("Localitatea."), judet: S("Județul."), suprafata: N("Suprafața utilă în m² (opțional)."),
+      ...ASSET_PROPS, bunuri: BUNURI,
       scop: S(`Utilizarea desemnată, de ex. ${["Garantare bancară", ...PURPOSES.filter((x) => x !== "Credit bancar")].slice(0, 5).join(", ")}…`),
       tip_raport: S("Raport de evaluare (implicit), Notă de evaluare sau Notă de inspecție."),
-      onorariu: N("Onorariul fără TVA, în lei."), termen_zile: N("Termenul propus, în zile lucrătoare."), valabila_zile: N("Câte zile e valabilă oferta (implicit 14)."),
+      onorariu: N("Onorariul fără TVA, în lei."), termen_zile: N("Termenul propus, în zile lucrătoare (implicit 3: spune-i utilizatorului dacă l-ai lăsat implicit)."), valabila_zile: N("Câte zile e valabilă oferta (implicit 14)."),
       transmisa_prin: S("email | whatsapp | phone | meeting — dacă oferta a fost deja transmisă clientului; lipsă = încă netrimisă.", { enum: ["email", "whatsapp", "phone", "meeting"] }),
       urgent: { type: "boolean", description: "Clientul are nevoie repede." }, note: S("Ce s-a discutat, condiții, de urmărit."),
       plata: S("avans50 (implicit) | avans30 | integral (la acceptare) | livrare (integral la livrare), sau textul condițiilor de plată.", { enum: ["avans50", "avans30", "integral", "livrare"] }),
-    }, required: ["bun"] },
+    } },
     write: true,
     run: async (c, a) => {
       // an existing client: what the call leaves out comes from the client's file
@@ -117,21 +145,56 @@ export const TOOLS: Tool[] = [
       if (cid && !e) return { eroare: "Clientul cu acest id nu a fost găsit. Caută-l cu „client” sau „cauta”." };
       const contact = e && !(e.phone || e.email) ? (await clientContacts(c.db, e.id).catch(() => []))[0] : null;
       if (!e && !str(a, "client")) return { eroare: "Dă numele clientului sau client_id." };
-      const days = num(a, "valabila_zile") ?? 14;
-      const valid = new Date(Date.now() + Math.max(1, Math.min(365, days)) * 86400000).toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
+      const assets = assetsOf(a);
+      if (!assets) return { eroare: "Spune ce se evaluează: „bun” sau lista „bunuri”." };
       const r = await createQuote(c.db, c.user.id, {
         client_id: e?.id, client_name: str(a, "client") || e?.name || "", client_phone: str(a, "telefon") || e?.phone || contact?.phone || "", client_email: str(a, "email") || e?.email || contact?.email || "",
         client_kind: a.firma === true || (e && e.kind !== "person") ? "company" : "person", client_cui: str(a, "cui") || e?.cui || "",
-        purpose: str(a, "scop"), report_type: str(a, "tip_raport") || "Raport de evaluare", fee: num(a, "onorariu"), term_days: num(a, "termen_zile") ?? 3, valid_until: valid,
+        purpose: str(a, "scop"), report_type: str(a, "tip_raport") || "Raport de evaluare", fee: num(a, "onorariu"), term_days: num(a, "termen_zile") ?? 3, valid_until: validUntil(num(a, "valabila_zile") ?? 14),
         urgent: a.urgent === true, notes: str(a, "note"), sent_via: str(a, "transmisa_prin") || undefined, payment: str(a, "plata") || "avans50", payment_terms: str(a, "plata"),
-        assets: [{ type: guessType(str(a, "bun")), full_address: str(a, "adresa"), city: str(a, "localitate"), county: str(a, "judet"), usable_area: num(a, "suprafata") != null ? String(num(a, "suprafata")) : "" }],
+        assets,
       });
       if (!r.ok) return { eroare: r.error };
-      const q = (await listQuotes(c.db, { tab: "toate", q: "" })).find((x) => x.id === r.id);
-      return { ok: true, numar: q ? quoteCode(q) : null, id: r.id, bun: q ? quoteWhat(q) : null, stare: q ? QUOTE_STATUS[q.status][0] : null, client: q?.client_name ?? null,
-        previzualizare: c.link(`/oferte/${r.id}/previzualizare`), link: c.link(`/oferte/${r.id}`), modifica: c.link(`/oferte/${r.id}/editare`),
-        mesaj: q?.status === "draft" ? "Oferta a fost creată ca ciornă și nu a fost trimisă clientului. Verific-o la „previzualizare”; se modifică și se trimite din CRM („link”)."
+      const q = await getQuote(c.db, r.id);
+      if (!q) return { eroare: "Oferta a fost creată, dar nu a putut fi recitită. Caut-o cu „oferte”." };
+      return { ...quoteAnswer(c, q),
+        mesaj: q.status === "draft" ? "Oferta a fost creată ca ciornă și nu a fost trimisă clientului. Verific-o la „previzualizare”; se modifică și se trimite din CRM („link”)."
           : "Oferta a fost notată în CRM ca transmisă. Comanda sau contractul se fac din CRM, cu „Convertește în lucrare”." };
+    },
+  },
+  {
+    name: "modifica_oferta",
+    title: "Modifică o ofertă (ciornă)",
+    description: "Modifică o ofertă din Oferte cât timp e ciornă (netrimisă clientului): onorariul, termenul, plata, scopul, bunurile, notele. Schimbă doar câmpurile pe care le dai; restul rămân. „bunuri” (sau „bun”) înlocuiește toate bunurile ofertei. O ofertă deja trimisă, acceptată sau convertită nu se modifică de aici, ci din CRM. NU trimite oferta clientului. Întoarce „previzualizare”: arată-l utilizatorului.",
+    inputSchema: { type: "object", properties: {
+      oferta: S("Numărul ofertei (OF-12) sau id-ul ei."),
+      client: S("Numele clientului."), telefon: S("Telefonul clientului."), email: S("Emailul clientului."), cui: S("CUI-ul firmei."),
+      ...ASSET_PROPS, bunuri: BUNURI,
+      scop: S("Utilizarea desemnată, de ex. Garantare bancară, Raportare financiară…"), tip_raport: S("Raport de evaluare, Notă de evaluare sau Notă de inspecție."),
+      onorariu: N("Onorariul fără TVA, în lei."), termen_zile: N("Termenul propus, în zile lucrătoare."), valabila_zile: N("Câte zile mai e valabilă oferta, de azi."),
+      urgent: { type: "boolean", description: "Clientul are nevoie repede." }, note: S("Notele interne ale ofertei (nu apar la client); înlocuiesc notele existente."),
+      plata: S("avans50 | avans30 | integral (la acceptare) | livrare (integral la livrare).", { enum: ["avans50", "avans30", "integral", "livrare"] }),
+    }, required: ["oferta"] },
+    write: true,
+    run: async (c, a) => {
+      const ref = str(a, "oferta");
+      const seq = /^(?:of-?)?(\d{1,7})$/i.exec(ref)?.[1];
+      const row = await c.db.prepare("SELECT id FROM quotes WHERE id = ?1 OR (?2 IS NOT NULL AND seq = CAST(?2 AS INTEGER)) ORDER BY id = ?1 DESC LIMIT 1").bind(ref, seq ?? null).first<{ id: string }>();
+      const q = row ? await getQuote(c.db, row.id) : null;
+      if (!q || (!can(c.user, "orders.all") && q.created_by !== c.user.id)) return { eroare: "Oferta nu a fost găsită. Caut-o cu „oferte”." };
+      if (q.status !== "draft" || q.sent_at) return { eroare: `Oferta ${quoteCode(q)} nu mai e ciornă (${QUOTE_STATUS[q.status][0].toLowerCase()}): se modifică din CRM.`, link: c.link(`/oferte/${q.id}`) };
+      const has = (k: string) => a[k] !== undefined && a[k] !== null && a[k] !== "";
+      const days = num(a, "valabila_zile");
+      const r = await updateQuote(c.db, c.user.id, q.id, {
+        client_id: q.client_id, client_kind: q.client_kind, client_name: str(a, "client") || q.client_name, client_phone: str(a, "telefon") || q.client_phone || "", client_email: str(a, "email") || q.client_email || "",
+        client_cui: str(a, "cui") || q.client_cui || "", purpose: str(a, "scop") || q.purpose || "", report_type: str(a, "tip_raport") || q.report_type || "",
+        fee: num(a, "onorariu") ?? q.fee, term_days: num(a, "termen_zile") ?? q.term_days, valid_until: days != null ? validUntil(days) : q.valid_until,
+        urgent: typeof a.urgent === "boolean" ? a.urgent : !!q.urgent, assets: assetsOf(a) ?? quoteAssets(q), inspection_notes: q.inspection_notes ?? "", notes: has("note") ? str(a, "note") : q.notes ?? "",
+        channel: q.channel, collaboration_id: q.collaboration_id, payment: str(a, "plata") || undefined, payment_terms: q.payment_terms ?? "", referral_id: q.referral_user_id ?? "",
+      });
+      if (!r.ok) return { eroare: r.error };
+      const fresh = await getQuote(c.db, q.id);
+      return { ...quoteAnswer(c, fresh ?? q), mesaj: "Oferta a fost modificată și a rămas ciornă: nu a fost trimisă clientului. Verific-o la „previzualizare”; se trimite din CRM („link”)." };
     },
   },
   {
