@@ -9,7 +9,9 @@ import { termNotices } from "./expert-cases";
 
 export type Notice = { id: string; at: string; kind: "message" | "team" | "review" | "verified" | "back" | "inspection" | "order" | "collect" | "alert"; title: string; sub: string; href: string;
   /** also sent by email (a configurable alert with the email tick) */
-  email?: boolean };
+  email?: boolean;
+  /** an important one, shown pale red in the list (the orders are always so) */
+  hot?: boolean };
 
 const DAYS = 30;
 const num = (n: string | null) => (n ? `nr. ${n}` : "fără număr");
@@ -98,7 +100,7 @@ export async function notificationsFor(db: D1Database, u: WithPerms & { id: stri
       id: `a${x.id}`, at: x.at, kind: "inspection", title: `Fișa de inspecție completată${x.number ? ` · raport ${num(x.number)}` : ""}`,
       sub: [x.who && `${x.who} a trimis completările`, x.place].filter(Boolean).join(" · "), href: rep(x.rid),
     })),
-    ...rules.map((n): Notice => ({ id: n.id, at: n.at, kind: n.kind as Notice["kind"], title: n.title, sub: n.sub, href: n.href, email: n.email })),
+    ...rules.map((n): Notice => ({ id: n.id, at: n.at, kind: n.kind as Notice["kind"], title: n.title, sub: n.sub, href: n.href, email: n.email, hot: n.tone === "err" })),
     ...taskItems,
     ...terms.map((t): Notice => ({ id: t.id, at: t.at, kind: "alert", title: t.title, sub: t.sub, href: `${base}/expertize/${t.caseId}?tab=termene`, email: t.email })),
   ].sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 30);

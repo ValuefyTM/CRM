@@ -10,6 +10,7 @@ import { ViewAs } from "./ViewAs";
 import { Shell, type NavEntry, type NavItem } from "./Shell";
 import { GlobalSearch } from "./GlobalSearch";
 import { Bell } from "./Bell";
+import { pendingOrdersCount } from "@/lib/new-orders";
 import { Heartbeat } from "./Heartbeat";
 import { Pwa } from "./Pwa";
 import { TableLabels } from "./TableLabels";
@@ -64,12 +65,16 @@ export async function CrmShell(props: { user: User; base: string; active: string
   // Inspecții: the ones still to do (to schedule or scheduled), as the page shows them to this user.
   // Oferte: the ones still open (to send or waiting for an answer).
   const quotesN = db && may("orders") ? await openQuotes(db) : 0;
+  // Comenzi neprocesate: the red circle next to the bell, leading to the card on the dashboard.
+  const pendingN = db ? await pendingOrdersCount(db, u).catch(() => 0) : 0;
   const expertN = db && isExpert(u) ? (await termNotices(db, u).catch(() => [])).length : 0;
   const inspN = db && may("inspections") ? await activeInspections(db, scopeOf(u, "inspections") as "all" | "lead" | "own", u.id) : 0;
   return (
     <Shell
       // "Vezi ca…" is picked on the dashboard only; elsewhere the banner just says whose CRM it is and leads back.
-      search={<>{viewAs && !u.impersonator && props.active === "home" && <ViewAs users={viewAs} realName={u.name || u.email} />}<GlobalSearch base={b} /><Bell /></>}
+      search={<>{viewAs && !u.impersonator && props.active === "home" && <ViewAs users={viewAs} realName={u.name || u.email} />}<GlobalSearch base={b} />
+        {pendingN > 0 && <a className="ordDot" href={`${b || "/"}#comenzi-noi`} title={`${pendingN} ${pendingN === 1 ? "comandă neprocesată" : "comenzi neprocesate"} · vezi pe dashboard`} aria-label={`${pendingN} ${pendingN === 1 ? "comandă neprocesată" : "comenzi neprocesate"}`}>{pendingN > 99 ? "99+" : pendingN}</a>}
+        <Bell /></>}
       banner={viewAs && u.impersonator ? <ViewAs users={props.active === "home" ? viewAs : null} as={{ id: u.id, name: u.name || u.email, role: roleLabel("internal", u.role) }} realName={u.impersonator.name} /> : undefined}
       bare={props.bare}
       dateTitle={props.dateTitle}

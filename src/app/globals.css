@@ -2076,6 +2076,16 @@ a.navItem[aria-current="page"] .navIcon { opacity: 1; }
 .bellList a { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 9px 10px; border-radius: 10px; color: var(--ink); text-decoration: none; }
 .bellList a:hover { background: var(--cream); }
 .bellList li.new a { background: color-mix(in srgb, var(--acc) 10%, #fff); }
+/* the important ones (orders to process, alerts marked urgent): pale red, whether new or not */
+.bellList li.hot a { background: #fdf0ee; box-shadow: inset 3px 0 0 #e0685e; }
+.bellList li.hot a:hover { background: #fbe4e1; }
+.bellList li.hot.new a { background: #fbe4e1; }
+.bellList li.hot .bellIcon { background: #f8d3ce; color: var(--err); }
+/* orders not processed: the red circle next to the bell, to the dashboard */
+.ordDot { flex-shrink: 0; min-width: 34px; height: 34px; padding: 0 9px; border-radius: 999px; display: grid; place-items: center; background: #d93025; color: #fff; font: 800 13px/1 var(--font); text-decoration: none; box-shadow: 0 0 0 3px #fde4e1; animation: ordPulse 2.4s ease-out infinite; }
+.ordDot:hover { background: #b3261e; }
+@keyframes ordPulse { 0% { box-shadow: 0 0 0 0 rgba(217, 48, 37, .45); } 70%, 100% { box-shadow: 0 0 0 9px rgba(217, 48, 37, 0); } }
+@media (prefers-reduced-motion: reduce) { .ordDot { animation: none; } }
 .bellIcon { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font-size: 13px; font-weight: 800; background: var(--cream-2, #f1ece2); }
 .bellIcon.k-message { background: #e8eefc; color: #3657b8; } .bellIcon.k-back { background: var(--err-bg); color: var(--err); }
 .bellIcon.k-verified { background: var(--ok-bg); color: var(--ok-text); } .bellIcon.k-review, .bellIcon.k-order { background: var(--acc-soft); color: var(--acc-text); }
@@ -3045,7 +3055,24 @@ span.rdPick { display: inline-block; }
 .bellIcon.k-collect { background: #fdecea; color: #b5382b; font-size: 9.5px; }
 /* Setări → Alerte */
 .alRules { display: flex; flex-direction: column; gap: 12px; }
-.alRule { border: 1px solid var(--divider); border-radius: 14px; padding: 12px 14px; background: #fff; }
+.alRule { border: 1px solid var(--divider); border-radius: 12px; background: #fff; }
+.alRule.open { border-color: var(--line); box-shadow: 0 10px 24px -22px rgba(17, 17, 17, .4); }
+.alGroup { display: flex; flex-direction: column; gap: 6px; }
+.alGroup h3 { margin: 6px 0 0; font-size: 11.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.alGroup h3 small { font-weight: 600; letter-spacing: 0; color: var(--muted-2); margin-left: 4px; }
+.alRow { display: flex; align-items: center; gap: 12px; padding: 8px 12px; }
+.alSum { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; background: none; border: 0; padding: 2px 0; font: inherit; color: var(--ink); text-align: left; cursor: pointer; }
+.alSumText { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.alSumText b { font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alSumText small { font-size: 12px; color: var(--muted-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alTags { display: flex; gap: 5px; flex-shrink: 0; }
+.alTags i { font-style: normal; font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: var(--cream-2, #f1ece2); color: var(--muted); }
+.alTags i.mail { background: #e8eefc; color: #3657b8; }
+.alChev { flex-shrink: 0; color: var(--muted-2); transition: transform .15s; }
+.alRule.open .alChev { transform: rotate(180deg); }
+.alBody { padding: 10px 14px 12px; border-top: 1px solid var(--divider); }
+.alAll { margin-left: auto; background: none; border: 0; padding: 0; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--muted); cursor: pointer; }
+@media (max-width: 640px) { .alTags { display: none; } }
 .alRule.off { opacity: .6; background: var(--cream-2); }
 .alHead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .alKind { font-weight: 700; max-width: 360px; }

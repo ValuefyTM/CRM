@@ -7,6 +7,7 @@ import { fileSrc } from "@/lib/files";
 import { getDb } from "@/lib/db";
 import { niceName } from "@/lib/labels";
 import { openTasks } from "@/lib/mail-rules";
+import { PENDING, seesEveryOrder } from "@/lib/new-orders";
 import { orderCode, propertyLabel } from "@/lib/order-labels";
 import { can, type WithPerms } from "@/lib/perms";
 import { photoUrl } from "@/lib/presence";
@@ -15,7 +16,6 @@ import { TaskList } from "./TaskList";
 type NewOrder = { id: string; seq: number | null; source: string; client: string | null; what: string | null; place: string | null; partner: string | null; who: string | null; who_id: string | null; avatar_at: string | null; at: string; urgent: number | null; viewed_at: string | null; viewer: string | null };
 
 /** Not processed yet: received, no offer or contract made from it, no report opened. */
-const PENDING = `o.status = 'received' AND o.processed_at IS NULL AND NOT EXISTS (SELECT 1 FROM reports r WHERE r.order_id = COALESCE(o.linked_order_id, o.id))`;
 const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0]!.toUpperCase()).join("") || "?";
 
 const age = (iso: string) => {
@@ -37,7 +37,7 @@ export async function NewOrdersCard({ user, base }: { user: WithPerms & { id: st
   if (!db) return null;
   const orders = can(user, "orders");
   // the website and the portal: for who works on every order (the accredited on framework contracts see the banks only)
-  const every = orders && !(can(user, "orders.contract") && !can(user, "orders.all"));
+  const every = seesEveryOrder(user);
   const tasks = await openTasks(db, user, orders).catch(() => []);
   if (!orders && !tasks.length) return null;
   const [banks, fresh, open] = await Promise.all([
@@ -64,7 +64,7 @@ export async function NewOrdersCard({ user, base }: { user: WithPerms & { id: st
     </a>
   );
   return (
-    <section className={`card tkBanks${total ? " hot" : ""}`} aria-label="Comenzi noi">
+    <section id="comenzi-noi" className={`card tkBanks${total ? " hot" : ""}`} aria-label="Comenzi noi">
       <div className="cardHead"><h2>Comenzi noi</h2>{total > 0 ? <span className="pill pillErr"><i />{total} de procesat</span> : <span className="pill pillOk"><i />toate procesate</span>}</div>
       <div className="tkBankRow">
         {banks.map((b) => {

@@ -1,5 +1,5 @@
 // Server-only: every valuation request sent from the website assistant becomes a CRM order (source "site").
-// Runs on CRM page loads: a single cheap query when there is nothing new.
+// Runs on CRM page loads and every quarter of an hour (worker.ts): a single cheap query when there is nothing new.
 import { now } from "./db";
 
 const TYPE: Record<string, string> = {

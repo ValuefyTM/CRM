@@ -1,6 +1,6 @@
 "use client";
-// The list of alert rules: each one a card with the situation, the delay, the recipients, the scope and the places it
-// shows. Saved all at once.
+// The list of alert rules, grouped by subject: each one a collapsed row (switch, name, a summary of when / to whom /
+// where) that opens to the situation, the delay, the recipients, the scope and the places it shows. Saved all at once.
 import { useState } from "react";
 import { ALERT_KINDS, ALERT_TO, DAY_CHOICES, EVERY_CHOICES, newRuleId, type AlertKind, type AlertRule } from "@/lib/alert-kinds";
 
@@ -10,19 +10,37 @@ type Person = { id: string; name: string; role: string };
 const KINDS = Object.entries(ALERT_KINDS) as [AlertKind, (typeof ALERT_KINDS)[AlertKind]][];
 const GROUPS = [...new Set(KINDS.map(([, k]) => k.group))];
 
-function Rule({ r, edit, people, scopes, onChange, onRemove }: { r: AlertRule; edit: boolean; people: Person[]; scopes: Scope[]; onChange: (r: AlertRule) => void; onRemove: () => void }) {
+function Rule({ r, edit, people, scopes, open, onToggle, onChange, onRemove }: { r: AlertRule; edit: boolean; people: Person[]; scopes: Scope[]; open: boolean; onToggle: () => void; onChange: (r: AlertRule) => void; onRemove: () => void }) {
   const k = ALERT_KINDS[r.kind];
   const [more, setMore] = useState(r.scope.length > 0 || r.to.some((t) => t.startsWith("u:")) || !!r.title);
   const pick = (kind: AlertKind, to: string[]) => (ALERT_KINDS[kind].roles.includes("assigned") && !to.length ? ["assigned"] : to);
   const set = (p: Partial<AlertRule>) => onChange({ ...r, ...p });
   const toggle = (list: string[], v: string, on: boolean) => (on ? [...new Set([...list, v])] : list.filter((x) => x !== v));
   const customDays = !DAY_CHOICES.some(([d]) => d === r.days);
+  const persons = r.to.filter((t) => t.startsWith("u:")).length;
+  const when = DAY_CHOICES.find(([d]) => d === r.days)?.[1] ?? `după ${r.days} zile`;
+  const whom = [...ALERT_TO.filter(([key]) => r.to.includes(key) && k.roles.includes(key)).map(([, l]) => l), persons ? `${persons} ${persons === 1 ? "persoană" : "persoane"}` : null].filter(Boolean).join(", ") || "nimeni";
   return (
-    <article className={`alRule${r.enabled ? "" : " off"}`}>
-      <header className="alHead">
+    <article className={`alRule${r.enabled ? "" : " off"}${open ? " open" : ""}`}>
+      <header className="alRow">
         <label className="alSwitch" title={r.enabled ? "Activă" : "Oprită"}>
           <input type="checkbox" checked={r.enabled} disabled={!edit} onChange={(e) => set({ enabled: e.target.checked })} /><i />
         </label>
+        <button type="button" className="alSum" aria-expanded={open} onClick={onToggle}>
+          <span className="alSumText">
+            <b>{r.title || k.label}</b>
+            <small>{when} · către {whom}{r.scope.length ? ` · ${r.scope.length} ${r.scope.length === 1 ? "contract" : "contracte"}` : ""}</small>
+          </span>
+          <span className="alTags">
+            {r.dashboard && <i>tablou</i>}
+            {r.email && <i className="mail">email</i>}
+            {k.lasting && !!r.every && <i>se repetă</i>}
+          </span>
+          <svg className="alChev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+        </button>
+      </header>
+      {open && (<div className="alBody">
+      <header className="alHead">
         <select className="select alKind" value={r.kind} disabled={!edit} onChange={(e) => { const kind = e.target.value as AlertKind; set({ kind, to: pick(kind, r.to.filter((t) => ALERT_KINDS[kind].roles.includes(t) || t.startsWith("u:"))) }); }}>
           {GROUPS.map((g) => <optgroup key={g} label={g}>{KINDS.filter(([, x]) => x.group === g).map(([key, x]) => <option key={key} value={key}>{x.label}</option>)}</optgroup>)}
         </select>
@@ -97,6 +115,7 @@ function Rule({ r, edit, people, scopes, onChange, onRemove }: { r: AlertRule; e
           </label>
         </div>
       )}
+      </div>)}
     </article>
   );
 }
@@ -107,7 +126,11 @@ export function AlertsEditor({ edit, initial, people, scopes }: { edit: boolean;
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [dirty, setDirty] = useState(false);
   const update = (next: AlertRule[]) => { setRules(next); setDirty(true); setMsg(null); };
-  const add = () => update([...rules, { id: newRuleId(), kind: "uncollected_after_insp", days: 1, to: ["evaluator", "ops"], scope: [], dashboard: true, enabled: true }]);
+  // restrânse: only the ones opened by hand (a new one opens by itself)
+  const [open, setOpen] = useState<string[]>([]);
+  const flip = (id: string) => setOpen((o) => (o.includes(id) ? o.filter((x) => x !== id) : [...o, id]));
+  const add = () => { const id = newRuleId(); update([...rules, { id, kind: "uncollected_after_insp", days: 1, to: ["evaluator", "ops"], scope: [], dashboard: true, enabled: true }]); setOpen((o) => [...o, id]); };
+  const groups = GROUPS.map((g) => ({ g, list: rules.filter((r) => ALERT_KINDS[r.kind].group === g) })).filter((x) => x.list.length);
   const save = async () => {
     setBusy(true); setMsg(null);
     const r = await fetch("/api/crm/settings/alerts", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rules }) }).catch(() => null);
@@ -118,11 +141,19 @@ export function AlertsEditor({ edit, initial, people, scopes }: { edit: boolean;
   };
   return (
     <section className="card">
-      <div className="cardHead"><h2>Alerte</h2><span className="muted">{rules.filter((r) => r.enabled).length} active</span></div>
+      <div className="cardHead"><h2>Alerte</h2><span className="muted">{rules.filter((r) => r.enabled).length} active din {rules.length}</span>
+        {rules.length > 1 && <button type="button" className="linkBtn alAll" onClick={() => setOpen(open.length ? [] : rules.map((r) => r.id))}>{open.length ? "Restrânge tot" : "Desfă tot"}</button>}
+      </div>
       {rules.length === 0 && <p className="hint">Nicio alertă. Adaugă una mai jos.</p>}
       <div className="alRules">
-        {rules.map((r) => (
-          <Rule key={r.id} r={r} edit={edit} people={people} scopes={scopes} onChange={(x) => update(rules.map((y) => (y.id === r.id ? x : y)))} onRemove={() => update(rules.filter((y) => y.id !== r.id))} />
+        {groups.map(({ g, list }) => (
+          <div key={g} className="alGroup">
+            <h3>{g} <small>{list.filter((r) => r.enabled).length} / {list.length}</small></h3>
+            {list.map((r) => (
+              <Rule key={r.id} r={r} edit={edit} people={people} scopes={scopes} open={open.includes(r.id)} onToggle={() => flip(r.id)}
+                onChange={(x) => update(rules.map((y) => (y.id === r.id ? x : y)))} onRemove={() => update(rules.filter((y) => y.id !== r.id))} />
+            ))}
+          </div>
         ))}
       </div>
       {msg && <div role={msg.ok ? "status" : "alert"} className={msg.ok ? "note" : "error"}>{msg.text}</div>}

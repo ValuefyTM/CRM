@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-type Notice = { id: string; at: string; kind: string; title: string; sub: string; href: string };
+type Notice = { id: string; at: string; kind: string; title: string; sub: string; href: string; hot?: boolean };
 type Data = { items: Notice[]; seen: string | null; unread: number };
 
 const ICON: Record<string, string> = { message: "✉", team: "+", review: "?", verified: "✓", back: "↩", inspection: "⌂", order: "•", collect: "lei", alert: "!" };
@@ -142,7 +142,7 @@ export function Bell() {
           {!data ? <p className="bellEmpty">Se încarcă…</p> : data.items.length === 0 ? <p className="bellEmpty">Nimic nou. Aici apar mesajele echipei, rapoartele în care ești pus, verificările și inspecțiile alocate.</p> : (
             <ul className="bellList">
               {data.items.map((n) => (
-                <li key={n.id} className={seenAt !== null && (seenAt === "" || n.at > seenAt) ? "new" : ""}>
+                <li key={n.id} className={`${seenAt !== null && (seenAt === "" || n.at > seenAt) ? "new" : ""}${n.kind === "order" || n.hot ? " hot" : ""}`}>
                   <a href={n.href}>
                     <span className={`bellIcon k-${n.kind}`} aria-hidden="true">{ICON[n.kind] ?? "•"}</span>
                     <span className="bellText"><b>{n.title}</b>{n.sub && <small>{n.sub}</small>}</span>

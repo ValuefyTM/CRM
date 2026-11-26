@@ -76,7 +76,7 @@ export const EVERY_CHOICES: [number, string][] = [[0, "o singură dată"], [1, "
 
 /** The alerts about the orders received (site, collaborators' portal) and what follows on them; added once to the rules already saved (migration 1101). */
 export const ORDER_RULES: AlertRule[] = [
-  { id: "r-order-site", kind: "order_site", days: 0, to: ["orders", "admins"], scope: [], dashboard: false, enabled: true },
+  { id: "r-order-site", kind: "order_site", days: 0, to: ["orders", "admins"], scope: [], dashboard: false, email: true, enabled: true },
   { id: "r-order-partner", kind: "order_partner", days: 0, to: ["orders", "admins"], scope: [], dashboard: false, enabled: true },
   { id: "r-order-msg", kind: "order_msg", days: 0, to: ["evaluator", "orders"], scope: [], dashboard: false, enabled: true },
   { id: "r-order-doc", kind: "order_doc_added", days: 0, to: ["evaluator", "orders"], scope: [], dashboard: false, enabled: true },
