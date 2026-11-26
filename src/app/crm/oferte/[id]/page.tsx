@@ -50,6 +50,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
               <Row k="Plata">{(q.payment_terms ?? "50% avans la acceptare, 50% la livrarea raportului").split(/[.,] (?=[A-ZÎȘȚ]|prin )/)[0]}</Row>
               <Row k="Valabilă până">{q.valid_until ? <span className={exp ? "errTxt" : undefined}>{fmtDate(q.valid_until)}{exp ? " · expirată" : ""}</span> : null}</Row>
               <Row k="Transmisă">{q.sent_at ? `${fmtDate(q.sent_at, true)}${q.sent_via ? ` · ${SENT_VIA.find(([k]) => k === q.sent_via)?.[1].toLowerCase()}` : ""}${q.sent_to ? ` · ${q.sent_to}` : ""}` : null}</Row>
+              <Row k="Previzualizare"><a className="link" href={`${base}/oferte/${q.id}/previzualizare`}>cum o vede clientul ↗</a></Row>
               <Row k="Pagina publică">{publicLink ? <><a className="link" href={publicLink} target="_blank" rel="noopener">deschide ↗</a>{q.viewed_at ? ` · văzută de client ${fmtDate(q.viewed_at, true)}` : " · neaccesată încă"}</> : null}</Row>
               <Row k="Răspuns">{q.decided_at ? `${q.status === "accepted" || q.status === "converted" ? `acceptată${q.accepted_name ? ` și semnată de ${q.accepted_name}` : ""}` : q.status === "cancelled" ? "anulată" : "refuzată"} ${fmtDate(q.decided_at, true)}${q.decline_reason ? ` · ${q.decline_reason}` : ""}` : null}</Row>
               <Row k="Dacă acceptă">{q.channel === "collab" ? `pe colaborare${q.collab_firm ? ` · ${q.collab_firm}` : ""}` : q.channel === "direct" ? "direct · contract clasic" : "se decide la conversie"}</Row>
