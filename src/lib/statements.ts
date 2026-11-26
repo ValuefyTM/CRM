@@ -153,21 +153,22 @@ export async function autoLines(db: D1Database, c: Criteria, period: string): Pr
     if (c.inc_evaluator) await pctLines("evaluator", u.share_evaluator);
     if (c.inc_verifier) await pctLines("verifier", u.share_verifier);
     // Inspections done in the month, when the person only inspected (not also the main evaluator of the report): one
-    // per report, the main asset's.
+    // per report, the main asset's. A cancelled report counts when its inspection is invoiced (cancel_bill): the
+    // inspector is paid for it — also when they were the report's evaluator, since a cancelled report pays no evaluator.
     if (c.inc_inspector && u.inspector_fee != null) {
-      const { results } = await db.prepare(`SELECT i.id AS insp_id, substr(i.done_at, 1, 10) AS on_date, ${REPORT_COLS} FROM inspections i JOIN reports r ON r.id = i.report_id
+      const { results } = await db.prepare(`SELECT i.id AS insp_id, substr(i.done_at, 1, 10) AS on_date, (r.status = 'cancelled') AS cancelled, ${REPORT_COLS} FROM inspections i JOIN reports r ON r.id = i.report_id
           LEFT JOIN entities cl ON cl.id = r.client_id LEFT JOIN entities b ON b.id = r.recipient_id LEFT JOIN assets a ON a.id = i.asset_id LEFT JOIN crm_properties p ON p.id = a.property_id
-          WHERE i.inspector_id = ?1 AND i.status = 'done' AND substr(i.done_at, 1, 7) = ?2 AND r.status <> 'cancelled'
-            AND NOT EXISTS (SELECT 1 FROM report_members m WHERE m.report_id = r.id AND m.user_id = ?1 AND m.role = 'evaluator')
+          WHERE i.inspector_id = ?1 AND i.status = 'done' AND substr(i.done_at, 1, 7) = ?2 AND (r.status <> 'cancelled' OR r.cancel_bill = 1)
+            AND (r.status = 'cancelled' OR NOT EXISTS (SELECT 1 FROM report_members m WHERE m.report_id = r.id AND m.user_id = ?1 AND m.role = 'evaluator'))
             -- one inspection per report: the main asset's (the secondary assets — parking, box — are not paid again)
             AND i.id = (SELECT i2.id FROM inspections i2 LEFT JOIN assets a2 ON a2.id = i2.asset_id WHERE i2.report_id = i.report_id AND i2.inspector_id = ?1
               AND i2.status = 'done' ORDER BY COALESCE(a2.is_main, 0) DESC, i2.done_at, i2.id LIMIT 1)
           ORDER BY i.done_at`)
-        .bind(c.user_id, period).all<RepRow & { insp_id: string }>();
+        .bind(c.user_id, period).all<RepRow & { insp_id: string; cancelled: number }>();
       for (const r of results) {
         const pct = u.inspector_fee_kind === "pct";
         const amount = pct ? (r.fee != null ? round2(r.fee * u.inspector_fee! / 100) : 0) : u.inspector_fee!;
-        out.push({ key: `insp:${r.insp_id}`, source: "inspector", report_id: r.id, inspection_id: r.insp_id, label: `Inspecție · ${repLabel(r)}`, detail: repDetail(r), on_date: r.on_date,
+        out.push({ key: `insp:${r.insp_id}`, source: "inspector", report_id: r.id, inspection_id: r.insp_id, label: `Inspecție · ${repLabel(r)}${r.cancelled ? " · raport anulat, inspecție facturată" : ""}`, detail: repDetail(r), on_date: r.on_date,
           base: pct ? r.fee : null, rate: pct ? `${u.inspector_fee}%` : `${u.inspector_fee} lei`, auto_amount: amount, amount, number: r.number });
       }
     }
@@ -479,7 +480,7 @@ async function monthParties(db: D1Database, period: string, kind: Kind) {
   const { results } = await db.prepare(`SELECT DISTINCT 'u:' || m.user_id AS party FROM report_members m JOIN reports r ON r.id = m.report_id JOIN users u ON u.id = m.user_id
         WHERE ${month} AND m.role IN ('evaluator', 'verifier') AND ${paid}
       UNION SELECT DISTINCT 'u:' || i.inspector_id FROM inspections i JOIN reports r ON r.id = i.report_id JOIN users u ON u.id = i.inspector_id
-        WHERE i.status = 'done' AND substr(i.done_at, 1, 7) = ?1 AND r.status <> 'cancelled' AND ${paid}`)
+        WHERE i.status = 'done' AND substr(i.done_at, 1, 7) = ?1 AND (r.status <> 'cancelled' OR r.cancel_bill = 1) AND ${paid}`)
     .bind(period).all<{ party: string }>();
   return results.map((x) => x.party);
 }
